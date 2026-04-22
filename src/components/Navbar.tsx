@@ -3,13 +3,16 @@ import { Menu, X, Activity, LayoutDashboard, LogOut, ChevronDown, User, Home, Su
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import type { AppView } from '../App';
+import type { SettingsSection } from './dashboard/Dashboard';
 
 interface NavbarProps {
   view: AppView;
   onViewChange: (view: AppView) => void;
+  onDashboardHome: () => void;
+  onOpenSettingsSection: (section: SettingsSection) => void;
 }
 
-export default function Navbar({ view, onViewChange }: NavbarProps) {
+export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSettingsSection }: NavbarProps) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -49,6 +52,18 @@ export default function Navbar({ view, onViewChange }: NavbarProps) {
     setMobileOpen(false);
   };
 
+  const handleDashboardHome = () => {
+    onDashboardHome();
+    setUserMenuOpen(false);
+    setMobileOpen(false);
+  };
+
+  const handleOpenSettingsSection = (section: SettingsSection) => {
+    onOpenSettingsSection(section);
+    setUserMenuOpen(false);
+    setMobileOpen(false);
+  };
+
   const headerBg = isLight
     ? scrolled || isDashboard
       ? 'bg-white/95 backdrop-blur-md border-b border-[#e2e8e2]'
@@ -62,8 +77,8 @@ export default function Navbar({ view, onViewChange }: NavbarProps) {
     : 'px-4 py-2 text-sm font-medium text-[#d2d7d2]/70 hover:text-white rounded-lg hover:bg-white/[0.06] transition-all duration-150';
 
   const mobileBg = isLight
-    ? 'border-t border-[#e2e8e2] bg-white/98 px-4 pb-4 pt-2'
-    : 'border-t border-white/[0.06] bg-[#0d110e]/98 px-4 pb-4 pt-2';
+    ? 'border-t border-[#e2e8e2] bg-white px-4 pb-4 pt-2 shadow-lg'
+    : 'border-t border-white/[0.06] bg-[#0d110e] px-4 pb-4 pt-2 shadow-lg';
 
   const logoTextColor = isLight ? 'text-[#1a1f1a]' : 'text-white';
 
@@ -77,7 +92,8 @@ export default function Navbar({ view, onViewChange }: NavbarProps) {
         <div className="flex items-center justify-between h-16">
           <button
             onClick={() => {
-              if (isDashboard) {
+              if (isLoggedIn) {
+                onDashboardHome();
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               } else {
                 onViewChange('landing');
@@ -133,12 +149,29 @@ export default function Navbar({ view, onViewChange }: NavbarProps) {
                       <p className={`text-sm ${isLight ? 'text-[#1a1f1a]' : 'text-white'} font-medium truncate`}>{user?.email}</p>
                     </div>
                     <div className="p-1.5">
+                      <p className={`px-3 py-1.5 text-[11px] uppercase tracking-wider ${isLight ? 'text-[#374137]/35' : 'text-[#d2d7d2]/35'}`}>
+                        Settings
+                      </p>
                       <button
-                        onClick={() => { setUserMenuOpen(false); onViewChange('landing'); }}
+                        onClick={() => handleOpenSettingsSection('account')}
                         className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm ${isLight ? 'text-[#374137]/60 hover:text-[#1a1f1a] hover:bg-[#1a1f1a]/[0.05]' : 'text-[#d2d7d2]/60 hover:text-white hover:bg-white/[0.05]'} rounded-lg transition-all duration-150`}
                       >
                         <Home size={14} />
-                        Back to Home
+                        Account
+                      </button>
+                      <button
+                        onClick={() => handleOpenSettingsSection('organization')}
+                        className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm ${isLight ? 'text-[#374137]/60 hover:text-[#1a1f1a] hover:bg-[#1a1f1a]/[0.05]' : 'text-[#d2d7d2]/60 hover:text-white hover:bg-white/[0.05]'} rounded-lg transition-all duration-150`}
+                      >
+                        <Home size={14} />
+                        Organization
+                      </button>
+                      <button
+                        onClick={() => handleOpenSettingsSection('security')}
+                        className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm ${isLight ? 'text-[#374137]/60 hover:text-[#1a1f1a] hover:bg-[#1a1f1a]/[0.05]' : 'text-[#d2d7d2]/60 hover:text-white hover:bg-white/[0.05]'} rounded-lg transition-all duration-150`}
+                      >
+                        <Home size={14} />
+                        Security
                       </button>
                       <div className={`my-1 h-px ${isLight ? 'bg-[#e2e8e2]' : 'bg-white/[0.05]'}`} />
                       <button
@@ -223,11 +256,25 @@ export default function Navbar({ view, onViewChange }: NavbarProps) {
                 <p className={`text-sm ${isLight ? 'text-[#1a1f1a]' : 'text-white'} font-medium truncate`}>{user?.email}</p>
               </div>
               <button
-                onClick={() => { setMobileOpen(false); onViewChange('landing'); }}
+                onClick={() => handleOpenSettingsSection('account')}
                 className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#374137]/70 hover:text-[#1a1f1a] hover:bg-[#1a1f1a]/[0.06]' : 'text-[#d2d7d2]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
               >
                 <Home size={14} />
-                Back to Home
+                Account
+              </button>
+              <button
+                onClick={() => handleOpenSettingsSection('organization')}
+                className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#374137]/70 hover:text-[#1a1f1a] hover:bg-[#1a1f1a]/[0.06]' : 'text-[#d2d7d2]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
+              >
+                <Home size={14} />
+                Organization
+              </button>
+              <button
+                onClick={() => handleOpenSettingsSection('security')}
+                className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#374137]/70 hover:text-[#1a1f1a] hover:bg-[#1a1f1a]/[0.06]' : 'text-[#d2d7d2]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
+              >
+                <Home size={14} />
+                Security
               </button>
               <button
                 onClick={handleSignOut}

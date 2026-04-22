@@ -62,7 +62,7 @@ export default function Login({ onViewChange }: LoginProps) {
           className={`flex items-center gap-1.5 text-sm ${backColor} transition-colors mb-8 group`}
         >
           <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
-          Back to home
+          Back
         </button>
 
         <div className="flex items-center gap-2.5 mb-8">

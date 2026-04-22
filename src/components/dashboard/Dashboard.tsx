@@ -1,16 +1,18 @@
-import { useState } from 'react';
-import { MessageSquare, LayoutDashboard, Activity, FileText, Settings, Database } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { MessageSquare, LayoutDashboard, Activity, FileText, Database, UserCircle2, KeyRound, Users, Shield } from 'lucide-react';
 import DashboardChat from './DashboardChat';
 import KnowledgeBase from './KnowledgeBase';
 import { useTheme } from '../../context/ThemeContext';
-import type { ChatMessage, RagStatus } from '../../lib/supabase';
+import { supabase, type ChatMessage, type RagStatus } from '../../lib/supabase';
+import { useAuth } from '../../context/AuthContext';
 
 type ExtendedMessage = ChatMessage & { streaming?: boolean; ragStatus?: RagStatus; ragError?: string };
 
-type Tab = 'overview' | 'chat' | 'knowledge' | 'workflows' | 'reports' | 'settings';
+export type DashboardTab = 'overview' | 'chat' | 'knowledge' | 'workflows' | 'reports' | 'settings';
+export type SettingsSection = 'account' | 'organization' | 'security';
 
 interface TabConfig {
-  id: Tab;
+  id: DashboardTab;
   label: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
 }
@@ -21,7 +23,6 @@ const TABS: TabConfig[] = [
   { id: 'knowledge', label: 'Knowledge Base', icon: Database },
   { id: 'workflows', label: 'Workflows', icon: Activity },
   { id: 'reports', label: 'Reports', icon: FileText },
-  { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
 const STAT_CARDS = [
@@ -124,12 +125,369 @@ function PlaceholderTab({ label }: { label: string }) {
   );
 }
 
-export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState<Tab>('overview');
+interface SettingsTabProps {
+  activeSection: SettingsSection;
+  onSectionChange: (section: SettingsSection) => void;
+}
+
+function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
+  const { theme } = useTheme();
+  const { user } = useAuth();
+  const isLight = theme === 'light';
+  const cardClass = isLight ? 'bg-[#f5f7f5] border-[#e2e8e2]' : 'bg-[#0d110e] border-white/8';
+  const inputClass = isLight
+    ? 'bg-white border-[#d8e0d8] text-[#1a1f1a] placeholder-[#374137]/25 focus:border-[#487e4a]/60'
+    : 'bg-[#131a14] border-white/[0.08] text-white placeholder-[#d2d7d2]/25 focus:border-[#487e4a]/60';
+
+  const [fullName, setFullName] = useState('');
+  const [title, setTitle] = useState('');
+  const [timezone, setTimezone] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMessage, setProfileMessage] = useState('');
+  const [profileError, setProfileError] = useState('');
+
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+
+  useEffect(() => {
+    if (!user) return;
+    const metadata = user.user_metadata ?? {};
+    setFullName((metadata.full_name as string) ?? '');
+    setTitle((metadata.title as string) ?? '');
+    setTimezone((metadata.timezone as string) ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
+  }, [user]);
+
+  const teamMembers = useMemo(() => {
+    if (!user) return [];
+    return [
+      {
+        id: user.id,
+        email: user.email ?? 'Unknown',
+        role: ((user.user_metadata?.role as string) ?? 'owner').toLowerCase(),
+      },
+    ];
+  }, [user]);
+
+  const handleProfileSave = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setProfileError('');
+    setProfileMessage('');
+    setProfileSaving(true);
+
+    const { error } = await supabase.auth.updateUser({
+      data: {
+        full_name: fullName.trim(),
+        title: title.trim(),
+        timezone: timezone.trim(),
+      },
+    });
+
+    setProfileSaving(false);
+    if (error) {
+      setProfileError(error.message);
+      return;
+    }
+    setProfileMessage('Profile updated.');
+  };
+
+  const handlePasswordSave = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setPasswordError('');
+    setPasswordMessage('');
+
+    if (!user?.email) {
+      setPasswordError('No account email found for this user.');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordError('New password must be at least 8 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New password and confirmation do not match.');
+      return;
+    }
+
+    setPasswordSaving(true);
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: currentPassword,
+    });
+    if (signInError) {
+      setPasswordSaving(false);
+      setPasswordError('Current password is incorrect.');
+      return;
+    }
+
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+    setPasswordSaving(false);
+
+    if (updateError) {
+      setPasswordError(updateError.message);
+      return;
+    }
+
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordMessage('Password updated.');
+  };
+
+  const navItems: Array<{ id: SettingsSection; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }> = [
+    { id: 'account', label: 'Account', icon: UserCircle2 },
+    { id: 'organization', label: 'Organization', icon: Users },
+    { id: 'security', label: 'Security', icon: Shield },
+  ];
+
+  const renderSectionContent = () => {
+    if (activeSection === 'account') {
+      return (
+        <div className="space-y-6">
+          <section className={`${cardClass} border rounded-xl p-5`}>
+            <div className="flex items-center gap-2 mb-4">
+              <UserCircle2 size={16} className="text-[#6e966f]" />
+              <h3 className={`${isLight ? 'text-[#1a1f1a]' : 'text-white'} font-medium text-sm`}>Account Profile</h3>
+            </div>
+
+            <form className="space-y-4" onSubmit={handleProfileSave}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className={`${isLight ? 'text-[#374137]/55' : 'text-[#d2d7d2]/45'} text-xs block mb-1.5`}>Full name</label>
+                  <input
+                    value={fullName}
+                    onChange={(event) => setFullName(event.target.value)}
+                    className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none transition-colors ${inputClass}`}
+                    placeholder="Your name"
+                  />
+                </div>
+                <div>
+                  <label className={`${isLight ? 'text-[#374137]/55' : 'text-[#d2d7d2]/45'} text-xs block mb-1.5`}>Work email</label>
+                  <input
+                    value={user?.email ?? ''}
+                    disabled
+                    className={`w-full px-3 py-2.5 border rounded-lg text-sm opacity-70 cursor-not-allowed ${inputClass}`}
+                  />
+                </div>
+                <div>
+                  <label className={`${isLight ? 'text-[#374137]/55' : 'text-[#d2d7d2]/45'} text-xs block mb-1.5`}>Title / Department</label>
+                  <input
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                    className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none transition-colors ${inputClass}`}
+                    placeholder="Clinical lead, operations, etc."
+                  />
+                </div>
+                <div>
+                  <label className={`${isLight ? 'text-[#374137]/55' : 'text-[#d2d7d2]/45'} text-xs block mb-1.5`}>Timezone</label>
+                  <input
+                    value={timezone}
+                    onChange={(event) => setTimezone(event.target.value)}
+                    className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none transition-colors ${inputClass}`}
+                    placeholder="America/Phoenix"
+                  />
+                </div>
+              </div>
+
+              {profileError && <p className="text-sm text-red-500">{profileError}</p>}
+              {profileMessage && <p className="text-sm text-emerald-500">{profileMessage}</p>}
+
+              <button
+                type="submit"
+                disabled={profileSaving}
+                className="px-4 py-2 text-sm font-semibold text-white bg-[#487e4a] rounded-lg hover:bg-[#5a9a5c] transition-colors disabled:opacity-50"
+              >
+                {profileSaving ? 'Saving...' : 'Save profile'}
+              </button>
+            </form>
+          </section>
+
+          <section className={`${cardClass} border rounded-xl p-5`}>
+            <div className="flex items-center gap-2 mb-4">
+              <KeyRound size={16} className="text-[#6e966f]" />
+              <h3 className={`${isLight ? 'text-[#1a1f1a]' : 'text-white'} font-medium text-sm`}>Password</h3>
+            </div>
+
+            <form className="space-y-4" onSubmit={handlePasswordSave}>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                  className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none transition-colors ${inputClass}`}
+                  placeholder="Current password"
+                  required
+                />
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none transition-colors ${inputClass}`}
+                  placeholder="New password"
+                  required
+                />
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none transition-colors ${inputClass}`}
+                  placeholder="Confirm new password"
+                  required
+                />
+              </div>
+
+              {passwordError && <p className="text-sm text-red-500">{passwordError}</p>}
+              {passwordMessage && <p className="text-sm text-emerald-500">{passwordMessage}</p>}
+
+              <button
+                type="submit"
+                disabled={passwordSaving}
+                className="px-4 py-2 text-sm font-semibold text-white bg-[#487e4a] rounded-lg hover:bg-[#5a9a5c] transition-colors disabled:opacity-50"
+              >
+                {passwordSaving ? 'Updating...' : 'Change password'}
+              </button>
+            </form>
+          </section>
+        </div>
+      );
+    }
+
+    if (activeSection === 'organization') {
+      return (
+        <section className={`${cardClass} border rounded-xl p-5`}>
+          <div className="flex items-center gap-2 mb-4">
+            <Users size={16} className="text-[#6e966f]" />
+            <h3 className={`${isLight ? 'text-[#1a1f1a]' : 'text-white'} font-medium text-sm`}>Team</h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+            <div className={`border rounded-lg p-3 ${isLight ? 'border-[#dce8dc] bg-white' : 'border-white/[0.08] bg-[#131a14]'}`}>
+              <p className="text-sm font-semibold text-[#6e966f]">Owner</p>
+              <p className={`${isLight ? 'text-[#374137]/50' : 'text-[#d2d7d2]/45'} text-xs mt-1`}>Full workspace control and role assignment.</p>
+            </div>
+            <div className={`border rounded-lg p-3 ${isLight ? 'border-[#dce8dc] bg-white' : 'border-white/[0.08] bg-[#131a14]'}`}>
+              <p className="text-sm font-semibold text-[#6e966f]">Admin</p>
+              <p className={`${isLight ? 'text-[#374137]/50' : 'text-[#d2d7d2]/45'} text-xs mt-1`}>Manage users, org settings, and security settings.</p>
+            </div>
+            <div className={`border rounded-lg p-3 ${isLight ? 'border-[#dce8dc] bg-white' : 'border-white/[0.08] bg-[#131a14]'}`}>
+              <p className="text-sm font-semibold text-[#6e966f]">Member</p>
+              <p className={`${isLight ? 'text-[#374137]/50' : 'text-[#d2d7d2]/45'} text-xs mt-1`}>Use dashboard features and day-to-day workflows.</p>
+            </div>
+          </div>
+
+          <div className={`border rounded-lg overflow-hidden ${isLight ? 'border-[#dce8dc]' : 'border-white/[0.08]'}`}>
+            <div className={`grid grid-cols-2 px-3 py-2 text-xs font-medium ${isLight ? 'bg-white text-[#374137]/60' : 'bg-[#131a14] text-[#d2d7d2]/50'}`}>
+              <span>User</span>
+              <span>Role</span>
+            </div>
+            {teamMembers.map((member) => (
+              <div key={member.id} className={`grid grid-cols-2 px-3 py-2.5 text-sm ${isLight ? 'bg-[#fdfefd] text-[#1a1f1a]' : 'bg-[#0f1510] text-[#d2d7d2]'}`}>
+                <span className="truncate">{member.email}</span>
+                <span className="capitalize">{member.role}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      );
+    }
+
+    return (
+      <section className={`${cardClass} border rounded-xl p-5`}>
+        <div className="flex items-center gap-2 mb-2">
+          <Shield size={16} className="text-[#6e966f]" />
+          <h3 className={`${isLight ? 'text-[#1a1f1a]' : 'text-white'} font-medium text-sm`}>Security</h3>
+        </div>
+        <p className={`${isLight ? 'text-[#374137]/55' : 'text-[#d2d7d2]/45'} text-sm`}>
+          Security controls are being rolled out in phases. Next up: active sessions, sign-out-all-devices, and audit history.
+        </p>
+      </section>
+    );
+  };
+
+  return (
+    <div className="p-6 space-y-6 overflow-y-auto h-full">
+      <div>
+        <h2 className={`${isLight ? 'text-[#1a1f1a]' : 'text-white'} font-semibold text-lg mb-1`}>Settings</h2>
+        <p className={`${isLight ? 'text-[#374137]/50' : 'text-[#d2d7d2]/40'} text-sm`}>
+          Select a settings section to manage account, organization, and security.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-[220px,1fr] gap-4">
+        <aside className={`${cardClass} border rounded-xl p-3 h-fit`}>
+          <div className="md:hidden mb-2">
+            <label className={`${isLight ? 'text-[#374137]/55' : 'text-[#d2d7d2]/45'} text-xs block mb-1.5`}>Section</label>
+            <select
+              value={activeSection}
+              onChange={(event) => onSectionChange(event.target.value as SettingsSection)}
+              className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none transition-colors ${inputClass}`}
+            >
+              {navItems.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <nav className="hidden md:flex flex-col gap-1">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const selected = activeSection === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => onSectionChange(item.id)}
+                  className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    selected
+                      ? 'bg-[#487e4a]/15 text-[#5a8a5c]'
+                      : isLight
+                        ? 'text-[#374137]/65 hover:bg-[#1a1f1a]/[0.05] hover:text-[#1a1f1a]'
+                        : 'text-[#d2d7d2]/60 hover:bg-white/[0.05] hover:text-white'
+                  }`}
+                >
+                  <Icon size={14} />
+                  {item.label}
+                </button>
+              );
+            })}
+          </nav>
+        </aside>
+
+        <div>{renderSectionContent()}</div>
+      </div>
+    </div>
+  );
+}
+
+interface DashboardProps {
+  activeTab?: DashboardTab;
+  onTabChange?: (tab: DashboardTab) => void;
+  settingsSection?: SettingsSection;
+  onSettingsSectionChange?: (section: SettingsSection) => void;
+}
+
+export default function Dashboard({
+  activeTab,
+  onTabChange,
+  settingsSection,
+  onSettingsSectionChange,
+}: DashboardProps) {
+  const [internalActiveTab, setInternalActiveTab] = useState<DashboardTab>('overview');
+  const [internalSettingsSection, setInternalSettingsSection] = useState<SettingsSection>('account');
   const [chatMessages, setChatMessages] = useState<ExtendedMessage[]>([]);
   const [chatSelectedDocIds, setChatSelectedDocIds] = useState<string[]>([]);
   const { theme } = useTheme();
   const isLight = theme === 'light';
+  const resolvedActiveTab = activeTab ?? internalActiveTab;
+  const resolvedSettingsSection = settingsSection ?? internalSettingsSection;
 
   const pageBg = isLight ? 'bg-[#f5f7f5]' : 'bg-[#0d110e]';
   const tabBarBg = isLight ? 'border-[#e2e8e2] bg-[#f5f7f5]/80' : 'border-white/5 bg-[#0d110e]/80';
@@ -142,7 +500,7 @@ export default function Dashboard() {
   const panelBg = isLight ? 'bg-white border-[#e2e8e2]' : 'bg-[#131a14] border-white/5';
 
   const renderContent = () => {
-    switch (activeTab) {
+    switch (resolvedActiveTab) {
       case 'overview': return <OverviewTab />;
       case 'chat': return (
         <DashboardChat
@@ -155,7 +513,15 @@ export default function Dashboard() {
       case 'knowledge': return <KnowledgeBase />;
       case 'workflows': return <PlaceholderTab label="Workflows" />;
       case 'reports': return <PlaceholderTab label="Reports" />;
-      case 'settings': return <PlaceholderTab label="Settings" />;
+      case 'settings': return (
+        <SettingsTab
+          activeSection={resolvedSettingsSection}
+          onSectionChange={(section) => {
+            onSettingsSectionChange?.(section);
+            if (!onSettingsSectionChange) setInternalSettingsSection(section);
+          }}
+        />
+      );
     }
   };
 
@@ -166,11 +532,14 @@ export default function Dashboard() {
           <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide py-1">
             {TABS.map((tab) => {
               const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
+              const isActive = resolvedActiveTab === tab.id;
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => {
+                    onTabChange?.(tab.id);
+                    if (!onTabChange) setInternalActiveTab(tab.id);
+                  }}
                   className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-all duration-150 whitespace-nowrap ${
                     isActive ? activeTabClass : inactiveTabClass
                   }`}
