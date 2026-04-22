@@ -10,6 +10,17 @@
     <meta name="twitter:image" content="https://bolt.new/static/og_default.png" />
   </head>
   <body>
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('piq-theme-v2');
+          var theme = (stored === 'light' || stored === 'dark') ? stored : 'light';
+          document.documentElement.classList.add(theme);
+        } catch (e) {
+          document.documentElement.classList.add('light');
+        }
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

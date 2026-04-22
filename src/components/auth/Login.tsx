@@ -33,17 +33,17 @@ export default function Login({ onViewChange }: LoginProps) {
     onViewChange('dashboard');
   };
 
-  const pageBg = isLight ? 'bg-[#f5f7f5]' : 'bg-[#0d110e]';
-  const logoText = isLight ? 'text-[#1a1f1a]' : 'text-white';
-  const headingColor = isLight ? 'text-[#1a1f1a]' : 'text-white';
-  const subColor = isLight ? 'text-[#374137]/45' : 'text-[#d2d7d2]/45';
-  const backColor = isLight ? 'text-[#374137]/40 hover:text-[#374137]/70' : 'text-[#d2d7d2]/40 hover:text-[#d2d7d2]/70';
-  const labelColor = isLight ? 'text-[#374137]/70' : 'text-[#d2d7d2]/70';
+  const pageBg = isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]';
+  const logoText = isLight ? 'text-[#1a1f28]' : 'text-white';
+  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
+  const subColor = isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/45';
+  const backColor = isLight ? 'text-[#374152]/40 hover:text-[#374152]/70' : 'text-[#d2d7e0]/40 hover:text-[#d2d7e0]/70';
+  const labelColor = isLight ? 'text-[#374152]/70' : 'text-[#d2d7e0]/70';
   const inputBg = isLight
-    ? 'bg-white border-[#d8e0d8] text-[#1a1f1a] placeholder-[#374137]/20 focus:border-[#487e4a]/60 focus:ring-[#487e4a]/30'
-    : 'bg-[#131a14] border-white/[0.08] text-white placeholder-[#d2d7d2]/20 focus:border-[#487e4a]/60 focus:ring-[#487e4a]/30';
-  const eyeColor = isLight ? 'text-[#374137]/30 hover:text-[#374137]/60' : 'text-[#d2d7d2]/30 hover:text-[#d2d7d2]/60';
-  const footerColor = isLight ? 'text-[#374137]/40' : 'text-[#d2d7d2]/40';
+    ? 'bg-white border-[#d8dfe8] text-[#1a1f28] placeholder-[#374152]/20 focus:border-[#4a6fa5]/60 focus:ring-[#4a6fa5]/30'
+    : 'bg-[#131a22] border-white/[0.08] text-white placeholder-[#d2d7e0]/20 focus:border-[#4a6fa5]/60 focus:ring-[#4a6fa5]/30';
+  const eyeColor = isLight ? 'text-[#374152]/30 hover:text-[#374152]/60' : 'text-[#d2d7e0]/30 hover:text-[#d2d7e0]/60';
+  const footerColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/40';
 
   return (
     <div className={`min-h-screen ${pageBg} flex flex-col items-center justify-center px-4 relative overflow-hidden`}>
@@ -51,8 +51,8 @@ export default function Login({ onViewChange }: LoginProps) {
         className="absolute inset-0 pointer-events-none"
         style={{
           background: isLight
-            ? 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(72,126,74,0.10) 0%, transparent 65%)'
-            : 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(72,126,74,0.18) 0%, transparent 65%)',
+            ? 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(74,111,165,0.10) 0%, transparent 65%)'
+            : 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(74,111,165,0.18) 0%, transparent 65%)',
         }}
       />
 
@@ -62,15 +62,15 @@ export default function Login({ onViewChange }: LoginProps) {
           className={`flex items-center gap-1.5 text-sm ${backColor} transition-colors mb-8 group`}
         >
           <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
-          Back to home
+          Back
         </button>
 
         <div className="flex items-center gap-2.5 mb-8">
-          <div className="w-8 h-8 rounded-lg bg-[#487e4a] flex items-center justify-center shadow-btn">
+          <div className="w-8 h-8 rounded-lg bg-[#4a6fa5] flex items-center justify-center shadow-btn">
             <Activity className="w-4 h-4 text-white" strokeWidth={2.5} />
           </div>
           <span className={`text-[15px] font-semibold ${logoText} tracking-tight`}>
-            PIQ<span className="text-[#6e966f]">Clinical</span>
+            PIQ<span className="text-[#6e8fb5]">Clinical</span>
           </span>
         </div>
 
@@ -103,7 +103,7 @@ export default function Login({ onViewChange }: LoginProps) {
               <button
                 type="button"
                 onClick={() => onViewChange('forgot-password')}
-                className="text-xs text-[#6e966f] hover:text-[#87b589] transition-colors font-medium"
+                className="text-xs text-[#6e8fb5] hover:text-[#87b5c7] transition-colors font-medium"
               >
                 Forgot password?
               </button>
@@ -137,7 +137,7 @@ export default function Login({ onViewChange }: LoginProps) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-[#487e4a] rounded-lg hover:bg-[#5a9a5c] transition-all duration-150 shadow-btn hover:shadow-btn-hover disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+            className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-all duration-150 shadow-btn hover:shadow-btn-hover disabled:opacity-50 disabled:cursor-not-allowed mt-2"
           >
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
@@ -148,7 +148,7 @@ export default function Login({ onViewChange }: LoginProps) {
           <button
             type="button"
             onClick={() => onViewChange('landing', 'contact')}
-            className="text-[#6e966f] hover:text-[#87b589] transition-colors font-medium"
+            className="text-[#6e8fb5] hover:text-[#87b5c7] transition-colors font-medium"
           >
             Request access
           </button>

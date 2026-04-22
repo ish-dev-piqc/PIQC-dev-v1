@@ -3,13 +3,16 @@ import { Menu, X, Activity, LayoutDashboard, LogOut, ChevronDown, User, Home, Su
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import type { AppView } from '../App';
+import type { SettingsSection } from './dashboard/Dashboard';
 
 interface NavbarProps {
   view: AppView;
   onViewChange: (view: AppView) => void;
+  onDashboardHome: () => void;
+  onOpenSettingsSection: (section: SettingsSection) => void;
 }
 
-export default function Navbar({ view, onViewChange }: NavbarProps) {
+export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSettingsSection }: NavbarProps) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -49,27 +52,39 @@ export default function Navbar({ view, onViewChange }: NavbarProps) {
     setMobileOpen(false);
   };
 
+  const handleDashboardHome = () => {
+    onDashboardHome();
+    setUserMenuOpen(false);
+    setMobileOpen(false);
+  };
+
+  const handleOpenSettingsSection = (section: SettingsSection) => {
+    onOpenSettingsSection(section);
+    setUserMenuOpen(false);
+    setMobileOpen(false);
+  };
+
   const headerBg = isLight
     ? scrolled || isDashboard
-      ? 'bg-white/95 backdrop-blur-md border-b border-[#e2e8e2]'
+      ? 'bg-white/95 backdrop-blur-md border-b border-[#e2e8ee]'
       : 'bg-transparent'
     : scrolled || isDashboard
-      ? 'bg-[#0d110e]/95 backdrop-blur-md border-b border-white/[0.05]'
+      ? 'bg-[#0d1118]/95 backdrop-blur-md border-b border-white/[0.05]'
       : 'bg-transparent';
 
   const navLinkClass = isLight
-    ? 'px-4 py-2 text-sm font-medium text-[#374137]/70 hover:text-[#1a1f1a] rounded-lg hover:bg-[#1a1f1a]/[0.06] transition-all duration-150'
-    : 'px-4 py-2 text-sm font-medium text-[#d2d7d2]/70 hover:text-white rounded-lg hover:bg-white/[0.06] transition-all duration-150';
+    ? 'px-4 py-2 text-sm font-medium text-[#374152]/70 hover:text-[#1a1f28] rounded-lg hover:bg-[#1a1f28]/[0.06] transition-all duration-150'
+    : 'px-4 py-2 text-sm font-medium text-[#d2d7e0]/70 hover:text-white rounded-lg hover:bg-white/[0.06] transition-all duration-150';
 
   const mobileBg = isLight
-    ? 'border-t border-[#e2e8e2] bg-white/98 px-4 pb-4 pt-2'
-    : 'border-t border-white/[0.06] bg-[#0d110e]/98 px-4 pb-4 pt-2';
+    ? 'border-t border-[#e2e8ee] bg-white px-4 pb-4 pt-2 shadow-lg'
+    : 'border-t border-white/[0.06] bg-[#0d1118] px-4 pb-4 pt-2 shadow-lg';
 
-  const logoTextColor = isLight ? 'text-[#1a1f1a]' : 'text-white';
+  const logoTextColor = isLight ? 'text-[#1a1f28]' : 'text-white';
 
   const themeButtonClass = isLight
-    ? 'p-2 rounded-lg text-[#374137]/60 hover:text-[#1a1f1a] hover:bg-[#1a1f1a]/[0.06] transition-colors'
-    : 'p-2 rounded-lg text-[#d2d7d2]/50 hover:text-white hover:bg-white/[0.06] transition-colors';
+    ? 'p-2 rounded-lg text-[#374152]/60 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.06] transition-colors'
+    : 'p-2 rounded-lg text-[#d2d7e0]/50 hover:text-white hover:bg-white/[0.06] transition-colors';
 
   return (
     <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${headerBg}`}>
@@ -77,7 +92,8 @@ export default function Navbar({ view, onViewChange }: NavbarProps) {
         <div className="flex items-center justify-between h-16">
           <button
             onClick={() => {
-              if (isDashboard) {
+              if (isLoggedIn) {
+                onDashboardHome();
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               } else {
                 onViewChange('landing');
@@ -86,19 +102,19 @@ export default function Navbar({ view, onViewChange }: NavbarProps) {
             }}
             className="flex items-center gap-2.5 group"
           >
-            <div className="w-8 h-8 rounded-lg bg-[#487e4a] flex items-center justify-center shadow-btn group-hover:bg-[#5a9a5c] transition-colors">
+            <div className="w-8 h-8 rounded-lg bg-[#4a6fa5] flex items-center justify-center shadow-btn group-hover:bg-[#5b82b8] transition-colors">
               <Activity className="w-4 h-4 text-white" strokeWidth={2.5} />
             </div>
             <span className={`text-[15px] font-semibold ${logoTextColor} tracking-tight`}>
-              PIQ<span className="text-[#6e966f]">Clinical</span>
+              PIQ<span className="text-[#6e8fb5]">Clinical</span>
             </span>
           </button>
 
           {isDashboard ? (
             <nav className="hidden md:flex items-center gap-2">
-              <div className={`flex items-center gap-2 px-3 py-1.5 ${isLight ? 'bg-[#487e4a]/10 border border-[#487e4a]/20' : 'bg-[#487e4a]/10 border border-[#487e4a]/20'} rounded-lg`}>
-                <LayoutDashboard size={14} className="text-[#6e966f]" />
-                <span className="text-sm font-medium text-[#6e966f]">Dashboard</span>
+              <div className={`flex items-center gap-2 px-3 py-1.5 ${isLight ? 'bg-[#4a6fa5]/10 border border-[#4a6fa5]/20' : 'bg-[#4a6fa5]/10 border border-[#4a6fa5]/20'} rounded-lg`}>
+                <LayoutDashboard size={14} className="text-[#6e8fb5]" />
+                <span className="text-sm font-medium text-[#6e8fb5]">Dashboard</span>
               </div>
 
               <button
@@ -112,35 +128,52 @@ export default function Navbar({ view, onViewChange }: NavbarProps) {
               <div className="relative" ref={userMenuRef}>
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-150 group ${isLight ? 'hover:bg-[#1a1f1a]/[0.06]' : 'hover:bg-white/[0.06]'}`}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-150 group ${isLight ? 'hover:bg-[#1a1f28]/[0.06]' : 'hover:bg-white/[0.06]'}`}
                 >
-                  <div className="w-7 h-7 rounded-full bg-[#487e4a]/20 border border-[#487e4a]/30 flex items-center justify-center">
-                    <User size={13} className="text-[#6e966f]" />
+                  <div className="w-7 h-7 rounded-full bg-[#4a6fa5]/20 border border-[#4a6fa5]/30 flex items-center justify-center">
+                    <User size={13} className="text-[#6e8fb5]" />
                   </div>
-                  <span className={`text-sm ${isLight ? 'text-[#374137]/60 group-hover:text-[#1a1f1a]' : 'text-[#d2d7d2]/60 group-hover:text-white'} transition-colors max-w-[140px] truncate`}>
+                  <span className={`text-sm ${isLight ? 'text-[#374152]/60 group-hover:text-[#1a1f28]' : 'text-[#d2d7e0]/60 group-hover:text-white'} transition-colors max-w-[140px] truncate`}>
                     {user?.email ?? 'Account'}
                   </span>
                   <ChevronDown
                     size={13}
-                    className={`${isLight ? 'text-[#374137]/40' : 'text-[#d2d7d2]/40'} transition-transform duration-200 ${userMenuOpen ? 'rotate-180' : ''}`}
+                    className={`${isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/40'} transition-transform duration-200 ${userMenuOpen ? 'rotate-180' : ''}`}
                   />
                 </button>
 
                 {userMenuOpen && (
-                  <div className={`absolute right-0 top-full mt-2 w-56 ${isLight ? 'bg-white border border-[#e2e8e2]' : 'bg-[#131a14] border border-white/10'} rounded-xl shadow-2xl overflow-hidden z-50`}>
-                    <div className={`px-4 py-3 border-b ${isLight ? 'border-[#e2e8e2]' : 'border-white/[0.06]'}`}>
-                      <p className={`text-xs ${isLight ? 'text-[#374137]/40' : 'text-[#d2d7d2]/40'} mb-0.5`}>Signed in as</p>
-                      <p className={`text-sm ${isLight ? 'text-[#1a1f1a]' : 'text-white'} font-medium truncate`}>{user?.email}</p>
+                  <div className={`absolute right-0 top-full mt-2 w-56 ${isLight ? 'bg-white border border-[#e2e8ee]' : 'bg-[#131a22] border border-white/10'} rounded-xl shadow-2xl overflow-hidden z-50`}>
+                    <div className={`px-4 py-3 border-b ${isLight ? 'border-[#e2e8ee]' : 'border-white/[0.06]'}`}>
+                      <p className={`text-xs ${isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/40'} mb-0.5`}>Signed in as</p>
+                      <p className={`text-sm ${isLight ? 'text-[#1a1f28]' : 'text-white'} font-medium truncate`}>{user?.email}</p>
                     </div>
                     <div className="p-1.5">
+                      <p className={`px-3 py-1.5 text-[11px] uppercase tracking-wider ${isLight ? 'text-[#374152]/35' : 'text-[#d2d7e0]/35'}`}>
+                        Settings
+                      </p>
                       <button
-                        onClick={() => { setUserMenuOpen(false); onViewChange('landing'); }}
-                        className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm ${isLight ? 'text-[#374137]/60 hover:text-[#1a1f1a] hover:bg-[#1a1f1a]/[0.05]' : 'text-[#d2d7d2]/60 hover:text-white hover:bg-white/[0.05]'} rounded-lg transition-all duration-150`}
+                        onClick={() => handleOpenSettingsSection('account')}
+                        className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm ${isLight ? 'text-[#374152]/60 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.05]' : 'text-[#d2d7e0]/60 hover:text-white hover:bg-white/[0.05]'} rounded-lg transition-all duration-150`}
                       >
                         <Home size={14} />
-                        Back to Home
+                        Account
                       </button>
-                      <div className={`my-1 h-px ${isLight ? 'bg-[#e2e8e2]' : 'bg-white/[0.05]'}`} />
+                      <button
+                        onClick={() => handleOpenSettingsSection('organization')}
+                        className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm ${isLight ? 'text-[#374152]/60 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.05]' : 'text-[#d2d7e0]/60 hover:text-white hover:bg-white/[0.05]'} rounded-lg transition-all duration-150`}
+                      >
+                        <Home size={14} />
+                        Organization
+                      </button>
+                      <button
+                        onClick={() => handleOpenSettingsSection('security')}
+                        className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm ${isLight ? 'text-[#374152]/60 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.05]' : 'text-[#d2d7e0]/60 hover:text-white hover:bg-white/[0.05]'} rounded-lg transition-all duration-150`}
+                      >
+                        <Home size={14} />
+                        Security
+                      </button>
+                      <div className={`my-1 h-px ${isLight ? 'bg-[#e2e8ee]' : 'bg-white/[0.05]'}`} />
                       <button
                         onClick={handleSignOut}
                         className="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-red-500/80 hover:text-red-500 hover:bg-red-500/[0.06] rounded-lg transition-all duration-150"
@@ -172,7 +205,7 @@ export default function Navbar({ view, onViewChange }: NavbarProps) {
               {isLoggedIn ? (
                 <button
                   onClick={() => onViewChange('dashboard')}
-                  className="ml-2 px-4 py-2 text-sm font-semibold text-white bg-[#487e4a] rounded-lg hover:bg-[#5a9a5c] transition-all duration-150 shadow-btn hover:shadow-btn-hover"
+                  className="ml-2 px-4 py-2 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-all duration-150 shadow-btn hover:shadow-btn-hover"
                 >
                   Dashboard
                 </button>
@@ -186,7 +219,7 @@ export default function Navbar({ view, onViewChange }: NavbarProps) {
                   </button>
                   <a
                     href="#contact"
-                    className="ml-2 px-4 py-2 text-sm font-semibold text-white bg-[#487e4a] rounded-lg hover:bg-[#5a9a5c] transition-all duration-150 shadow-btn hover:shadow-btn-hover"
+                    className="ml-2 px-4 py-2 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-all duration-150 shadow-btn hover:shadow-btn-hover"
                   >
                     Get Started
                   </a>
@@ -204,7 +237,7 @@ export default function Navbar({ view, onViewChange }: NavbarProps) {
               {isLight ? <Moon size={16} /> : <Sun size={16} />}
             </button>
             <button
-              className={`p-2 rounded-lg ${isLight ? 'text-[#374137]/70 hover:text-[#1a1f1a] hover:bg-[#1a1f1a]/[0.06]' : 'text-[#d2d7d2]/70 hover:text-white hover:bg-white/[0.06]'} transition-colors`}
+              className={`p-2 rounded-lg ${isLight ? 'text-[#374152]/70 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.06]' : 'text-[#d2d7e0]/70 hover:text-white hover:bg-white/[0.06]'} transition-colors`}
               onClick={() => setMobileOpen(!mobileOpen)}
               aria-label="Toggle menu"
             >
@@ -218,16 +251,30 @@ export default function Navbar({ view, onViewChange }: NavbarProps) {
         <div className={`md:hidden ${mobileBg}`}>
           {isDashboard ? (
             <>
-              <div className={`px-3 py-2.5 border-b ${isLight ? 'border-[#e2e8e2]' : 'border-white/[0.06]'} mb-1`}>
-                <p className={`text-xs ${isLight ? 'text-[#374137]/40' : 'text-[#d2d7d2]/40'} mb-0.5`}>Signed in as</p>
-                <p className={`text-sm ${isLight ? 'text-[#1a1f1a]' : 'text-white'} font-medium truncate`}>{user?.email}</p>
+              <div className={`px-3 py-2.5 border-b ${isLight ? 'border-[#e2e8ee]' : 'border-white/[0.06]'} mb-1`}>
+                <p className={`text-xs ${isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/40'} mb-0.5`}>Signed in as</p>
+                <p className={`text-sm ${isLight ? 'text-[#1a1f28]' : 'text-white'} font-medium truncate`}>{user?.email}</p>
               </div>
               <button
-                onClick={() => { setMobileOpen(false); onViewChange('landing'); }}
-                className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#374137]/70 hover:text-[#1a1f1a] hover:bg-[#1a1f1a]/[0.06]' : 'text-[#d2d7d2]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
+                onClick={() => handleOpenSettingsSection('account')}
+                className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#374152]/70 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.06]' : 'text-[#d2d7e0]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
               >
                 <Home size={14} />
-                Back to Home
+                Account
+              </button>
+              <button
+                onClick={() => handleOpenSettingsSection('organization')}
+                className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#374152]/70 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.06]' : 'text-[#d2d7e0]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
+              >
+                <Home size={14} />
+                Organization
+              </button>
+              <button
+                onClick={() => handleOpenSettingsSection('security')}
+                className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#374152]/70 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.06]' : 'text-[#d2d7e0]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
+              >
+                <Home size={14} />
+                Security
               </button>
               <button
                 onClick={handleSignOut}
@@ -244,7 +291,7 @@ export default function Navbar({ view, onViewChange }: NavbarProps) {
                   key={link.label}
                   href={link.href}
                   onClick={() => setMobileOpen(false)}
-                  className={`block px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#374137]/70 hover:text-[#1a1f1a] hover:bg-[#1a1f1a]/[0.06]' : 'text-[#d2d7d2]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
+                  className={`block px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#374152]/70 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.06]' : 'text-[#d2d7e0]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
                 >
                   {link.label}
                 </a>
@@ -252,7 +299,7 @@ export default function Navbar({ view, onViewChange }: NavbarProps) {
               {isLoggedIn ? (
                 <button
                   onClick={() => { onViewChange('dashboard'); setMobileOpen(false); }}
-                  className="mt-2 w-full text-center px-4 py-2.5 text-sm font-semibold text-white bg-[#487e4a] rounded-lg hover:bg-[#5a9a5c] transition-colors block"
+                  className="mt-2 w-full text-center px-4 py-2.5 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors block"
                 >
                   Dashboard
                 </button>
@@ -260,14 +307,14 @@ export default function Navbar({ view, onViewChange }: NavbarProps) {
                 <>
                   <button
                     onClick={() => { onViewChange('login'); setMobileOpen(false); }}
-                    className={`w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#374137]/70 hover:text-[#1a1f1a] hover:bg-[#1a1f1a]/[0.06]' : 'text-[#d2d7d2]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors text-left`}
+                    className={`w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#374152]/70 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.06]' : 'text-[#d2d7e0]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors text-left`}
                   >
                     Log In
                   </button>
                   <a
                     href="#contact"
                     onClick={() => setMobileOpen(false)}
-                    className="mt-2 block text-center px-4 py-2.5 text-sm font-semibold text-white bg-[#487e4a] rounded-lg hover:bg-[#5a9a5c] transition-colors"
+                    className="mt-2 block text-center px-4 py-2.5 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors"
                   >
                     Get Started
                   </a>
