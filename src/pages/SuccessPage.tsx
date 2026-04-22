@@ -16,9 +16,9 @@ export function SuccessPage() {
       <div className="px-4 py-6 sm:px-0">
         <div className="max-w-md mx-auto">
           <div className="text-center">
-            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 mb-4">
               <svg
-                className="h-6 w-6 text-green-600"
+                className="h-6 w-6 text-blue-600"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"

@@ -69,13 +69,13 @@ function AppContent() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const pageBg = theme === 'light' ? 'bg-[#f5f7f5]' : 'bg-[#070d1a]';
-  const textColor = theme === 'light' ? 'text-[#1a1f1a]' : 'text-white';
+  const pageBg = theme === 'light' ? 'bg-[#f5f7fa]' : 'bg-[#070d1a]';
+  const textColor = theme === 'light' ? 'text-[#1a1f28]' : 'text-white';
 
   if (loading) {
     return (
-      <div className={`min-h-screen ${theme === 'light' ? 'bg-[#f5f7f5]' : 'bg-[#0d110e]'} flex items-center justify-center`}>
-        <div className="w-6 h-6 border-2 border-[#487e4a] border-t-transparent rounded-full animate-spin" />
+      <div className={`min-h-screen ${theme === 'light' ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]'} flex items-center justify-center`}>
+        <div className="w-6 h-6 border-2 border-[#4a6fa5] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }

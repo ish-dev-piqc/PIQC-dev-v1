@@ -100,7 +100,7 @@ function RagStatusTag({ ragStatus, ragError, isLight }: { ragStatus: RagStatus; 
   if (ragStatus === 'found') {
     return (
       <div className={`flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full w-fit text-[10px] font-medium ${
-        isLight ? 'text-[#3a6b3c]/70 bg-[#487e4a]/08' : 'text-[#6aaa6c]/60 bg-[#487e4a]/10'
+        isLight ? 'text-[#3a5a85]/70 bg-[#4a6fa5]/08' : 'text-[#6a8fb8]/60 bg-[#4a6fa5]/10'
       }`}>
         <Database size={9} />
         <span>Answered from knowledge base</span>
@@ -142,37 +142,37 @@ function MessageBubble({ msg, isLight }: { msg: ExtendedMessage; isLight: boolea
     <div className={`flex gap-3 group ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
       <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-sm ${
         isUser
-          ? 'bg-gradient-to-br from-[#5a9a5c] to-[#3d6b3f]'
+          ? 'bg-gradient-to-br from-[#5b82b8] to-[#3d6ba5]'
           : isLight
-          ? 'bg-gradient-to-br from-[#e8f0e8] to-[#d4e4d4] border border-[#c8dcc8]'
-          : 'bg-gradient-to-br from-[#1e2b1e] to-[#141d14] border border-[#2a3a2a]'
+          ? 'bg-gradient-to-br from-[#e8f0f6] to-[#d4e4ee] border border-[#c8dce4]'
+          : 'bg-gradient-to-br from-[#1e2b35] to-[#141d22] border border-[#2a3a45]'
       }`}>
         {isUser
           ? <User size={14} className="text-white" />
-          : <BookOpen size={14} className="text-[#5a8a5c]" />
+          : <BookOpen size={14} className="text-[#5a7fa5]" />
         }
       </div>
 
       <div className={`flex flex-col gap-1 max-w-[78%] ${isUser ? 'items-end' : 'items-start'}`}>
         <span className={`text-[10px] font-medium tracking-wide uppercase px-1 ${
           isUser
-            ? isLight ? 'text-[#374137]/40' : 'text-[#d2d7d2]/30'
-            : isLight ? 'text-[#374137]/40' : 'text-[#d2d7d2]/30'
+            ? isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/30'
+            : isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/30'
         }`}>
           {isUser ? 'You' : 'Protocol Assistant'}
         </span>
         <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
           isUser
-            ? 'bg-gradient-to-br from-[#5a9a5c] to-[#3d6b3f] text-white rounded-tr-sm'
+            ? 'bg-gradient-to-br from-[#5b82b8] to-[#3d6ba5] text-white rounded-tr-sm'
             : isLight
-            ? 'bg-white text-[#2a3a2a] rounded-tl-sm border border-[#e2e8e2] shadow-[0_1px_4px_rgba(0,0,0,0.06)]'
-            : 'bg-[#171f18] text-[#c8d4c8] rounded-tl-sm border border-white/[0.07] shadow-[0_1px_4px_rgba(0,0,0,0.3)]'
+            ? 'bg-white text-[#2a3a45] rounded-tl-sm border border-[#e2e8ee] shadow-[0_1px_4px_rgba(0,0,0,0.06)]'
+            : 'bg-[#171f25] text-[#c8d4e0] rounded-tl-sm border border-white/[0.07] shadow-[0_1px_4px_rgba(0,0,0,0.3)]'
         }`}>
           {msg.content.split('\n').map((line, i) => {
             if (line.startsWith('- ')) {
               return (
                 <div key={i} className="flex gap-2 my-1">
-                  <span className={`mt-1.5 flex-shrink-0 w-1.5 h-1.5 rounded-full ${isUser ? 'bg-white/70' : 'bg-[#5a8a5c]'}`} />
+                  <span className={`mt-1.5 flex-shrink-0 w-1.5 h-1.5 rounded-full ${isUser ? 'bg-white/70' : 'bg-[#5a7fa5]'}`} />
                   <span>{renderContent(line.slice(2))}</span>
                 </div>
               );
@@ -184,7 +184,7 @@ function MessageBubble({ msg, isLight }: { msg: ExtendedMessage; isLight: boolea
             );
           })}
           {msg.streaming && (
-            <span className="inline-block w-0.5 h-4 ml-0.5 bg-[#5a8a5c] animate-pulse rounded-full align-middle" />
+            <span className="inline-block w-0.5 h-4 ml-0.5 bg-[#5a7fa5] animate-pulse rounded-full align-middle" />
           )}
         </div>
         {!isUser && !msg.streaming && msg.ragStatus && (
@@ -200,30 +200,30 @@ function TypingIndicator({ retrieving, isLight }: { retrieving?: boolean; isLigh
     <div className="flex gap-3">
       <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm ${
         isLight
-          ? 'bg-gradient-to-br from-[#e8f0e8] to-[#d4e4d4] border border-[#c8dcc8]'
-          : 'bg-gradient-to-br from-[#1e2b1e] to-[#141d14] border border-[#2a3a2a]'
+          ? 'bg-gradient-to-br from-[#e8f0f6] to-[#d4e4ee] border border-[#c8dce4]'
+          : 'bg-gradient-to-br from-[#1e2b35] to-[#141d22] border border-[#2a3a45]'
       }`}>
-        <BookOpen size={14} className="text-[#5a8a5c]" />
+        <BookOpen size={14} className="text-[#5a7fa5]" />
       </div>
       <div className="flex flex-col gap-1 items-start">
-        <span className={`text-[10px] font-medium tracking-wide uppercase px-1 ${isLight ? 'text-[#374137]/40' : 'text-[#d2d7d2]/30'}`}>
+        <span className={`text-[10px] font-medium tracking-wide uppercase px-1 ${isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/30'}`}>
           Protocol Assistant
         </span>
         <div className={`rounded-2xl rounded-tl-sm px-4 py-3 flex gap-2 items-center shadow-sm ${
           isLight
-            ? 'bg-white border border-[#e2e8e2] shadow-[0_1px_4px_rgba(0,0,0,0.06)]'
-            : 'bg-[#171f18] border border-white/[0.07] shadow-[0_1px_4px_rgba(0,0,0,0.3)]'
+            ? 'bg-white border border-[#e2e8ee] shadow-[0_1px_4px_rgba(0,0,0,0.06)]'
+            : 'bg-[#171f25] border border-white/[0.07] shadow-[0_1px_4px_rgba(0,0,0,0.3)]'
         }`}>
           {retrieving ? (
             <>
-              <Search size={13} className="text-[#5a8a5c] animate-pulse flex-shrink-0" />
-              <span className={`text-xs ${isLight ? 'text-[#374137]/50' : 'text-[#d2d7d2]/40'}`}>Searching knowledge base...</span>
+              <Search size={13} className="text-[#5a7fa5] animate-pulse flex-shrink-0" />
+              <span className={`text-xs ${isLight ? 'text-[#374152]/50' : 'text-[#d2d7e0]/40'}`}>Searching knowledge base...</span>
             </>
           ) : (
             <div className="flex gap-1.5 items-center">
-              <span className="w-2 h-2 rounded-full bg-[#5a8a5c]/70 animate-bounce" style={{ animationDelay: '0ms' }} />
-              <span className="w-2 h-2 rounded-full bg-[#5a8a5c]/70 animate-bounce" style={{ animationDelay: '160ms' }} />
-              <span className="w-2 h-2 rounded-full bg-[#5a8a5c]/70 animate-bounce" style={{ animationDelay: '320ms' }} />
+              <span className="w-2 h-2 rounded-full bg-[#5a7fa5]/70 animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-2 h-2 rounded-full bg-[#5a7fa5]/70 animate-bounce" style={{ animationDelay: '160ms' }} />
+              <span className="w-2 h-2 rounded-full bg-[#5a7fa5]/70 animate-bounce" style={{ animationDelay: '320ms' }} />
             </div>
           )}
         </div>
@@ -284,10 +284,10 @@ function DocumentSelector({ selectedDocIds, onSelectionChange, isLight }: Docume
         onClick={() => setOpen(o => !o)}
         className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all duration-150 ${
           selectedDocIds.length > 0
-            ? 'bg-[#487e4a]/15 border-[#487e4a]/40 text-[#5a8a5c]'
+            ? 'bg-[#4a6fa5]/15 border-[#4a6fa5]/40 text-[#5a7fa5]'
             : isLight
-            ? 'bg-transparent border-[#d8e4d8] text-[#374137]/50 hover:text-[#374137]/80 hover:border-[#c8d8c8]'
-            : 'bg-transparent border-white/10 text-[#d2d7d2]/40 hover:text-[#d2d7d2]/70 hover:border-white/15'
+            ? 'bg-transparent border-[#d8e4ee] text-[#374152]/50 hover:text-[#374152]/80 hover:border-[#c8d8e4]'
+            : 'bg-transparent border-white/10 text-[#d2d7e0]/40 hover:text-[#d2d7e0]/70 hover:border-white/15'
         }`}
       >
         <FileText size={11} />
@@ -305,22 +305,22 @@ function DocumentSelector({ selectedDocIds, onSelectionChange, isLight }: Docume
       {open && (
         <div className={`absolute bottom-full left-0 mb-2 w-72 border rounded-xl shadow-2xl z-50 overflow-hidden ${
           isLight
-            ? 'bg-white border-[#dce8dc] shadow-[#1a1f1a]/12'
-            : 'bg-[#141c14] border-white/10 shadow-black/40'
+            ? 'bg-white border-[#dce8f0] shadow-[#1a1f28]/12'
+            : 'bg-[#141c22] border-white/10 shadow-black/40'
         }`}>
           <div className={`px-3 py-2.5 border-b flex items-center justify-between ${
-            isLight ? 'border-[#eef4ee]' : 'border-white/5'
+            isLight ? 'border-[#eef4f8]' : 'border-white/5'
           }`}>
             <span className={`text-[10px] font-semibold uppercase tracking-widest ${
-              isLight ? 'text-[#374137]/40' : 'text-[#d2d7d2]/35'
+              isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35'
             }`}>Filter by document</span>
             {selectedDocIds.length > 0 && (
               <button
                 onClick={() => onSelectionChange([])}
                 className={`text-xs transition-colors flex items-center gap-1 ${
                   isLight
-                    ? 'text-[#374137]/40 hover:text-[#374137]/70'
-                    : 'text-[#d2d7d2]/30 hover:text-[#d2d7d2]/60'
+                    ? 'text-[#374152]/40 hover:text-[#374152]/70'
+                    : 'text-[#d2d7e0]/30 hover:text-[#d2d7e0]/60'
                 }`}
               >
                 <X size={10} />
@@ -331,9 +331,9 @@ function DocumentSelector({ selectedDocIds, onSelectionChange, isLight }: Docume
 
           <div className="max-h-56 overflow-y-auto">
             {loading ? (
-              <div className={`px-3 py-5 text-xs text-center ${isLight ? 'text-[#374137]/40' : 'text-[#d2d7d2]/30'}`}>Loading documents...</div>
+              <div className={`px-3 py-5 text-xs text-center ${isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/30'}`}>Loading documents...</div>
             ) : docs.length === 0 ? (
-              <div className={`px-3 py-5 text-xs text-center ${isLight ? 'text-[#374137]/40' : 'text-[#d2d7d2]/30'}`}>No documents in knowledge base</div>
+              <div className={`px-3 py-5 text-xs text-center ${isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/30'}`}>No documents in knowledge base</div>
             ) : (
               docs.map(doc => {
                 const selected = selectedDocIds.includes(doc.id);
@@ -343,21 +343,21 @@ function DocumentSelector({ selectedDocIds, onSelectionChange, isLight }: Docume
                     onClick={() => toggle(doc.id)}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${
                       selected
-                        ? isLight ? 'bg-[#487e4a]/08' : 'bg-[#487e4a]/12'
-                        : isLight ? 'hover:bg-[#f5f9f5]' : 'hover:bg-white/[0.04]'
+                        ? isLight ? 'bg-[#4a6fa5]/08' : 'bg-[#4a6fa5]/12'
+                        : isLight ? 'hover:bg-[#f5f9fc]' : 'hover:bg-white/[0.04]'
                     }`}
                   >
                     <div className={`flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors ${
                       selected
-                        ? 'bg-[#487e4a] border-[#487e4a]'
-                        : isLight ? 'border-[#c8d8c8] bg-transparent' : 'border-white/20 bg-transparent'
+                        ? 'bg-[#4a6fa5] border-[#4a6fa5]'
+                        : isLight ? 'border-[#c8d8e4] bg-transparent' : 'border-white/20 bg-transparent'
                     }`}>
                       {selected && <Check size={9} className="text-white" />}
                     </div>
                     <div className="min-w-0">
-                      <p className={`text-sm truncate leading-tight font-medium ${isLight ? 'text-[#2a3a2a]' : 'text-[#c8d4c8]'}`}>{doc.title || 'Untitled'}</p>
+                      <p className={`text-sm truncate leading-tight font-medium ${isLight ? 'text-[#2a3a45]' : 'text-[#c8d4e0]'}`}>{doc.title || 'Untitled'}</p>
                       {doc.source && (
-                        <p className={`text-xs truncate mt-0.5 ${isLight ? 'text-[#374137]/40' : 'text-[#d2d7d2]/30'}`}>{doc.source}</p>
+                        <p className={`text-xs truncate mt-0.5 ${isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/30'}`}>{doc.source}</p>
                       )}
                     </div>
                   </button>
@@ -522,36 +522,36 @@ export default function DashboardChat({
 
   const statusColor = loading
     ? 'bg-amber-400'
-    : 'bg-emerald-400';
+    : 'bg-blue-400';
 
   return (
-    <div className={`flex flex-col h-full ${isLight ? 'bg-[#fafcfa]' : 'bg-[#0c110d]'}`}>
+    <div className={`flex flex-col h-full ${isLight ? 'bg-[#fafcfd]' : 'bg-[#0c1118]'}`}>
 
       {/* Header */}
       <div className={`flex-shrink-0 px-5 py-3.5 border-b ${
         isLight
-          ? 'border-[#e2eae2] bg-white'
-          : 'border-white/[0.06] bg-[#111711]'
+          ? 'border-[#e2eaf0] bg-white'
+          : 'border-white/[0.06] bg-[#11171d]'
       }`}>
         <div className="flex items-center gap-3">
           <div className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-sm ${
             isLight
-              ? 'bg-gradient-to-br from-[#dceadc] to-[#c4d8c4]'
-              : 'bg-gradient-to-br from-[#1e2e1e] to-[#162016]'
+              ? 'bg-gradient-to-br from-[#dceaf0] to-[#c4d8e4]'
+              : 'bg-gradient-to-br from-[#1e2e38] to-[#162026]'
           }`}>
-            <BookOpen size={17} className="text-[#4a7a4c]" />
+            <BookOpen size={17} className="text-[#4a7aa8]" />
           </div>
           <div>
-            <h2 className={`font-semibold text-sm leading-tight ${isLight ? 'text-[#1a2a1a]' : 'text-[#e0e8e0]'}`}>
+            <h2 className={`font-semibold text-sm leading-tight ${isLight ? 'text-[#1a2a32]' : 'text-[#e0e8f0]'}`}>
               Protocol Assistant
             </h2>
-            <p className={`text-[11px] leading-tight mt-0.5 ${isLight ? 'text-[#374137]/50' : 'text-[#8a9a8a]'}`}>
+            <p className={`text-[11px] leading-tight mt-0.5 ${isLight ? 'text-[#374152]/50' : 'text-[#8a9ab0]'}`}>
               Clinical knowledge at your fingertips
             </p>
           </div>
           <div className="ml-auto flex items-center gap-1.5">
             <span className={`w-1.5 h-1.5 rounded-full transition-colors duration-500 ${statusColor} ${loading ? '' : 'animate-pulse'}`} />
-            <span className={`text-[11px] font-medium transition-all duration-300 ${isLight ? 'text-[#374137]/50' : 'text-[#8a9a8a]'}`}>
+            <span className={`text-[11px] font-medium transition-all duration-300 ${isLight ? 'text-[#374152]/50' : 'text-[#8a9ab0]'}`}>
               {statusLabel}
             </span>
           </div>
@@ -567,25 +567,25 @@ export default function DashboardChat({
               <div className="relative mb-5">
                 <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-md ${
                   isLight
-                    ? 'bg-gradient-to-br from-[#dceadc] to-[#bdd4bd]'
-                    : 'bg-gradient-to-br from-[#1e2e1e] to-[#162016]'
+                    ? 'bg-gradient-to-br from-[#dceaf0] to-[#bdd4e0]'
+                    : 'bg-gradient-to-br from-[#1e2e38] to-[#162026]'
                 }`}>
-                  <Stethoscope size={28} className="text-[#4a7a4c]" />
+                  <Stethoscope size={28} className="text-[#4a7aa8]" />
                 </div>
-                <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gradient-to-br from-[#5a9a5c] to-[#3d6b3f] flex items-center justify-center shadow-sm">
+                <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gradient-to-br from-[#5b82b8] to-[#3d6ba5] flex items-center justify-center shadow-sm">
                   <Sparkles size={10} className="text-white" />
                 </div>
               </div>
-              <h3 className={`font-bold text-lg mb-2 tracking-tight ${isLight ? 'text-[#1a2a1a]' : 'text-[#e0e8e0]'}`}>
+              <h3 className={`font-bold text-lg mb-2 tracking-tight ${isLight ? 'text-[#1a2a32]' : 'text-[#e0e8f0]'}`}>
                 Clinical Protocol Assistant
               </h3>
-              <p className={`text-sm max-w-[280px] leading-relaxed ${isLight ? 'text-[#374137]/55' : 'text-[#8a9a8a]'}`}>
+              <p className={`text-sm max-w-[280px] leading-relaxed ${isLight ? 'text-[#374152]/55' : 'text-[#8a9ab0]'}`}>
                 Ask me about care protocols, workflows, compliance requirements, or anything in your knowledge base.
               </p>
 
               {docSuggestions.length > 0 ? (
                 <div className="mt-6 w-full max-w-sm space-y-2">
-                  <p className={`text-[10px] font-semibold uppercase tracking-widest mb-3 ${isLight ? 'text-[#374137]/35' : 'text-[#8a9a8a]/60'}`}>
+                  <p className={`text-[10px] font-semibold uppercase tracking-widest mb-3 ${isLight ? 'text-[#374152]/35' : 'text-[#8a9ab0]/60'}`}>
                     Suggested for selected documents
                   </p>
                   {docSuggestions.slice(0, 4).map((prompt, i) => (
@@ -594,12 +594,12 @@ export default function DashboardChat({
                       onClick={() => handleSend(prompt)}
                       className={`w-full text-left text-xs px-3.5 py-2.5 rounded-xl border transition-all duration-150 leading-relaxed group ${
                         isLight
-                          ? 'bg-white border-[#dce8dc] text-[#2a3a2a]/70 hover:border-[#5a8a5c]/40 hover:bg-[#f0f8f0] hover:text-[#2a3a2a]'
-                          : 'bg-[#141c14] border-white/[0.07] text-[#a0b0a0] hover:border-[#5a8a5c]/30 hover:bg-[#1a241a] hover:text-[#c0d0c0]'
+                          ? 'bg-white border-[#dce8f0] text-[#2a3a45]/70 hover:border-[#5a7fa5]/40 hover:bg-[#f0f8fb] hover:text-[#2a3a45]'
+                          : 'bg-[#141c22] border-white/[0.07] text-[#a0b0c4] hover:border-[#5a7fa5]/30 hover:bg-[#1a242a] hover:text-[#c0d0dc]'
                       }`}
                     >
                       <span className="flex items-start gap-2">
-                        <span className="text-[#5a8a5c] mt-0.5 flex-shrink-0 group-hover:translate-x-0.5 transition-transform">›</span>
+                        <span className="text-[#5a7fa5] mt-0.5 flex-shrink-0 group-hover:translate-x-0.5 transition-transform">›</span>
                         {prompt}
                       </span>
                     </button>
@@ -613,11 +613,11 @@ export default function DashboardChat({
                       onClick={() => handleSend(text)}
                       className={`text-left text-xs px-3 py-3 rounded-xl border transition-all duration-150 group ${
                         isLight
-                          ? 'bg-white border-[#dce8dc] text-[#2a3a2a]/65 hover:border-[#5a8a5c]/40 hover:bg-[#f4fbf4] hover:text-[#2a3a2a]'
-                          : 'bg-[#141c14] border-white/[0.07] text-[#8a9a8a] hover:border-[#5a8a5c]/30 hover:bg-[#192019] hover:text-[#b0c0b0]'
+                          ? 'bg-white border-[#dce8f0] text-[#2a3a45]/65 hover:border-[#5a7fa5]/40 hover:bg-[#f4fbfd] hover:text-[#2a3a45]'
+                          : 'bg-[#141c22] border-white/[0.07] text-[#8a9ab0] hover:border-[#5a7fa5]/30 hover:bg-[#192027] hover:text-[#b0c0cc]'
                       }`}
                     >
-                      <Icon size={14} className="text-[#5a8a5c] mb-2 group-hover:scale-110 transition-transform" />
+                      <Icon size={14} className="text-[#5a7fa5] mb-2 group-hover:scale-110 transition-transform" />
                       <span className="leading-snug">{text}</span>
                     </button>
                   ))}
@@ -640,8 +640,8 @@ export default function DashboardChat({
         {/* Scroll fade */}
         <div className={`sticky bottom-0 left-0 right-0 h-6 pointer-events-none ${
           isLight
-            ? 'bg-gradient-to-t from-[#fafcfa] to-transparent'
-            : 'bg-gradient-to-t from-[#0c110d] to-transparent'
+            ? 'bg-gradient-to-t from-[#fafcfd] to-transparent'
+            : 'bg-gradient-to-t from-[#0c1118] to-transparent'
         }`} />
       </div>
 
@@ -668,12 +668,12 @@ export default function DashboardChat({
 
       {/* Input area */}
       <div className={`flex-shrink-0 px-4 pb-4 pt-3 border-t ${
-        isLight ? 'border-[#e2eae2] bg-white' : 'border-white/[0.06] bg-[#111711]'
+        isLight ? 'border-[#e2eaf0] bg-white' : 'border-white/[0.06] bg-[#11171d]'
       }`}>
         <div className={`rounded-2xl border transition-all duration-200 ${
           isLight
-            ? 'bg-[#f5f9f5] border-[#d8e8d8] focus-within:border-[#5a8a5c]/60 focus-within:shadow-[0_0_0_3px_rgba(90,138,92,0.08)]'
-            : 'bg-[#141c14] border-white/[0.08] focus-within:border-[#5a8a5c]/40 focus-within:shadow-[0_0_0_3px_rgba(90,138,92,0.06)]'
+            ? 'bg-[#f5f9fc] border-[#d8e8f0] focus-within:border-[#5a7fa5]/60 focus-within:shadow-[0_0_0_3px_rgba(74,111,165,0.08)]'
+            : 'bg-[#141c22] border-white/[0.08] focus-within:border-[#5a7fa5]/40 focus-within:shadow-[0_0_0_3px_rgba(74,111,165,0.06)]'
         }`}>
 
           <div className="px-4 pt-3 pb-2">
@@ -686,15 +686,15 @@ export default function DashboardChat({
               rows={1}
               className={`w-full bg-transparent text-sm resize-none focus:outline-none leading-relaxed ${
                 isLight
-                  ? 'text-[#1a2a1a] placeholder-[#374137]/30'
-                  : 'text-[#d8e4d8] placeholder-[#4a5a4a]'
+                  ? 'text-[#1a2a32] placeholder-[#374152]/30'
+                  : 'text-[#d8e4ee] placeholder-[#4a5a6a]'
               }`}
               style={{ maxHeight: '120px' }}
             />
           </div>
 
           <div className={`flex items-center gap-2 px-3 pb-2.5 pt-1 border-t ${
-            isLight ? 'border-[#dce8dc]' : 'border-white/[0.06]'
+            isLight ? 'border-[#dce8f0]' : 'border-white/[0.06]'
           }`}>
             <DocumentSelector
               selectedDocIds={selectedDocIds}
@@ -702,13 +702,13 @@ export default function DashboardChat({
               isLight={isLight}
             />
             {selectedDocIds.length > 0 && (
-              <span className={`text-[11px] truncate max-w-[140px] ${isLight ? 'text-[#374137]/40' : 'text-[#8a9a8a]/70'}`}>
+              <span className={`text-[11px] truncate max-w-[140px] ${isLight ? 'text-[#374152]/40' : 'text-[#8a9ab0]/70'}`}>
                 Scoped to {selectedDocIds.length === 1 ? 'selected doc' : `${selectedDocIds.length} docs`}
               </span>
             )}
 
             <div className="ml-auto flex items-center gap-2">
-              <span className={`text-[10px] hidden sm:block ${isLight ? 'text-[#374137]/30' : 'text-[#4a5a4a]'}`}>
+              <span className={`text-[10px] hidden sm:block ${isLight ? 'text-[#374152]/30' : 'text-[#4a5a6a]'}`}>
                 Enter to send
               </span>
               {loading ? (
@@ -723,7 +723,7 @@ export default function DashboardChat({
                 <button
                   onClick={() => handleSend()}
                   disabled={!input.trim()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-br from-[#5a9a5c] to-[#3d6b3f] text-white hover:from-[#62a864] hover:to-[#456e47] disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs font-medium shadow-sm"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-br from-[#5b82b8] to-[#3d6ba5] text-white hover:from-[#62a8c4] hover:to-[#456ea8] disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs font-medium shadow-sm"
                 >
                   <Send size={12} />
                   Send
