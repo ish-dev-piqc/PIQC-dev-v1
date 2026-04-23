@@ -11,8 +11,8 @@ dist
 dist-ssr
 *.local
 
-.vscode/*
-!.vscode/extensions.json
+.vscode/
+.claude/
 .idea
 .DS_Store
 *.suo
@@ -21,3 +21,4 @@ dist-ssr
 *.sln
 *.sw?
 .env
+.env.local
