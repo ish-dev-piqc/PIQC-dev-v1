@@ -23,6 +23,8 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
   const userMenuRef = useRef<HTMLDivElement>(null);
   const modeMenuRef = useRef<HTMLDivElement>(null);
   const protocolMenuRef = useRef<HTMLDivElement>(null);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const mobileToggleRef = useRef<HTMLButtonElement>(null);
   const { signOut, user, session } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { mode, setMode } = useMode();
@@ -236,6 +238,13 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
       if (protocolMenuRef.current && !protocolMenuRef.current.contains(e.target as Node)) {
         setProtocolMenuOpen(false);
       }
+      // Mobile menu: close if click is outside both the expanded menu and the toggle button.
+      const target = e.target as Node;
+      const clickedInsideMenu = mobileMenuRef.current?.contains(target) ?? false;
+      const clickedToggle = mobileToggleRef.current?.contains(target) ?? false;
+      if (!clickedInsideMenu && !clickedToggle) {
+        setMobileOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -417,6 +426,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
 
           <div className="md:hidden flex items-center gap-1">
             <button
+              ref={mobileToggleRef}
               className={`p-2 rounded-lg ${isLight ? 'text-[#374152]/70 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.06]' : 'text-[#d2d7e0]/70 hover:text-white hover:bg-white/[0.06]'} transition-colors`}
               onClick={() => setMobileOpen(!mobileOpen)}
               aria-label="Toggle menu"
@@ -428,7 +438,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
       </div>
 
       {mobileOpen && (
-        <div className={`md:hidden ${mobileBg}`}>
+        <div ref={mobileMenuRef} className={`md:hidden ${mobileBg}`}>
           {isDashboard ? (
             <>
               <div className={`px-3 py-2.5 border-b ${isLight ? 'border-[#e2e8ee]' : 'border-white/[0.06]'} mb-1`}>
