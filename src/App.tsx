@@ -10,6 +10,8 @@ import Login from './components/auth/Login';
 import ForgotPassword from './components/auth/ForgotPassword';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
+import { ModeProvider } from './context/ModeContext';
+import { ProtocolProvider } from './context/ProtocolContext';
 
 export type AppView = 'landing' | 'dashboard' | 'login' | 'forgot-password';
 
@@ -130,7 +132,11 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <AppContent />
+        <ModeProvider>
+          <ProtocolProvider>
+            <AppContent />
+          </ProtocolProvider>
+        </ModeProvider>
       </AuthProvider>
     </ThemeProvider>
   );

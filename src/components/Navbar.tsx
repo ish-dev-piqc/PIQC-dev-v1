@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Menu, X, Activity, LayoutDashboard, LogOut, ChevronDown, User, Home, Sun, Moon } from 'lucide-react';
+import { Menu, X, Activity, LogOut, ChevronDown, User, Home, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { useMode, type DashboardMode } from '../context/ModeContext';
+import { useProtocol } from '../context/ProtocolContext';
 import type { AppView } from '../App';
 import type { SettingsSection } from './dashboard/Dashboard';
 
@@ -16,11 +18,208 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
+  const [protocolMenuOpen, setProtocolMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const modeMenuRef = useRef<HTMLDivElement>(null);
+  const protocolMenuRef = useRef<HTMLDivElement>(null);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const mobileToggleRef = useRef<HTMLButtonElement>(null);
   const { signOut, user, session } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { mode, setMode } = useMode();
+  const { protocols, activeProtocol, setActiveProtocol } = useProtocol();
 
   const isLight = theme === 'light';
+
+  const modeOptions: Array<{ id: DashboardMode; label: string }> = [
+    { id: 'site', label: 'Site Mode' },
+    { id: 'audit', label: 'Audit Mode' },
+  ];
+
+  const renderModeSwitcher = (extraClassName = '') => (
+    <div
+      className={`inline-flex items-center p-0.5 rounded-lg border ${isLight ? 'border-[#dce4ed] bg-[#eef2f6]' : 'border-white/[0.08] bg-white/[0.04]'} ${extraClassName}`}
+    >
+      {modeOptions.map(({ id, label }) => {
+        const active = mode === id;
+        const activeClass = isLight
+          ? 'bg-[#4a6fa5] text-white shadow-sm'
+          : 'bg-[#4a6fa5] text-white shadow-sm';
+        const inactiveClass = isLight
+          ? 'text-[#374152]/60 hover:text-[#1a1f28]'
+          : 'text-[#d2d7e0]/60 hover:text-white';
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setMode(id)}
+            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors duration-150 ${active ? activeClass : inactiveClass}`}
+            aria-pressed={active}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const activeModeLabel = modeOptions.find((m) => m.id === mode)?.label ?? 'Site Mode';
+
+  const renderModeDropdown = () => (
+    <div className="relative" ref={modeMenuRef}>
+      <button
+        type="button"
+        onClick={() => setModeMenuOpen((o) => !o)}
+        className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md border transition-colors ${isLight ? 'border-[#dce4ed] bg-[#eef2f6] text-[#374152] hover:bg-[#e4ebf2]' : 'border-white/[0.08] bg-white/[0.04] text-[#d2d7e0] hover:bg-white/[0.08]'}`}
+        aria-haspopup="listbox"
+        aria-expanded={modeMenuOpen}
+      >
+        {activeModeLabel}
+        <ChevronDown size={12} className={`transition-transform duration-150 ${modeMenuOpen ? 'rotate-180' : ''}`} />
+      </button>
+      {modeMenuOpen && (
+        <div
+          className={`absolute left-0 top-full mt-1.5 w-36 rounded-lg shadow-lg border overflow-hidden z-50 ${isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/10'}`}
+          role="listbox"
+        >
+          {modeOptions.map(({ id, label }) => {
+            const active = mode === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => {
+                  setMode(id);
+                  setModeMenuOpen(false);
+                }}
+                className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors ${
+                  active
+                    ? 'bg-[#4a6fa5] text-white'
+                    : isLight
+                    ? 'text-[#374152]/70 hover:bg-[#1a1f28]/[0.05]'
+                    : 'text-[#d2d7e0]/70 hover:bg-white/[0.05]'
+                }`}
+                role="option"
+                aria-selected={active}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
+  const isHomeScope = activeProtocol === null;
+
+  const renderProtocolPicker = () => (
+    <div className="relative" ref={protocolMenuRef}>
+      <button
+        type="button"
+        onClick={() => setProtocolMenuOpen((o) => !o)}
+        className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md border transition-colors ${isLight ? 'border-[#dce4ed] bg-white text-[#374152] hover:bg-[#f5f7fa]' : 'border-white/[0.08] bg-[#131a22] text-[#d2d7e0] hover:bg-white/[0.08]'}`}
+        aria-haspopup="listbox"
+        aria-expanded={protocolMenuOpen}
+        title={isHomeScope ? 'Home · All protocols' : activeProtocol.name}
+      >
+        {isHomeScope ? (
+          <Home size={12} className={`flex-shrink-0 ${isLight ? 'text-[#4a6fa5]' : 'text-[#6e8fb5]'}`} />
+        ) : (
+          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isLight ? 'bg-[#4a6fa5]' : 'bg-[#6e8fb5]'}`} />
+        )}
+        <span className="truncate max-w-[110px]">{isHomeScope ? 'Home' : activeProtocol.code}</span>
+        <ChevronDown size={12} className={`transition-transform duration-150 flex-shrink-0 ${protocolMenuOpen ? 'rotate-180' : ''}`} />
+      </button>
+      {protocolMenuOpen && (
+        <div
+          className={`absolute left-0 top-full mt-1.5 w-72 rounded-lg shadow-lg border overflow-hidden z-50 ${isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/10'}`}
+          role="listbox"
+        >
+          <div className={`px-3 py-2 border-b ${isLight ? 'border-[#e2e8ee]' : 'border-white/[0.06]'}`}>
+            <p className={`text-[10px] uppercase tracking-wider font-semibold ${isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35'}`}>
+              Scope
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveProtocol(null);
+              setProtocolMenuOpen(false);
+            }}
+            className={`w-full text-left px-3 py-2.5 transition-colors flex items-start gap-2.5 ${
+              isHomeScope
+                ? isLight
+                  ? 'bg-[#4a6fa5]/10'
+                  : 'bg-[#4a6fa5]/15'
+                : isLight
+                ? 'hover:bg-[#1a1f28]/[0.04]'
+                : 'hover:bg-white/[0.04]'
+            }`}
+            role="option"
+            aria-selected={isHomeScope}
+          >
+            <Home size={14} className={`mt-0.5 flex-shrink-0 ${isHomeScope ? (isLight ? 'text-[#4a6fa5]' : 'text-[#6e8fb5]') : isLight ? 'text-[#374152]/50' : 'text-[#d2d7e0]/45'}`} />
+            <div className="min-w-0">
+              <div className={`text-xs font-semibold ${isHomeScope ? (isLight ? 'text-[#4a6fa5]' : 'text-[#6e8fb5]') : isLight ? 'text-[#1a1f28]' : 'text-white'}`}>
+                Home
+              </div>
+              <div className={`text-[11px] mt-0.5 ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'}`}>
+                Across all protocols
+              </div>
+            </div>
+          </button>
+          <div className={`px-3 py-2 border-y ${isLight ? 'border-[#e2e8ee] bg-[#f5f7fa]' : 'border-white/[0.06] bg-white/[0.02]'}`}>
+            <p className={`text-[10px] uppercase tracking-wider font-semibold ${isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35'}`}>
+              Your protocols
+            </p>
+          </div>
+          {protocols.map((p) => {
+            const active = !isHomeScope && p.id === activeProtocol.id;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => {
+                  setActiveProtocol(p);
+                  setProtocolMenuOpen(false);
+                }}
+                className={`w-full text-left px-3 py-2.5 transition-colors ${
+                  active
+                    ? isLight
+                      ? 'bg-[#4a6fa5]/10'
+                      : 'bg-[#4a6fa5]/15'
+                    : isLight
+                    ? 'hover:bg-[#1a1f28]/[0.04]'
+                    : 'hover:bg-white/[0.04]'
+                }`}
+                role="option"
+                aria-selected={active}
+              >
+                <div
+                  className={`text-xs font-semibold ${
+                    active
+                      ? isLight
+                        ? 'text-[#4a6fa5]'
+                        : 'text-[#6e8fb5]'
+                      : isLight
+                      ? 'text-[#1a1f28]'
+                      : 'text-white'
+                  }`}
+                >
+                  {p.code}
+                </div>
+                <div className={`text-[11px] mt-0.5 truncate ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'}`}>
+                  {p.sponsor} · {p.phase}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -32,6 +231,19 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
     const handleClickOutside = (e: MouseEvent) => {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
         setUserMenuOpen(false);
+      }
+      if (modeMenuRef.current && !modeMenuRef.current.contains(e.target as Node)) {
+        setModeMenuOpen(false);
+      }
+      if (protocolMenuRef.current && !protocolMenuRef.current.contains(e.target as Node)) {
+        setProtocolMenuOpen(false);
+      }
+      // Mobile menu: close if click is outside both the expanded menu and the toggle button.
+      const target = e.target as Node;
+      const clickedInsideMenu = mobileMenuRef.current?.contains(target) ?? false;
+      const clickedToggle = mobileToggleRef.current?.contains(target) ?? false;
+      if (!clickedInsideMenu && !clickedToggle) {
+        setMobileOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -82,49 +294,38 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
 
   const logoTextColor = isLight ? 'text-[#1a1f28]' : 'text-white';
 
-  const themeButtonClass = isLight
-    ? 'p-2 rounded-lg text-[#374152]/60 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.06] transition-colors'
-    : 'p-2 rounded-lg text-[#d2d7e0]/50 hover:text-white hover:bg-white/[0.06] transition-colors';
-
   return (
     <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${headerBg}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          <button
-            onClick={() => {
-              if (isLoggedIn) {
-                onDashboardHome();
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              } else {
-                onViewChange('landing');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }
-            }}
-            className="flex items-center gap-2.5 group"
-          >
-            <div className="w-8 h-8 rounded-lg bg-[#4a6fa5] flex items-center justify-center shadow-btn group-hover:bg-[#5b82b8] transition-colors">
-              <Activity className="w-4 h-4 text-white" strokeWidth={2.5} />
-            </div>
-            <span className={`text-[15px] font-semibold ${logoTextColor} tracking-tight`}>
-              PIQ<span className="text-[#6e8fb5]">Clinical</span>
-            </span>
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => {
+                if (isLoggedIn) {
+                  onDashboardHome();
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                } else {
+                  onViewChange('landing');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+              }}
+              className="flex items-center gap-2.5 group"
+            >
+              <div className="w-8 h-8 rounded-lg bg-[#4a6fa5] flex items-center justify-center shadow-btn group-hover:bg-[#5b82b8] transition-colors">
+                <Activity className="w-4 h-4 text-white" strokeWidth={2.5} />
+              </div>
+              <span className={`text-[15px] font-semibold ${logoTextColor} tracking-tight`}>
+                PIQ<span className="text-[#6e8fb5]">Clinical</span>
+              </span>
+            </button>
+
+            {isDashboard && <div className="hidden md:inline-flex">{renderModeSwitcher()}</div>}
+            {isDashboard && <div className="md:hidden">{renderModeDropdown()}</div>}
+            {isDashboard && renderProtocolPicker()}
+          </div>
 
           {isDashboard ? (
             <nav className="hidden md:flex items-center gap-2">
-              <div className={`flex items-center gap-2 px-3 py-1.5 ${isLight ? 'bg-[#4a6fa5]/10 border border-[#4a6fa5]/20' : 'bg-[#4a6fa5]/10 border border-[#4a6fa5]/20'} rounded-lg`}>
-                <LayoutDashboard size={14} className="text-[#6e8fb5]" />
-                <span className="text-sm font-medium text-[#6e8fb5]">Dashboard</span>
-              </div>
-
-              <button
-                onClick={toggleTheme}
-                className={themeButtonClass}
-                aria-label="Toggle theme"
-              >
-                {isLight ? <Moon size={16} /> : <Sun size={16} />}
-              </button>
-
               <div className="relative" ref={userMenuRef}>
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
@@ -143,7 +344,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                 </button>
 
                 {userMenuOpen && (
-                  <div className={`absolute right-0 top-full mt-2 w-56 ${isLight ? 'bg-white border border-[#e2e8ee]' : 'bg-[#131a22] border border-white/10'} rounded-xl shadow-2xl overflow-hidden z-50`}>
+                  <div className={`absolute right-0 top-full mt-2 w-56 ${isLight ? 'bg-white border border-[#e2e8ee]' : 'bg-[#131a22] border border-white/10'} rounded-xl shadow-2xl overflow-y-auto overflow-x-hidden max-h-[calc(100vh-5rem)] z-50`}>
                     <div className={`px-4 py-3 border-b ${isLight ? 'border-[#e2e8ee]' : 'border-white/[0.06]'}`}>
                       <p className={`text-xs ${isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/40'} mb-0.5`}>Signed in as</p>
                       <p className={`text-sm ${isLight ? 'text-[#1a1f28]' : 'text-white'} font-medium truncate`}>{user?.email}</p>
@@ -160,18 +361,21 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                         Account
                       </button>
                       <button
-                        onClick={() => handleOpenSettingsSection('organization')}
-                        className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm ${isLight ? 'text-[#374152]/60 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.05]' : 'text-[#d2d7e0]/60 hover:text-white hover:bg-white/[0.05]'} rounded-lg transition-all duration-150`}
-                      >
-                        <Home size={14} />
-                        Organization
-                      </button>
-                      <button
                         onClick={() => handleOpenSettingsSection('security')}
                         className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm ${isLight ? 'text-[#374152]/60 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.05]' : 'text-[#d2d7e0]/60 hover:text-white hover:bg-white/[0.05]'} rounded-lg transition-all duration-150`}
                       >
                         <Home size={14} />
                         Security
+                      </button>
+                      <p className={`px-3 pt-3 pb-1.5 text-[11px] uppercase tracking-wider ${isLight ? 'text-[#374152]/35' : 'text-[#d2d7e0]/35'}`}>
+                        Appearance
+                      </p>
+                      <button
+                        onClick={toggleTheme}
+                        className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm ${isLight ? 'text-[#374152]/60 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.05]' : 'text-[#d2d7e0]/60 hover:text-white hover:bg-white/[0.05]'} rounded-lg transition-all duration-150`}
+                      >
+                        {isLight ? <Moon size={14} /> : <Sun size={14} />}
+                        Switch to {isLight ? 'Dark' : 'Light'} Mode
                       </button>
                       <div className={`my-1 h-px ${isLight ? 'bg-[#e2e8ee]' : 'bg-white/[0.05]'}`} />
                       <button
@@ -193,14 +397,6 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                   {link.label}
                 </a>
               ))}
-
-              <button
-                onClick={toggleTheme}
-                className={`ml-1 ${themeButtonClass}`}
-                aria-label="Toggle theme"
-              >
-                {isLight ? <Moon size={16} /> : <Sun size={16} />}
-              </button>
 
               {isLoggedIn ? (
                 <button
@@ -230,13 +426,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
 
           <div className="md:hidden flex items-center gap-1">
             <button
-              onClick={toggleTheme}
-              className={themeButtonClass}
-              aria-label="Toggle theme"
-            >
-              {isLight ? <Moon size={16} /> : <Sun size={16} />}
-            </button>
-            <button
+              ref={mobileToggleRef}
               className={`p-2 rounded-lg ${isLight ? 'text-[#374152]/70 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.06]' : 'text-[#d2d7e0]/70 hover:text-white hover:bg-white/[0.06]'} transition-colors`}
               onClick={() => setMobileOpen(!mobileOpen)}
               aria-label="Toggle menu"
@@ -248,7 +438,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
       </div>
 
       {mobileOpen && (
-        <div className={`md:hidden ${mobileBg}`}>
+        <div ref={mobileMenuRef} className={`md:hidden ${mobileBg}`}>
           {isDashboard ? (
             <>
               <div className={`px-3 py-2.5 border-b ${isLight ? 'border-[#e2e8ee]' : 'border-white/[0.06]'} mb-1`}>
@@ -263,18 +453,18 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                 Account
               </button>
               <button
-                onClick={() => handleOpenSettingsSection('organization')}
-                className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#374152]/70 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.06]' : 'text-[#d2d7e0]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
-              >
-                <Home size={14} />
-                Organization
-              </button>
-              <button
                 onClick={() => handleOpenSettingsSection('security')}
                 className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#374152]/70 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.06]' : 'text-[#d2d7e0]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
               >
                 <Home size={14} />
                 Security
+              </button>
+              <button
+                onClick={() => { toggleTheme(); setMobileOpen(false); }}
+                className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#374152]/70 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.06]' : 'text-[#d2d7e0]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
+              >
+                {isLight ? <Moon size={14} /> : <Sun size={14} />}
+                Switch to {isLight ? 'Dark' : 'Light'} Mode
               </button>
               <button
                 onClick={handleSignOut}
