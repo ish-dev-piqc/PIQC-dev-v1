@@ -16,12 +16,12 @@ type ExtendedMessage = ChatMessage & { streaming?: boolean; ragStatus?: RagStatu
 
 export type DashboardTab =
   // Audit Mode tabs (current; will be redesigned later)
-  | 'overview'
+  | 'audit-overview'
   | 'chat'
   | 'knowledge'
   | 'workflows'
   // Site Mode tabs
-  | 'today'
+  | 'overview'
   | 'participants'
   | 'visits'
   | 'protocol'
@@ -39,7 +39,7 @@ interface TabConfig {
 }
 
 const SITE_TABS: TabConfig[] = [
-  { id: 'today', label: 'Today', icon: LayoutDashboard },
+  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'participants', label: 'Participants', icon: Users },
   { id: 'visits', label: 'Visits', icon: CalendarCheck },
   { id: 'protocol', label: 'Protocol', icon: Database },
@@ -49,7 +49,7 @@ const SITE_TABS: TabConfig[] = [
 ];
 
 const AUDIT_TABS: TabConfig[] = [
-  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'audit-overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'chat', label: 'Chat', icon: MessageSquare },
   { id: 'knowledge', label: 'Knowledge Base', icon: Database },
   { id: 'workflows', label: 'Workflows', icon: Activity },
@@ -460,7 +460,7 @@ export default function Dashboard({
   settingsSection,
   onSettingsSectionChange,
 }: DashboardProps) {
-  const [internalActiveTab, setInternalActiveTab] = useState<DashboardTab>('today');
+  const [internalActiveTab, setInternalActiveTab] = useState<DashboardTab>('overview');
   const [internalSettingsSection, setInternalSettingsSection] = useState<SettingsSection>('account');
   const [chatMessages, setChatMessages] = useState<ExtendedMessage[]>([]);
   const [chatSelectedDocIds, setChatSelectedDocIds] = useState<string[]>([]);
@@ -499,7 +499,7 @@ export default function Dashboard({
   const renderContent = () => {
     switch (resolvedActiveTab) {
       // Audit Mode tabs (kept as-is for now)
-      case 'overview':
+      case 'audit-overview':
         return <OverviewTab />;
       case 'chat':
         return (
@@ -515,7 +515,7 @@ export default function Dashboard({
       case 'workflows':
         return <PlaceholderTab label="Workflows" />;
       // Site Mode tabs
-      case 'today':
+      case 'overview':
         return <TodayTab />;
       case 'participants':
         return (
