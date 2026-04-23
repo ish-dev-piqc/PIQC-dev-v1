@@ -122,14 +122,14 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
         className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md border transition-colors ${isLight ? 'border-[#dce4ed] bg-white text-[#374152] hover:bg-[#f5f7fa]' : 'border-white/[0.08] bg-[#131a22] text-[#d2d7e0] hover:bg-white/[0.08]'}`}
         aria-haspopup="listbox"
         aria-expanded={protocolMenuOpen}
-        title={isHomeScope ? 'Home · All protocols' : activeProtocol.name}
+        title={isHomeScope ? 'All protocols — combined view' : activeProtocol.name}
       >
         {isHomeScope ? (
           <Home size={12} className={`flex-shrink-0 ${isLight ? 'text-[#4a6fa5]' : 'text-[#6e8fb5]'}`} />
         ) : (
           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isLight ? 'bg-[#4a6fa5]' : 'bg-[#6e8fb5]'}`} />
         )}
-        <span className="truncate max-w-[110px]">{isHomeScope ? 'Home' : activeProtocol.code}</span>
+        <span className="truncate max-w-[110px]">{isHomeScope ? 'All protocols' : activeProtocol.code}</span>
         <ChevronDown size={12} className={`transition-transform duration-150 flex-shrink-0 ${protocolMenuOpen ? 'rotate-180' : ''}`} />
       </button>
       {protocolMenuOpen && (
@@ -163,10 +163,10 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
             <Home size={14} className={`mt-0.5 flex-shrink-0 ${isHomeScope ? (isLight ? 'text-[#4a6fa5]' : 'text-[#6e8fb5]') : isLight ? 'text-[#374152]/50' : 'text-[#d2d7e0]/45'}`} />
             <div className="min-w-0">
               <div className={`text-xs font-semibold ${isHomeScope ? (isLight ? 'text-[#4a6fa5]' : 'text-[#6e8fb5]') : isLight ? 'text-[#1a1f28]' : 'text-white'}`}>
-                Home
+                All protocols
               </div>
               <div className={`text-[11px] mt-0.5 ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'}`}>
-                Across all protocols
+                Combined view across every study
               </div>
             </div>
           </button>

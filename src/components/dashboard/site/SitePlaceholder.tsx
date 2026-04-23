@@ -26,7 +26,7 @@ export default function SitePlaceholder({ title, description, whatWillLiveHere }
           <p className={`${subColor} text-sm`}>{description}</p>
         </div>
         <span className={`inline-flex items-center px-3 py-1 rounded-full border text-xs font-medium ${chipBg}`}>
-          {activeProtocol?.code ?? 'Home'}
+          {activeProtocol?.code ?? 'All protocols'}
         </span>
       </div>
 
