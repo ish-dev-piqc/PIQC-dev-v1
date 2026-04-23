@@ -44,7 +44,7 @@ export default function Hero({ onViewChange }: HeroProps) {
         </h1>
 
         <p className={`text-lg sm:text-xl font-medium mb-4 ${isLight ? 'text-[#374152]/80' : 'text-[#d2d7e0]/80'}`}>
-          Turn complex protocols into workflows you can track and manage in one place
+          PIQClinical turns complex protocols into guided workflows your team can execute.
         </p>
 
         <p className={`text-[15px] leading-relaxed max-w-xl mx-auto mb-10 ${isLight ? 'text-[#374152]/50' : 'text-[#d2d7e0]/50'}`}>

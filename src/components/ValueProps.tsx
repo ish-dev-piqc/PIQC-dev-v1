@@ -1,4 +1,4 @@
-import { Upload, Layers, CheckSquare, Building2, ClipboardCheck, Stethoscope } from 'lucide-react';
+import { Upload, Layers, CheckSquare, Workflow, FileSearch } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
 const steps = [
@@ -14,14 +14,37 @@ const steps = [
     icon: Layers,
     title: 'Protocol is structured and indexed',
     detail:
-      'Procedures, timelines, eligibility criteria, and role responsibilities are extracted and organized into a navigable, queryable format.',
+      'Procedures, timelines, eligibility criteria, and responsibilities are extracted and organized into a navigable, queryable format.',
   },
   {
     number: '03',
     icon: CheckSquare,
     title: 'Teams work from structured clarity',
     detail:
-      'Every role on the trial accesses what they need when they need it, with a built-in assistant available to answer questions as they come up.',
+      'Everyone on the trial accesses what they need when they need it, with a built-in assistant available to answer questions as they come up.',
+  },
+];
+
+const modes = [
+  {
+    icon: Workflow,
+    label: 'Site Mode',
+    tagline: 'For running the trial',
+    bullets: [
+      'Move through visits, procedures, and tasks in a structured, step-by-step flow',
+      'Grouped, plain-language steps on the surface, with deeper protocol detail one expansion away',
+      'Built-in guidance surfaces higher-risk or commonly misunderstood areas before they become problems',
+    ],
+  },
+  {
+    icon: FileSearch,
+    label: 'Audit Mode',
+    tagline: 'For reviewing execution',
+    bullets: [
+      'Compare what the protocol requires against what actually happened',
+      'Keep structured notes and findings in one focused workspace',
+      'Every observation traces back to the exact protocol logic that governs it',
+    ],
   },
 ];
 
@@ -32,38 +55,11 @@ const whyBullets = [
   },
   {
     heading: 'Keeps responsibilities visible across the trial',
-    body: 'Role-specific views surface what each person is accountable for, so coordination happens through the platform rather than through repeated back-and-forth.',
+    body: 'Structured views surface what each person is accountable for, so coordination happens through the platform rather than through repeated back-and-forth.',
   },
   {
     heading: 'Resolves ambiguity at the point of need',
     body: 'The built-in assistant interprets dense protocol language and answers contextual questions directly, reducing interruptions and reliance on manual clarification chains.',
-  },
-];
-
-const roles = [
-  {
-    icon: Building2,
-    role: 'Site Managers',
-    bullets: [
-      'Monitor site-level progress and upcoming protocol milestones without having to pull up source documents each time',
-      'Keep staff aligned on responsibilities and timelines through structured, role-specific views of the protocol',
-    ],
-  },
-  {
-    icon: ClipboardCheck,
-    role: 'Auditors',
-    bullets: [
-      'Review structured protocol data and follow execution progress over time rather than working from raw document exports',
-      'Surface inconsistencies or procedural gaps across trial steps with a consistent, navigable record of the protocol',
-    ],
-  },
-  {
-    icon: Stethoscope,
-    role: 'Practitioners',
-    bullets: [
-      'Access plain-language explanations of protocol requirements at the point of care without interrupting the clinical workflow',
-      'Ask questions about eligibility, procedures, or safety criteria and receive answers grounded in the actual protocol text',
-    ],
   },
 ];
 
@@ -77,9 +73,6 @@ export default function ValueProps() {
   const bodyColor = isLight ? 'text-[#374152]/50' : 'text-[#d2d7e0]/50';
   const stepHeadColor = isLight ? 'text-[#1a1f28]' : 'text-white';
   const iconBg = isLight ? 'bg-[#4a6fa5]/10 border border-[#4a6fa5]/20' : 'bg-[#4a6fa5]/15 border border-[#4a6fa5]/25';
-  const cardBg = isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]';
-  const cardHover = isLight ? 'hover:bg-[#eef2f6]' : 'hover:bg-[#111a22]';
-  const gridBg = isLight ? 'bg-[#d8e4ee]' : 'bg-white/[0.06]';
 
   return (
     <>
@@ -95,8 +88,8 @@ export default function ValueProps() {
               </h2>
               <p className={`text-[15px] ${bodyColor} leading-relaxed`}>
                 Clinical trial protocols are detailed by necessity, but the way teams have traditionally
-                consumed them hasn't kept pace with that complexity. The platform structures protocol
-                contents into a format every role on the trial can actually work from.
+                consumed them hasn't kept pace with that complexity. PIQClinical structures protocol
+                contents into a format teams can actually work from.
               </p>
             </div>
 
@@ -134,7 +127,7 @@ export default function ValueProps() {
             The problem isn't that protocols are complex. The tools for working with them simply haven't caught up.
           </p>
           <p className={`text-[15px] ${bodyColor} leading-relaxed text-center mb-14 max-w-2xl mx-auto`}>
-            Site teams spend significant time navigating documents, coordinating across roles, and resolving questions
+            Site teams spend significant time navigating documents, coordinating across the trial, and resolving questions
             that the protocol itself should be able to answer. That overhead compounds across every visit, every site,
             every trial.
           </p>
@@ -154,37 +147,41 @@ export default function ValueProps() {
 
       <section className={`py-24 px-4 sm:px-6 lg:px-8 ${bg} border-t ${border}`}>
         <div className="max-w-6xl mx-auto">
-          <div className="mb-14">
+          <div className="mb-14 text-center">
             <p className="text-xs font-semibold text-[#6e8fb5] uppercase tracking-widest mb-4">
-              Who It's For
+              How Teams Use It
             </p>
-            <h2 className={`text-3xl sm:text-4xl font-bold ${headingColor} leading-tight max-w-xl`}>
-              Built for every role on the trial
+            <h2 className={`text-3xl sm:text-4xl font-bold ${headingColor} leading-tight max-w-2xl mx-auto`}>
+              Built for execution and review
             </h2>
-            <p className={`text-[15px] ${bodyColor} leading-relaxed mt-4 max-w-2xl`}>
-              Different roles have different needs. PIQClinical surfaces the right information in the right
-              context for everyone on the trial, so each person can navigate what is directly relevant to
-              their work.
+            <p className={`text-[15px] ${bodyColor} leading-relaxed mt-4 max-w-2xl mx-auto`}>
+              PIQClinical supports both running the trial day-to-day and reviewing how it was run.
+              Each mode is structured for a different kind of work.
             </p>
           </div>
 
-          <div className={`grid grid-cols-1 md:grid-cols-3 gap-px ${gridBg} rounded-2xl overflow-hidden`}>
-            {roles.map(({ icon: Icon, role, bullets }) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {modes.map(({ icon: Icon, label, tagline, bullets }) => (
               <div
-                key={role}
-                className={`${cardBg} p-8 group ${cardHover} transition-colors duration-300`}
+                key={label}
+                className={`${isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#161d25] border-white/[0.07]'} border rounded-2xl p-7`}
               >
-                <div className="flex items-center gap-3 mb-6">
-                  <div className={`w-9 h-9 rounded-lg ${iconBg} flex items-center justify-center`}>
-                    <Icon className="w-4 h-4 text-[#6e8fb5]" strokeWidth={1.75} />
+                <div className="flex items-center gap-3 mb-5">
+                  <div className={`w-10 h-10 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0`}>
+                    <Icon className="w-5 h-5 text-[#6e8fb5]" strokeWidth={1.75} />
                   </div>
-                  <h3 className={`text-[16px] font-bold ${headingColor}`}>{role}</h3>
+                  <div>
+                    <h3 className={`text-[17px] font-bold ${headingColor} leading-tight`}>{label}</h3>
+                    <p className="text-[12px] font-medium text-[#6e8fb5] uppercase tracking-wider mt-0.5">
+                      {tagline}
+                    </p>
+                  </div>
                 </div>
-                <ul className="space-y-5">
+                <ul className="space-y-4">
                   {bullets.map((bullet, idx) => (
                     <li key={idx} className="flex gap-3">
                       <span className="w-1 flex-shrink-0 mt-2 h-1 rounded-full bg-[#6e8fb5]/60" />
-                      <p className={`text-[13.5px] ${bodyColor} leading-relaxed`}>{bullet}</p>
+                      <p className={`text-[14px] ${bodyColor} leading-relaxed`}>{bullet}</p>
                     </li>
                   ))}
                 </ul>
@@ -193,6 +190,7 @@ export default function ValueProps() {
           </div>
         </div>
       </section>
+
     </>
   );
 }

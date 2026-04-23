@@ -1,15 +1,36 @@
-import { useEffect, useMemo, useState } from 'react';
-import { MessageSquare, LayoutDashboard, Activity, FileText, Database, UserCircle2, KeyRound, Users, Shield } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { MessageSquare, LayoutDashboard, Activity, FileText, Database, UserCircle2, KeyRound, Shield, Users, CalendarCheck, UserCog } from 'lucide-react';
 import DashboardChat from './DashboardChat';
 import KnowledgeBase from './KnowledgeBase';
+import TodayTab from './site/TodayTab';
+import ParticipantsTab from './site/ParticipantsTab';
+import VisitsTab from './site/VisitsTab';
+import TeamTab from './site/TeamTab';
+import ProtocolRequiredGate from './site/ProtocolRequiredGate';
 import { useTheme } from '../../context/ThemeContext';
+import { useMode } from '../../context/ModeContext';
 import { supabase, type ChatMessage, type RagStatus } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 
 type ExtendedMessage = ChatMessage & { streaming?: boolean; ragStatus?: RagStatus; ragError?: string };
 
-export type DashboardTab = 'overview' | 'chat' | 'knowledge' | 'workflows' | 'reports' | 'settings';
-export type SettingsSection = 'account' | 'organization' | 'security';
+export type DashboardTab =
+  // Audit Mode tabs (current; will be redesigned later)
+  | 'overview'
+  | 'chat'
+  | 'knowledge'
+  | 'workflows'
+  // Site Mode tabs
+  | 'today'
+  | 'participants'
+  | 'visits'
+  | 'protocol'
+  | 'team'
+  | 'ask'
+  // Shared
+  | 'reports'
+  | 'settings';
+export type SettingsSection = 'account' | 'security';
 
 interface TabConfig {
   id: DashboardTab;
@@ -17,7 +38,17 @@ interface TabConfig {
   icon: React.ComponentType<{ size?: number; className?: string }>;
 }
 
-const TABS: TabConfig[] = [
+const SITE_TABS: TabConfig[] = [
+  { id: 'today', label: 'Today', icon: LayoutDashboard },
+  { id: 'participants', label: 'Participants', icon: Users },
+  { id: 'visits', label: 'Visits', icon: CalendarCheck },
+  { id: 'protocol', label: 'Protocol', icon: Database },
+  { id: 'team', label: 'Team', icon: UserCog },
+  { id: 'ask', label: 'Ask', icon: MessageSquare },
+  { id: 'reports', label: 'Reports', icon: FileText },
+];
+
+const AUDIT_TABS: TabConfig[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'chat', label: 'Chat', icon: MessageSquare },
   { id: 'knowledge', label: 'Knowledge Base', icon: Database },
@@ -161,17 +192,6 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
     setTimezone((metadata.timezone as string) ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
   }, [user]);
 
-  const teamMembers = useMemo(() => {
-    if (!user) return [];
-    return [
-      {
-        id: user.id,
-        email: user.email ?? 'Unknown',
-        role: ((user.user_metadata?.role as string) ?? 'owner').toLowerCase(),
-      },
-    ];
-  }, [user]);
-
   const handleProfileSave = async (event: React.FormEvent) => {
     event.preventDefault();
     setProfileError('');
@@ -242,7 +262,6 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
 
   const navItems: Array<{ id: SettingsSection; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }> = [
     { id: 'account', label: 'Account', icon: UserCircle2 },
-    { id: 'organization', label: 'Organization', icon: Users },
     { id: 'security', label: 'Security', icon: Shield },
   ];
 
@@ -358,45 +377,6 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
       );
     }
 
-    if (activeSection === 'organization') {
-      return (
-        <section className={`${cardClass} border rounded-xl p-5`}>
-          <div className="flex items-center gap-2 mb-4">
-            <Users size={16} className="text-[#6e8fb5]" />
-            <h3 className={`${isLight ? 'text-[#1a1f28]' : 'text-white'} font-medium text-sm`}>Team</h3>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-            <div className={`border rounded-lg p-3 ${isLight ? 'border-[#dce8f0] bg-white' : 'border-white/[0.08] bg-[#131a22]'}`}>
-              <p className="text-sm font-semibold text-[#6e8fb5]">Owner</p>
-              <p className={`${isLight ? 'text-[#374152]/50' : 'text-[#d2d7e0]/45'} text-xs mt-1`}>Full workspace control and role assignment.</p>
-            </div>
-            <div className={`border rounded-lg p-3 ${isLight ? 'border-[#dce8f0] bg-white' : 'border-white/[0.08] bg-[#131a22]'}`}>
-              <p className="text-sm font-semibold text-[#6e8fb5]">Admin</p>
-              <p className={`${isLight ? 'text-[#374152]/50' : 'text-[#d2d7e0]/45'} text-xs mt-1`}>Manage users, org settings, and security settings.</p>
-            </div>
-            <div className={`border rounded-lg p-3 ${isLight ? 'border-[#dce8f0] bg-white' : 'border-white/[0.08] bg-[#131a22]'}`}>
-              <p className="text-sm font-semibold text-[#6e8fb5]">Member</p>
-              <p className={`${isLight ? 'text-[#374152]/50' : 'text-[#d2d7e0]/45'} text-xs mt-1`}>Use dashboard features and day-to-day workflows.</p>
-            </div>
-          </div>
-
-          <div className={`border rounded-lg overflow-hidden ${isLight ? 'border-[#dce8f0]' : 'border-white/[0.08]'}`}>
-            <div className={`grid grid-cols-2 px-3 py-2 text-xs font-medium ${isLight ? 'bg-white text-[#374152]/60' : 'bg-[#131a22] text-[#d2d7e0]/50'}`}>
-              <span>User</span>
-              <span>Role</span>
-            </div>
-            {teamMembers.map((member) => (
-              <div key={member.id} className={`grid grid-cols-2 px-3 py-2.5 text-sm ${isLight ? 'bg-[#fdfefe] text-[#1a1f28]' : 'bg-[#0f151a] text-[#d2d7e0]'}`}>
-                <span className="truncate">{member.email}</span>
-                <span className="capitalize">{member.role}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      );
-    }
-
     return (
       <section className={`${cardClass} border rounded-xl p-5`}>
         <div className="flex items-center gap-2 mb-2">
@@ -415,7 +395,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
       <div>
         <h2 className={`${isLight ? 'text-[#1a1f28]' : 'text-white'} font-semibold text-lg mb-1`}>Settings</h2>
         <p className={`${isLight ? 'text-[#374152]/50' : 'text-[#d2d7e0]/40'} text-sm`}>
-          Select a settings section to manage account, organization, and security.
+          Manage your account and security preferences.
         </p>
       </div>
 
@@ -480,14 +460,31 @@ export default function Dashboard({
   settingsSection,
   onSettingsSectionChange,
 }: DashboardProps) {
-  const [internalActiveTab, setInternalActiveTab] = useState<DashboardTab>('overview');
+  const [internalActiveTab, setInternalActiveTab] = useState<DashboardTab>('today');
   const [internalSettingsSection, setInternalSettingsSection] = useState<SettingsSection>('account');
   const [chatMessages, setChatMessages] = useState<ExtendedMessage[]>([]);
   const [chatSelectedDocIds, setChatSelectedDocIds] = useState<string[]>([]);
   const { theme } = useTheme();
+  const { mode } = useMode();
   const isLight = theme === 'light';
   const resolvedActiveTab = activeTab ?? internalActiveTab;
   const resolvedSettingsSection = settingsSection ?? internalSettingsSection;
+
+  const tabs = mode === 'site' ? SITE_TABS : AUDIT_TABS;
+
+  // If the active tab isn't valid for the current mode (and isn't the shared settings tab),
+  // fall back to the mode's default landing tab. Catches both mode switches and external
+  // tab-change callers (e.g. App setting 'overview' on logo click while in Site Mode).
+  useEffect(() => {
+    if (resolvedActiveTab === 'settings') return;
+    const inList = tabs.some((t) => t.id === resolvedActiveTab);
+    if (!inList) {
+      const fallback = tabs[0].id;
+      onTabChange?.(fallback);
+      if (!onTabChange) setInternalActiveTab(fallback);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, resolvedActiveTab]);
 
   const pageBg = isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]';
   const tabBarBg = isLight ? 'border-[#e2e8ee] bg-[#f5f7fa]/80' : 'border-white/5 bg-[#0d1118]/80';
@@ -501,27 +498,73 @@ export default function Dashboard({
 
   const renderContent = () => {
     switch (resolvedActiveTab) {
-      case 'overview': return <OverviewTab />;
-      case 'chat': return (
-        <DashboardChat
-          messages={chatMessages}
-          setMessages={setChatMessages}
-          selectedDocIds={chatSelectedDocIds}
-          setSelectedDocIds={setChatSelectedDocIds}
-        />
-      );
-      case 'knowledge': return <KnowledgeBase />;
-      case 'workflows': return <PlaceholderTab label="Workflows" />;
-      case 'reports': return <PlaceholderTab label="Reports" />;
-      case 'settings': return (
-        <SettingsTab
-          activeSection={resolvedSettingsSection}
-          onSectionChange={(section) => {
-            onSettingsSectionChange?.(section);
-            if (!onSettingsSectionChange) setInternalSettingsSection(section);
-          }}
-        />
-      );
+      // Audit Mode tabs (kept as-is for now)
+      case 'overview':
+        return <OverviewTab />;
+      case 'chat':
+        return (
+          <DashboardChat
+            messages={chatMessages}
+            setMessages={setChatMessages}
+            selectedDocIds={chatSelectedDocIds}
+            setSelectedDocIds={setChatSelectedDocIds}
+          />
+        );
+      case 'knowledge':
+        return <KnowledgeBase />;
+      case 'workflows':
+        return <PlaceholderTab label="Workflows" />;
+      // Site Mode tabs
+      case 'today':
+        return <TodayTab />;
+      case 'participants':
+        return (
+          <ProtocolRequiredGate label="Participants">
+            <ParticipantsTab />
+          </ProtocolRequiredGate>
+        );
+      case 'visits':
+        return (
+          <ProtocolRequiredGate label="Visits">
+            <VisitsTab />
+          </ProtocolRequiredGate>
+        );
+      case 'protocol':
+        return (
+          <ProtocolRequiredGate label="Protocol">
+            <KnowledgeBase />
+          </ProtocolRequiredGate>
+        );
+      case 'team':
+        return (
+          <ProtocolRequiredGate label="Team">
+            <TeamTab />
+          </ProtocolRequiredGate>
+        );
+      case 'ask':
+        return (
+          <ProtocolRequiredGate label="Ask">
+            <DashboardChat
+              messages={chatMessages}
+              setMessages={setChatMessages}
+              selectedDocIds={chatSelectedDocIds}
+              setSelectedDocIds={setChatSelectedDocIds}
+            />
+          </ProtocolRequiredGate>
+        );
+      // Shared
+      case 'reports':
+        return <PlaceholderTab label="Reports" />;
+      case 'settings':
+        return (
+          <SettingsTab
+            activeSection={resolvedSettingsSection}
+            onSectionChange={(section) => {
+              onSettingsSectionChange?.(section);
+              if (!onSettingsSectionChange) setInternalSettingsSection(section);
+            }}
+          />
+        );
     }
   };
 
@@ -530,7 +573,7 @@ export default function Dashboard({
       <div className={`flex-shrink-0 border-b ${tabBarBg} backdrop-blur-sm`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide py-1">
-            {TABS.map((tab) => {
+            {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = resolvedActiveTab === tab.id;
               return (

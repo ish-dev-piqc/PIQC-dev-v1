@@ -37,11 +37,10 @@ export default function Contact() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
           <div className="lg:pt-2">
             <h2 className={`text-3xl sm:text-4xl font-bold ${headingColor} leading-tight mb-4`}>
-              Ready to Transform Your Trials?
+              Transform How Your Team Runs Trials
             </h2>
             <p className={`text-[15px] ${bodyColor} leading-relaxed mb-8`}>
-              Join leading clinical trial organizations in leveraging AI to achieve operational
-              excellence. Let's discuss how PIQClinical can streamline your protocol management.
+              Tell us about your trials and we'll show you what guided execution looks like on your actual protocol.
             </p>
 
             <div className="space-y-4">
