@@ -92,10 +92,13 @@ function UploadForm({ onSuccess, isLight }: { onSuccess: () => void; isLight: bo
         };
       }
 
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token ?? supabaseAnonKey;
+
       const res = await fetch(`${supabaseUrl}/functions/v1/ingest`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${supabaseAnonKey}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),

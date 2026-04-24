@@ -44,6 +44,11 @@ export interface StreamDashboardChatResult {
   sources: SourceCitation[];
 }
 
+async function getAuthToken(): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ?? supabaseAnonKey;
+}
+
 export async function streamDashboardChat(
   message: string,
   history: ChatMessage[],
@@ -52,10 +57,11 @@ export async function streamDashboardChat(
   onSources?: (sources: SourceCitation[]) => void,
   signal?: AbortSignal
 ): Promise<StreamDashboardChatResult> {
+  const token = await getAuthToken();
   const response = await fetch(`${supabaseUrl}/functions/v1/dashboard-chat`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${supabaseAnonKey}`,
+      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ message, history, selectedDocIds }),
