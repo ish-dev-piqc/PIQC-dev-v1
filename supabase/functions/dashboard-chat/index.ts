@@ -89,7 +89,20 @@ CRITICAL CONSISTENCY RULE — DO NOT VIOLATE:
 If the user-provided system message contains a block labelled "CONTEXT FROM PROTOCOL DOCUMENTS" you are REQUIRED to treat it as real retrieved protocol text. In that case Rule 3 is FORBIDDEN. You must NEVER output "No matching content was found in your documents for this question." when a CONTEXT FROM PROTOCOL DOCUMENTS block is present. Only Rule 1 or Rule 2 apply. If content looks thin, use Rule 2, never Rule 3.
 
 SUMMARY QUESTIONS:
-When the user asks for a summary or overview of a protocol document (e.g. "summarize", "summary of", "key points of", "overview of"), produce a structured summary that covers, where the context allows: study objectives, study design, population and eligibility, intervention and dosing, schedule of assessments, primary and secondary endpoints, safety reporting, and statistical considerations. Use dash bullet points grouped under bold section labels. Do NOT default to Rule 3 wording — use the provided context.
+When the user asks for a summary or overview of a protocol document (e.g. "summarize", "summary of", "key points of", "overview of"), produce a structured summary using the provided context. Cover as many of these sections as the context supports (skip sections with no supporting context rather than inventing content):
+
+**Study Overview** — protocol number, study title, sponsor, phase, indication
+**Study Design** — randomised/blinded/controlled, treatment arms, duration
+**Patient Population** — key inclusion and exclusion criteria
+**Intervention & Dosing** — IMP name, dose, route, schedule
+**Endpoints** — primary endpoint definition; key secondary endpoints
+**Schedule of Assessments** — visit structure and key timepoints
+**Safety Reporting** — SAE/SUSAR requirements
+**Statistics** — sample size, primary analysis method
+
+If the document appears to be a **protocol amendment**, lead with a brief description of what the amendment changes, then summarise the key updated sections.
+
+Use dash bullet points grouped under bold section labels. Cite each point with [N]. Do NOT default to Rule 3 wording — use the provided context.
 
 Clinical trial terminology and domains you handle confidently:
 - Visit schedules and assessment windows
@@ -107,6 +120,12 @@ When answering questions about schedules or timelines, always end with:
 "Please verify this against the current approved protocol version and your site's approved schedule of assessments."
 
 When information may differ between protocol versions or amendments, flag this explicitly.
+
+Citations:
+- Every factual claim drawn from the CONTEXT FROM PROTOCOL DOCUMENTS MUST be followed immediately by a citation marker like [1] or [2] referring to the numbered chunk it came from.
+- Use the exact number shown at the start of each chunk — e.g. if chunk starts with "[3]", cite it as [3].
+- Multiple sources for one sentence: [1][3]. Do not bundle as [1,3].
+- Do NOT cite general clinical knowledge — only cite chunks from the context block.
 
 Formatting:
 - Keep responses concise for specific single queries; use structured longer answers only for comprehensive questions like "summarise the eligibility criteria"
@@ -165,7 +184,7 @@ STRONGLY deprioritise (exclude where possible):
 - Page headers, footers, "CONFIDENTIAL" boilerplate
 - Non-clinical findings that are purely toxicology references
 
-Only return the JSON array of up to 12 indices, nothing else. Example: [7, 12, 18, 24, 30, 42, 55, 68, 80, 95, 110, 120]`;
+Only return the JSON array of up to 16 indices, nothing else. Example: [7, 12, 18, 24, 30, 42, 55, 68, 80, 95, 110, 120, 130, 140, 150, 160]`;
 
 const SUMMARY_PATTERNS = [
   /\bsummari[sz]e\b/i,
@@ -180,6 +199,46 @@ const SUMMARY_PATTERNS = [
 
 function isSummaryQuery(text: string): boolean {
   return SUMMARY_PATTERNS.some((p) => p.test(text));
+}
+
+// Strip recurring PDF header/footer noise Reducto injects into every chunk.
+const NOISE_PATTERNS: RegExp[] = [
+  // Markdown heading + CONFIDENTIAL anywhere on the line
+  /#+\s*CONFIDENTIAL[^\n]*/gi,
+  // Standalone CONFIDENTIAL line
+  /^CONFIDENTIAL\s*$/gim,
+  // "CONFIDENTIAL CLINICAL STUDY PROTOCOL..." boilerplate
+  /CONFIDENTIAL\s+CLINICAL\s+STUDY\s+PROTOCOL[^\n]*/gi,
+  // Page N of M
+  /Page\s+\d+\s+of\s+\d+[^\n]*/gi,
+  // Version X.X lines
+  /Version\s+\d+\.\d+[^\n]*/gi,
+  // Protocol Number: ... header block
+  /Protocol\s+Number[:\s]+[A-Z0-9()_\-\s]+(?:\n|$)/gi,
+  // "AMENDMENT No. 2 (cont.)" lines
+  /AMENDMENT\s+No\.?\s*\d+[^\n]*/gi,
+  // Study identifier lines like "(POLAR-A) 27 Sep 2018"
+  /\([A-Z]+-[A-Z]+\)\s*\d{1,2}\s+\w+\s+\d{4}[^\n]*/gi,
+  // Standalone "CLINICAL STUDY PROTOCOL" header line
+  /^CLINICAL\s+STUDY\s+PROTOCOL\s*$/gim,
+  // Amendment section-change markers (Reducto's markdown headers for these)
+  /##\s*(?:Protocol text|This will be replaced by|The following amendment applies to)[^\n]*/gi,
+  // Plain text amendment markers
+  /^(?:Protocol text|This will be replaced by|The following amendment applies to)\s*:?\s*$/gim,
+  // "(cont.)" continuation labels
+  /\(cont\.\)/gi,
+  // Standalone "[…]" ellipsis placeholders
+  /^\s*\[[……]\]\s*$/gim,
+  /^\s*\[\.{3}\]\s*$/gim,
+];
+
+function cleanContent(text: string): string {
+  let cleaned = text;
+  for (const p of NOISE_PATTERNS) {
+    cleaned = cleaned.replace(p, "");
+  }
+  // Collapse runs of blank lines left behind
+  return cleaned.replace(/\n{3,}/g, "\n\n").trim();
 }
 
 interface ChatMessage {
@@ -276,8 +335,8 @@ async function rerankChunks(
 ): Promise<ChunkRow[]> {
   if (chunks.length === 0) return [];
 
-  const topK = opts.summary ? 12 : 5;
-  const previewLen = opts.summary ? 500 : 400;
+  const topK = opts.summary ? 16 : 5;
+  const previewLen = opts.summary ? 600 : 400;
   const prompt = opts.summary ? SUMMARY_RERANK_PROMPT : RERANK_PROMPT;
 
   const chunkList = chunks
@@ -300,7 +359,7 @@ async function rerankChunks(
         },
       ],
       temperature: 0,
-      max_tokens: 120,
+      max_tokens: opts.summary ? 200 : 120,
     }),
   });
 
@@ -362,9 +421,10 @@ async function fetchDocumentTitles(
 async function fetchStructuralChunks(
   supabaseUrl: string,
   serviceRoleKey: string,
-  documentId: string
+  documentId: string,
+  limit = 6
 ): Promise<ChunkRow[]> {
-  const url = `${supabaseUrl}/rest/v1/chunks?document_id=eq.${documentId}&select=id,document_id,content,chunk_index,page_start,page_end,section_heading,block_types&order=chunk_index.asc`;
+  const url = `${supabaseUrl}/rest/v1/chunks?document_id=eq.${documentId}&select=id,document_id,content,chunk_index,page_start,page_end,section_heading,block_types&order=chunk_index.asc&limit=${limit}`;
   const res = await fetch(url, {
     headers: {
       apikey: serviceRoleKey,
@@ -431,13 +491,24 @@ async function resolveSummaryDocumentId(
   if (!res.ok) return null;
   const docs = (await res.json()) as Array<{ id: string; title: string }>;
 
-  const lower = message.toLowerCase();
+  // Normalise both sides: lowercase, collapse underscores/hyphens to spaces
+  const normalise = (s: string) => s.toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  const lowerMsg = normalise(message);
+
   let best: { id: string; score: number } | null = null;
   for (const d of docs) {
-    const title = (d.title ?? "").toLowerCase().trim();
+    const title = normalise(d.title ?? "");
     if (!title) continue;
-    if (lower.includes(title)) {
-      const score = title.length;
+    // Exact substring match first
+    if (lowerMsg.includes(title)) {
+      const score = title.length * 2;
+      if (!best || score > best.score) best = { id: d.id, score };
+      continue;
+    }
+    // Word-level match: all words of the title appear in the message
+    const titleWords = title.split(" ").filter(Boolean);
+    if (titleWords.length > 0 && titleWords.every((w) => lowerMsg.includes(w))) {
+      const score = titleWords.join("").length;
       if (!best || score > best.score) best = { id: d.id, score };
     }
   }
@@ -542,6 +613,7 @@ Deno.serve(async (req: Request) => {
 
     const summaryMode = isSummaryQuery(message);
     let contextBlock = "";
+    let summaryDocTitle = "";
     let ragStatus: RagStatus = "not_found";
     let ragErrorMessage = "";
     let sources: SourceCitation[] = [];
@@ -558,12 +630,50 @@ Deno.serve(async (req: Request) => {
           selectedDocIds
         );
         if (summaryDocId) {
-          const allChunks = await fetchStructuralChunks(supabaseUrl, serviceRoleKey, summaryDocId);
-          if (allChunks.length > 0) {
-            rawChunks = sampleStructural(allChunks, 30);
-            usedStructural = true;
-            console.log("RAG: summary structural sample count=", rawChunks.length, "of total", allChunks.length);
+          // Fetch the document title so we can label the context block
+          const titleRes = await fetch(`${supabaseUrl}/rest/v1/documents?id=eq.${summaryDocId}&select=title`, {
+            headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
+          });
+          if (titleRes.ok) {
+            const titleRows = await titleRes.json() as Array<{ title: string }>;
+            summaryDocTitle = titleRows[0]?.title ?? "";
           }
+
+          // Two-pass: targeted semantic search for clinical substance + first few chunks for doc context
+          const summarySearchQuery =
+            "study objectives design population eligibility inclusion exclusion dosing IMP endpoints primary secondary safety SAE statistics randomisation";
+          const [summaryEmbedding, headerChunks] = await Promise.all([
+            embedText(summarySearchQuery, openaiKey),
+            fetchStructuralChunks(supabaseUrl, serviceRoleKey, summaryDocId, 6),
+          ]);
+
+          const summaryRpcRes = await fetch(`${supabaseUrl}/rest/v1/rpc/hybrid_search`, {
+            method: "POST",
+            headers: {
+              "apikey": serviceRoleKey,
+              "Authorization": `Bearer ${serviceRoleKey}`,
+              "Content-Type": "application/json",
+              "Prefer": "return=representation",
+            },
+            body: JSON.stringify({
+              query_embedding: summaryEmbedding,
+              query_text: summarySearchQuery,
+              match_count: 24,
+              filter_document_ids: [summaryDocId],
+            }),
+          });
+
+          const searchChunks: ChunkRow[] = summaryRpcRes.ok ? await summaryRpcRes.json() : [];
+
+          // Merge: header chunks first (for document context), then search results; dedup by id
+          const seen = new Set<string>();
+          rawChunks = [...headerChunks, ...searchChunks].filter((c) => {
+            if (seen.has(c.id)) return false;
+            seen.add(c.id);
+            return true;
+          });
+          usedStructural = true;
+          log("info", "dashboard-chat.summary_two_pass", { header: headerChunks.length, search: searchChunks.length, combined: rawChunks.length });
         }
       }
 
@@ -578,7 +688,7 @@ Deno.serve(async (req: Request) => {
         const rpcBody: Record<string, unknown> = {
           query_embedding: queryEmbedding,
           query_text: searchQuery,
-          match_count: summaryMode ? 40 : 20,
+          match_count: 12,
           filter_document_ids: hasDocFilter ? selectedDocIds : null,
         };
 
@@ -611,12 +721,15 @@ Deno.serve(async (req: Request) => {
             ? [...topChunks].sort((a, b) => a.chunk_index - b.chunk_index)
             : topChunks;
 
-          // Build context block with [N] references
-          const contextLines = ordered.map((c, i) => `[${i + 1}] ${c.content}`).join("\n\n");
-          contextBlock = `CONTEXT FROM PROTOCOL DOCUMENTS:\n${contextLines}\n\nEND OF CONTEXT\n\nCONTEXT IS PRESENT — Rules 1 or 2 apply. Rule 3 is FORBIDDEN; you MUST NOT say "No matching content was found in your documents for this question."\n\n`;
+          // Build context block with [N] references (noise-stripped)
+          const contextLines = ordered
+            .map((c, i) => `[${i + 1}] ${cleanContent(c.content)}`)
+            .join("\n\n");
+          const docLabel = summaryDocTitle ? `DOCUMENT: ${summaryDocTitle}\n` : "";
+          contextBlock = `${docLabel}CONTEXT FROM PROTOCOL DOCUMENTS:\n${contextLines}\n\nEND OF CONTEXT\n\nCONTEXT IS PRESENT — Rules 1 or 2 apply. Rule 3 is FORBIDDEN; you MUST NOT say "No matching content was found in your documents for this question."\n\n`;
           ragStatus = "found";
 
-          // Build citation sources
+          // Build citation sources (preview also cleaned)
           const uniqueDocIds = [...new Set(ordered.map((c) => c.document_id))];
           const titleMap = await fetchDocumentTitles(supabaseUrl, serviceRoleKey, uniqueDocIds);
 
@@ -627,7 +740,7 @@ Deno.serve(async (req: Request) => {
             page_start: c.page_start,
             page_end: c.page_end,
             section_heading: c.section_heading,
-            chunk_preview: c.content.slice(0, 200),
+            chunk_preview: cleanContent(c.content).slice(0, 200),
           }));
         }
       }
@@ -648,7 +761,7 @@ Deno.serve(async (req: Request) => {
       { role: "user", content: message },
     ];
 
-    const maxTokens = summaryMode ? 1800 : 1200;
+    const maxTokens = summaryMode ? 2400 : 1200;
 
     // Abort controller combining 30s timeout + client disconnect
     const openaiController = new AbortController();
