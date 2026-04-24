@@ -11,6 +11,33 @@ const CHUNK_SIZE = 400;
 const CHUNK_OVERLAP = 50;
 const OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
 const REDUCTO_BASE_URL = "https://platform.reducto.ai";
+const MAX_BODY_BYTES = 50 * 1024 * 1024; // 50 MB (PDF payloads can be large)
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 5; // ingest is expensive — strict limit
+const EMBED_MAX_RETRIES = 3;
+
+const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  if (rateLimitBuckets.size > 5_000) {
+    for (const [key, val] of rateLimitBuckets) {
+      if (val.resetAt < now) rateLimitBuckets.delete(key);
+    }
+  }
+  const bucket = rateLimitBuckets.get(ip);
+  if (!bucket || bucket.resetAt < now) {
+    rateLimitBuckets.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+  if (bucket.count >= RATE_LIMIT_MAX) return false;
+  bucket.count++;
+  return true;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 interface ReductoBlock {
   type: string;
@@ -55,22 +82,33 @@ function splitIntoChunks(text: string): ChunkData[] {
 }
 
 async function embedText(text: string, apiKey: string): Promise<number[]> {
-  const res = await fetch("https://api.openai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ input: text, model: OPENAI_EMBEDDING_MODEL }),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`OpenAI embedding error: ${err}`);
+  let lastErr: Error | null = null;
+  for (let attempt = 0; attempt < EMBED_MAX_RETRIES; attempt++) {
+    if (attempt > 0) await sleep(1_000 * Math.pow(2, attempt - 1)); // 1s, 2s
+    try {
+      const res = await fetch("https://api.openai.com/v1/embeddings", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ input: text, model: OPENAI_EMBEDDING_MODEL }),
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        // Don't retry 400-level errors (auth/quota issues won't improve with retry)
+        if (res.status < 500) throw new Error(`OpenAI embedding error ${res.status}: ${err}`);
+        lastErr = new Error(`OpenAI embedding error ${res.status}: ${err}`);
+        continue;
+      }
+      const data = await res.json();
+      return data.data[0].embedding as number[];
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith("OpenAI embedding error")) throw err;
+      lastErr = err instanceof Error ? err : new Error(String(err));
+    }
   }
-
-  const data = await res.json();
-  return data.data[0].embedding as number[];
+  throw lastErr ?? new Error("Embedding failed after retries");
 }
 
 async function uploadToReducto(pdfBytes: Uint8Array, reductoKey: string): Promise<string> {
@@ -174,6 +212,23 @@ async function parsePdfWithReducto(fileId: string, reductoKey: string): Promise<
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
+  }
+
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
+
+  if (!checkRateLimit(ip)) {
+    return new Response(
+      JSON.stringify({ error: "Too many requests — please wait before ingesting again" }),
+      { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  const contentLength = parseInt(req.headers.get("content-length") ?? "0", 10);
+  if (contentLength > MAX_BODY_BYTES) {
+    return new Response(
+      JSON.stringify({ error: "Request body too large (max 50 MB)" }),
+      { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 
   const openaiKey = Deno.env.get("OPENAI_API_KEY");

@@ -368,6 +368,7 @@ function DocumentSelector({ selectedDocIds, onSelectionChange, isLight }: Docume
     supabase
       .from('documents')
       .select('id, title, source')
+      .eq('status', 'ready')
       .order('created_at', { ascending: false })
       .limit(50)
       .then(({ data }) => {
@@ -520,6 +521,7 @@ export default function DashboardChat({
     supabase
       .from('documents')
       .select('id, title, source')
+      .eq('status', 'ready')
       .order('created_at', { ascending: false })
       .limit(50)
       .then(({ data }) => setAllDocs(data ?? []));

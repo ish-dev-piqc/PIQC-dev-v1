@@ -9,6 +9,8 @@ interface Document {
   source: string;
   created_at: string;
   chunk_count?: number;
+  status?: string;
+  error_message?: string | null;
 }
 
 interface UploadState {
@@ -303,7 +305,7 @@ function DocumentList({ refreshKey, isLight }: { refreshKey: number; isLight: bo
     setLoading(true);
     const { data: docData } = await supabase
       .from('documents')
-      .select('id, title, source, created_at')
+      .select('id, title, source, created_at, status, error_message')
       .order('created_at', { ascending: false })
       .limit(50);
 
@@ -377,10 +379,18 @@ function DocumentList({ refreshKey, isLight }: { refreshKey: number; isLight: bo
                   <FileText size={14} className="text-[#6e8fb5]" />
                 </div>
                 <div className="min-w-0">
-                  <p className={`text-sm font-medium truncate ${isLight ? 'text-[#1a1f28]/90' : 'text-[#d2d7e0]/80'}`}>{doc.title || 'Untitled'}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className={`text-sm font-medium truncate ${isLight ? 'text-[#1a1f28]/90' : 'text-[#d2d7e0]/80'}`}>{doc.title || 'Untitled'}</p>
+                    {doc.status === 'pending' && (
+                      <span className="flex-shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-400/15 text-amber-500">ingesting</span>
+                    )}
+                    {doc.status === 'failed' && (
+                      <span className="flex-shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400" title={doc.error_message ?? ''}>failed</span>
+                    )}
+                  </div>
                   <p className={`text-xs truncate ${isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/30'}`}>
                     {doc.source || 'No source'}
-                    {doc.chunk_count !== undefined && (
+                    {doc.chunk_count !== undefined && doc.status !== 'failed' && (
                       <span className={`ml-2 ${isLight ? 'text-[#374152]/30' : 'text-[#d2d7e0]/20'}`}>&middot; {doc.chunk_count} chunks</span>
                     )}
                   </p>
