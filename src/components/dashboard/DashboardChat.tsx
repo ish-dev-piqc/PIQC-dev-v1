@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, StopCircle, BookOpen, Stethoscope, User, ChevronDown, Search, FileText, ChevronUp, X, Check, Sparkles, Activity, Shield, GitBranch, AlertTriangle, Database, HelpCircle } from 'lucide-react';
-import { streamDashboardChat, ChatMessage, RagStatus, supabase } from '../../lib/supabase';
+import { streamDashboardChat, ChatMessage, RagStatus, SourceCitation, supabase } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
 
 interface Document {
@@ -13,6 +13,7 @@ type ExtendedMessage = ChatMessage & {
   streaming?: boolean;
   ragStatus?: RagStatus;
   ragError?: string;
+  sources?: SourceCitation[];
 };
 
 const DOC_SUGGESTED_PROMPTS: Record<string, string[]> = {};
@@ -83,9 +84,37 @@ function getSuggestionsForDocs(docs: Document[]): string[] {
   ];
 }
 
-function renderContent(text: string) {
-  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
+function renderLine(
+  text: string,
+  sources: SourceCitation[] | undefined,
+  onCitationClick: ((n: number) => void) | undefined,
+  isLight: boolean,
+  isUser: boolean
+): React.ReactNode[] {
+  const parts = text.split(/(\[\d+\]|\*\*[^*]+\*\*|\*[^*]+\*)/g);
   return parts.map((part, i) => {
+    const citationMatch = part.match(/^\[(\d+)\]$/);
+    if (citationMatch && sources && onCitationClick) {
+      const n = parseInt(citationMatch[1]);
+      if (sources.some((s) => s.n === n)) {
+        return (
+          <button
+            key={i}
+            onClick={() => onCitationClick(n)}
+            title={`Source ${n}`}
+            className={`inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded text-[9px] font-bold leading-none mx-0.5 align-middle transition-colors ${
+              isUser
+                ? 'bg-white/25 text-white hover:bg-white/40'
+                : isLight
+                ? 'bg-[#4a6fa5]/15 text-[#4a6fa5] hover:bg-[#4a6fa5]/30'
+                : 'bg-[#4a6fa5]/20 text-[#6a9fc8] hover:bg-[#4a6fa5]/40'
+            }`}
+          >
+            {n}
+          </button>
+        );
+      }
+    }
     if (part.startsWith('**') && part.endsWith('**')) {
       return <strong key={i}>{part.slice(2, -2)}</strong>;
     }
@@ -94,6 +123,69 @@ function renderContent(text: string) {
     }
     return <span key={i}>{part}</span>;
   });
+}
+
+function SourceDetailPanel({
+  source,
+  onClose,
+  isLight,
+}: {
+  source: SourceCitation;
+  onClose: () => void;
+  isLight: boolean;
+}) {
+  const hasPage = source.page_start !== null;
+  const pageLabel = hasPage
+    ? `p. ${source.page_start}${source.page_end !== source.page_start ? `–${source.page_end}` : ''}`
+    : null;
+
+  return (
+    <div
+      className={`mt-2 rounded-xl border p-3 text-xs animate-in fade-in slide-in-from-top-1 duration-150 ${
+        isLight
+          ? 'bg-[#f0f8fb] border-[#c8dce8] text-[#2a3a45]'
+          : 'bg-[#141c22] border-[#253040] text-[#c8d4e0]'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2 mb-1.5">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span
+            className={`inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded text-[9px] font-bold flex-shrink-0 ${
+              isLight ? 'bg-[#4a6fa5]/15 text-[#4a6fa5]' : 'bg-[#4a6fa5]/20 text-[#6a9fc8]'
+            }`}
+          >
+            {source.n}
+          </span>
+          <span className="font-semibold truncate">{source.document_title || 'Untitled'}</span>
+        </div>
+        <button
+          onClick={onClose}
+          className={`flex-shrink-0 transition-opacity hover:opacity-100 opacity-50 ${
+            isLight ? 'text-[#374152]' : 'text-[#8a9ab0]'
+          }`}
+        >
+          <X size={11} />
+        </button>
+      </div>
+      {(pageLabel || source.section_heading) && (
+        <div className={`flex items-center flex-wrap gap-x-3 gap-y-0.5 mb-1.5 text-[10px] ${isLight ? 'text-[#374152]/60' : 'text-[#8a9ab0]'}`}>
+          {pageLabel && <span>📄 {pageLabel}</span>}
+          {source.section_heading && <span>§ {source.section_heading}</span>}
+        </div>
+      )}
+      {source.chunk_preview && (
+        <p
+          className={`text-[11px] leading-relaxed italic border-l-2 pl-2 ${
+            isLight
+              ? 'border-[#4a6fa5]/30 text-[#374152]/70'
+              : 'border-[#4a6fa5]/30 text-[#a0b0c0]'
+          }`}
+        >
+          "{source.chunk_preview.trim()}…"
+        </p>
+      )}
+    </div>
+  );
 }
 
 function RagStatusTag({ ragStatus, ragError, isLight }: { ragStatus: RagStatus; ragError?: string; isLight: boolean }) {
@@ -137,6 +229,13 @@ function RagStatusTag({ ragStatus, ragError, isLight }: { ragStatus: RagStatus; 
 
 function MessageBubble({ msg, isLight }: { msg: ExtendedMessage; isLight: boolean }) {
   const isUser = msg.role === 'user';
+  const [expandedSource, setExpandedSource] = useState<number | null>(null);
+
+  const handleCitationClick = (n: number) => {
+    setExpandedSource((prev) => (prev === n ? null : n));
+  };
+
+  const expandedSourceData = msg.sources?.find((s) => s.n === expandedSource);
 
   return (
     <div className={`flex gap-3 group ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -169,17 +268,25 @@ function MessageBubble({ msg, isLight }: { msg: ExtendedMessage; isLight: boolea
             : 'bg-[#171f25] text-[#c8d4e0] rounded-tl-sm border border-white/[0.07] shadow-[0_1px_4px_rgba(0,0,0,0.3)]'
         }`}>
           {msg.content.split('\n').map((line, i) => {
+            const lineContent = line.startsWith('- ') ? line.slice(2) : line;
+            const rendered = renderLine(
+              lineContent,
+              msg.sources,
+              isUser ? undefined : handleCitationClick,
+              isLight,
+              isUser
+            );
             if (line.startsWith('- ')) {
               return (
                 <div key={i} className="flex gap-2 my-1">
                   <span className={`mt-1.5 flex-shrink-0 w-1.5 h-1.5 rounded-full ${isUser ? 'bg-white/70' : 'bg-[#5a7fa5]'}`} />
-                  <span>{renderContent(line.slice(2))}</span>
+                  <span>{rendered}</span>
                 </div>
               );
             }
             return (
               <p key={i} className={i > 0 && line !== '' ? 'mt-2' : ''}>
-                {renderContent(line)}
+                {rendered}
               </p>
             );
           })}
@@ -187,6 +294,18 @@ function MessageBubble({ msg, isLight }: { msg: ExtendedMessage; isLight: boolea
             <span className="inline-block w-0.5 h-4 ml-0.5 bg-[#5a7fa5] animate-pulse rounded-full align-middle" />
           )}
         </div>
+
+        {/* Citation expand panel */}
+        {expandedSourceData && (
+          <div className="w-full">
+            <SourceDetailPanel
+              source={expandedSourceData}
+              onClose={() => setExpandedSource(null)}
+              isLight={isLight}
+            />
+          </div>
+        )}
+
         {!isUser && !msg.streaming && msg.ragStatus && (
           <RagStatusTag ragStatus={msg.ragStatus} ragError={msg.ragError} isLight={isLight} />
         )}
@@ -440,6 +559,7 @@ export default function DashboardChat({
     let firstToken = true;
     let finalRagStatus: RagStatus = 'not_found';
     let finalRagError = '';
+    let collectedSources: SourceCitation[] = [];
 
     try {
       const result = await streamDashboardChat(
@@ -461,10 +581,12 @@ export default function DashboardChat({
             return updated;
           });
         },
+        (sources) => { collectedSources = sources; },
         ac.signal
       );
       finalRagStatus = result.ragStatus;
       finalRagError = result.ragError;
+      if (result.sources.length > 0) collectedSources = result.sources;
     } catch (err: any) {
       if (err.name !== 'AbortError') {
         const errorMsg = err.message || 'Something went wrong. Please try again.';
@@ -489,6 +611,7 @@ export default function DashboardChat({
             streaming: false,
             ragStatus: finalRagStatus,
             ragError: finalRagError,
+            sources: collectedSources.length > 0 ? collectedSources : undefined,
           };
         }
         return updated;

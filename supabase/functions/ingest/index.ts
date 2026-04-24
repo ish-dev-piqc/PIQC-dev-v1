@@ -12,14 +12,42 @@ const CHUNK_OVERLAP = 50;
 const OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
 const REDUCTO_BASE_URL = "https://platform.reducto.ai";
 
-function splitIntoChunks(text: string): string[] {
+interface ReductoBlock {
+  type: string;
+  bbox?: { page?: number };
+  content?: string;
+}
+
+interface ReductoChunk {
+  content?: string;
+  embed?: string;
+  blocks?: ReductoBlock[];
+}
+
+interface ChunkData {
+  content: string;
+  page_start: number | null;
+  page_end: number | null;
+  section_heading: string | null;
+  block_types: string[] | null;
+}
+
+function splitIntoChunks(text: string): ChunkData[] {
   const words = text.split(/\s+/).filter(Boolean);
-  const chunks: string[] = [];
+  const chunks: ChunkData[] = [];
 
   let i = 0;
   while (i < words.length) {
     const chunk = words.slice(i, i + CHUNK_SIZE).join(" ");
-    if (chunk.trim()) chunks.push(chunk.trim());
+    if (chunk.trim()) {
+      chunks.push({
+        content: chunk.trim(),
+        page_start: null,
+        page_end: null,
+        section_heading: null,
+        block_types: null,
+      });
+    }
     i += CHUNK_SIZE - CHUNK_OVERLAP;
   }
 
@@ -67,7 +95,7 @@ async function uploadToReducto(pdfBytes: Uint8Array, reductoKey: string): Promis
   return data.file_id as string;
 }
 
-async function parsePdfWithReducto(fileId: string, reductoKey: string): Promise<string[]> {
+async function parsePdfWithReducto(fileId: string, reductoKey: string): Promise<ChunkData[]> {
   const res = await fetch(`${REDUCTO_BASE_URL}/parse`, {
     method: "POST",
     headers: {
@@ -97,23 +125,50 @@ async function parsePdfWithReducto(fileId: string, reductoKey: string): Promise<
 
   const data = await res.json();
 
-  let chunks: string[] = [];
+  let rawChunks: ReductoChunk[] = [];
 
   if (data.result && Array.isArray(data.result.chunks)) {
-    chunks = data.result.chunks
-      .map((c: { content?: string; embed?: string }) => (c.embed || c.content || "").trim())
-      .filter((c: string) => c.length > 0);
+    rawChunks = data.result.chunks;
   } else if (data.url) {
     const urlRes = await fetch(data.url);
     const urlData = await urlRes.json();
     if (urlData.result && Array.isArray(urlData.result.chunks)) {
-      chunks = urlData.result.chunks
-        .map((c: { content?: string; embed?: string }) => (c.embed || c.content || "").trim())
-        .filter((c: string) => c.length > 0);
+      rawChunks = urlData.result.chunks;
     }
   }
 
-  return chunks;
+  const SECTION_BLOCK_TYPES = new Set(["Section Header", "Title"]);
+  let currentSection: string | null = null;
+
+  return rawChunks
+    .map((c: ReductoChunk): ChunkData | null => {
+      const content = (c.embed || c.content || "").trim();
+      if (!content) return null;
+
+      const blocks: ReductoBlock[] = Array.isArray(c.blocks) ? c.blocks : [];
+
+      // Update section heading when a section-marker block appears in this chunk
+      for (const b of blocks) {
+        if (SECTION_BLOCK_TYPES.has(b.type) && b.content?.trim()) {
+          currentSection = b.content.trim();
+        }
+      }
+
+      const pages = blocks
+        .map((b) => b.bbox?.page)
+        .filter((p): p is number => typeof p === "number");
+
+      const blockTypeSet = [...new Set(blocks.map((b) => b.type))].sort();
+
+      return {
+        content,
+        page_start: pages.length > 0 ? Math.min(...pages) : null,
+        page_end: pages.length > 0 ? Math.max(...pages) : null,
+        section_heading: currentSection,
+        block_types: blockTypeSet.length > 0 ? blockTypeSet : null,
+      };
+    })
+    .filter((c): c is ChunkData => c !== null);
 }
 
 Deno.serve(async (req: Request) => {
@@ -121,18 +176,25 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
+  const openaiKey = Deno.env.get("OPENAI_API_KEY");
+  if (!openaiKey) {
+    return new Response(
+      JSON.stringify({ error: "OPENAI_API_KEY not configured" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+  let docId: string | null = null;
+
   try {
-    const openaiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!openaiKey) throw new Error("OPENAI_API_KEY not configured");
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
-
     const body = await req.json();
     const { title, source, content, pdf_base64 } = body;
 
-    let chunks: string[] = [];
+    let chunks: ChunkData[] = [];
 
     if (pdf_base64) {
       const reductoKey = Deno.env.get("REDUCTO_API_KEY");
@@ -159,6 +221,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Insert document — status defaults to 'pending' via column default
     const { data: doc, error: docError } = await supabase
       .from("documents")
       .insert({ title: title ?? "", source: source ?? "" })
@@ -166,6 +229,7 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (docError) throw docError;
+    docId = doc.id;
 
     const batchSize = 20;
     let inserted = 0;
@@ -174,14 +238,18 @@ Deno.serve(async (req: Request) => {
       const batch = chunks.slice(b, b + batchSize);
 
       const embeddings = await Promise.all(
-        batch.map((chunk) => embedText(chunk, openaiKey))
+        batch.map((chunk) => embedText(chunk.content, openaiKey))
       );
 
       const rows = batch.map((chunk, i) => ({
-        document_id: doc.id,
-        content: chunk,
+        document_id: docId,
+        content: chunk.content,
         chunk_index: b + i,
         embedding: JSON.stringify(embeddings[i]),
+        page_start: chunk.page_start,
+        page_end: chunk.page_end,
+        section_heading: chunk.section_heading,
+        block_types: chunk.block_types ? JSON.stringify(chunk.block_types) : null,
       }));
 
       const { error: insertError } = await supabase.from("chunks").insert(rows);
@@ -190,16 +258,31 @@ Deno.serve(async (req: Request) => {
       inserted += batch.length;
     }
 
+    // Mark document ready
+    await supabase
+      .from("documents")
+      .update({ status: "ready" })
+      .eq("id", docId);
+
     return new Response(
       JSON.stringify({
         success: true,
-        document_id: doc.id,
+        document_id: docId,
         chunks_created: inserted,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
+
+    // Mark document failed if it was created
+    if (docId) {
+      await supabase
+        .from("documents")
+        .update({ status: "failed", error_message: message })
+        .eq("id", docId);
+    }
+
     return new Response(
       JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

@@ -7,6 +7,10 @@ const corsHeaders = {
   "Access-Control-Expose-Headers": "X-Rag-Status, X-Rag-Error",
 };
 
+const GENERATION_MODEL = "gpt-4.1-mini";
+const RERANK_MODEL = "gpt-4o-mini";
+const OPENAI_TIMEOUT_MS = 30_000;
+
 const SYSTEM_PROMPT = `You are a clinical trial protocol assistant. Your users are trial site staff — coordinators, investigators, data managers, and nurses — who need fast, accurate answers from their protocol documents during busy site days.
 
 Your priority order is always:
@@ -139,6 +143,20 @@ interface ChunkRow {
   chunk_index: number;
   similarity: number;
   rank_score: number;
+  page_start: number | null;
+  page_end: number | null;
+  section_heading: string | null;
+  block_types: unknown;
+}
+
+export interface SourceCitation {
+  n: number;
+  document_id: string;
+  document_title: string;
+  page_start: number | null;
+  page_end: number | null;
+  section_heading: string | null;
+  chunk_preview: string;
 }
 
 type RagStatus = "found" | "not_found" | "error";
@@ -158,6 +176,47 @@ async function embedText(text: string, apiKey: string): Promise<number[]> {
   return data.data[0].embedding as number[];
 }
 
+async function rewriteQuery(
+  message: string,
+  history: ChatMessage[],
+  apiKey: string
+): Promise<string> {
+  if (history.length === 0) return message;
+
+  const recent = history
+    .slice(-6)
+    .map((m) => `${m.role}: ${m.content.slice(0, 300)}`)
+    .join("\n");
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: RERANK_MODEL,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a query rewriting assistant for clinical trial documents. Given a conversation and the latest user question, rewrite the question as a single, self-contained search query that captures the full intent without needing the conversation context. Output only the rewritten query, nothing else.",
+        },
+        {
+          role: "user",
+          content: `Conversation:\n${recent}\n\nLatest question: ${message}`,
+        },
+      ],
+      temperature: 0,
+      max_tokens: 120,
+    }),
+  });
+
+  if (!res.ok) return message;
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content?.trim() || message;
+}
+
 async function rerankChunks(
   question: string,
   chunks: ChunkRow[],
@@ -167,7 +226,7 @@ async function rerankChunks(
   if (chunks.length === 0) return [];
 
   const topK = opts.summary ? 12 : 5;
-  const previewLen = opts.summary ? 400 : 300;
+  const previewLen = opts.summary ? 500 : 400;
   const prompt = opts.summary ? SUMMARY_RERANK_PROMPT : RERANK_PROMPT;
 
   const chunkList = chunks
@@ -181,7 +240,7 @@ async function rerankChunks(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "gpt-4o-mini",
+      model: RERANK_MODEL,
       messages: [
         { role: "system", content: prompt },
         {
@@ -212,12 +271,31 @@ async function rerankChunks(
   }
 }
 
+async function fetchDocumentTitles(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  docIds: string[]
+): Promise<Map<string, string>> {
+  if (docIds.length === 0) return new Map();
+  const idList = docIds.map((id) => `"${id}"`).join(",");
+  const url = `${supabaseUrl}/rest/v1/documents?id=in.(${idList})&select=id,title&status=eq.ready`;
+  const res = await fetch(url, {
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
+    },
+  });
+  if (!res.ok) return new Map();
+  const docs = (await res.json()) as Array<{ id: string; title: string }>;
+  return new Map(docs.map((d) => [d.id, d.title ?? ""]));
+}
+
 async function fetchStructuralChunks(
   supabaseUrl: string,
   serviceRoleKey: string,
   documentId: string
 ): Promise<ChunkRow[]> {
-  const url = `${supabaseUrl}/rest/v1/chunks?document_id=eq.${documentId}&select=id,document_id,content,chunk_index&order=chunk_index.asc`;
+  const url = `${supabaseUrl}/rest/v1/chunks?document_id=eq.${documentId}&select=id,document_id,content,chunk_index,page_start,page_end,section_heading,block_types&order=chunk_index.asc`;
   const res = await fetch(url, {
     headers: {
       apikey: serviceRoleKey,
@@ -230,6 +308,10 @@ async function fetchStructuralChunks(
     document_id: string;
     content: string;
     chunk_index: number;
+    page_start: number | null;
+    page_end: number | null;
+    section_heading: string | null;
+    block_types: unknown;
   }>;
   return rows.map((r) => ({
     ...r,
@@ -270,7 +352,7 @@ async function resolveSummaryDocumentId(
     return null;
   }
 
-  const url = `${supabaseUrl}/rest/v1/documents?select=id,title&order=created_at.desc&limit=50`;
+  const url = `${supabaseUrl}/rest/v1/documents?select=id,title&order=created_at.desc&limit=50&status=eq.ready`;
   const res = await fetch(url, {
     headers: {
       apikey: serviceRoleKey,
@@ -323,10 +405,18 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+    const safeHistory: ChatMessage[] = Array.isArray(history)
+      ? history
+          .filter((m) => m.role === "user" || m.role === "assistant")
+          .map((m) => ({ role: m.role, content: String(m.content).slice(0, 3000) }))
+          .slice(-20)
+      : [];
+
     const summaryMode = isSummaryQuery(message);
     let contextBlock = "";
     let ragStatus: RagStatus = "not_found";
     let ragErrorMessage = "";
+    let sources: SourceCitation[] = [];
 
     try {
       let rawChunks: ChunkRow[] = [];
@@ -340,31 +430,26 @@ Deno.serve(async (req: Request) => {
           selectedDocIds
         );
         if (summaryDocId) {
-          const allChunks = await fetchStructuralChunks(
-            supabaseUrl,
-            serviceRoleKey,
-            summaryDocId
-          );
+          const allChunks = await fetchStructuralChunks(supabaseUrl, serviceRoleKey, summaryDocId);
           if (allChunks.length > 0) {
             rawChunks = sampleStructural(allChunks, 30);
             usedStructural = true;
-            console.log(
-              "RAG: summary mode — structural sample count=",
-              rawChunks.length,
-              "of total",
-              allChunks.length
-            );
+            console.log("RAG: summary structural sample count=", rawChunks.length, "of total", allChunks.length);
           }
         }
       }
 
       if (!usedStructural) {
-        const queryEmbedding = await embedText(message, openaiKey);
+        // Rewrite query using conversation history for better retrieval
+        const searchQuery = await rewriteQuery(message, safeHistory, openaiKey);
+        console.log("RAG: searchQuery=", searchQuery.slice(0, 120));
+
+        const queryEmbedding = await embedText(searchQuery, openaiKey);
         const hasDocFilter = Array.isArray(selectedDocIds) && selectedDocIds.length > 0;
 
         const rpcBody: Record<string, unknown> = {
           query_embedding: queryEmbedding,
-          query_text: message,
+          query_text: searchQuery,
           match_count: summaryMode ? 40 : 20,
           filter_document_ids: hasDocFilter ? selectedDocIds : null,
         };
@@ -390,20 +475,32 @@ Deno.serve(async (req: Request) => {
       }
 
       if (rawChunks && rawChunks.length > 0) {
-        const topChunks = await rerankChunks(message, rawChunks, openaiKey, {
-          summary: summaryMode,
-        });
+        const topChunks = await rerankChunks(message, rawChunks, openaiKey, { summary: summaryMode });
         console.log("RAG: topChunks count=", topChunks.length, "summaryMode=", summaryMode);
 
         if (topChunks.length > 0) {
           const ordered = summaryMode
             ? [...topChunks].sort((a, b) => a.chunk_index - b.chunk_index)
             : topChunks;
-          const contextLines = ordered
-            .map((c, i) => `[${i + 1}] ${c.content}`)
-            .join("\n\n");
+
+          // Build context block with [N] references
+          const contextLines = ordered.map((c, i) => `[${i + 1}] ${c.content}`).join("\n\n");
           contextBlock = `CONTEXT FROM PROTOCOL DOCUMENTS:\n${contextLines}\n\nEND OF CONTEXT\n\nCONTEXT IS PRESENT — Rules 1 or 2 apply. Rule 3 is FORBIDDEN; you MUST NOT say "No matching content was found in your documents for this question."\n\n`;
           ragStatus = "found";
+
+          // Build citation sources
+          const uniqueDocIds = [...new Set(ordered.map((c) => c.document_id))];
+          const titleMap = await fetchDocumentTitles(supabaseUrl, serviceRoleKey, uniqueDocIds);
+
+          sources = ordered.map((c, i) => ({
+            n: i + 1,
+            document_id: c.document_id,
+            document_title: titleMap.get(c.document_id) ?? "",
+            page_start: c.page_start,
+            page_end: c.page_end,
+            section_heading: c.section_heading,
+            chunk_preview: c.content.slice(0, 200),
+          }));
         }
       }
     } catch (ragErr) {
@@ -413,18 +510,9 @@ Deno.serve(async (req: Request) => {
       ragErrorMessage = msg;
     }
 
-    console.log("RAG: status=", ragStatus, "contextBlock length=", contextBlock.length);
+    console.log("RAG: status=", ragStatus, "sources=", sources.length);
 
-    const safeHistory: ChatMessage[] = Array.isArray(history)
-      ? history
-          .filter((m) => m.role === "user" || m.role === "assistant")
-          .map((m) => ({ role: m.role, content: String(m.content).slice(0, 3000) }))
-          .slice(-20)
-      : [];
-
-    const systemContent = contextBlock
-      ? `${SYSTEM_PROMPT}\n\n${contextBlock}`
-      : SYSTEM_PROMPT;
+    const systemContent = contextBlock ? `${SYSTEM_PROMPT}\n\n${contextBlock}` : SYSTEM_PROMPT;
 
     const messages = [
       { role: "system", content: systemContent },
@@ -434,14 +522,20 @@ Deno.serve(async (req: Request) => {
 
     const maxTokens = summaryMode ? 1800 : 1200;
 
+    // Abort controller combining 30s timeout + client disconnect
+    const openaiController = new AbortController();
+    const timeoutId = setTimeout(() => openaiController.abort(), OPENAI_TIMEOUT_MS);
+    req.signal.addEventListener("abort", () => openaiController.abort());
+
     const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
+      signal: openaiController.signal,
       headers: {
         "Authorization": `Bearer ${openaiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: GENERATION_MODEL,
         messages,
         temperature: 0.3,
         max_tokens: maxTokens,
@@ -450,6 +544,7 @@ Deno.serve(async (req: Request) => {
     });
 
     if (!openaiRes.ok) {
+      clearTimeout(timeoutId);
       const err = await openaiRes.text();
       console.error("OpenAI error:", err);
       return new Response(
@@ -458,7 +553,35 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    return new Response(openaiRes.body, {
+    // Stream: prepend sources SSE frame then relay OpenAI stream
+    const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+    const writer = writable.getWriter();
+    const encoder = new TextEncoder();
+
+    (async () => {
+      const reader = openaiRes.body!.getReader();
+      try {
+        // Emit sources frame first so the frontend can render citations before text arrives
+        const sourcesFrame = `data: ${JSON.stringify({ type: "sources", sources })}\n\n`;
+        await writer.write(encoder.encode(sourcesFrame));
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          await writer.write(value);
+        }
+        console.log("dashboard-chat: stream done, ragStatus=", ragStatus);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn("dashboard-chat: stream ended early:", msg);
+      } finally {
+        clearTimeout(timeoutId);
+        try { reader.releaseLock(); } catch { /* ignore */ }
+        try { await writer.close(); } catch { /* ignore */ }
+      }
+    })();
+
+    return new Response(readable, {
       headers: {
         ...corsHeaders,
         "Content-Type": "text/event-stream",
