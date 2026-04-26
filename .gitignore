@@ -1,0 +1,14 @@
+CLAUDE.local.md
+.env
+.env.local
+.env.*.local
+.env.test
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+dist/
+build/
+.next/
+out/
+.claude/

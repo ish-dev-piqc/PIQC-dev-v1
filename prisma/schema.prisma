@@ -1,0 +1,1099 @@
+// =============================================================================
+// Vendor PIQC — Prisma Schema
+// Stack: Next.js + PostgreSQL + Prisma ORM
+// Phase: 1 — Protocol Risk Spine + Structured Auditor Workspace
+//
+// Ground rules:
+//   - Schema-first, relational. No text blobs for structured reasoning.
+//   - All risk/trust/classification changes stored as StateHistoryDelta rows.
+//   - No autonomous finding finalization. No black-box scoring.
+//   - Evidence always linked to structured objects — never stored as loose files.
+//
+// Open decision markers:
+//   [PIQC]         — field name/type blocked on D-009 (PIQC API contract)
+//   [D-005]        — trust posture scoring model not yet decided
+//   [D-004 STUB]   — SOP checkpoint placeholder; replaced in Phase 2
+// =============================================================================
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum UserRole {
+  AUDITOR
+  LEAD_AUDITOR
+  OBSERVER
+}
+
+enum ProtocolVersionStatus {
+  DRAFT
+  ACTIVE
+  SUPERSEDED
+}
+
+// Clinical trial study phase. Lives on ProtocolVersion because combined/adaptive
+// designs and amendment-driven phase transitions are possible (rare but real).
+// Drives scrutiny depth in questionnaire addendum generation and risk tagging:
+// early-phase (PHASE_1, PHASE_1_2) emphasizes safety/PK vendor oversight;
+// late-phase (PHASE_3, PHASE_4) emphasizes data integrity, central stats,
+// eTMF, and IRT vendor oversight.
+enum ClinicalTrialPhase {
+  PHASE_1
+  PHASE_1_2
+  PHASE_2
+  PHASE_2_3
+  PHASE_3
+  PHASE_4
+  NOT_APPLICABLE
+}
+
+enum EndpointTier {
+  PRIMARY
+  SECONDARY
+  SAFETY
+  SUPPORTIVE
+}
+
+enum ImpactSurface {
+  DATA_INTEGRITY
+  PATIENT_SAFETY
+  BOTH
+}
+
+enum VersionChangeType {
+  ADDED     // No previous_version_risk_id — new in this version
+  MODIFIED  // Has prior lineage link, fields differ from previous version
+  UNCHANGED // Has prior lineage link, fields identical — carried forward
+}
+
+enum AuditType {
+  REMOTE
+  ONSITE
+  HYBRID
+}
+
+enum AuditStatus {
+  DRAFT
+  IN_PROGRESS
+  REVIEW
+  CLOSED
+}
+
+// D-010: Authoritative workflow stage for an Audit. Eight stages, collapsing the
+// design's separate Confirmation Letter / Agenda / Checklist stages into a single
+// PRE_AUDIT_DRAFTING stage (auditor co-drafts those three artifacts in one
+// workspace, with cross-references). currentStage is the source of truth for
+// worklist navigation and downstream agent gating; per-artifact statuses still
+// exist for fine-grained workflow.
+enum AuditStage {
+  INTAKE
+  VENDOR_ENRICHMENT
+  QUESTIONNAIRE_REVIEW
+  SCOPE_AND_RISK_REVIEW
+  PRE_AUDIT_DRAFTING
+  AUDIT_CONDUCT
+  REPORT_DRAFTING
+  FINAL_REVIEW_EXPORT
+}
+
+// D-010: Approval lifecycle for VendorRiskSummaryObject. DRAFT until the auditor
+// explicitly approves; once APPROVED it becomes the source of truth that
+// downstream drafting (confirmation letter, agenda, checklist, report) reads from.
+enum RiskSummaryApprovalStatus {
+  DRAFT
+  APPROVED
+}
+
+// D-010 / step 7 (Pre-Audit Drafting): Approval lifecycle for the three
+// pre-audit deliverables (ConfirmationLetterObject, AgendaObject,
+// ChecklistObject). DRAFT until the auditor explicitly approves; downstream
+// REPORT_DRAFTING reads only APPROVED deliverables. Editing an APPROVED
+// deliverable demotes it back to DRAFT (re-approval required) — same pattern
+// as VendorRiskSummaryObject.
+enum DeliverableApprovalStatus {
+  DRAFT
+  APPROVED
+}
+
+enum DerivedCriticality {
+  CRITICAL
+  HIGH
+  MODERATE
+  LOW
+}
+
+// [D-005] Trust posture scoring model not yet decided.
+// Options under consideration:
+//   (a) Qualitative labels — current placeholder approach
+//   (b) Numeric score — 1–5 scale per dimension
+//   (c) Multi-axis — compliance_posture and maturity_posture scored separately,
+//       provisional_trust_posture derived from both
+// Do not finalize UI or reporting logic against these enums until D-005 is decided.
+// If D-005 resolves to numeric or multi-axis, these three enums change.
+enum CompliancePosture {
+  STRONG
+  ADEQUATE
+  WEAK
+  UNKNOWN
+}
+
+// [D-005] See CompliancePosture note above.
+enum MaturityPosture {
+  MATURE
+  DEVELOPING
+  EARLY
+  UNKNOWN
+}
+
+// [D-005] See CompliancePosture note above.
+enum TrustPosture {
+  HIGH
+  MODERATE
+  LOW
+  UNKNOWN
+}
+
+enum ResponseStatus {
+  ANSWERED
+  UNANSWERED
+  PARTIAL
+  DEFERRED
+}
+
+// Answer shape for a questionnaire question. Drives how the response UI renders
+// (text area vs. yes/no-plus-qualifier vs. evidence uploader) and how vendor
+// returns are validated.
+enum QuestionAnswerType {
+  NARRATIVE         // e.g. "Describe your QMS"
+  YES_NO_QUALIFY    // Yes/No + required qualifier on "yes"
+  EVIDENCE_REQUEST  // "Provide a copy of your organizational chart"
+  LIST              // Enumerated list (e.g. offices, certifications)
+  NUMERIC           // Count or number (e.g. "How many audits in last 12 months?")
+}
+
+// Provenance of a response. Distinct from ResponseStatus (which is workflow state).
+// Drives the "send to vendor" filter — vendors see only PENDING questions,
+// never re-answering what the auditor already pre-filled from public sources.
+enum ResponseSource {
+  PENDING                      // No answer yet
+  AUDITOR_PREFILL_WEB          // Auditor pre-filled from public web search (vendor site, certifications, etc.)
+  AUDITOR_PREFILL_PRIOR_AUDIT  // Auditor pre-filled from a prior audit of this vendor
+  AUDITOR_AUTHORED             // Auditor authored directly (judgment/observation, not research)
+  VENDOR                       // Vendor answered directly
+  NOT_APPLICABLE               // Question does not apply to this engagement
+}
+
+// Lifecycle of a QuestionnaireInstance. Linear workflow matching the
+// real auditor → vendor handoff described in D-003.
+enum QuestionnaireInstanceStatus {
+  DRAFT                  // Just forked from template; addenda not yet generated
+  PREFILL_IN_PROGRESS    // Auditor is pre-filling from web research
+  READY_TO_SEND          // Pre-fill complete; waiting for contract / pending send
+  SENT_TO_VENDOR         // Vendor has the questionnaire (PENDING questions only)
+  VENDOR_RESPONDED       // Vendor has returned responses
+  COMPLETE               // Auditor has reviewed and finalized
+}
+
+// Source of a question: template-seeded standard question, or instance-specific
+// addendum auto-generated from VendorServiceMappingObject entries.
+enum QuestionOrigin {
+  TEMPLATE   // Inherited from QuestionnaireTemplateVersion (e.g. 1.1.1–5.2.2)
+  ADDENDUM   // Generated per-instance into section 5.3 from service mappings
+}
+
+enum ProvisionalImpact {
+  CRITICAL
+  MAJOR
+  MINOR
+  OBSERVATION
+  NONE
+}
+
+enum ProvisionalClassification {
+  FINDING
+  OBSERVATION
+  OPPORTUNITY_FOR_IMPROVEMENT
+  NOT_YET_CLASSIFIED
+}
+
+enum AmendmentAlertStatus {
+  PENDING   // Created, not yet reviewed by auditor
+  REVIEWED  // Auditor has seen it (intermediate state before decision)
+  ADOPTED   // Auditor chose to move to new protocol version
+  DISMISSED // Auditor chose to stay on current version
+}
+
+enum AmendmentDecision {
+  ADOPT_NEW_VERSION
+  STAY_ON_CURRENT
+}
+
+// How a ProtocolRiskObject was created. Enables future analysis of suggestion
+// accuracy and auditor override rates across phases.
+enum TaggingMode {
+  MANUAL        // Auditor filled all fields with no system assistance (Phase 1)
+  PIQC_ASSISTED // Fields pre-populated from PIQC candidate tags, auditor confirmed/edited (Phase 2)
+  LLM_ASSISTED  // Fields proposed by LLM analysis, auditor confirmed/edited (Phase 3)
+}
+
+// Polymorphic object type enum for StateHistoryDelta.
+// Prisma does not support true polymorphic FK constraints — objectId is stored
+// as String without a DB-level FK. This enum provides type safety at the
+// application layer. All values map 1:1 to a Prisma model name.
+enum TrackedObjectType {
+  PROTOCOL_RISK_OBJECT
+  VENDOR_SERVICE_OBJECT
+  VENDOR_SERVICE_MAPPING_OBJECT
+  TRUST_ASSESSMENT_OBJECT
+  QUESTIONNAIRE_INSTANCE
+  QUESTIONNAIRE_RESPONSE_OBJECT
+  AUDIT_WORKSPACE_ENTRY_OBJECT
+  AUDIT
+  AMENDMENT_ALERT
+  VENDOR_RISK_SUMMARY_OBJECT
+  CONFIRMATION_LETTER_OBJECT
+  AGENDA_OBJECT
+  CHECKLIST_OBJECT
+}
+
+// =============================================================================
+// MODELS
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// User
+// Minimal identity model for Phase 1. Powers actor_id on all state deltas.
+// Proper auth (NextAuth, Clerk, etc.) layered on top in a later phase.
+// -----------------------------------------------------------------------------
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  role      UserRole
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  ledAudits                 Audit[]                     @relation("AuditLeadAuditor")
+  stateDeltas               StateHistoryDelta[]
+  taggedRiskObjects         ProtocolRiskObject[]        @relation("RiskObjectTagger")
+  trustAssessments          TrustAssessmentObject[]     @relation("TrustAssessor")
+  createdWorkspaceEntries   AuditWorkspaceEntryObject[] @relation("WorkspaceEntryCreator")
+  confirmedWorkspaceEntries AuditWorkspaceEntryObject[] @relation("WorkspaceEntryConfirmer")
+  reviewedAlerts            AmendmentAlert[]            @relation("AlertReviewer")
+  uploadedEvidence          EvidenceAttachment[]
+  capturedResponses         QuestionnaireResponseObject[] @relation("ResponseCapturer")
+  approvedQuestionnaires    QuestionnaireInstance[]       @relation("QuestionnaireInstanceApprover")
+  approvedRiskSummaries     VendorRiskSummaryObject[]     @relation("RiskSummaryApprover")
+  approvedConfirmationLetters ConfirmationLetterObject[]  @relation("ConfirmationLetterApprover")
+  approvedAgendas             AgendaObject[]              @relation("AgendaApprover")
+  approvedChecklists          ChecklistObject[]           @relation("ChecklistApprover")
+
+  @@map("users")
+}
+
+// -----------------------------------------------------------------------------
+// Vendor
+// Root entity. The vendor organization under audit. Persists across audits.
+// -----------------------------------------------------------------------------
+model Vendor {
+  id        String   @id @default(uuid())
+  name      String
+  legalName String?  @map("legal_name")
+  country   String
+  website   String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  audits Audit[]
+
+  @@map("vendors")
+}
+
+// -----------------------------------------------------------------------------
+// Protocol
+// Stable root identifier for a clinical trial. Never mutated after creation.
+// Amendments create a new ProtocolVersion — not a new Protocol.
+// The trial registration number, sponsor, and title live here.
+// -----------------------------------------------------------------------------
+model Protocol {
+  id          String   @id @default(uuid())
+  studyNumber String?  @unique @map("study_number") // e.g. NCT number, EudraCT — stable across all amendments
+  title       String
+  sponsor     String
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  versions ProtocolVersion[]
+  audits   Audit[]           // Convenience back-relation — audits are primarily linked via ProtocolVersion
+
+  @@map("protocols")
+}
+
+// -----------------------------------------------------------------------------
+// ProtocolVersion
+// One version of a protocol — initial or any subsequent amendment.
+// A new ProtocolVersion is created each time PIQC sends an updated payload.
+// All PIQC-sourced fields and all ProtocolRiskObjects belong here, not on Protocol.
+//
+// [PIQC] D-009 INTEGRATION POINT
+// Fields marked [PIQC] are provisional. Names, types, and presence must be
+// confirmed against the PIQC API output before finalizing. The raw_piqc_payload
+// Json field stores the full incoming payload for traceability — it is not the
+// source of truth for any structured field in this schema.
+// -----------------------------------------------------------------------------
+model ProtocolVersion {
+  id            String                @id @default(uuid())
+  protocolId    String                @map("protocol_id")
+  versionNumber Int                   @map("version_number") // Monotonically incrementing per protocol: 1, 2, 3…
+  amendmentLabel String?              @map("amendment_label") // e.g. "Amendment 2", "v3.1" — optional, set by auditor or PIQC metadata
+  status        ProtocolVersionStatus @default(DRAFT)
+  effectiveDate DateTime?             @map("effective_date") @db.Date // When this version takes clinical effect
+
+  // Clinical trial study phase for this version. Amendments may transition phase
+  // (uncommon but possible — e.g. Phase 1/2 combined designs progressing).
+  // Downstream consumers (questionnaire addendum generator, risk scrutiny) read
+  // this via the Audit → ProtocolVersion relation. Do NOT copy onto Audit.
+  clinicalTrialPhase ClinicalTrialPhase @default(NOT_APPLICABLE) @map("clinical_trial_phase")
+
+  // [PIQC] D-009 PLACEHOLDER — the following two fields must be confirmed against
+  // PIQC API output before finalizing. Format of piqcProtocolId is TBD (string ID,
+  // slug, hash, or composite key). raw_piqc_payload is stored whole for traceability only.
+  piqcProtocolId String @map("piqc_protocol_id") // [PIQC] PIQC's identifier for this version's payload. Format TBD.
+  rawPiqcPayload Json   @map("raw_piqc_payload")  // [PIQC] Full JSON as received from PIQC. NOT the source of truth for structured fields.
+
+  receivedAt DateTime @default(now()) @map("received_at") // When Vendor PIQC ingested this from PIQC
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  protocol            Protocol            @relation(fields: [protocolId], references: [id])
+  riskObjects         ProtocolRiskObject[]
+  audits              Audit[]
+  alertsAsFromVersion AmendmentAlert[]    @relation("AlertFromVersion")
+  alertsAsToVersion   AmendmentAlert[]    @relation("AlertToVersion")
+
+  @@unique([protocolId, versionNumber])
+  @@map("protocol_versions")
+}
+
+// -----------------------------------------------------------------------------
+// ProtocolRiskObject
+// One risk-tagged section of a specific ProtocolVersion. Created when an auditor
+// manually tags sections received via PIQC. Includes lineage tracking via
+// previous_version_risk_id to enable diff computation across amendments.
+//
+// [PIQC] D-009 INTEGRATION POINT
+// section_identifier and section_title are provisional. The exact keys PIQC uses
+// to identify protocol sections (numeric IDs, slugs, hierarchy paths) are TBD.
+// These field names and types must be confirmed with the PIQC team before finalizing.
+// -----------------------------------------------------------------------------
+model ProtocolRiskObject {
+  id                String @id @default(uuid())
+  protocolVersionId String @map("protocol_version_id")
+
+  // [PIQC] D-009 PLACEHOLDER — section identification scheme TBD.
+  // sectionIdentifier: PIQC's key for this section. Could be a numeric ID, slug,
+  // or hierarchical path (e.g. "3.2.1"). Format must be confirmed with PIQC team.
+  sectionIdentifier String @map("section_identifier") // [PIQC] Format TBD — confirm with PIQC team (D-009)
+  // [PIQC] D-009 PLACEHOLDER — field name for section title TBD.
+  sectionTitle      String @map("section_title")      // [PIQC] Human-readable section title. Field name in PIQC output TBD.
+
+  endpointTier          EndpointTier @map("endpoint_tier")
+  impactSurface         ImpactSurface @map("impact_surface")
+  timeSensitivity       Boolean      @map("time_sensitivity")
+  vendorDependencyFlags String[]     @map("vendor_dependency_flags") // Phase 1: Postgres string array. Phase 2 candidate: junction table if query patterns require it.
+  operationalDomainTag  String       @map("operational_domain_tag") // Controlled vocab: ECG | imaging | ePRO | randomization | central_lab | IVRS
+
+  // Tagging provenance — how this object was created and what the system suggested before auditor confirmation.
+  // Phase 1: taggingMode is always MANUAL, suggestionProvenance is null.
+  // Phase 2: PIQC_ASSISTED — suggestionProvenance populated from PIQC candidate tags.
+  // Phase 3: LLM_ASSISTED — suggestionProvenance populated from LLM proposals.
+  // Shape of suggestionProvenance when present:
+  //   { "fieldName": { "suggested": <value>, "source": "piqc" | "llm", "confidence": 0.0–1.0 } }
+  // Only fields that were suggested are included. Auditor-edited fields will differ from suggested values.
+  taggingMode           TaggingMode  @default(MANUAL) @map("tagging_mode")
+  suggestionProvenance  Json?        @map("suggestion_provenance")
+
+  // Lineage tracking for amendment diff computation.
+  // previousVersionRiskId points to the counterpart object in the prior version.
+  // Null means this object is new in this version (ADDED).
+  // Removed objects are those in v_n with no v_n+1 object pointing back to them —
+  // detected by query, not by a field on this model.
+  previousVersionRiskId String?           @map("previous_version_risk_id")
+  versionChangeType     VersionChangeType @map("version_change_type")
+
+  taggedBy  String   @map("tagged_by")
+  taggedAt  DateTime @map("tagged_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  protocolVersion       ProtocolVersion              @relation(fields: [protocolVersionId], references: [id])
+  previousVersionRisk   ProtocolRiskObject?          @relation("RiskObjectLineage", fields: [previousVersionRiskId], references: [id])
+  nextVersionRisks      ProtocolRiskObject[]         @relation("RiskObjectLineage")
+  tagger                User                         @relation("RiskObjectTagger", fields: [taggedBy], references: [id])
+  vendorServiceMappings VendorServiceMappingObject[]
+  workspaceEntries      AuditWorkspaceEntryObject[]
+  riskSummaryRefs       VendorRiskSummaryProtocolRisk[]
+
+  @@index([protocolVersionId])
+  @@map("protocol_risk_objects")
+}
+
+// -----------------------------------------------------------------------------
+// Audit
+// A specific audit engagement scoped to one Vendor, one ProtocolVersion, and
+// one vendor service engagement.
+//
+// protocol_version_id is the active version this audit operates against.
+// When an auditor adopts a new version, this field is updated and the change
+// is recorded in StateHistoryDelta (object_type: AUDIT) for GxP traceability.
+//
+// protocol_id is a convenience FK to avoid a join when only the root trial
+// identity is needed. It is set at creation and does not change.
+// -----------------------------------------------------------------------------
+model Audit {
+  id                String      @id @default(uuid())
+  vendorId          String      @map("vendor_id")
+  protocolId        String      @map("protocol_id")         // Convenience — stable trial identity without a join through ProtocolVersion
+  protocolVersionId String      @map("protocol_version_id") // Active version. Updated on adoption. Change recorded in StateHistoryDelta.
+  auditName         String      @map("audit_name")
+  auditType         AuditType   @map("audit_type")
+  status            AuditStatus @default(DRAFT)
+  // D-010: Authoritative workflow position. status remains as a coarse health flag
+  // (e.g. CLOSED suppresses an audit from active worklists); currentStage drives
+  // navigation, gating, and worklist display. Transitions are explicit auditor
+  // actions, delta-tracked under TrackedObjectType.AUDIT.
+  currentStage      AuditStage  @default(INTAKE) @map("current_stage")
+  leadAuditorId     String      @map("lead_auditor_id")
+  scheduledDate     DateTime?   @map("scheduled_date") @db.Date
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  vendor                 Vendor                        @relation(fields: [vendorId], references: [id])
+  protocol               Protocol                      @relation(fields: [protocolId], references: [id])
+  protocolVersion        ProtocolVersion               @relation(fields: [protocolVersionId], references: [id])
+  leadAuditor            User                          @relation("AuditLeadAuditor", fields: [leadAuditorId], references: [id])
+  vendorService          VendorServiceObject?
+  trustAssessment        TrustAssessmentObject?
+  questionnaireInstance  QuestionnaireInstance?
+  vendorRiskSummary      VendorRiskSummaryObject?
+  confirmationLetter     ConfirmationLetterObject?
+  agenda                 AgendaObject?
+  checklist              ChecklistObject?
+  questionnaireResponses QuestionnaireResponseObject[]
+  workspaceEntries       AuditWorkspaceEntryObject[]
+  amendmentAlerts        AmendmentAlert[]
+
+  @@index([vendorId])
+  @@index([protocolVersionId])
+  @@map("audits")
+}
+
+// -----------------------------------------------------------------------------
+// VendorServiceObject
+// The specific vendor service being audited. One per Audit.
+// -----------------------------------------------------------------------------
+model VendorServiceObject {
+  id                 String   @id @default(uuid())
+  auditId            String   @unique @map("audit_id") // One per audit — @unique enforces the 1:1
+  serviceName        String   @map("service_name")
+  serviceType        String   @map("service_type") // Controlled vocab: ECG | central_lab | ePRO | IVRS | imaging | randomization
+  serviceDescription String?  @map("service_description")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  audit    Audit                        @relation(fields: [auditId], references: [id])
+  mappings VendorServiceMappingObject[]
+
+  @@map("vendor_service_objects")
+}
+
+// -----------------------------------------------------------------------------
+// VendorServiceMappingObject
+// Junction entity linking a VendorServiceObject to one ProtocolRiskObject.
+// First-class object — carries derived criticality context, not a thin join.
+// derived_criticality is computed deterministically from ProtocolRiskObject fields.
+// It is human-editable with a rationale field. It is never LLM-scored.
+// -----------------------------------------------------------------------------
+model VendorServiceMappingObject {
+  id                   String             @id @default(uuid())
+  vendorServiceId      String             @map("vendor_service_id")
+  protocolRiskId       String             @map("protocol_risk_id")
+  derivedCriticality   DerivedCriticality @map("derived_criticality")
+  criticalityRationale String?            @map("criticality_rationale") // Auditor-editable explanation of criticality assignment
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  vendorService             VendorServiceObject           @relation(fields: [vendorServiceId], references: [id])
+  protocolRisk              ProtocolRiskObject            @relation(fields: [protocolRiskId], references: [id])
+  questionnaireResponses    QuestionnaireResponseObject[]
+  generatedAddendaQuestions QuestionnaireQuestion[]
+  workspaceEntries          AuditWorkspaceEntryObject[]
+
+  @@unique([vendorServiceId, protocolRiskId])
+  @@map("vendor_service_mapping_objects")
+}
+
+// -----------------------------------------------------------------------------
+// TrustAssessmentObject
+// Structured capture of front-end vendor intelligence. One per Audit.
+// Populated by auditor from public vendor materials before the audit begins.
+//
+// [D-005] Three posture fields use qualitative label enums as placeholders.
+// See enum definitions for options under consideration. Do not finalize
+// UI or reporting logic against these fields until D-005 is decided.
+// -----------------------------------------------------------------------------
+model TrustAssessmentObject {
+  id                      String   @id @default(uuid())
+  auditId                 String   @unique @map("audit_id") // One per audit — @unique enforces the 1:1
+  certificationsClaimed   String[] @map("certifications_claimed") // e.g. ["ISO 13485", "21 CFR Part 11"]
+  regulatoryClaims        String[] @map("regulatory_claims")
+
+  compliancePosture       CompliancePosture @map("compliance_posture")        // [D-005 PLACEHOLDER] See enum
+  maturityPosture         MaturityPosture   @map("maturity_posture")          // [D-005 PLACEHOLDER] See enum
+  provisionalTrustPosture TrustPosture      @map("provisional_trust_posture") // [D-005 PLACEHOLDER] See enum
+
+  riskHypotheses String[] @map("risk_hypotheses") // Auditor-authored risk hypothesis statements — each a plain text assertion
+  notes          String?                           // Narrative notes. Minimal — structured fields are source of truth.
+  assessedBy     String   @map("assessed_by")
+  assessedAt     DateTime? @map("assessed_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  audit    Audit @relation(fields: [auditId], references: [id])
+  assessor User  @relation("TrustAssessor", fields: [assessedBy], references: [id])
+
+  @@map("trust_assessment_objects")
+}
+
+// -----------------------------------------------------------------------------
+// VendorRiskSummaryObject (D-010)
+// One row per Audit (1:1). The "secondary decision layer" from the design —
+// explains why this vendor matters in the context of this study.
+//
+// Generation: a deterministic stub is composed at creation from copied
+// studyContext + matched ProtocolRiskObject operational domains + mapped
+// VendorServiceObject types. The stub is sponsor-name-free. Auditors edit the
+// narrative down to fit their judgment rather than starting from a blank page.
+// Future LLM-assisted generators replace the stub behind the same write-shape.
+//
+// studyContext is a snapshot copied at creation (therapeutic space, primary /
+// secondary endpoints from ProtocolVersion). It is not a live FK read — once
+// approved, this artifact is a stable input for downstream drafting and must
+// not silently change if the protocol version is later edited.
+//
+// Approval: explicit human gate. approvedAt/approvedBy are the source of truth
+// for downstream drafting agents (confirmation letter, agenda, checklist,
+// report) — not the approvalStatus enum alone.
+// -----------------------------------------------------------------------------
+model VendorRiskSummaryObject {
+  id      String @id @default(uuid())
+  auditId String @unique @map("audit_id") // 1:1 with Audit
+
+  // Snapshot copied from ProtocolVersion at creation. Shape:
+  //   { therapeuticSpace: string, primaryEndpoints: string[], secondaryEndpoints: string[],
+  //     clinicalTrialPhase: ClinicalTrialPhase, capturedAt: ISO8601 }
+  // Captured at creation so this artifact remains stable across protocol amendments.
+  studyContext Json @map("study_context")
+
+  // Auditor-editable narrative. Populated by the deterministic stub generator on
+  // first read; auditor edits down to their judgment. Never sponsor-branded.
+  vendorRelevanceNarrative String @map("vendor_relevance_narrative")
+
+  // Structured operational-domain tags identifying where audit scope should go
+  // deeper. Controlled vocab matching ProtocolRiskObject.operationalDomainTag.
+  // Stored as a string array (Phase 1 — same pattern as vendor_dependency_flags
+  // on ProtocolRiskObject; promote to junction table later if query patterns require it).
+  focusAreas String[] @map("focus_areas")
+
+  approvalStatus RiskSummaryApprovalStatus @default(DRAFT) @map("approval_status")
+  approvedAt     DateTime?                 @map("approved_at")
+  approvedBy     String?                   @map("approved_by")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  audit            Audit                          @relation(fields: [auditId], references: [id])
+  approver         User?                          @relation("RiskSummaryApprover", fields: [approvedBy], references: [id])
+  protocolRiskRefs VendorRiskSummaryProtocolRisk[]
+
+  @@map("vendor_risk_summary_objects")
+}
+
+// Junction: VendorRiskSummaryObject ↔ ProtocolRiskObject (many-to-many).
+// Records which protocol risk objects drove this summary's narrative. Lets
+// downstream review surface the underlying risk evidence without re-deriving it.
+model VendorRiskSummaryProtocolRisk {
+  riskSummaryId  String @map("risk_summary_id")
+  protocolRiskId String @map("protocol_risk_id")
+
+  riskSummary  VendorRiskSummaryObject @relation(fields: [riskSummaryId], references: [id])
+  protocolRisk ProtocolRiskObject      @relation(fields: [protocolRiskId], references: [id])
+
+  @@id([riskSummaryId, protocolRiskId])
+  @@map("vendor_risk_summary_protocol_risks")
+}
+
+// -----------------------------------------------------------------------------
+// QuestionnaireTemplate (D-003)
+// Canonical, reusable questionnaire definition. Phase 1: a single seeded
+// template (Standard GCP Vendor Questionnaire). Future: one per customer
+// or practice, selectable at instance creation.
+//
+// The template itself is the stable name/owner handle. Actual question content
+// lives on QuestionnaireTemplateVersion — so edits to the seed over time
+// produce new versions and preserve traceability to past audits.
+// -----------------------------------------------------------------------------
+model QuestionnaireTemplate {
+  id          String   @id @default(uuid())
+  slug        String   @unique // e.g. "standard-gcp-vendor"
+  name        String   // Human label, e.g. "Standard GCP Vendor Questionnaire"
+  description String?
+  isDefault   Boolean  @default(false) @map("is_default") // Single canonical default in Phase 1
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  versions QuestionnaireTemplateVersion[]
+
+  @@map("questionnaire_templates")
+}
+
+// -----------------------------------------------------------------------------
+// QuestionnaireTemplateVersion
+// A specific immutable version of a template. Instances fork from a version
+// at audit start — the version is pinned so later template edits cannot alter
+// historical audit artifacts.
+// -----------------------------------------------------------------------------
+model QuestionnaireTemplateVersion {
+  id            String   @id @default(uuid())
+  templateId    String   @map("template_id")
+  versionNumber Int      @map("version_number") // 1, 2, 3…
+  notes         String?  // Changelog for this version
+  publishedAt   DateTime @default(now()) @map("published_at")
+
+  template  QuestionnaireTemplate    @relation(fields: [templateId], references: [id])
+  questions QuestionnaireQuestion[]
+  instances QuestionnaireInstance[]
+
+  @@unique([templateId, versionNumber])
+  @@map("questionnaire_template_versions")
+}
+
+// -----------------------------------------------------------------------------
+// QuestionnaireQuestion
+// A single question definition. Belongs to either a TemplateVersion (standard
+// seeded question, e.g. "1.1.1") OR a QuestionnaireInstance (addendum generated
+// into section 5.3 from VendorServiceMappingObject entries).
+//
+// Application-layer invariant: exactly one of templateVersionId / instanceId
+// is non-null. Matched by `origin` enum for type safety.
+//
+// Keeping both shapes in one table rather than two separate tables matches the
+// "collapse cognitive load, avoid duplication" design principle — downstream
+// QuestionnaireResponseObject rows have one FK target, not two.
+// -----------------------------------------------------------------------------
+model QuestionnaireQuestion {
+  id         String         @id @default(uuid())
+  origin     QuestionOrigin // TEMPLATE | ADDENDUM
+
+  // Exactly one of these is set. Enforced at application layer.
+  templateVersionId String? @map("template_version_id")
+  instanceId        String? @map("instance_id")
+
+  // Question identifier as shown in the rendered questionnaire (e.g. "1.1.1", "5.3.2").
+  // Not a unique key across all questions — unique within its parent (version or instance).
+  questionNumber String @map("question_number")
+  sectionTitle   String @map("section_title") // e.g. "Vendor Background", "Data Protection / Privacy"
+  sectionCode    String @map("section_code")  // e.g. "1.1", "4.1" — machine-friendly section key
+  prompt         String // Question text as it appears in the rendered questionnaire
+
+  answerType       QuestionAnswerType @map("answer_type")
+  evidenceExpected Boolean            @default(false) @map("evidence_expected") // True for "Please provide a copy of X"
+  domainTag        String?            @map("domain_tag") // For addenda: service domain that triggered this question
+
+  // Addendum-only: which mapping generated this question. Null for TEMPLATE origin.
+  generatedFromMappingId String? @map("generated_from_mapping_id")
+
+  // Sort within its parent. For TEMPLATE, matches source template order. For ADDENDUM,
+  // assigned at generation time (1, 2, 3… appended to 5.3.N slots).
+  ordinal Int
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  templateVersion        QuestionnaireTemplateVersion? @relation(fields: [templateVersionId], references: [id])
+  instance               QuestionnaireInstance?        @relation("InstanceAddendaQuestions", fields: [instanceId], references: [id])
+  generatedFromMapping   VendorServiceMappingObject?   @relation(fields: [generatedFromMappingId], references: [id])
+  responses              QuestionnaireResponseObject[]
+
+  @@index([templateVersionId])
+  @@index([instanceId])
+  @@map("questionnaire_questions")
+}
+
+// -----------------------------------------------------------------------------
+// QuestionnaireInstance (D-003)
+// One questionnaire run per Audit. Forked from a QuestionnaireTemplateVersion
+// at creation. Hosts instance-specific addendum questions (section 5.3.x)
+// generated from VendorServiceMappingObject entries.
+//
+// Lifecycle: DRAFT → PREFILL_IN_PROGRESS → READY_TO_SEND → SENT_TO_VENDOR
+//            → VENDOR_RESPONDED → COMPLETE
+//
+// Status transitions are recorded in StateHistoryDelta (TrackedObjectType.
+// QUESTIONNAIRE_INSTANCE) for GxP traceability.
+// -----------------------------------------------------------------------------
+model QuestionnaireInstance {
+  id                String                      @id @default(uuid())
+  auditId           String                      @unique @map("audit_id") // 1:1 with Audit (Phase 1)
+  templateVersionId String                      @map("template_version_id")
+  status            QuestionnaireInstanceStatus @default(DRAFT)
+
+  // Vendor-facing metadata captured at top of the rendered questionnaire.
+  // Prefilled from Vendor + Audit relations where possible — these fields are
+  // mutable here because auditors may adjust wording or contact details per send.
+  vendorContactName  String? @map("vendor_contact_name")
+  vendorContactEmail String? @map("vendor_contact_email")
+  vendorContactTitle String? @map("vendor_contact_title")
+
+  // Workflow timestamps.
+  addendaGeneratedAt DateTime? @map("addenda_generated_at")
+  sentToVendorAt     DateTime? @map("sent_to_vendor_at")
+  vendorRespondedAt  DateTime? @map("vendor_responded_at")
+  completedAt        DateTime? @map("completed_at")
+
+  // D-010: Approval signal — distinct from `COMPLETE` status. Once approved, this
+  // questionnaire becomes a source of truth for downstream drafting agents. The
+  // status enum tracks workflow position; approvedAt/approvedBy records the
+  // explicit human gate.
+  approvedAt DateTime? @map("approved_at")
+  approvedBy String?   @map("approved_by")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  audit            Audit                         @relation(fields: [auditId], references: [id])
+  templateVersion  QuestionnaireTemplateVersion  @relation(fields: [templateVersionId], references: [id])
+  approver         User?                         @relation("QuestionnaireInstanceApprover", fields: [approvedBy], references: [id])
+  addendaQuestions QuestionnaireQuestion[]       @relation("InstanceAddendaQuestions")
+  responses        QuestionnaireResponseObject[]
+
+  @@index([templateVersionId])
+  @@map("questionnaire_instances")
+}
+
+// -----------------------------------------------------------------------------
+// QuestionnaireResponseObject (revised for D-003)
+// A response to one specific QuestionnaireQuestion within one QuestionnaireInstance.
+// Question text/domain are NOT duplicated here — read via the questionId relation.
+//
+// Provenance is first-class: `source` records WHO provided the answer and HOW.
+// Vendors only ever see questions where `source = PENDING`.
+//
+// Optional vendorServiceMappingId ties a response to a specific risk domain
+// for Verify-mode cross-reference; for ADDENDUM questions this is auto-set
+// to the mapping that generated the question.
+// -----------------------------------------------------------------------------
+model QuestionnaireResponseObject {
+  id                     String         @id @default(uuid())
+  instanceId             String         @map("instance_id")
+  questionId             String         @map("question_id")
+  auditId                String         @map("audit_id") // Denormalized for fast per-audit queries
+  vendorServiceMappingId String?        @map("vendor_service_mapping_id")
+
+  responseText      String?        @map("response_text")   // Nullable until answered
+  responseStatus    ResponseStatus @default(UNANSWERED) @map("response_status") // Workflow state
+  source            ResponseSource @default(PENDING) // Provenance — drives "send to vendor" filter
+  sourceReference   String?        @map("source_reference") // URL / citation for AUDITOR_PREFILL_WEB
+  confidenceFlag    Boolean        @default(false) @map("confidence_flag") // Auditor's confidence in a prefilled answer
+
+  inconsistencyFlag Boolean        @default(false) @map("inconsistency_flag") // Set by auditor — not automated
+  inconsistencyNote String?        @map("inconsistency_note")
+
+  respondedBy String?   @map("responded_by") // User id when AUDITOR_*; null when VENDOR (vendor users not in User table in Phase 1)
+  respondedAt DateTime? @map("responded_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  instance             QuestionnaireInstance       @relation(fields: [instanceId], references: [id])
+  question             QuestionnaireQuestion       @relation(fields: [questionId], references: [id])
+  audit                Audit                       @relation(fields: [auditId], references: [id])
+  vendorServiceMapping VendorServiceMappingObject? @relation(fields: [vendorServiceMappingId], references: [id])
+  responder            User?                       @relation("ResponseCapturer", fields: [respondedBy], references: [id])
+  workspaceEntries     AuditWorkspaceEntryObject[]
+  evidenceLinks        EvidenceOnQuestionnaireResponse[]
+
+  @@unique([instanceId, questionId]) // One response per question per instance
+  @@index([auditId])
+  @@index([instanceId, source])      // Fast query: "all PENDING questions in this instance"
+  @@map("questionnaire_response_objects")
+}
+
+// -----------------------------------------------------------------------------
+// AuditWorkspaceEntryObject
+// A structured auditor observation. The primary output of Verify mode.
+//
+// Risk attribute inheritance: endpoint_tier, impact_surface, and time_sensitivity
+// are COPIED from the linked ProtocolRiskObject at link time — not read via join.
+// This makes workspace entries stable audit artifacts. If the protocol risk object
+// changes later (e.g. via amendment), the inherited fields on this entry do not
+// silently update. Instead, risk_context_outdated is set to true by the system
+// and the auditor must explicitly re-confirm.
+//
+// Amendment flagging: risk_context_outdated is written by the system (never by the
+// auditor directly) when an AmendmentAlert is processed and the linked
+// ProtocolRiskObject has version_change_type = MODIFIED in the new version,
+// or no counterpart exists in the new version (removed). This is a deterministic
+// write triggered by the amendment ingestion API route — not a live computed flag.
+// -----------------------------------------------------------------------------
+model AuditWorkspaceEntryObject {
+  id                      String  @id @default(uuid())
+  auditId                 String  @map("audit_id")
+  protocolRiskId          String? @map("protocol_risk_id")           // Optional — source of inherited risk context
+  vendorServiceMappingId  String? @map("vendor_service_mapping_id")  // Optional — source of criticality context
+  questionnaireResponseId String? @map("questionnaire_response_id")  // Optional — links observation to a Q&A exchange
+
+  // [D-004 STUB] Phase 1: plain text reference to SOP/checkpoint (e.g. "SOP-QC-014 §3.2").
+  // Phase 2: this field is replaced by a FK to ControlCheckpointObject when SOP parsing is built.
+  // Do not build application logic that depends on this being a structured FK reference.
+  checkpointRef String? @map("checkpoint_ref") // [D-004 STUB] Text only. Phase 2: FK to ControlCheckpointObject.
+
+  vendorDomain              String                    @map("vendor_domain")       // Which vendor operational domain this entry addresses
+  observationText           String                    @map("observation_text")    // Auditor's structured observation. Required.
+  provisionalImpact         ProvisionalImpact         @default(NONE) @map("provisional_impact")                         // Human-assigned only. Never autonomous.
+  provisionalClassification ProvisionalClassification @default(NOT_YET_CLASSIFIED) @map("provisional_classification")   // Human-assigned only. Never autonomous.
+
+  // Risk attribute inheritance — copied from ProtocolRiskObject at link time.
+  // These fields are the stable snapshot of risk context when this observation was recorded.
+  // Null when no protocol_risk_id is linked.
+  riskAttrsInherited       Boolean       @default(false) @map("risk_attrs_inherited")
+  inheritedEndpointTier    EndpointTier? @map("inherited_endpoint_tier")
+  inheritedImpactSurface   ImpactSurface? @map("inherited_impact_surface")
+  inheritedTimeSensitivity Boolean?      @map("inherited_time_sensitivity")
+
+  // Amendment flagging — system-written, not auditor-written.
+  // Set to true by the amendment ingestion route when the linked protocol risk
+  // object was modified or removed in a new ProtocolVersion.
+  riskContextOutdated    Boolean   @default(false) @map("risk_context_outdated")
+  riskContextConfirmedAt DateTime? @map("risk_context_confirmed_at") // Set when auditor explicitly re-confirms after amendment
+  riskContextConfirmedBy String?   @map("risk_context_confirmed_by")
+
+  createdBy String   @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  audit                 Audit                        @relation(fields: [auditId], references: [id])
+  protocolRisk          ProtocolRiskObject?          @relation(fields: [protocolRiskId], references: [id])
+  vendorServiceMapping  VendorServiceMappingObject?  @relation(fields: [vendorServiceMappingId], references: [id])
+  questionnaireResponse QuestionnaireResponseObject? @relation(fields: [questionnaireResponseId], references: [id])
+  creator               User                         @relation("WorkspaceEntryCreator", fields: [createdBy], references: [id])
+  confirmer             User?                        @relation("WorkspaceEntryConfirmer", fields: [riskContextConfirmedBy], references: [id])
+  evidenceLinks         EvidenceOnWorkspaceEntry[]
+
+  @@index([auditId])
+  @@index([riskContextOutdated]) // Supports fast query: "all outdated entries in this audit"
+  @@map("audit_workspace_entry_objects")
+}
+
+// -----------------------------------------------------------------------------
+// AmendmentAlert
+// Created automatically when a new ProtocolVersion is ingested and one or more
+// active Audits are pinned to the previous version.
+//
+// The auditor's adopt/stay decision is explicit and recorded here. The status
+// transition (PENDING → ADOPTED or DISMISSED) is written to StateHistoryDelta
+// as a GxP-critical traceability event.
+//
+// When this alert is processed (created), the system also writes
+// risk_context_outdated = true on AuditWorkspaceEntryObjects in the affected
+// audit whose linked ProtocolRiskObject was MODIFIED or removed in the new version.
+// This is a deterministic write — not a live computed flag.
+// -----------------------------------------------------------------------------
+model AmendmentAlert {
+  id            String               @id @default(uuid())
+  auditId       String               @map("audit_id")
+  fromVersionId String               @map("from_version_id") // Version the audit was pinned to before this amendment
+  toVersionId   String               @map("to_version_id")   // New version that triggered this alert
+  status        AmendmentAlertStatus @default(PENDING)
+  decision      AmendmentDecision?   // Null until auditor reviews
+  decisionNote  String?              @map("decision_note") // Auditor-authored rationale
+  reviewedBy    String?              @map("reviewed_by")
+  reviewedAt    DateTime?            @map("reviewed_at")
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @updatedAt @map("updated_at")
+
+  audit       Audit           @relation(fields: [auditId], references: [id])
+  fromVersion ProtocolVersion @relation("AlertFromVersion", fields: [fromVersionId], references: [id])
+  toVersion   ProtocolVersion @relation("AlertToVersion", fields: [toVersionId], references: [id])
+  reviewer    User?           @relation("AlertReviewer", fields: [reviewedBy], references: [id])
+
+  @@index([auditId, status]) // Supports query: "all pending alerts for this audit"
+  @@map("amendment_alerts")
+}
+
+// -----------------------------------------------------------------------------
+// EvidenceAttachment
+// A file attachment with structured metadata. Always linked to at least one
+// structured object — never stored as a loose file. Links are managed via
+// the two junction models below.
+// -----------------------------------------------------------------------------
+model EvidenceAttachment {
+  id            String   @id @default(uuid())
+  filename      String
+  storageKey    String   @map("storage_key")    // e.g. S3 object key. Not a public URL.
+  mimeType      String   @map("mime_type")
+  fileSizeBytes Int      @map("file_size_bytes")
+  checkpointRef String?  @map("checkpoint_ref") // Optional — SOP or protocol section this evidence pertains to
+  uploadedBy    String   @map("uploaded_by")
+  uploadedAt    DateTime @default(now()) @map("uploaded_at")
+
+  uploader                   User                              @relation(fields: [uploadedBy], references: [id])
+  workspaceEntryLinks        EvidenceOnWorkspaceEntry[]
+  questionnaireResponseLinks EvidenceOnQuestionnaireResponse[]
+
+  @@map("evidence_attachments")
+}
+
+// Junction: EvidenceAttachment ↔ AuditWorkspaceEntryObject (many-to-many)
+model EvidenceOnWorkspaceEntry {
+  workspaceEntryId String @map("workspace_entry_id")
+  evidenceId       String @map("evidence_id")
+
+  workspaceEntry AuditWorkspaceEntryObject @relation(fields: [workspaceEntryId], references: [id])
+  evidence       EvidenceAttachment        @relation(fields: [evidenceId], references: [id])
+
+  @@id([workspaceEntryId, evidenceId])
+  @@map("evidence_on_workspace_entries")
+}
+
+// Junction: EvidenceAttachment ↔ QuestionnaireResponseObject (many-to-many)
+model EvidenceOnQuestionnaireResponse {
+  questionnaireResponseId String @map("questionnaire_response_id")
+  evidenceId              String @map("evidence_id")
+
+  questionnaireResponse QuestionnaireResponseObject @relation(fields: [questionnaireResponseId], references: [id])
+  evidence              EvidenceAttachment           @relation(fields: [evidenceId], references: [id])
+
+  @@id([questionnaireResponseId, evidenceId])
+  @@map("evidence_on_questionnaire_responses")
+}
+
+// -----------------------------------------------------------------------------
+// StateHistoryDelta
+// Immutable, append-only log of all field-level changes to tracked objects.
+// Never updated. Never deleted.
+//
+// Polymorphic by design: objectType + objectId identify the changed object.
+// Prisma does not support polymorphic FK constraints — objectId is a String
+// with no DB-level FK. The TrackedObjectType enum enforces type identity at
+// the application layer. Application code must validate objectId refers to a
+// real record of the declared type before writing a delta.
+//
+// changed_fields shape: { "fieldName": { "from": <before>, "to": <after> } }
+// Only changed fields are included — not the full object snapshot.
+// -----------------------------------------------------------------------------
+model StateHistoryDelta {
+  id            String            @id @default(uuid())
+  objectType    TrackedObjectType @map("object_type")
+  objectId      String            @map("object_id")     // UUID of the changed object — no DB FK, polymorphic
+  changedFields Json              @map("changed_fields") // Before/after of changed fields only
+  actorId       String            @map("actor_id")       // Always a human in Phase 1
+  reason        String?                                  // Auditor-authored note explaining the change
+  createdAt     DateTime          @default(now()) @map("created_at")
+  // No updatedAt — append-only. Application layer must never issue UPDATE or DELETE on this table.
+
+  actor User @relation(fields: [actorId], references: [id])
+
+  @@index([objectType, objectId]) // Primary query pattern: history of a specific object
+  @@index([actorId])
+  @@map("state_history_deltas")
+}
+
+// =============================================================================
+// PRE-AUDIT DRAFTING DELIVERABLES (D-010, step 7 — scaffolding only)
+// =============================================================================
+// The three deliverables produced inside the PRE_AUDIT_DRAFTING stage:
+// confirmation letter (sent to vendor), agenda (audit-day plan), checklist
+// (auditor's working checklist). All three share the same shape — 1:1 with
+// Audit, an opaque content payload, and an approval gate. Field-level
+// structure is intentionally a Json blob in this pass: deliverable detail
+// (per-section structure, evidence linkage, vendor variables) is its own
+// follow-up build per backlog. Sponsor-name-free by rule — branding is
+// added externally on export.
+//
+// Downstream REPORT_DRAFTING reads only APPROVED deliverables. Edits to an
+// APPROVED deliverable demote it to DRAFT — same pattern as risk summary.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// ConfirmationLetterObject
+// One per Audit. Sent to the vendor confirming audit dates, attendees, and
+// scope. Generated as a deterministic stub from VendorRiskSummaryObject +
+// VendorServiceObject + Audit.scheduledDate; auditor edits down.
+// -----------------------------------------------------------------------------
+model ConfirmationLetterObject {
+  id             String                    @id @default(uuid())
+  auditId        String                    @unique @map("audit_id") // 1:1 with Audit
+  content        Json                      @default("{}")            // [SCAFFOLD] structure TBD; minimum: { bodyText: string, recipients: string[], scope: string[] }
+  approvalStatus DeliverableApprovalStatus @default(DRAFT) @map("approval_status")
+  approvedBy     String?                   @map("approved_by")
+  approvedAt     DateTime?                 @map("approved_at")
+  createdAt      DateTime                  @default(now()) @map("created_at")
+  updatedAt      DateTime                  @updatedAt @map("updated_at")
+
+  audit    Audit @relation(fields: [auditId], references: [id])
+  approver User? @relation("ConfirmationLetterApprover", fields: [approvedBy], references: [id])
+
+  @@map("confirmation_letter_objects")
+}
+
+// -----------------------------------------------------------------------------
+// AgendaObject
+// One per Audit. The audit-day plan: time slots, topics, attendees, evidence
+// to request live. Stub generated from approved QuestionnaireInstance gaps +
+// VendorServiceMappingObject criticality.
+// -----------------------------------------------------------------------------
+model AgendaObject {
+  id             String                    @id @default(uuid())
+  auditId        String                    @unique @map("audit_id") // 1:1 with Audit
+  content        Json                      @default("{}")            // [SCAFFOLD] structure TBD; minimum: { items: [{ time, topic, owner, notes }] }
+  approvalStatus DeliverableApprovalStatus @default(DRAFT) @map("approval_status")
+  approvedBy     String?                   @map("approved_by")
+  approvedAt     DateTime?                 @map("approved_at")
+  createdAt      DateTime                  @default(now()) @map("created_at")
+  updatedAt      DateTime                  @updatedAt @map("updated_at")
+
+  audit    Audit @relation(fields: [auditId], references: [id])
+  approver User? @relation("AgendaApprover", fields: [approvedBy], references: [id])
+
+  @@map("agenda_objects")
+}
+
+// -----------------------------------------------------------------------------
+// ChecklistObject
+// One per Audit. Auditor's working checklist for the audit day — what to
+// observe, what evidence to collect, which checkpoints to verify. Stub
+// generated from APPROVED VendorRiskSummaryObject focus areas + service
+// mappings; later phases hydrate from ControlCheckpointObject (D-004).
+// -----------------------------------------------------------------------------
+model ChecklistObject {
+  id             String                    @id @default(uuid())
+  auditId        String                    @unique @map("audit_id") // 1:1 with Audit
+  content        Json                      @default("{}")            // [SCAFFOLD] structure TBD; minimum: { items: [{ id, prompt, checkpointRef?, evidenceExpected }] }
+  approvalStatus DeliverableApprovalStatus @default(DRAFT) @map("approval_status")
+  approvedBy     String?                   @map("approved_by")
+  approvedAt     DateTime?                 @map("approved_at")
+  createdAt      DateTime                  @default(now()) @map("created_at")
+  updatedAt      DateTime                  @updatedAt @map("updated_at")
+
+  audit    Audit @relation(fields: [auditId], references: [id])
+  approver User? @relation("ChecklistApprover", fields: [approvedBy], references: [id])
+
+  @@map("checklist_objects")
+}
