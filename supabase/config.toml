@@ -1,0 +1,8 @@
+[functions.dashboard-chat]
+verify_jwt = true
+
+[functions.chat]
+verify_jwt = false
+
+[functions.ingest]
+verify_jwt = false

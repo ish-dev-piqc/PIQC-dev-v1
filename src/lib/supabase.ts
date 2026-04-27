@@ -38,12 +38,13 @@ export async function streamDashboardChat(
   history: ChatMessage[],
   selectedDocIds: string[],
   onChunk: (token: string) => void,
+  accessToken: string,
   signal?: AbortSignal
 ): Promise<StreamDashboardChatResult> {
   const response = await fetch(`${supabaseUrl}/functions/v1/dashboard-chat`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${supabaseAnonKey}`,
+      'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ message, history, selectedDocIds }),

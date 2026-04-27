@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, StopCircle, BookOpen, Stethoscope, User, ChevronDown, Search, FileText, ChevronUp, X, Check, Sparkles, Activity, Shield, GitBranch, AlertTriangle, Database, HelpCircle } from 'lucide-react';
 import { streamDashboardChat, ChatMessage, RagStatus, supabase } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 
 interface Document {
   id: string;
@@ -394,6 +395,7 @@ export default function DashboardChat({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { theme } = useTheme();
   const isLight = theme === 'light';
+  const { session } = useAuth();
 
   const showEmpty = messages.length === 0;
 
@@ -461,6 +463,7 @@ export default function DashboardChat({
             return updated;
           });
         },
+        session?.access_token ?? '',
         ac.signal
       );
       finalRagStatus = result.ragStatus;
