@@ -28,9 +28,25 @@ export interface ChatMessage {
 
 export type RagStatus = 'found' | 'not_found' | 'error';
 
+export interface SourceCitation {
+  n: number;
+  document_id: string;
+  document_title: string;
+  page_start: number | null;
+  page_end: number | null;
+  section_heading: string | null;
+  chunk_preview: string;
+}
+
 export interface StreamDashboardChatResult {
   ragStatus: RagStatus;
   ragError: string;
+  sources: SourceCitation[];
+}
+
+async function getAuthToken(): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ?? supabaseAnonKey;
 }
 
 export async function streamDashboardChat(
@@ -38,13 +54,14 @@ export async function streamDashboardChat(
   history: ChatMessage[],
   selectedDocIds: string[],
   onChunk: (token: string) => void,
-  accessToken: string,
+  onSources?: (sources: SourceCitation[]) => void,
   signal?: AbortSignal
 ): Promise<StreamDashboardChatResult> {
+  const token = await getAuthToken();
   const response = await fetch(`${supabaseUrl}/functions/v1/dashboard-chat`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${accessToken}`,
+      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ message, history, selectedDocIds }),
@@ -68,6 +85,7 @@ export async function streamDashboardChat(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let sources: SourceCitation[] = [];
 
   while (true) {
     const { done, value } = await reader.read();
@@ -81,9 +99,14 @@ export async function streamDashboardChat(
       const trimmed = line.trim();
       if (!trimmed.startsWith('data:')) continue;
       const payload = trimmed.slice(5).trim();
-      if (payload === '[DONE]') return { ragStatus, ragError };
+      if (payload === '[DONE]') return { ragStatus, ragError, sources };
       try {
         const parsed = JSON.parse(payload);
+        if (parsed?.type === 'sources' && Array.isArray(parsed.sources)) {
+          sources = parsed.sources as SourceCitation[];
+          onSources?.(sources);
+          continue;
+        }
         const token = parsed?.choices?.[0]?.delta?.content;
         if (typeof token === 'string') onChunk(token);
       } catch {
@@ -92,7 +115,7 @@ export async function streamDashboardChat(
     }
   }
 
-  return { ragStatus, ragError };
+  return { ragStatus, ragError, sources };
 }
 
 export async function streamChatFunction(
