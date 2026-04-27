@@ -1,0 +1,73 @@
+/* =============================================================================
+   Global styles — minimal. Token values are exported from lib/ui/tokens.ts;
+   this file holds the rules that inline styles can't express:
+     - :focus-visible (pseudo-class)
+     - element resets
+     - link defaults
+   ============================================================================= */
+
+:root {
+  /* CSS custom properties mirror lib/ui/tokens.ts — when the TS file changes,
+     update both. Future CSS-only components can consume these without
+     importing the TS module. */
+  --color-bg:             #ffffff;
+  --color-bg-muted:       #fafafa;
+  --color-bg-subtle:      #f3f4f6;
+  --color-border:         #e5e7eb;
+  --color-border-strong:  #d1d5db;
+  --color-fg:             #1f2937;
+  --color-fg-muted:       #4b5563;
+  --color-fg-subtle:      #6b7280;
+  --color-primary:        #2563eb;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--color-fg);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* All keyboard-focusable elements get a visible ring. Inline styles can't
+   express :focus-visible, so this is the global guarantee. */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Buttons inherit body font; reset native chrome. */
+button {
+  font-family: inherit;
+}
+
+/* Anchor reset — components opt in to link styling. */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Visually hidden — for accessible labels (table captions, etc.) */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
