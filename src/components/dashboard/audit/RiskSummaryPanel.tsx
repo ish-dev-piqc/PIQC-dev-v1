@@ -7,10 +7,8 @@ import {
   X,
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
-import {
-  MOCK_RISK_SUMMARIES,
-  type MockRiskSummary,
-} from '../../../lib/audit/mockRiskSummary';
+import { useAuditData } from '../../../context/AuditDataContext';
+import { type MockRiskSummary } from '../../../lib/audit/mockRiskSummary';
 import type { ClinicalTrialPhase } from '../../../types/audit';
 
 // =============================================================================
@@ -46,12 +44,8 @@ export default function RiskSummaryPanel({ auditId }: RiskSummaryPanelProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
 
-  // Mock store — keyed by audit id, mutated locally on save/approve. Phase B
-  // replaces with Supabase queries. We keep a single state tree across audit
-  // switches so edits persist within a session.
-  const [summaries, setSummaries] = useState<Record<string, MockRiskSummary | null>>(
-    () => ({ ...MOCK_RISK_SUMMARIES }),
-  );
+  // Shared store — Scope Review's approval gate reads the same data.
+  const { riskSummaries: summaries, setRiskSummaries: setSummaries } = useAuditData();
   const summary = summaries[auditId] ?? null;
 
   const [editing, setEditing] = useState(false);

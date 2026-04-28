@@ -14,6 +14,8 @@ import type {
   EndpointTier,
   ImpactSurface,
   MaturityPosture,
+  ProvisionalClassification,
+  ProvisionalImpact,
   QuestionAnswerType,
   QuestionnaireInstanceStatus,
   ResponseSource,
@@ -207,4 +209,26 @@ export const QUESTION_ANSWER_TYPE_LABELS: Record<QuestionAnswerType, string> = {
   EVIDENCE_REQUEST: 'Evidence',
   LIST: 'List',
   NUMERIC: 'Number',
+};
+
+// =============================================================================
+// Audit Conduct vocabularies (AUDIT_CONDUCT stage)
+// =============================================================================
+
+// Provisional impact — how severe the auditor judges this observation.
+// Human-assigned only per D-008; never autonomously proposed.
+export const PROVISIONAL_IMPACT_LABELS: Record<ProvisionalImpact, string> = {
+  CRITICAL: 'Critical',
+  MAJOR: 'Major',
+  MINOR: 'Minor',
+  OBSERVATION: 'Observation',
+  NONE: 'None',
+};
+
+// Provisional classification — what kind of finding this is. Human-assigned.
+export const PROVISIONAL_CLASSIFICATION_LABELS: Record<ProvisionalClassification, string> = {
+  FINDING: 'Finding',
+  OBSERVATION: 'Observation',
+  OPPORTUNITY_FOR_IMPROVEMENT: 'OFI',
+  NOT_YET_CLASSIFIED: 'Not yet classified',
 };

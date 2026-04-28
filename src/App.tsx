@@ -13,6 +13,7 @@ import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { ModeProvider } from './context/ModeContext';
 import { ProtocolProvider } from './context/ProtocolContext';
 import { AuditProvider } from './context/AuditContext';
+import { AuditDataProvider } from './context/AuditDataContext';
 
 export type AppView = 'landing' | 'dashboard' | 'login' | 'forgot-password';
 
@@ -136,7 +137,9 @@ export default function App() {
         <ModeProvider>
           <ProtocolProvider>
             <AuditProvider>
-              <AppContent />
+              <AuditDataProvider>
+                <AppContent />
+              </AuditDataProvider>
             </AuditProvider>
           </ProtocolProvider>
         </ModeProvider>
