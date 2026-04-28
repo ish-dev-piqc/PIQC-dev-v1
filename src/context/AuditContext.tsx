@@ -37,6 +37,9 @@ interface AuditContextValue {
   audits: AuditWithContext[];
   activeAudit: AuditWithContext | null;
   setActiveAudit: (audit: AuditWithContext | null) => void;
+  // Mutates the active audit's current_stage in the in-session store. Phase B
+  // mock pattern; replace with a Supabase RPC call when wired.
+  advanceStage: (toStage: AuditStage) => void;
 }
 
 const AUDIT_STORAGE_KEY = 'piq-audit-v1';
@@ -86,9 +89,14 @@ const AuditContext = createContext<AuditContextValue>({
   audits: MOCK_AUDITS,
   activeAudit: null,
   setActiveAudit: () => {},
+  advanceStage: () => {},
 });
 
 export function AuditProvider({ children }: { children: React.ReactNode }) {
+  // In-session mutable copy of the audit list. Phase B mock pattern allows
+  // stage transitions to update Audit.current_stage; resets on page reload.
+  const [audits, setAudits] = useState<AuditWithContext[]>(MOCK_AUDITS);
+
   const [activeId, setActiveId] = useState<string | null>(() => {
     try {
       const stored = localStorage.getItem(AUDIT_STORAGE_KEY);
@@ -109,19 +117,27 @@ export function AuditProvider({ children }: { children: React.ReactNode }) {
   }, [activeId]);
 
   const activeAudit = activeId
-    ? MOCK_AUDITS.find((a) => a.id === activeId) ?? null
+    ? audits.find((a) => a.id === activeId) ?? null
     : null;
 
   const setActiveAudit = (audit: AuditWithContext | null) => {
     setActiveId(audit ? audit.id : null);
   };
 
+  const advanceStage = (toStage: AuditStage) => {
+    if (!activeId) return;
+    setAudits((prev) =>
+      prev.map((a) => (a.id === activeId ? { ...a, current_stage: toStage } : a)),
+    );
+  };
+
   return (
     <AuditContext.Provider
       value={{
-        audits: MOCK_AUDITS,
+        audits,
         activeAudit,
         setActiveAudit,
+        advanceStage,
       }}
     >
       {children}

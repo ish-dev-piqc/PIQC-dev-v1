@@ -12,8 +12,8 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useAudit } from '../../../../context/AuditContext';
+import { useAuditData } from '../../../../context/AuditDataContext';
 import {
-  MOCK_QUESTIONNAIRES,
   TEMPLATE_QUESTIONS,
   type MockQuestion,
   type MockQuestionnaireBundle,
@@ -81,10 +81,8 @@ export default function QuestionnaireReviewWorkspace() {
   const { activeAudit } = useAudit();
   const isLight = theme === 'light';
 
-  // In-session store, keyed by audit id
-  const [bundles, setBundles] = useState<Record<string, MockQuestionnaireBundle | null>>(
-    () => ({ ...MOCK_QUESTIONNAIRES }),
-  );
+  // Shared store across stages — Scope Review's gate reads from here.
+  const { questionnaires: bundles, setQuestionnaires: setBundles } = useAuditData();
 
   useEffect(() => {
     // No-op for now; would reset edit state if any local-only flags existed.

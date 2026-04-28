@@ -2,17 +2,14 @@ import { useState, useEffect } from 'react';
 import { CheckCircle2, Lock, Pencil, History as HistoryIcon } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useAudit } from '../../../../context/AuditContext';
+import { useAuditData } from '../../../../context/AuditDataContext';
 import {
   SERVICE_TYPE_OPTIONS,
   COMPLIANCE_POSTURE_LABELS,
   MATURITY_POSTURE_LABELS,
   TRUST_POSTURE_LABELS,
 } from '../../../../lib/audit/labels';
-import { MOCK_PROTOCOL_RISKS } from '../../../../lib/audit/mockProtocolRisks';
 import {
-  MOCK_VENDOR_SERVICES,
-  MOCK_SERVICE_MAPPINGS,
-  MOCK_TRUST_ASSESSMENTS,
   type MockVendorService,
   type MockServiceMapping,
   type MockTrustAssessment,
@@ -41,17 +38,17 @@ export default function VendorEnrichmentWorkspace() {
   const isLight = theme === 'light';
 
   // -----------------------------------------------------------------------
-  // Local state stores (mock-backed)
+  // Shared state stores (Phase B — propagates across stages)
   // -----------------------------------------------------------------------
-  const [services, setServices] = useState<Record<string, MockVendorService | null>>(
-    () => ({ ...MOCK_VENDOR_SERVICES }),
-  );
-  const [mappings, setMappings] = useState<Record<string, MockServiceMapping[]>>(
-    () => ({ ...MOCK_SERVICE_MAPPINGS }),
-  );
-  const [assessments, setAssessments] = useState<
-    Record<string, MockTrustAssessment | null>
-  >(() => ({ ...MOCK_TRUST_ASSESSMENTS }));
+  const {
+    vendorServices: services,
+    setVendorServices: setServices,
+    serviceMappings: mappings,
+    setServiceMappings: setMappings,
+    trustAssessments: assessments,
+    setTrustAssessments: setAssessments,
+    protocolRisks,
+  } = useAuditData();
 
   // Form modes
   const [serviceMode, setServiceMode] = useState<'view' | 'edit' | 'create'>('view');
@@ -69,7 +66,7 @@ export default function VendorEnrichmentWorkspace() {
   const service = services[auditId] ?? null;
   const auditMappings = mappings[auditId] ?? [];
   const assessment = assessments[auditId] ?? null;
-  const protocolRisks = MOCK_PROTOCOL_RISKS[auditId] ?? [];
+  const auditProtocolRisks = protocolRisks[auditId] ?? [];
 
   // -----------------------------------------------------------------------
   // Mutation handlers
@@ -189,7 +186,7 @@ export default function VendorEnrichmentWorkspace() {
         {service && (
           <ServiceMappingTable
             mappings={auditMappings}
-            availableRisks={protocolRisks}
+            availableRisks={auditProtocolRisks}
             vendorServiceId={service.id}
             onAdd={addMapping}
             onUpdate={updateMapping}

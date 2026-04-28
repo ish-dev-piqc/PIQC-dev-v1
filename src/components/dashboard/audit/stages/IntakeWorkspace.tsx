@@ -2,15 +2,13 @@ import { useState, useEffect } from 'react';
 import { Plus, Pencil, Clock, History as HistoryIcon } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useAudit } from '../../../../context/AuditContext';
+import { useAuditData } from '../../../../context/AuditDataContext';
 import {
   ENDPOINT_TIER_LABELS,
   IMPACT_SURFACE_LABELS,
   OPERATIONAL_DOMAIN_OPTIONS,
 } from '../../../../lib/audit/labels';
-import {
-  MOCK_PROTOCOL_RISKS,
-  type TaggedSection,
-} from '../../../../lib/audit/mockProtocolRisks';
+import { type TaggedSection } from '../../../../lib/audit/mockProtocolRisks';
 import type { EndpointTier, ImpactSurface } from '../../../../types/audit';
 import RiskTaggingForm, { type RiskTagFormValues } from './intake/RiskTaggingForm';
 
@@ -37,11 +35,11 @@ export default function IntakeWorkspace() {
   const { activeAudit } = useAudit();
   const isLight = theme === 'light';
 
-  // In-session sections store, keyed by audit id. Initialized from the mock
-  // baseline; mutations update this state.
-  const [sectionsByAudit, setSectionsByAudit] = useState<
-    Record<string, TaggedSection[]>
-  >(() => ({ ...MOCK_PROTOCOL_RISKS }));
+  // Shared store across stages (Phase B). Mutations propagate to other stages
+  // that consume the same context (e.g. Vendor Enrichment's mapping picker
+  // and Scope Review's read-only summary).
+  const { protocolRisks: sectionsByAudit, setProtocolRisks: setSectionsByAudit } =
+    useAuditData();
 
   const [mode, setMode] = useState<FormMode>('list');
   const [editTarget, setEditTarget] = useState<TaggedSection | null>(null);
