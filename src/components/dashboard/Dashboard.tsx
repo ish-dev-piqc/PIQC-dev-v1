@@ -7,6 +7,7 @@ import ParticipantsTab from './site/ParticipantsTab';
 import VisitsTab from './site/VisitsTab';
 import TeamTab from './site/TeamTab';
 import ProtocolRequiredGate from './site/ProtocolRequiredGate';
+import AuditWorkspaceShell from './audit/AuditWorkspaceShell';
 import { useTheme } from '../../context/ThemeContext';
 import { useMode } from '../../context/ModeContext';
 import { supabase, type ChatMessage, type RagStatus } from '../../lib/supabase';
@@ -567,6 +568,26 @@ export default function Dashboard({
         );
     }
   };
+
+  // Audit Mode skips the legacy tab rail entirely. The 3-pane workspace shell
+  // owns its own navigation (StageNav). Settings is still reachable via the
+  // Navbar user dropdown — when activeTab flips to 'settings' we render the
+  // Settings tab inside the constrained panel instead of the shell.
+  if (mode === 'audit') {
+    return (
+      <div className={`h-screen ${pageBg} pt-16 flex flex-col overflow-hidden`}>
+        {resolvedActiveTab === 'settings' ? (
+          <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 flex flex-col" style={{ minHeight: 0 }}>
+            <div className={`flex-1 ${panelBg} border rounded-2xl overflow-hidden flex flex-col`} style={{ minHeight: 0 }}>
+              {renderContent()}
+            </div>
+          </div>
+        ) : (
+          <AuditWorkspaceShell />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={`h-screen ${pageBg} pt-16 flex flex-col overflow-hidden`}>

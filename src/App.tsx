@@ -12,6 +12,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { ModeProvider } from './context/ModeContext';
 import { ProtocolProvider } from './context/ProtocolContext';
+import { AuditProvider } from './context/AuditContext';
 
 export type AppView = 'landing' | 'dashboard' | 'login' | 'forgot-password';
 
@@ -134,7 +135,9 @@ export default function App() {
       <AuthProvider>
         <ModeProvider>
           <ProtocolProvider>
-            <AppContent />
+            <AuditProvider>
+              <AppContent />
+            </AuditProvider>
           </ProtocolProvider>
         </ModeProvider>
       </AuthProvider>
