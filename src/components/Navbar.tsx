@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { Menu, X, Activity, LogOut, ChevronDown, User, Home, Sun, Moon } from 'lucide-react';
+import { Menu, X, Activity, LogOut, ChevronDown, User, Home, Sun, Moon, ClipboardList } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useMode, type DashboardMode } from '../context/ModeContext';
 import { useProtocol } from '../context/ProtocolContext';
+import { useAudit } from '../context/AuditContext';
+import type { AuditStage } from '../types/audit';
 import type { AppView } from '../App';
 import type { SettingsSection } from './dashboard/Dashboard';
 
@@ -20,15 +22,29 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [protocolMenuOpen, setProtocolMenuOpen] = useState(false);
+  const [auditMenuOpen, setAuditMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const modeMenuRef = useRef<HTMLDivElement>(null);
   const protocolMenuRef = useRef<HTMLDivElement>(null);
+  const auditMenuRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const mobileToggleRef = useRef<HTMLButtonElement>(null);
   const { signOut, user, session } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { mode, setMode } = useMode();
   const { protocols, activeProtocol, setActiveProtocol } = useProtocol();
+  const { audits, activeAudit, setActiveAudit } = useAudit();
+
+  const STAGE_LABELS: Record<AuditStage, string> = {
+    INTAKE: 'Intake',
+    VENDOR_ENRICHMENT: 'Vendor enrichment',
+    QUESTIONNAIRE_REVIEW: 'Questionnaire review',
+    SCOPE_AND_RISK_REVIEW: 'Scope & risk review',
+    PRE_AUDIT_DRAFTING: 'Pre-audit drafting',
+    AUDIT_CONDUCT: 'Audit conduct',
+    REPORT_DRAFTING: 'Report drafting',
+    FINAL_REVIEW_EXPORT: 'Final review & export',
+  };
 
   const isLight = theme === 'light';
 
@@ -221,6 +237,91 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
     </div>
   );
 
+  const renderAuditPicker = () => (
+    <div className="relative" ref={auditMenuRef}>
+      <button
+        type="button"
+        onClick={() => setAuditMenuOpen((o) => !o)}
+        className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md border transition-colors ${isLight ? 'border-[#dce4ed] bg-white text-[#374152] hover:bg-[#f5f7fa]' : 'border-white/[0.08] bg-[#131a22] text-[#d2d7e0] hover:bg-white/[0.08]'}`}
+        aria-haspopup="listbox"
+        aria-expanded={auditMenuOpen}
+        title={activeAudit ? activeAudit.audit_name : 'No audit selected'}
+      >
+        {activeAudit ? (
+          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isLight ? 'bg-[#4a6fa5]' : 'bg-[#6e8fb5]'}`} />
+        ) : (
+          <ClipboardList size={12} className={`flex-shrink-0 ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'}`} />
+        )}
+        <span className="truncate max-w-[160px]">
+          {activeAudit ? activeAudit.audit_name : 'Select audit'}
+        </span>
+        <ChevronDown size={12} className={`transition-transform duration-150 flex-shrink-0 ${auditMenuOpen ? 'rotate-180' : ''}`} />
+      </button>
+      {auditMenuOpen && (
+        <div
+          className={`absolute left-0 top-full mt-1.5 w-80 rounded-lg shadow-lg border overflow-hidden z-50 ${isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/10'}`}
+          role="listbox"
+        >
+          <div className={`px-3 py-2 border-b ${isLight ? 'border-[#e2e8ee]' : 'border-white/[0.06]'}`}>
+            <p className={`text-[10px] uppercase tracking-wider font-semibold ${isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35'}`}>
+              Active audits
+            </p>
+          </div>
+          {audits.length === 0 ? (
+            <div className={`px-3 py-4 text-xs ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'}`}>
+              No audits yet.
+            </div>
+          ) : (
+            audits.map((a) => {
+              const active = activeAudit?.id === a.id;
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveAudit(a);
+                    setAuditMenuOpen(false);
+                  }}
+                  className={`w-full text-left px-3 py-2.5 transition-colors ${
+                    active
+                      ? isLight
+                        ? 'bg-[#4a6fa5]/10'
+                        : 'bg-[#4a6fa5]/15'
+                      : isLight
+                      ? 'hover:bg-[#1a1f28]/[0.04]'
+                      : 'hover:bg-white/[0.04]'
+                  }`}
+                  role="option"
+                  aria-selected={active}
+                >
+                  <div
+                    className={`text-xs font-semibold truncate ${
+                      active
+                        ? isLight
+                          ? 'text-[#4a6fa5]'
+                          : 'text-[#6e8fb5]'
+                        : isLight
+                        ? 'text-[#1a1f28]'
+                        : 'text-white'
+                    }`}
+                  >
+                    {a.audit_name}
+                  </div>
+                  <div className={`text-[11px] mt-0.5 truncate ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'}`}>
+                    {a.vendor_name} · {a.protocol_code}
+                  </div>
+                  <div className={`text-[10px] mt-0.5 uppercase tracking-wider font-medium ${isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40'}`}>
+                    {STAGE_LABELS[a.current_stage]}
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', onScroll);
@@ -237,6 +338,9 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
       }
       if (protocolMenuRef.current && !protocolMenuRef.current.contains(e.target as Node)) {
         setProtocolMenuOpen(false);
+      }
+      if (auditMenuRef.current && !auditMenuRef.current.contains(e.target as Node)) {
+        setAuditMenuOpen(false);
       }
       // Mobile menu: close if click is outside both the expanded menu and the toggle button.
       const target = e.target as Node;
@@ -261,12 +365,6 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
   const handleSignOut = async () => {
     await signOut();
     onViewChange('landing');
-    setMobileOpen(false);
-  };
-
-  const handleDashboardHome = () => {
-    onDashboardHome();
-    setUserMenuOpen(false);
     setMobileOpen(false);
   };
 
@@ -321,7 +419,8 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
 
             {isDashboard && <div className="hidden md:inline-flex">{renderModeSwitcher()}</div>}
             {isDashboard && <div className="md:hidden">{renderModeDropdown()}</div>}
-            {isDashboard && renderProtocolPicker()}
+            {isDashboard && mode === 'site' && renderProtocolPicker()}
+            {isDashboard && mode === 'audit' && renderAuditPicker()}
           </div>
 
           {isDashboard ? (

@@ -1,0 +1,133 @@
+import { useEffect, useState } from 'react';
+import { useTheme } from '../../../context/ThemeContext';
+import { useAudit } from '../../../context/AuditContext';
+import type { AuditStage } from '../../../types/audit';
+import { STAGE_LABELS, AUDIT_TYPE_LABELS, AUDIT_STATUS_LABELS } from '../../../lib/audit/labels';
+import StageNav from './StageNav';
+import AuditRequiredGate from './AuditRequiredGate';
+import RiskSummaryPanel from './RiskSummaryPanel';
+import IntakeWorkspace from './stages/IntakeWorkspace';
+import VendorEnrichmentWorkspace from './stages/VendorEnrichmentWorkspace';
+import QuestionnaireReviewWorkspace from './stages/QuestionnaireReviewWorkspace';
+import ScopeReviewWorkspace from './stages/ScopeReviewWorkspace';
+import PreAuditDraftingWorkspace from './stages/PreAuditDraftingWorkspace';
+import AuditConductWorkspace from './stages/AuditConductWorkspace';
+import ReportDraftingWorkspace from './stages/ReportDraftingWorkspace';
+import FinalReviewExportWorkspace from './stages/FinalReviewExportWorkspace';
+
+// Dispatch table — viewedStage → component. Phase B replaces each entry's
+// internals as that stage gets ported. The shell itself stays unchanged.
+const STAGE_COMPONENTS: Record<AuditStage, React.ComponentType> = {
+  INTAKE: IntakeWorkspace,
+  VENDOR_ENRICHMENT: VendorEnrichmentWorkspace,
+  QUESTIONNAIRE_REVIEW: QuestionnaireReviewWorkspace,
+  SCOPE_AND_RISK_REVIEW: ScopeReviewWorkspace,
+  PRE_AUDIT_DRAFTING: PreAuditDraftingWorkspace,
+  AUDIT_CONDUCT: AuditConductWorkspace,
+  REPORT_DRAFTING: ReportDraftingWorkspace,
+  FINAL_REVIEW_EXPORT: FinalReviewExportWorkspace,
+};
+
+// =============================================================================
+// AuditWorkspaceShell — 3-pane layout for Audit Mode.
+//
+//   Left   : StageNav (audit progress + navigation)
+//   Center : per-stage workspace (placeholder in Phase A; real impls in Phase B)
+//   Right  : RiskSummaryPanel (why this vendor matters)
+//
+// When no audit is selected, renders AuditRequiredGate as the full content.
+//
+// Internal state:
+//   viewedStage — which stage the user is currently looking at. Defaults to
+//   activeAudit.current_stage, but the user can navigate to any unlocked
+//   stage via StageNav. This is separate from the audit's actual workflow
+//   position — Phase B will add transition controls to advance current_stage.
+// =============================================================================
+
+export default function AuditWorkspaceShell() {
+  const { theme } = useTheme();
+  const { activeAudit } = useAudit();
+  const isLight = theme === 'light';
+
+  // Reset viewedStage to the audit's current stage whenever the active audit changes.
+  const [viewedStage, setViewedStage] = useState<AuditStage>(
+    activeAudit?.current_stage ?? 'INTAKE',
+  );
+
+  // Snap the viewed stage to the audit's current_stage when the active audit
+  // (or its workflow position) changes. We intentionally depend on the
+  // primitive id/stage values rather than the full activeAudit object —
+  // depending on the object would clobber the user's stage navigation any
+  // time the parent re-rendered with a new reference.
+  useEffect(() => {
+    if (activeAudit) setViewedStage(activeAudit.current_stage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAudit?.id, activeAudit?.current_stage]);
+
+  if (!activeAudit) {
+    return (
+      <div className="flex-1 flex flex-col" style={{ minHeight: 0 }}>
+        <AuditRequiredGate />
+      </div>
+    );
+  }
+
+  const headerBg = isLight
+    ? 'bg-white border-[#e2e8ee]'
+    : 'bg-[#131a22] border-white/5';
+  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
+  const subColor = isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45';
+  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
+  const chipBg = isLight
+    ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/20 text-[#4a6fa5]'
+    : 'bg-[#4a6fa5]/15 border-[#4a6fa5]/30 text-[#6e8fb5]';
+
+  return (
+    <div className="flex-1 flex" style={{ minHeight: 0 }}>
+      <StageNav
+        currentStage={activeAudit.current_stage}
+        viewedStage={viewedStage}
+        onSelectStage={setViewedStage}
+      />
+
+      <main className="flex-1 flex flex-col min-w-0">
+        {/* Audit context header — shows what audit + stage you're in */}
+        <div className={`flex-shrink-0 border-b ${headerBg} px-6 py-3`}>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] uppercase tracking-wider font-semibold ${chipBg}`}>
+                  {STAGE_LABELS[viewedStage]}
+                </span>
+                {viewedStage !== activeAudit.current_stage && (
+                  <span className={`text-[11px] ${mutedColor}`}>
+                    Viewing earlier stage
+                  </span>
+                )}
+              </div>
+              <h2 className={`${headingColor} font-semibold text-base truncate`}>
+                {activeAudit.audit_name}
+              </h2>
+              <p className={`${subColor} text-xs mt-0.5 truncate`}>
+                {activeAudit.vendor_name} · {activeAudit.protocol_code} ·{' '}
+                {AUDIT_TYPE_LABELS[activeAudit.audit_type]} ·{' '}
+                {AUDIT_STATUS_LABELS[activeAudit.status]}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Stage workspace content — dispatched by viewedStage. Phase B fills
+            in each stage component individually without touching the shell. */}
+        <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
+          {(() => {
+            const Workspace = STAGE_COMPONENTS[viewedStage];
+            return <Workspace />;
+          })()}
+        </div>
+      </main>
+
+      <RiskSummaryPanel auditId={activeAudit.id} />
+    </div>
+  );
+}

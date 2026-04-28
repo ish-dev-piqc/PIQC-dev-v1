@@ -1,0 +1,564 @@
+import { useState, useEffect } from 'react';
+import { CheckCircle2, Lock, Pencil, History as HistoryIcon } from 'lucide-react';
+import { useTheme } from '../../../../context/ThemeContext';
+import { useAudit } from '../../../../context/AuditContext';
+import {
+  SERVICE_TYPE_OPTIONS,
+  COMPLIANCE_POSTURE_LABELS,
+  MATURITY_POSTURE_LABELS,
+  TRUST_POSTURE_LABELS,
+} from '../../../../lib/audit/labels';
+import { MOCK_PROTOCOL_RISKS } from '../../../../lib/audit/mockProtocolRisks';
+import {
+  MOCK_VENDOR_SERVICES,
+  MOCK_SERVICE_MAPPINGS,
+  MOCK_TRUST_ASSESSMENTS,
+  type MockVendorService,
+  type MockServiceMapping,
+  type MockTrustAssessment,
+} from '../../../../lib/audit/mockVendorEnrichment';
+import VendorServiceForm, { type VendorServiceFormValues } from './vendor-enrichment/VendorServiceForm';
+import ServiceMappingTable from './vendor-enrichment/ServiceMappingTable';
+import TrustAssessmentForm, { type TrustAssessmentFormValues } from './vendor-enrichment/TrustAssessmentForm';
+
+// =============================================================================
+// VendorEnrichmentWorkspace — VENDOR_ENRICHMENT stage center pane.
+//
+// Three sequential cards:
+//   1. Vendor service definition — locked once saved
+//   2. Protocol section mapping — locked until vendor service exists
+//   3. Trust intelligence — always available
+//
+// Phase A pattern: in-session local state. Replace mock stores with Supabase
+// reads + per-mutation RPCs in the wire-up phase.
+// =============================================================================
+
+type SectionStatus = 'pending' | 'done' | 'locked';
+
+export default function VendorEnrichmentWorkspace() {
+  const { theme } = useTheme();
+  const { activeAudit } = useAudit();
+  const isLight = theme === 'light';
+
+  // -----------------------------------------------------------------------
+  // Local state stores (mock-backed)
+  // -----------------------------------------------------------------------
+  const [services, setServices] = useState<Record<string, MockVendorService | null>>(
+    () => ({ ...MOCK_VENDOR_SERVICES }),
+  );
+  const [mappings, setMappings] = useState<Record<string, MockServiceMapping[]>>(
+    () => ({ ...MOCK_SERVICE_MAPPINGS }),
+  );
+  const [assessments, setAssessments] = useState<
+    Record<string, MockTrustAssessment | null>
+  >(() => ({ ...MOCK_TRUST_ASSESSMENTS }));
+
+  // Form modes
+  const [serviceMode, setServiceMode] = useState<'view' | 'edit' | 'create'>('view');
+  const [trustMode, setTrustMode] = useState<'view' | 'edit' | 'create'>('view');
+
+  // Reset modes when active audit changes
+  useEffect(() => {
+    setServiceMode('view');
+    setTrustMode('view');
+  }, [activeAudit?.id]);
+
+  if (!activeAudit) return null;
+
+  const auditId = activeAudit.id;
+  const service = services[auditId] ?? null;
+  const auditMappings = mappings[auditId] ?? [];
+  const assessment = assessments[auditId] ?? null;
+  const protocolRisks = MOCK_PROTOCOL_RISKS[auditId] ?? [];
+
+  // -----------------------------------------------------------------------
+  // Mutation handlers
+  // -----------------------------------------------------------------------
+  const saveService = (values: VendorServiceFormValues) => {
+    const next: MockVendorService = service
+      ? { ...service, ...values }
+      : {
+          id: `vs-${auditId}-${Date.now()}`,
+          audit_id: auditId,
+          ...values,
+        };
+    setServices((prev) => ({ ...prev, [auditId]: next }));
+    setServiceMode('view');
+  };
+
+  const addMapping = (m: Omit<MockServiceMapping, 'id'>) => {
+    const newMapping: MockServiceMapping = { ...m, id: `sm-${auditId}-${Date.now()}` };
+    setMappings((prev) => ({
+      ...prev,
+      [auditId]: [...(prev[auditId] ?? []), newMapping],
+    }));
+  };
+
+  const updateMapping = (mappingId: string, updates: Partial<MockServiceMapping>) => {
+    setMappings((prev) => ({
+      ...prev,
+      [auditId]: (prev[auditId] ?? []).map((m) =>
+        m.id === mappingId ? { ...m, ...updates } : m,
+      ),
+    }));
+  };
+
+  const removeMapping = (mappingId: string) => {
+    setMappings((prev) => ({
+      ...prev,
+      [auditId]: (prev[auditId] ?? []).filter((m) => m.id !== mappingId),
+    }));
+  };
+
+  const saveAssessment = (values: TrustAssessmentFormValues) => {
+    const next: MockTrustAssessment = assessment
+      ? { ...assessment, ...values }
+      : { id: `ta-${auditId}-${Date.now()}`, audit_id: auditId, ...values };
+    setAssessments((prev) => ({ ...prev, [auditId]: next }));
+    setTrustMode('view');
+  };
+
+  // -----------------------------------------------------------------------
+  // Theme tokens
+  // -----------------------------------------------------------------------
+  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
+
+  // -----------------------------------------------------------------------
+  // Render
+  // -----------------------------------------------------------------------
+  const serviceStatus: SectionStatus = service ? 'done' : 'pending';
+  const mappingStatus: SectionStatus = !service
+    ? 'locked'
+    : auditMappings.length > 0
+    ? 'done'
+    : 'pending';
+  const trustStatus: SectionStatus = assessment ? 'done' : 'pending';
+
+  const sectionHeader = isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40';
+  const subColor = isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55';
+
+  return (
+    <div className="p-6 max-w-4xl mx-auto space-y-6">
+      {/* Header */}
+      <div>
+        <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
+          Stage 2 · Vendor enrichment
+        </p>
+        <h2 className={`${headingColor} text-xl font-semibold mt-1`}>
+          Vendor service, mapping, and trust
+        </h2>
+        <p className={`${subColor} text-sm mt-1.5 leading-relaxed max-w-2xl`}>
+          Define the contracted vendor service, link it to the protocol sections it touches,
+          and capture initial trust intelligence from public materials. These three artefacts
+          anchor questionnaire addenda and the risk summary downstream.
+        </p>
+      </div>
+
+      {/* Section 1: Vendor service */}
+      <SectionCard
+        step={1}
+        title="Vendor service"
+        description="Define the service this vendor is providing under the trial. Manual entry after contract review — not inferred."
+        status={serviceStatus}
+        isLight={isLight}
+      >
+        {service && serviceMode === 'view' ? (
+          <ServiceSummary
+            service={service}
+            isLight={isLight}
+            onEdit={() => setServiceMode('edit')}
+          />
+        ) : (
+          <VendorServiceForm
+            initialValues={service ?? undefined}
+            onSubmit={saveService}
+            onCancel={() => setServiceMode('view')}
+          />
+        )}
+      </SectionCard>
+
+      {/* Section 2: Protocol section mapping */}
+      <SectionCard
+        step={2}
+        title="Protocol section mapping"
+        description="Link the protocol sections this vendor service is responsible for. Auditor assigns a derived criticality + rationale."
+        status={mappingStatus}
+        lockedReason="Define the vendor service above first."
+        isLight={isLight}
+      >
+        {service && (
+          <ServiceMappingTable
+            mappings={auditMappings}
+            availableRisks={protocolRisks}
+            vendorServiceId={service.id}
+            onAdd={addMapping}
+            onUpdate={updateMapping}
+            onRemove={removeMapping}
+          />
+        )}
+      </SectionCard>
+
+      {/* Section 3: Trust intelligence */}
+      <SectionCard
+        step={3}
+        title="Trust intelligence"
+        description="Record certifications claimed, compliance posture, and risk hypotheses from public vendor materials. Auditor-authored only — this is structured capture, not autonomous research."
+        status={trustStatus}
+        isLight={isLight}
+      >
+        {assessment && trustMode === 'view' ? (
+          <TrustAssessmentSummary
+            assessment={assessment}
+            isLight={isLight}
+            onEdit={() => setTrustMode('edit')}
+          />
+        ) : (
+          <TrustAssessmentForm
+            initialValues={assessment ?? undefined}
+            onSubmit={saveAssessment}
+            onCancel={() => setTrustMode('view')}
+          />
+        )}
+      </SectionCard>
+    </div>
+  );
+}
+
+// ============================================================================
+// SectionCard
+// ============================================================================
+
+interface SectionCardProps {
+  step: number;
+  title: string;
+  description: string;
+  status: SectionStatus;
+  lockedReason?: string;
+  isLight: boolean;
+  children: React.ReactNode;
+}
+
+function SectionCard({
+  step,
+  title,
+  description,
+  status,
+  lockedReason,
+  isLight,
+  children,
+}: SectionCardProps) {
+  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
+  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
+  const subColor = isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55';
+  const sectionHeader = isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40';
+  const borderTone = isLight ? 'border-[#eef2f6]' : 'border-white/5';
+
+  const opacity = status === 'locked' ? 'opacity-60' : '';
+
+  return (
+    <section className={`${cardBg} border rounded-xl ${opacity}`}>
+      <header className={`px-5 pt-4 pb-3 border-b ${borderTone}`}>
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
+          <span className={`text-[10px] uppercase tracking-wider font-semibold ${sectionHeader}`}>
+            Step {step}
+          </span>
+          <StatusBadge status={status} isLight={isLight} />
+        </div>
+        <h3 className={`${headingColor} text-base font-semibold`}>{title}</h3>
+        <p className={`${subColor} text-xs mt-1 leading-relaxed`}>
+          {status === 'locked' && lockedReason ? lockedReason : description}
+        </p>
+      </header>
+      {status !== 'locked' && <div className="px-5 py-5">{children}</div>}
+    </section>
+  );
+}
+
+function StatusBadge({ status, isLight }: { status: SectionStatus; isLight: boolean }) {
+  const tones: Record<SectionStatus, string> = {
+    done: isLight
+      ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+      : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400',
+    pending: isLight
+      ? 'bg-amber-50 border-amber-200 text-amber-700'
+      : 'bg-amber-500/15 border-amber-500/30 text-amber-400',
+    locked: isLight
+      ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]/60'
+      : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]/50',
+  };
+  const labels: Record<SectionStatus, string> = {
+    done: 'Defined',
+    pending: 'Not started',
+    locked: 'Locked',
+  };
+  const Icon = status === 'done' ? CheckCircle2 : status === 'locked' ? Lock : null;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border ${tones[status]}`}
+    >
+      {Icon && <Icon size={10} />}
+      {labels[status]}
+    </span>
+  );
+}
+
+// ============================================================================
+// ServiceSummary — read-only view of the saved vendor service
+// ============================================================================
+
+interface ServiceSummaryProps {
+  service: MockVendorService;
+  isLight: boolean;
+  onEdit: () => void;
+}
+
+function ServiceSummary({ service, isLight, onEdit }: ServiceSummaryProps) {
+  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
+  const subColor = isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55';
+  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
+  const buttonSecondary = isLight
+    ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
+    : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]';
+  const typeLabel =
+    SERVICE_TYPE_OPTIONS.find((o) => o.value === service.service_type)?.label ??
+    service.service_type;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`${headingColor} text-base font-semibold`}>
+              {service.service_name}
+            </span>
+            <span
+              className={`inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded border ${
+                isLight
+                  ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]/70'
+                  : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]/65'
+              }`}
+            >
+              {typeLabel}
+            </span>
+          </div>
+          {service.service_description && (
+            <p className={`${subColor} text-sm mt-2 leading-relaxed`}>
+              {service.service_description}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onEdit}
+            className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+          >
+            <Pencil size={12} />
+            Edit
+          </button>
+          <button
+            type="button"
+            className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+            title="Change history (Phase B wires real history)"
+          >
+            <HistoryIcon size={12} />
+            History
+          </button>
+        </div>
+      </div>
+      <p className={`text-[11px] ${mutedColor}`}>
+        Re-create the audit if the contracted service category fundamentally changes.
+      </p>
+    </div>
+  );
+}
+
+// ============================================================================
+// TrustAssessmentSummary — read-only view of the saved assessment
+// ============================================================================
+
+interface TrustAssessmentSummaryProps {
+  assessment: MockTrustAssessment;
+  isLight: boolean;
+  onEdit: () => void;
+}
+
+function TrustAssessmentSummary({
+  assessment,
+  isLight,
+  onEdit,
+}: TrustAssessmentSummaryProps) {
+  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
+  const subColor = isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55';
+  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
+  const sectionHeader = isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40';
+  const chipBg = isLight
+    ? 'bg-[#eef2f6] border-[#cbd2db] text-[#1a1f28]'
+    : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]';
+  const buttonSecondary = isLight
+    ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
+    : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]';
+
+  return (
+    <div className="space-y-4">
+      {/* Postures — primary signal */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <PostureSummary
+          label="Compliance"
+          value={COMPLIANCE_POSTURE_LABELS[assessment.compliance_posture]}
+          rawValue={assessment.compliance_posture}
+          isLight={isLight}
+        />
+        <PostureSummary
+          label="Maturity"
+          value={MATURITY_POSTURE_LABELS[assessment.maturity_posture]}
+          rawValue={assessment.maturity_posture}
+          isLight={isLight}
+        />
+        <PostureSummary
+          label="Provisional trust"
+          value={TRUST_POSTURE_LABELS[assessment.provisional_trust_posture]}
+          rawValue={assessment.provisional_trust_posture}
+          isLight={isLight}
+        />
+      </div>
+
+      {/* Certifications */}
+      {assessment.certifications_claimed.length > 0 && (
+        <SummaryList
+          label="Certifications claimed"
+          items={assessment.certifications_claimed}
+          chipBg={chipBg}
+          sectionHeader={sectionHeader}
+          mutedColor={mutedColor}
+        />
+      )}
+
+      {/* Regulatory claims */}
+      {assessment.regulatory_claims.length > 0 && (
+        <SummaryList
+          label="Regulatory claims"
+          items={assessment.regulatory_claims}
+          chipBg={chipBg}
+          sectionHeader={sectionHeader}
+          mutedColor={mutedColor}
+        />
+      )}
+
+      {/* Risk hypotheses */}
+      {assessment.risk_hypotheses.length > 0 && (
+        <div>
+          <p className={`text-[10px] uppercase tracking-wider font-semibold mb-2 ${sectionHeader}`}>
+            Risk hypotheses
+          </p>
+          <ul className="space-y-1.5">
+            {assessment.risk_hypotheses.map((h, i) => (
+              <li key={i} className={`text-sm flex items-start gap-2 ${headingColor}`}>
+                <span
+                  className={`mt-1.5 w-1 h-1 rounded-full flex-shrink-0 ${
+                    isLight ? 'bg-[#4a6fa5]/55' : 'bg-[#6e8fb5]/55'
+                  }`}
+                />
+                {h}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Notes */}
+      {assessment.notes && (
+        <div>
+          <p className={`text-[10px] uppercase tracking-wider font-semibold mb-1.5 ${sectionHeader}`}>
+            Notes
+          </p>
+          <p className={`text-sm leading-relaxed ${subColor}`}>{assessment.notes}</p>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex items-center gap-2 pt-2">
+        <button
+          type="button"
+          onClick={onEdit}
+          className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+        >
+          <Pencil size={12} />
+          Edit
+        </button>
+        <button
+          type="button"
+          className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+          title="Change history (Phase B wires real history)"
+        >
+          <HistoryIcon size={12} />
+          History
+        </button>
+      </div>
+    </div>
+  );
+}
+
+interface PostureSummaryProps {
+  label: string;
+  value: string;
+  rawValue: string;
+  isLight: boolean;
+}
+
+function PostureSummary({ label, value, rawValue, isLight }: PostureSummaryProps) {
+  // Highlight when posture is something other than UNKNOWN
+  const isUnknown = rawValue === 'UNKNOWN';
+  const cardBg = isUnknown
+    ? isLight
+      ? 'bg-[#f9fafc] border-[#e2e8ee]'
+      : 'bg-white/[0.02] border-white/5'
+    : isLight
+    ? 'bg-[#4a6fa5]/[0.06] border-[#4a6fa5]/20'
+    : 'bg-[#4a6fa5]/[0.10] border-[#6e8fb5]/30';
+  const sectionHeader = isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40';
+  const valueColor = isUnknown
+    ? isLight
+      ? 'text-[#374152]/55'
+      : 'text-[#d2d7e0]/45'
+    : isLight
+    ? 'text-[#1a1f28]'
+    : 'text-white';
+
+  return (
+    <div className={`${cardBg} border rounded-md px-3 py-2.5`}>
+      <p className={`text-[10px] uppercase tracking-wider font-semibold ${sectionHeader}`}>
+        {label}
+      </p>
+      <p className={`text-sm font-semibold mt-0.5 ${valueColor}`}>{value}</p>
+    </div>
+  );
+}
+
+interface SummaryListProps {
+  label: string;
+  items: string[];
+  chipBg: string;
+  sectionHeader: string;
+  mutedColor: string;
+}
+
+function SummaryList({ label, items, chipBg, sectionHeader }: SummaryListProps) {
+  return (
+    <div>
+      <p className={`text-[10px] uppercase tracking-wider font-semibold mb-2 ${sectionHeader}`}>
+        {label}
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {items.map((it, i) => (
+          <span
+            key={`${it}-${i}`}
+            className={`inline-flex items-center text-xs px-2 py-1 rounded border ${chipBg}`}
+          >
+            {it}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
