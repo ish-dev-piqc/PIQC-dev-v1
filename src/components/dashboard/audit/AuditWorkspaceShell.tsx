@@ -3,9 +3,11 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useAudit } from '../../../context/AuditContext';
 import type { AuditStage } from '../../../types/audit';
 import { STAGE_LABELS, AUDIT_TYPE_LABELS, AUDIT_STATUS_LABELS } from '../../../lib/audit/labels';
+import { ChevronDown } from 'lucide-react';
 import StageNav from './StageNav';
 import AuditRequiredGate from './AuditRequiredGate';
 import RiskSummaryPanel from './RiskSummaryPanel';
+import { AUDIT_STAGES } from '../../../types/audit';
 import IntakeWorkspace from './stages/IntakeWorkspace';
 import VendorEnrichmentWorkspace from './stages/VendorEnrichmentWorkspace';
 import QuestionnaireReviewWorkspace from './stages/QuestionnaireReviewWorkspace';
@@ -94,7 +96,7 @@ export default function AuditWorkspaceShell() {
         {/* Audit context header — shows what audit + stage you're in */}
         <div className={`flex-shrink-0 border-b ${headerBg} px-6 py-3`}>
           <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap mb-1">
                 <span className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] uppercase tracking-wider font-semibold ${chipBg}`}>
                   {STAGE_LABELS[viewedStage]}
@@ -114,6 +116,13 @@ export default function AuditWorkspaceShell() {
                 {AUDIT_STATUS_LABELS[activeAudit.status]}
               </p>
             </div>
+            {/* Mobile-only stage picker — replaces the StageNav rail below md: */}
+            <MobileStagePicker
+              currentStage={activeAudit.current_stage}
+              viewedStage={viewedStage}
+              onSelectStage={setViewedStage}
+              isLight={isLight}
+            />
           </div>
         </div>
 
@@ -128,6 +137,57 @@ export default function AuditWorkspaceShell() {
       </main>
 
       <RiskSummaryPanel auditId={activeAudit.id} />
+    </div>
+  );
+}
+
+// ============================================================================
+// MobileStagePicker — replaces the StageNav rail below md:.
+// ============================================================================
+interface MobileStagePickerProps {
+  currentStage: AuditStage;
+  viewedStage: AuditStage;
+  onSelectStage: (s: AuditStage) => void;
+  isLight: boolean;
+}
+
+function MobileStagePicker({
+  currentStage,
+  viewedStage,
+  onSelectStage,
+  isLight,
+}: MobileStagePickerProps) {
+  const currentIdx = AUDIT_STAGES.indexOf(currentStage);
+
+  return (
+    <div className="md:hidden flex-shrink-0 self-start relative">
+      <select
+        value={viewedStage}
+        onChange={(e) => onSelectStage(e.target.value as AuditStage)}
+        aria-label="Audit stage"
+        className={`appearance-none text-xs font-semibold pl-3 pr-8 py-1.5 rounded-md border transition-colors cursor-pointer ${
+          isLight
+            ? 'bg-white border-[#dce4ed] text-[#374152] hover:bg-[#f5f7fa]'
+            : 'bg-[#131a22] border-white/[0.08] text-[#d2d7e0] hover:bg-white/[0.04]'
+        }`}
+      >
+        {AUDIT_STAGES.map((s, idx) => {
+          // Mirror StageNav locking: anything > current+1 is unreachable.
+          const locked = idx > currentIdx + 1;
+          return (
+            <option key={s} value={s} disabled={locked}>
+              {idx + 1}. {STAGE_LABELS[s]}
+              {locked ? ' 🔒' : idx === currentIdx ? ' ← current' : ''}
+            </option>
+          );
+        })}
+      </select>
+      <ChevronDown
+        size={12}
+        className={`pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 ${
+          isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'
+        }`}
+      />
     </div>
   );
 }

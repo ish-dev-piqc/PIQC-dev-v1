@@ -1,6 +1,6 @@
 # PIQClinical — Build Plan & Status
 
-_Last updated: 2026-04-28 (shared mock-store contexts in)_
+_Last updated: 2026-04-29 (Site Mode tabs built; StageNav mobile collapse)_
 
 This document describes the current build of PIQClinical (PIQC), what's
 finished, and what's queued. It's the source of truth for "where are we" — the
