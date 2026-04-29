@@ -36,7 +36,7 @@ export default function StageNav({ currentStage, viewedStage, onSelectStage }: S
   return (
     <nav
       aria-label="Audit stages"
-      className={`${navBg} border-r flex-shrink-0 w-60 overflow-y-auto`}
+      className={`${navBg} border-r flex-shrink-0 w-60 overflow-y-auto hidden md:flex md:flex-col`}
     >
       <div className={`px-4 pt-5 pb-3 border-b ${isLight ? 'border-[#e2e8ee]' : 'border-white/5'}`}>
         <p className={`text-[10px] uppercase tracking-wider font-semibold ${headerColor}`}>
