@@ -1,6 +1,6 @@
 # PIQClinical — Build Plan & Status
 
-_Last updated: 2026-04-29 (Phase B Audit Mode complete; mobile responsiveness pass — RiskSummary drawer, header tightening)_
+_Last updated: 2026-04-30 (Heatmap layer chassis + first surfaces shipped)_
 
 This document describes the current build of PIQClinical (PIQC), what's
 finished, and what's queued. It's the source of truth for "where are we" — the
@@ -237,6 +237,7 @@ src/
     AuthContext, ThemeContext, ModeContext
     ProtocolContext.tsx                     Site Mode active protocol
     AuditContext.tsx                        Audit Mode active audit
+    HeatmapContext.tsx                      Heatmap layer toggle (default ON)
   lib/
     supabase.ts                             Supabase client
     audit/
@@ -250,6 +251,8 @@ src/
       mockReport.ts                         REPORT_DRAFTING / FINAL_REVIEW mock data
       mockRiskSummary.ts                    Risk summary panel mock data
     mockCalendarData.ts                     Site Mode Overview mock data
+    mockSiteData.ts                         Participants + Team mock data
+    heatmap.ts                              Heat scoring + tone tokens
   types/
     audit/                                  TS mirrors of the audit-mode schema
 
@@ -267,7 +270,7 @@ rv1_code/                                   Reference copy of the original Next.
 In priority order:
 
 1. **Real Supabase wire-up** for all Phase B stages — replace mock context's seed data with `supabase.from(...)` queries and setters with `supabase.rpc(...)` calls. The `AuditDataContext` is the single replacement target. Blocked: migrations need to apply first.
-2. **Heatmap layer** designed and added across visits + workspace entries (UX spec's missing co-primary feature)
+2. **Heatmap layer — partial.** Done: chassis (HeatmapContext, scoring utilities, HeatIndicator component with bar + chip variants), Navbar toggle (default ON, persisted), applied to calendar visit cells (right-edge bar) and Audit Conduct workspace entries (chip). Remaining: extend to more surfaces (StageNav stage-level signals, RiskSummaryPanel focus areas, ParticipantsTab rows), real network-level scoring once data is live.
 3. **History drawer** wired to `audit_mode_get_object_history` so change history shows real entries (depends on Supabase wire-up)
 4. **Ask tab + AI assistant pane** redesigned to match the UX spec
 5. **Mobile responsiveness — partial.** Done: StageNav mobile collapse, RiskSummaryPanel drawer access below xl, audit context header tightening on phones. Remaining: drawer behaviour on phones (visit/day/history), Site Mode calendar week-view stacking on phones.

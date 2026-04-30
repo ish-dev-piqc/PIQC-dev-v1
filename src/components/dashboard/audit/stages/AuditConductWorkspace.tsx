@@ -16,6 +16,8 @@ import {
 } from '../../../../lib/audit/labels';
 import { type TaggedSection } from '../../../../lib/audit/mockProtocolRisks';
 import { type MockWorkspaceEntry } from '../../../../lib/audit/mockWorkspaceEntries';
+import HeatIndicator from '../../../heatmap/HeatIndicator';
+import { scoreWorkspaceEntry } from '../../../../lib/heatmap';
 import type {
   ProvisionalClassification,
   ProvisionalImpact,
@@ -544,6 +546,11 @@ function EntryRow({
               isLight={isLight}
             />
             {entry.risk_context_outdated && <RiskOutdatedChip isLight={isLight} />}
+            <HeatIndicator
+              score={scoreWorkspaceEntry(entry)}
+              variant="chip"
+              hint="across similar audits"
+            />
           </div>
           {protocolRisk && (
             <div className={`flex items-center gap-1.5 mt-1 text-[11px] ${subColor}`}>

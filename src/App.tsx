@@ -14,6 +14,7 @@ import { ModeProvider } from './context/ModeContext';
 import { ProtocolProvider } from './context/ProtocolContext';
 import { AuditProvider } from './context/AuditContext';
 import { AuditDataProvider } from './context/AuditDataContext';
+import { HeatmapProvider } from './context/HeatmapContext';
 
 export type AppView = 'landing' | 'dashboard' | 'login' | 'forgot-password';
 
@@ -138,7 +139,9 @@ export default function App() {
           <ProtocolProvider>
             <AuditProvider>
               <AuditDataProvider>
-                <AppContent />
+                <HeatmapProvider>
+                  <AppContent />
+                </HeatmapProvider>
               </AuditDataProvider>
             </AuditProvider>
           </ProtocolProvider>
