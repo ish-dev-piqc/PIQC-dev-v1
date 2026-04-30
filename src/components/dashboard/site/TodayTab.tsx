@@ -920,75 +920,133 @@ function WeekView({ isLight, isHome, anchorDate, today, visitsByDate, onVisitCli
   const todayTint = isLight ? 'bg-[#4a6fa5]/[0.04]' : 'bg-[#6e8fb5]/[0.04]';
   const numberColor = isLight ? 'text-[#1a1f28]' : 'text-white';
   const todayNumber = isLight ? 'bg-[#4a6fa5] text-white' : 'bg-[#6e8fb5] text-[#1a1f28]';
+  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* Weekday headers */}
-      <div className={`grid grid-cols-7 border-b ${dayBorder} ${headerBg} flex-shrink-0`}>
-        {days.map((d) => (
-          <div key={d.toISOString()} className={`py-2 text-center border-r last:border-r-0 ${dayBorder}`}>
-            <div className={`text-[10px] uppercase tracking-wider font-semibold ${headerText}`}>
-              {d.toLocaleDateString('en-US', { weekday: 'short' })}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Day columns */}
-      <div className="grid grid-cols-7 flex-1 min-h-0">
+      {/* Mobile (below sm:): vertical stack of day cards */}
+      <div className="sm:hidden flex-1 overflow-y-auto p-3 space-y-2">
         {days.map((d) => {
           const key = formatYmd(d);
           const dayVisits = visitsByDate.get(key) ?? [];
           const isToday = isSameDay(d, today);
           const past = isPast(d, today);
-
           return (
             <div
               key={key}
-              className={`border-r last:border-r-0 ${dayBorder} flex flex-col min-h-0 ${
-                isToday ? todayTint : ''
-              } ${past ? 'opacity-80' : ''}`}
+              className={`${cardBg} border rounded-lg ${isToday ? todayTint : ''} ${past ? 'opacity-80' : ''}`}
             >
               <button
                 type="button"
                 onClick={() => onDayClick(d)}
-                className="px-2 pt-2 pb-1 flex items-center justify-between w-full hover:opacity-80 transition-opacity"
+                className={`w-full flex items-center gap-3 px-3 py-2 hover:opacity-80 transition-opacity ${dayVisits.length > 0 ? `border-b ${dayBorder}` : ''}`}
               >
                 <span
-                  className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-semibold ${
+                  className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold flex-shrink-0 ${
                     isToday ? todayNumber : numberColor
                   }`}
                 >
                   {d.getDate()}
                 </span>
-                {dayVisits.length > 0 && (
-                  <span className={`text-[10px] font-medium ${headerText}`}>{dayVisits.length}</span>
+                <span className={`text-xs font-medium ${headerText} flex-1 text-left`}>
+                  {d.toLocaleDateString('en-US', { weekday: 'long' })}
+                </span>
+                {dayVisits.length > 0 ? (
+                  <span className={`text-[11px] font-medium ${headerText}`}>
+                    {dayVisits.length} {dayVisits.length === 1 ? 'visit' : 'visits'}
+                  </span>
+                ) : (
+                  <span className={`text-[11px] italic ${headerText}`}>Nothing scheduled</span>
                 )}
               </button>
-              <div className="px-1.5 pb-2 space-y-1 overflow-hidden">
-                {dayVisits.slice(0, 3).map((v) => (
-                  <WeekVisitRow
-                    key={v.id}
-                    visit={v}
-                    isLight={isLight}
-                    isHome={isHome}
-                    past={past}
-                    onClick={() => onVisitClick(v)}
-                  />
-                ))}
-                {dayVisits.length > 3 && (
-                  <button
-                    type="button"
-                    onClick={() => onDayClick(d)}
-                    className={`w-full text-left text-[10px] font-medium px-1.5 py-1 rounded hover:underline ${headerText}`}
-                  >
-                    +{dayVisits.length - 3} more
-                  </button>
-                )}
-              </div>
+              {dayVisits.length > 0 && (
+                <div className="px-2 py-2 space-y-1">
+                  {dayVisits.map((v) => (
+                    <WeekVisitRow
+                      key={v.id}
+                      visit={v}
+                      isLight={isLight}
+                      isHome={isHome}
+                      past={past}
+                      onClick={() => onVisitClick(v)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
+      </div>
+
+      {/* sm: and above — original 7-column grid */}
+      <div className="hidden sm:flex sm:flex-col flex-1 min-h-0">
+        {/* Weekday headers */}
+        <div className={`grid grid-cols-7 border-b ${dayBorder} ${headerBg} flex-shrink-0`}>
+          {days.map((d) => (
+            <div key={d.toISOString()} className={`py-2 text-center border-r last:border-r-0 ${dayBorder}`}>
+              <div className={`text-[10px] uppercase tracking-wider font-semibold ${headerText}`}>
+                {d.toLocaleDateString('en-US', { weekday: 'short' })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Day columns */}
+        <div className="grid grid-cols-7 flex-1 min-h-0">
+          {days.map((d) => {
+            const key = formatYmd(d);
+            const dayVisits = visitsByDate.get(key) ?? [];
+            const isToday = isSameDay(d, today);
+            const past = isPast(d, today);
+
+            return (
+              <div
+                key={key}
+                className={`border-r last:border-r-0 ${dayBorder} flex flex-col min-h-0 ${
+                  isToday ? todayTint : ''
+                } ${past ? 'opacity-80' : ''}`}
+              >
+                <button
+                  type="button"
+                  onClick={() => onDayClick(d)}
+                  className="px-2 pt-2 pb-1 flex items-center justify-between w-full hover:opacity-80 transition-opacity"
+                >
+                  <span
+                    className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-semibold ${
+                      isToday ? todayNumber : numberColor
+                    }`}
+                  >
+                    {d.getDate()}
+                  </span>
+                  {dayVisits.length > 0 && (
+                    <span className={`text-[10px] font-medium ${headerText}`}>{dayVisits.length}</span>
+                  )}
+                </button>
+                <div className="px-1.5 pb-2 space-y-1 overflow-hidden">
+                  {dayVisits.slice(0, 3).map((v) => (
+                    <WeekVisitRow
+                      key={v.id}
+                      visit={v}
+                      isLight={isLight}
+                      isHome={isHome}
+                      past={past}
+                      onClick={() => onVisitClick(v)}
+                    />
+                  ))}
+                  {dayVisits.length > 3 && (
+                    <button
+                      type="button"
+                      onClick={() => onDayClick(d)}
+                      className={`w-full text-left text-[10px] font-medium px-1.5 py-1 rounded hover:underline ${headerText}`}
+                    >
+                      +{dayVisits.length - 3} more
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -1197,9 +1255,9 @@ function DayDetailDrawer({ isLight, isHome, day, today, visits, onClose, onVisit
       onClick={(e) => {
         if (e.target === overlayClick.current) onClose();
       }}
-      className="fixed inset-0 z-40 bg-black/30 flex justify-end"
+      className="fixed inset-0 z-40 bg-black/30 flex justify-end animate-fade-in"
     >
-      <div className={`w-full max-w-md h-full ${bg} border-l ${border} shadow-xl flex flex-col`}>
+      <div className={`w-full max-w-md h-full ${bg} border-l ${border} shadow-xl flex flex-col animate-slide-in-right`}>
         <div className={`flex items-center justify-between px-5 py-4 border-b ${border}`}>
           <div>
             <div className={`text-[11px] uppercase tracking-wider font-semibold ${subColor}`}>
@@ -1304,9 +1362,9 @@ function VisitDetailDrawer({ isLight, visit, protocols, today, onClose }: VisitD
       onClick={(e) => {
         if (e.target === overlay.current) onClose();
       }}
-      className="fixed inset-0 z-50 bg-black/30 flex justify-end"
+      className="fixed inset-0 z-50 bg-black/30 flex justify-end animate-fade-in"
     >
-      <div className={`w-full max-w-md h-full ${bg} border-l ${border} shadow-xl flex flex-col`}>
+      <div className={`w-full max-w-md h-full ${bg} border-l ${border} shadow-xl flex flex-col animate-slide-in-right`}>
         <div className={`flex items-center justify-between px-5 py-4 border-b ${border}`}>
           <div className="flex items-center gap-2">
             {statusIcon(visit.status, 14)}

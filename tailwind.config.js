@@ -39,6 +39,20 @@ export default {
         '2xl': '1.25rem',
         '3xl': '1.75rem',
       },
+      keyframes: {
+        'slide-in-right': {
+          '0%': { transform: 'translateX(100%)' },
+          '100%': { transform: 'translateX(0)' },
+        },
+        'fade-in': {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+      },
+      animation: {
+        'slide-in-right': 'slide-in-right 200ms cubic-bezier(0.32, 0.72, 0, 1)',
+        'fade-in': 'fade-in 150ms ease-out',
+      },
     },
   },
   plugins: [],
