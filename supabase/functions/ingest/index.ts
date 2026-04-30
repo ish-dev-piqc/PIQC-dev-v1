@@ -15,6 +15,82 @@ const MAX_BODY_BYTES = 50 * 1024 * 1024; // 50 MB (PDF payloads can be large)
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 5; // ingest is expensive — strict limit
 const EMBED_MAX_RETRIES = 3;
+const REDUCTO_MAX_RETRIES = 3;
+
+// JSON Schema for structured clinical protocol extraction via Reducto Extract.
+// Extract runs after Parse via jobid:// so it sees the same enhanced parse output
+// the chunks were derived from (single parse cost, consistent ground truth).
+const CLINICAL_EXTRACT_SCHEMA = {
+  type: "object",
+  properties: {
+    protocol_title: {
+      type: "string",
+      description: "Full title of the clinical study protocol, typically found on the cover page",
+    },
+    protocol_number: {
+      type: "string",
+      description: "Protocol identifier or reference number (e.g. ABC-123), found on cover page or running header",
+    },
+    protocol_version: {
+      type: "string",
+      description: "Version number of this protocol document",
+    },
+    sponsor_name: {
+      type: "string",
+      description: "Name of the study sponsor or sponsoring organization",
+    },
+    compound_name: {
+      type: "string",
+      description: "Name of the investigational compound, drug, or device",
+    },
+    therapeutic_area: {
+      type: "string",
+      description: "Therapeutic area or disease indication being studied",
+    },
+    study_phase: {
+      type: "string",
+      enum: ["Phase I", "Phase II", "Phase III", "Phase IV", "Not applicable", "Unknown"],
+      description: "Clinical development phase of the study",
+    },
+    study_design: {
+      type: "string",
+      description: "Study design description (e.g. randomized, double-blind, placebo-controlled, parallel-group)",
+    },
+    primary_endpoints: {
+      type: "array",
+      items: { type: "string" },
+      description: "List of primary efficacy or safety endpoints as stated in the protocol",
+    },
+    secondary_endpoints: {
+      type: "array",
+      items: { type: "string" },
+      description: "List of secondary endpoints",
+    },
+    key_inclusion_criteria: {
+      type: "array",
+      items: { type: "string" },
+      description: "Key patient inclusion criteria",
+    },
+    key_exclusion_criteria: {
+      type: "array",
+      items: { type: "string" },
+      description: "Key patient exclusion criteria",
+    },
+    dosing_regimen: {
+      type: "string",
+      description: "Dosing regimen including dose levels, route of administration, frequency, and duration",
+    },
+    is_amendment: {
+      type: "boolean",
+      description: "Whether this document is a protocol amendment rather than the original protocol",
+    },
+    amendment_summary: {
+      type: ["string", "null"],
+      description: "Brief summary of changes made in this amendment. Null if not an amendment.",
+    },
+  },
+  required: ["protocol_title"],
+};
 
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 
@@ -39,6 +115,27 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Signals that an error should not be retried (e.g. 4xx auth/client errors).
+class NonRetryableError extends Error {}
+
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  label: string,
+  maxRetries = REDUCTO_MAX_RETRIES,
+): Promise<T> {
+  let lastErr: Error | null = null;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    if (attempt > 0) await sleep(1_000 * Math.pow(2, attempt - 1)); // 1s, 2s
+    try {
+      return await fn();
+    } catch (err) {
+      if (err instanceof NonRetryableError) throw err;
+      lastErr = err instanceof Error ? err : new Error(String(err));
+    }
+  }
+  throw lastErr ?? new Error(`${label} failed after ${maxRetries} retries`);
+}
+
 interface ReductoBlock {
   type: string;
   bbox?: { page?: number };
@@ -57,6 +154,11 @@ interface ChunkData {
   page_end: number | null;
   section_heading: string | null;
   block_types: string[] | null;
+}
+
+interface ParseResult {
+  jobId: string | null;
+  chunks: ChunkData[];
 }
 
 function splitIntoChunks(text: string): ChunkData[] {
@@ -112,101 +214,175 @@ async function embedText(text: string, apiKey: string): Promise<number[]> {
 }
 
 async function uploadToReducto(pdfBytes: Uint8Array, reductoKey: string): Promise<string> {
-  const formData = new FormData();
-  const blob = new Blob([pdfBytes], { type: "application/pdf" });
-  formData.append("file", blob, "document.pdf");
+  return withRetry(async () => {
+    const formData = new FormData();
+    const blob = new Blob([pdfBytes], { type: "application/pdf" });
+    formData.append("file", blob, "document.pdf");
 
-  const res = await fetch(`${REDUCTO_BASE_URL}/upload`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${reductoKey}`,
-    },
-    body: formData,
-  });
+    const res = await fetch(`${REDUCTO_BASE_URL}/upload`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${reductoKey}` },
+      body: formData,
+    });
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Reducto upload error: ${err}`);
-  }
+    if (!res.ok) {
+      const err = await res.text();
+      if (res.status < 500) throw new NonRetryableError(`Reducto upload error: ${err}`);
+      throw new Error(`Reducto upload error: ${err}`);
+    }
 
-  const data = await res.json();
-  return data.file_id as string;
+    const data = await res.json();
+    return data.file_id as string;
+  }, "uploadToReducto");
 }
 
-async function parsePdfWithReducto(fileId: string, reductoKey: string): Promise<ChunkData[]> {
-  const res = await fetch(`${REDUCTO_BASE_URL}/parse`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${reductoKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      input: fileId,
-      retrieval: {
-        chunking: {
-          chunk_mode: "variable",
-          chunk_overlap: 50,
+async function parsePdfWithReducto(fileId: string, reductoKey: string): Promise<ParseResult> {
+  return withRetry(async () => {
+    const res = await fetch(`${REDUCTO_BASE_URL}/parse`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${reductoKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        input: fileId,
+        retrieval: {
+          chunking: {
+            chunk_mode: "variable",
+            chunk_overlap: 50,
+          },
+          embedding_optimized: true,
+          // Reducto filters page decoration at source — replaces our manual filtering
+          filter_blocks: ["Header", "Footer", "Page Number"],
         },
-        embedding_optimized: true,
-      },
-      settings: {
-        ocr_system: "standard",
-        extraction_mode: "hybrid",
-      },
-    }),
-  });
+        settings: {
+          ocr_system: "standard",
+          extraction_mode: "hybrid",
+        },
+        formatting: {
+          table_output_format: "dynamic", // md for simple tables, html for complex (Reducto chooses per-table)
+          add_page_markers: true,         // inline page markers improve citation precision
+          merge_tables: true,             // joins multi-page tables (Schedule of Assessments, AE listings)
+          include: ["change_tracking"],   // amendments: inline <change><s>old</s><u>new</u></change> markup
+        },
+        enhance: {
+          agentic: [
+            { scope: "table" },           // VLM pass for merged cells, faint borders, rotated text
+            { scope: "figure" },          // enhanced figure classification + summarization
+          ],
+          intelligent_ordering: true,     // VLM-based reading order for multi-column layouts
+        },
+      }),
+    });
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Reducto parse error: ${err}`);
-  }
-
-  const data = await res.json();
-
-  let rawChunks: ReductoChunk[] = [];
-
-  if (data.result && Array.isArray(data.result.chunks)) {
-    rawChunks = data.result.chunks;
-  } else if (data.url) {
-    const urlRes = await fetch(data.url);
-    const urlData = await urlRes.json();
-    if (urlData.result && Array.isArray(urlData.result.chunks)) {
-      rawChunks = urlData.result.chunks;
+    if (!res.ok) {
+      const err = await res.text();
+      if (res.status < 500) throw new NonRetryableError(`Reducto parse error: ${err}`);
+      throw new Error(`Reducto parse error: ${err}`);
     }
-  }
 
-  const SECTION_BLOCK_TYPES = new Set(["Section Header", "Title"]);
-  let currentSection: string | null = null;
+    const data = await res.json();
 
-  return rawChunks
-    .map((c: ReductoChunk): ChunkData | null => {
-      const content = (c.embed || c.content || "").trim();
-      if (!content) return null;
+    let rawChunks: ReductoChunk[] = [];
+    let resultJobId: string | null = (data.job_id as string | undefined) ?? null;
 
-      const blocks: ReductoBlock[] = Array.isArray(c.blocks) ? c.blocks : [];
-
-      // Update section heading when a section-marker block appears in this chunk
-      for (const b of blocks) {
-        if (SECTION_BLOCK_TYPES.has(b.type) && b.content?.trim()) {
-          currentSection = b.content.trim();
+    if (data.result && Array.isArray(data.result.chunks)) {
+      rawChunks = data.result.chunks;
+    } else if (data.url) {
+      try {
+        const urlRes = await fetch(data.url);
+        if (!urlRes.ok) throw new Error(`Reducto result fetch error: ${urlRes.status}`);
+        const urlData = await urlRes.json();
+        if (urlData.result && Array.isArray(urlData.result.chunks)) {
+          rawChunks = urlData.result.chunks;
         }
+        if (!resultJobId && typeof urlData.job_id === "string") {
+          resultJobId = urlData.job_id;
+        }
+      } catch (urlErr) {
+        throw new Error(
+          `Failed to fetch Reducto async result: ${urlErr instanceof Error ? urlErr.message : String(urlErr)}`,
+        );
       }
+    }
 
-      const pages = blocks
-        .map((b) => b.bbox?.page)
-        .filter((p): p is number => typeof p === "number");
+    const SECTION_BLOCK_TYPES = new Set(["Section Header", "Title"]);
+    let currentSection: string | null = null;
 
-      const blockTypeSet = [...new Set(blocks.map((b) => b.type))].sort();
+    const chunks = rawChunks
+      .map((c: ReductoChunk): ChunkData | null => {
+        const content = (c.embed || c.content || "").trim();
+        if (!content) return null;
 
-      return {
-        content,
-        page_start: pages.length > 0 ? Math.min(...pages) : null,
-        page_end: pages.length > 0 ? Math.max(...pages) : null,
-        section_heading: currentSection,
-        block_types: blockTypeSet.length > 0 ? blockTypeSet : null,
-      };
-    })
-    .filter((c): c is ChunkData => c !== null);
+        const blocks: ReductoBlock[] = Array.isArray(c.blocks) ? c.blocks : [];
+
+        // Update section heading when a section-marker block appears in this chunk
+        for (const b of blocks) {
+          if (SECTION_BLOCK_TYPES.has(b.type) && b.content?.trim()) {
+            currentSection = b.content.trim();
+          }
+        }
+
+        const pages = blocks
+          .map((b) => b.bbox?.page)
+          .filter((p): p is number => typeof p === "number");
+
+        const blockTypeSet = [...new Set(blocks.map((b) => b.type))].sort();
+
+        return {
+          content,
+          page_start: pages.length > 0 ? Math.min(...pages) : null,
+          page_end: pages.length > 0 ? Math.max(...pages) : null,
+          section_heading: currentSection,
+          block_types: blockTypeSet.length > 0 ? blockTypeSet : null,
+        };
+      })
+      .filter((c): c is ChunkData => c !== null);
+
+    return { jobId: resultJobId, chunks };
+  }, "parsePdfWithReducto");
+}
+
+async function extractClinicalFields(
+  jobId: string,
+  reductoKey: string,
+): Promise<Record<string, unknown> | null> {
+  return withRetry(async () => {
+    const res = await fetch(`${REDUCTO_BASE_URL}/extract`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${reductoKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        // Reuse the parse result instead of re-parsing — half the Reducto cost,
+        // and Extract sees the same enhanced output the chunks came from.
+        input: `jobid://${jobId}`,
+        instructions: {
+          schema: CLINICAL_EXTRACT_SCHEMA,
+          system_prompt:
+            "You are extracting structured data from a clinical trial protocol document. " +
+            "Extract only information explicitly stated in the document. " +
+            "Use null for any field not found. Do not infer, calculate, or assume values.",
+        },
+        settings: {
+          citations: {
+            enabled: true,
+            numerical_confidence: false, // categorical high/low is enough; saves response size
+          },
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      if (res.status < 500) throw new NonRetryableError(`Reducto extract error: ${err}`);
+      throw new Error(`Reducto extract error: ${err}`);
+    }
+
+    const data = await res.json();
+    return (data.result ?? data) as Record<string, unknown>;
+  }, "extractClinicalFields");
 }
 
 Deno.serve(async (req: Request) => {
@@ -250,6 +426,7 @@ Deno.serve(async (req: Request) => {
     const { title, source, content, pdf_base64 } = body;
 
     let chunks: ChunkData[] = [];
+    let extractedFields: Record<string, unknown> | null = null;
 
     if (pdf_base64) {
       const reductoKey = Deno.env.get("REDUCTO_API_KEY");
@@ -262,10 +439,17 @@ Deno.serve(async (req: Request) => {
       }
 
       const fileId = await uploadToReducto(pdfBytes, reductoKey);
-      chunks = await parsePdfWithReducto(fileId, reductoKey);
+      const parseResult = await parsePdfWithReducto(fileId, reductoKey);
+      chunks = parseResult.chunks;
 
       if (chunks.length === 0) {
         throw new Error("Reducto returned no text chunks from the PDF");
+      }
+
+      if (parseResult.jobId) {
+        extractedFields = await extractClinicalFields(parseResult.jobId, reductoKey).catch(
+          () => null,
+        );
       }
     } else if (content && typeof content === "string") {
       chunks = splitIntoChunks(content);
@@ -313,17 +497,21 @@ Deno.serve(async (req: Request) => {
       inserted += batch.length;
     }
 
-    // Mark document ready
-    await supabase
+    const { error: updateError } = await supabase
       .from("documents")
-      .update({ status: "ready" })
+      .update({
+        status: "ready",
+        ...(extractedFields ? { extracted_fields: extractedFields } : {}),
+      })
       .eq("id", docId);
+    if (updateError) throw updateError;
 
     return new Response(
       JSON.stringify({
         success: true,
         document_id: docId,
         chunks_created: inserted,
+        extracted_fields: extractedFields,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

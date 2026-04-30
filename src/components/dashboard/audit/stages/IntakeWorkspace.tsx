@@ -11,6 +11,12 @@ import {
 import { type TaggedSection } from '../../../../lib/audit/mockProtocolRisks';
 import type { EndpointTier, ImpactSurface } from '../../../../types/audit';
 import RiskTaggingForm, { type RiskTagFormValues } from './intake/RiskTaggingForm';
+import {
+  fetchProtocolRisksForAudit,
+  createProtocolRisk,
+  updateProtocolRisk,
+  deleteProtocolRisk,
+} from '../../../../lib/audit/intakeApi';
 
 // =============================================================================
 // IntakeWorkspace — INTAKE stage center pane
@@ -43,12 +49,26 @@ export default function IntakeWorkspace() {
 
   const [mode, setMode] = useState<FormMode>('list');
   const [editTarget, setEditTarget] = useState<TaggedSection | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  // Reset form state when the active audit changes.
+  // Load protocol risks from Supabase when the active audit changes
   useEffect(() => {
+    if (!activeAudit) return;
+
+    const loadRisks = async () => {
+      setLoading(true);
+      const risks = await fetchProtocolRisksForAudit(activeAudit.id);
+      setSectionsByAudit((prev) => ({
+        ...prev,
+        [activeAudit.id]: risks,
+      }));
+      setLoading(false);
+    };
+
+    loadRisks();
     setMode('list');
     setEditTarget(null);
-  }, [activeAudit?.id]);
+  }, [activeAudit?.id, setSectionsByAudit]);
 
   if (!activeAudit) {
     // Shell should have rendered the gate, but guard for defensive rendering.
@@ -60,9 +80,9 @@ export default function IntakeWorkspace() {
   // ---------------------------------------------------------------------------
   // Handlers
   // ---------------------------------------------------------------------------
-  const handleAdd = (values: RiskTagFormValues) => {
-    const newSection: TaggedSection = {
-      id: `pr-${activeAudit.id}-${Date.now()}`,
+  const handleAdd = async (values: RiskTagFormValues) => {
+    setLoading(true);
+    const created = await createProtocolRisk(activeAudit.protocol_version_id || '', {
       section_identifier: values.section_identifier,
       section_title: values.section_title,
       endpoint_tier: values.endpoint_tier,
@@ -72,35 +92,39 @@ export default function IntakeWorkspace() {
       operational_domain_tag: values.operational_domain_tag,
       tagging_mode: 'MANUAL',
       version_change_type: 'ADDED',
-    };
-    setSectionsByAudit((prev) => ({
-      ...prev,
-      [activeAudit.id]: [...(prev[activeAudit.id] ?? []), newSection],
-    }));
+    });
+    if (created) {
+      setSectionsByAudit((prev) => ({
+        ...prev,
+        [activeAudit.id]: [...(prev[activeAudit.id] ?? []), created],
+      }));
+    }
     setMode('list');
+    setLoading(false);
   };
 
-  const handleEdit = (values: RiskTagFormValues) => {
+  const handleEdit = async (values: RiskTagFormValues) => {
     if (!editTarget) return;
-    setSectionsByAudit((prev) => ({
-      ...prev,
-      [activeAudit.id]: (prev[activeAudit.id] ?? []).map((s) =>
-        s.id === editTarget.id
-          ? {
-              ...s,
-              endpoint_tier: values.endpoint_tier,
-              impact_surface: values.impact_surface,
-              time_sensitivity: values.time_sensitivity,
-              vendor_dependency_flags: values.vendor_dependency_flags,
-              operational_domain_tag: values.operational_domain_tag,
-              version_change_type:
-                s.version_change_type === 'ADDED' ? 'ADDED' : 'MODIFIED',
-            }
-          : s,
-      ),
-    }));
+    setLoading(true);
+    const updated = await updateProtocolRisk(editTarget.id, {
+      endpoint_tier: values.endpoint_tier,
+      impact_surface: values.impact_surface,
+      time_sensitivity: values.time_sensitivity,
+      vendor_dependency_flags: values.vendor_dependency_flags,
+      operational_domain_tag: values.operational_domain_tag,
+      version_change_type: editTarget.version_change_type === 'ADDED' ? 'ADDED' : 'MODIFIED',
+    });
+    if (updated) {
+      setSectionsByAudit((prev) => ({
+        ...prev,
+        [activeAudit.id]: (prev[activeAudit.id] ?? []).map((s) =>
+          s.id === editTarget.id ? updated : s,
+        ),
+      }));
+    }
     setMode('list');
     setEditTarget(null);
+    setLoading(false);
   };
 
   const openAdd = () => {
@@ -216,6 +240,19 @@ export default function IntakeWorkspace() {
                 key={s.id}
                 section={s}
                 onEdit={() => openEdit(s)}
+                onDelete={async () => {
+                  setLoading(true);
+                  const success = await deleteProtocolRisk(s.id);
+                  if (success) {
+                    setSectionsByAudit((prev) => ({
+                      ...prev,
+                      [activeAudit.id]: (prev[activeAudit.id] ?? []).filter(
+                        (r) => r.id !== s.id,
+                      ),
+                    }));
+                  }
+                  setLoading(false);
+                }}
                 isLight={isLight}
                 cardBg={cardBg}
                 headingColor={headingColor}
@@ -237,6 +274,7 @@ export default function IntakeWorkspace() {
 interface SectionRowProps {
   section: TaggedSection;
   onEdit: () => void;
+  onDelete: () => Promise<void>;
   isLight: boolean;
   cardBg: string;
   headingColor: string;
@@ -247,12 +285,14 @@ interface SectionRowProps {
 function SectionRow({
   section,
   onEdit,
+  onDelete,
   isLight,
   cardBg,
   headingColor,
   subColor,
   mutedColor,
 }: SectionRowProps) {
+  const [deleting, setDeleting] = useState(false);
   const buttonSecondary = isLight
     ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
     : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]';
@@ -308,14 +348,29 @@ function SectionRow({
             )}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onEdit}
-          className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
-        >
-          <Pencil size={12} />
-          Edit
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onEdit}
+            className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+          >
+            <Pencil size={12} />
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              setDeleting(true);
+              await onDelete();
+              setDeleting(false);
+            }}
+            disabled={deleting}
+            className={`text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors opacity-50 hover:opacity-75 disabled:opacity-50 cursor-pointer ${buttonSecondary}`}
+            title="Delete this risk"
+          >
+            {deleting ? 'Deleting…' : 'Delete'}
+          </button>
+        </div>
       </div>
     </div>
   );

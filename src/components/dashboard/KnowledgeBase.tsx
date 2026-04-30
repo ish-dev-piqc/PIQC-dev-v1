@@ -332,9 +332,16 @@ function DocumentList({ refreshKey, isLight }: { refreshKey: number; isLight: bo
 
   const handleDelete = useCallback(async (id: string) => {
     setDeleting(id);
-    await supabase.from('documents').delete().eq('id', id);
-    setDocs(prev => prev.filter(d => d.id !== id));
-    setDeleting(null);
+    try {
+      const { error } = await supabase.from('documents').delete().eq('id', id);
+      if (error) throw error;
+      setDocs(prev => prev.filter(d => d.id !== id));
+    } catch (err) {
+      console.error('Delete failed:', err);
+      alert('Failed to delete document');
+    } finally {
+      setDeleting(null);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load, refreshKey]);

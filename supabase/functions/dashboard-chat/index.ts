@@ -85,6 +85,16 @@ Always attempt a helpful answer even without document context.
 RULE 4 — Off-topic questions (clearly outside clinical, regulatory, or healthcare domain):
 Politely decline and explain you are focused on clinical protocol questions.
 
+DOCUMENT FACTS — STRUCTURED FIELDS:
+The system message may include a block labelled "DOCUMENT FACTS". This contains pre-extracted structured fields (protocol title, number, sponsor, phase, endpoints, eligibility criteria, dosing regimen, amendment status, etc.) pulled directly from the document with verified source citations. Treat DOCUMENT FACTS as authoritative for the fields it covers.
+
+When answering:
+- For questions about fields present in DOCUMENT FACTS, prefer those values over the CONTEXT chunks. They are cleaner, complete, and citation-verified.
+- When a fact has a "[page N]" reference, include that page in your citation (e.g. "Per the protocol, Phase II [page 1]").
+- For reasoning, synthesis, free-form questions, or details not covered by DOCUMENT FACTS, use CONTEXT FROM PROTOCOL DOCUMENTS.
+- If DOCUMENT FACTS and CONTEXT conflict on a structured value, prefer DOCUMENT FACTS but note the discrepancy.
+- The presence of a DOCUMENT FACTS block also satisfies the "context provided" condition — Rule 3 is FORBIDDEN whenever DOCUMENT FACTS is present.
+
 CRITICAL CONSISTENCY RULE — DO NOT VIOLATE:
 If the user-provided system message contains a block labelled "CONTEXT FROM PROTOCOL DOCUMENTS" you are REQUIRED to treat it as real retrieved protocol text. In that case Rule 3 is FORBIDDEN. You must NEVER output "No matching content was found in your documents for this question." when a CONTEXT FROM PROTOCOL DOCUMENTS block is present. Only Rule 1 or Rule 2 apply. If content looks thin, use Rule 2, never Rule 3.
 
@@ -201,45 +211,6 @@ function isSummaryQuery(text: string): boolean {
   return SUMMARY_PATTERNS.some((p) => p.test(text));
 }
 
-// Strip recurring PDF header/footer noise Reducto injects into every chunk.
-const NOISE_PATTERNS: RegExp[] = [
-  // Markdown heading + CONFIDENTIAL anywhere on the line
-  /#+\s*CONFIDENTIAL[^\n]*/gi,
-  // Standalone CONFIDENTIAL line
-  /^CONFIDENTIAL\s*$/gim,
-  // "CONFIDENTIAL CLINICAL STUDY PROTOCOL..." boilerplate
-  /CONFIDENTIAL\s+CLINICAL\s+STUDY\s+PROTOCOL[^\n]*/gi,
-  // Page N of M
-  /Page\s+\d+\s+of\s+\d+[^\n]*/gi,
-  // Version X.X lines
-  /Version\s+\d+\.\d+[^\n]*/gi,
-  // Protocol Number: ... header block
-  /Protocol\s+Number[:\s]+[A-Z0-9()_\-\s]+(?:\n|$)/gi,
-  // "AMENDMENT No. 2 (cont.)" lines
-  /AMENDMENT\s+No\.?\s*\d+[^\n]*/gi,
-  // Study identifier lines like "(POLAR-A) 27 Sep 2018"
-  /\([A-Z]+-[A-Z]+\)\s*\d{1,2}\s+\w+\s+\d{4}[^\n]*/gi,
-  // Standalone "CLINICAL STUDY PROTOCOL" header line
-  /^CLINICAL\s+STUDY\s+PROTOCOL\s*$/gim,
-  // Amendment section-change markers (Reducto's markdown headers for these)
-  /##\s*(?:Protocol text|This will be replaced by|The following amendment applies to)[^\n]*/gi,
-  // Plain text amendment markers
-  /^(?:Protocol text|This will be replaced by|The following amendment applies to)\s*:?\s*$/gim,
-  // "(cont.)" continuation labels
-  /\(cont\.\)/gi,
-  // Standalone "[…]" ellipsis placeholders
-  /^\s*\[[……]\]\s*$/gim,
-  /^\s*\[\.{3}\]\s*$/gim,
-];
-
-function cleanContent(text: string): string {
-  let cleaned = text;
-  for (const p of NOISE_PATTERNS) {
-    cleaned = cleaned.replace(p, "");
-  }
-  // Collapse runs of blank lines left behind
-  return cleaned.replace(/\n{3,}/g, "\n\n").trim();
-}
 
 interface ChatMessage {
   role: "user" | "assistant" | "system";
@@ -416,6 +387,101 @@ async function fetchDocumentTitles(
   if (!res.ok) return new Map();
   const docs = (await res.json()) as Array<{ id: string; title: string }>;
   return new Map(docs.map((d) => [d.id, d.title ?? ""]));
+}
+
+// Reducto Extract returns scalars as { value, citations? } and arrays as either
+// plain values or [{ value, citations? }, ...]. Unwrap defensively for either shape.
+function unwrapValue(v: unknown): { value: unknown; page: number | null } {
+  if (v && typeof v === "object" && "value" in (v as Record<string, unknown>)) {
+    const obj = v as { value: unknown; citations?: Array<{ bbox?: { page?: number } }> };
+    const page = obj.citations?.[0]?.bbox?.page ?? null;
+    return { value: obj.value, page };
+  }
+  return { value: v, page: null };
+}
+
+const FACT_LABELS: Array<[string, string]> = [
+  ["protocol_title", "Protocol Title"],
+  ["protocol_number", "Protocol Number"],
+  ["protocol_version", "Protocol Version"],
+  ["sponsor_name", "Sponsor"],
+  ["compound_name", "Investigational Product"],
+  ["therapeutic_area", "Therapeutic Area"],
+  ["study_phase", "Phase"],
+  ["study_design", "Study Design"],
+  ["primary_endpoints", "Primary Endpoints"],
+  ["secondary_endpoints", "Secondary Endpoints"],
+  ["key_inclusion_criteria", "Key Inclusion Criteria"],
+  ["key_exclusion_criteria", "Key Exclusion Criteria"],
+  ["dosing_regimen", "Dosing Regimen"],
+  ["is_amendment", "Is Amendment"],
+  ["amendment_summary", "Amendment Summary"],
+];
+
+function formatFact(label: string, raw: unknown): string | null {
+  if (raw === null || raw === undefined) return null;
+
+  if (Array.isArray(raw)) {
+    const lines = raw
+      .map((item) => unwrapValue(item))
+      .filter((u) => u.value !== null && u.value !== undefined && String(u.value).trim() !== "")
+      .map((u) => {
+        const pageRef = u.page ? ` [page ${u.page}]` : "";
+        return `    • ${String(u.value).trim()}${pageRef}`;
+      });
+    if (lines.length === 0) return null;
+    return `- ${label}:\n${lines.join("\n")}`;
+  }
+
+  const { value, page } = unwrapValue(raw);
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  if (text === "") return null;
+  const pageRef = page ? ` [page ${page}]` : "";
+  return `- ${label}: ${text}${pageRef}`;
+}
+
+async function buildFactsBlock(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  docIds: string[],
+  titleMap?: Map<string, string>,
+): Promise<string> {
+  if (docIds.length === 0) return "";
+
+  const idList = docIds.map((id) => `"${id}"`).join(",");
+  const url = `${supabaseUrl}/rest/v1/documents?id=in.(${idList})&select=id,title,extracted_fields&status=eq.ready&extracted_fields=not.is.null`;
+  const res = await fetch(url, {
+    headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
+  });
+  if (!res.ok) return "";
+
+  const rows = (await res.json()) as Array<{
+    id: string;
+    title: string;
+    extracted_fields: Record<string, unknown> | null;
+  }>;
+
+  const sections: string[] = [];
+  for (const row of rows) {
+    if (!row.extracted_fields) continue;
+    const lines: string[] = [];
+    for (const [key, label] of FACT_LABELS) {
+      const line = formatFact(label, row.extracted_fields[key]);
+      if (line) lines.push(line);
+    }
+    if (lines.length === 0) continue;
+    const heading = titleMap?.get(row.id) ?? row.title ?? "Document";
+    sections.push(`Document: ${heading}\n${lines.join("\n")}`);
+  }
+
+  if (sections.length === 0) return "";
+
+  return (
+    `DOCUMENT FACTS — high-confidence structured fields extracted directly from the document(s):\n\n` +
+    sections.join("\n\n") +
+    `\n\nEND OF DOCUMENT FACTS\n\n`
+  );
 }
 
 async function fetchStructuralChunks(
@@ -613,6 +679,7 @@ Deno.serve(async (req: Request) => {
 
     const summaryMode = isSummaryQuery(message);
     let contextBlock = "";
+    let factsBlock = "";
     let summaryDocTitle = "";
     let ragStatus: RagStatus = "not_found";
     let ragErrorMessage = "";
@@ -639,6 +706,8 @@ Deno.serve(async (req: Request) => {
             summaryDocTitle = titleRows[0]?.title ?? "";
           }
 
+          factsBlock = await buildFactsBlock(supabaseUrl, serviceRoleKey, [summaryDocId]);
+
           // Two-pass: targeted semantic search for clinical substance + first few chunks for doc context
           const summarySearchQuery =
             "study objectives design population eligibility inclusion exclusion dosing IMP endpoints primary secondary safety SAE statistics randomisation";
@@ -658,7 +727,7 @@ Deno.serve(async (req: Request) => {
             body: JSON.stringify({
               query_embedding: summaryEmbedding,
               query_text: summarySearchQuery,
-              match_count: 24,
+              match_count: 16,
               filter_document_ids: [summaryDocId],
             }),
           });
@@ -678,17 +747,21 @@ Deno.serve(async (req: Request) => {
       }
 
       if (!usedStructural) {
-        // Rewrite query using conversation history for better retrieval
         const searchQuery = await rewriteQuery(message, safeHistory, openaiKey);
-        console.log("RAG: searchQuery=", searchQuery.slice(0, 120));
-
         const queryEmbedding = await embedText(searchQuery, openaiKey);
         const hasDocFilter = Array.isArray(selectedDocIds) && selectedDocIds.length > 0;
+
+        // Fetch extracted facts for the scoped documents — gives the LLM clean
+        // structured fields alongside RAG chunks. Skipped when no doc filter
+        // (would dump every doc's fields into the prompt).
+        if (hasDocFilter) {
+          factsBlock = await buildFactsBlock(supabaseUrl, serviceRoleKey, selectedDocIds);
+        }
 
         const rpcBody: Record<string, unknown> = {
           query_embedding: queryEmbedding,
           query_text: searchQuery,
-          match_count: 12,
+          match_count: 10,
           filter_document_ids: hasDocFilter ? selectedDocIds : null,
         };
 
@@ -709,12 +782,10 @@ Deno.serve(async (req: Request) => {
         }
 
         rawChunks = (await rpcRes.json()) as ChunkRow[];
-        console.log("RAG: rawChunks count=", rawChunks?.length ?? 0);
       }
 
       if (rawChunks && rawChunks.length > 0) {
         const topChunks = await rerankChunks(message, rawChunks, openaiKey, { summary: summaryMode });
-        console.log("RAG: topChunks count=", topChunks.length, "summaryMode=", summaryMode);
 
         if (topChunks.length > 0) {
           const ordered = summaryMode
@@ -723,7 +794,7 @@ Deno.serve(async (req: Request) => {
 
           // Build context block with [N] references (noise-stripped)
           const contextLines = ordered
-            .map((c, i) => `[${i + 1}] ${cleanContent(c.content)}`)
+            .map((c, i) => `[${i + 1}] ${c.content}`)
             .join("\n\n");
           const docLabel = summaryDocTitle ? `DOCUMENT: ${summaryDocTitle}\n` : "";
           contextBlock = `${docLabel}CONTEXT FROM PROTOCOL DOCUMENTS:\n${contextLines}\n\nEND OF CONTEXT\n\nCONTEXT IS PRESENT — Rules 1 or 2 apply. Rule 3 is FORBIDDEN; you MUST NOT say "No matching content was found in your documents for this question."\n\n`;
@@ -740,7 +811,7 @@ Deno.serve(async (req: Request) => {
             page_start: c.page_start,
             page_end: c.page_end,
             section_heading: c.section_heading,
-            chunk_preview: cleanContent(c.content).slice(0, 200),
+            chunk_preview: c.content.slice(0, 200),
           }));
         }
       }
@@ -753,7 +824,9 @@ Deno.serve(async (req: Request) => {
 
     log("info", "dashboard-chat.rag_done", { ip, ragStatus, sources: sources.length });
 
-    const systemContent = contextBlock ? `${SYSTEM_PROMPT}\n\n${contextBlock}` : SYSTEM_PROMPT;
+    const systemContent = [SYSTEM_PROMPT, factsBlock, contextBlock]
+      .filter((s) => s && s.length > 0)
+      .join("\n\n");
 
     const messages = [
       { role: "system", content: systemContent },
