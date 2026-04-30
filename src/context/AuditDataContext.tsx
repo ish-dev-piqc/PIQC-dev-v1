@@ -25,6 +25,7 @@ import {
   MOCK_WORKSPACE_ENTRIES,
   type MockWorkspaceEntry,
 } from '../lib/audit/mockWorkspaceEntries';
+import { MOCK_REPORTS, type MockReportDraft } from '../lib/audit/mockReport';
 
 // =============================================================================
 // AuditDataContext — the shared in-session store for Audit Mode mock data.
@@ -83,6 +84,11 @@ interface AuditDataContextValue {
   setWorkspaceEntries: React.Dispatch<
     React.SetStateAction<Record<string, MockWorkspaceEntry[]>>
   >;
+
+  reports: Record<string, MockReportDraft | null>;
+  setReports: React.Dispatch<
+    React.SetStateAction<Record<string, MockReportDraft | null>>
+  >;
 }
 
 const noop = () => {};
@@ -104,6 +110,8 @@ const AuditDataContext = createContext<AuditDataContextValue>({
   setPreAuditBundles: noop,
   workspaceEntries: {},
   setWorkspaceEntries: noop,
+  reports: {},
+  setReports: noop,
 });
 
 export function AuditDataProvider({ children }: { children: React.ReactNode }) {
@@ -132,6 +140,9 @@ export function AuditDataProvider({ children }: { children: React.ReactNode }) {
   const [workspaceEntries, setWorkspaceEntries] = useState<
     Record<string, MockWorkspaceEntry[]>
   >(() => ({ ...MOCK_WORKSPACE_ENTRIES }));
+  const [reports, setReports] = useState<Record<string, MockReportDraft | null>>(
+    () => ({ ...MOCK_REPORTS }),
+  );
 
   return (
     <AuditDataContext.Provider
@@ -152,6 +163,8 @@ export function AuditDataProvider({ children }: { children: React.ReactNode }) {
         setPreAuditBundles,
         workspaceEntries,
         setWorkspaceEntries,
+        reports,
+        setReports,
       }}
     >
       {children}
