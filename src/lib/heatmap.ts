@@ -15,6 +15,7 @@
 import type { CalendarVisit } from './mockCalendarData';
 import type { MockWorkspaceEntry } from './audit/mockWorkspaceEntries';
 import type { MockParticipant } from './mockSiteData';
+import type { AuditStage } from '../types/audit';
 
 // 'none' is a valid score that suppresses the indicator entirely. Higher tones
 // always include all lower tones' data; the consumer just renders the highest
@@ -147,5 +148,73 @@ export function scoreParticipant(p: MockParticipant): HeatScore {
 
   // Active with no deviations — minor signal so the layer is visible
   // without being alarmist.
+  return 'low';
+}
+
+// Audit stages — heat reflects how often each stage stalls or generates
+// rework across audits. The "where audits commonly get stuck" signal.
+//
+// Heuristic basis (Phase B):
+//   - QUESTIONNAIRE_REVIEW + AUDIT_CONDUCT are historically the longest
+//     stages with the most back-and-forth (vendor delays, observation
+//     classification iteration). High.
+//   - PRE_AUDIT_DRAFTING coordinates three deliverables; moderate friction.
+//   - INTAKE / VENDOR_ENRICHMENT / SCOPE_AND_RISK_REVIEW are mostly
+//     setup and confirmation; low.
+//   - REPORT_DRAFTING / FINAL_REVIEW_EXPORT are mechanical compilations
+//     once upstream is approved; low/none.
+export function scoreStage(stage: AuditStage): HeatScore {
+  switch (stage) {
+    case 'QUESTIONNAIRE_REVIEW':
+    case 'AUDIT_CONDUCT':
+      return 'high';
+    case 'PRE_AUDIT_DRAFTING':
+      return 'moderate';
+    case 'INTAKE':
+    case 'VENDOR_ENRICHMENT':
+    case 'SCOPE_AND_RISK_REVIEW':
+      return 'low';
+    case 'REPORT_DRAFTING':
+    case 'FINAL_REVIEW_EXPORT':
+      return 'none';
+  }
+}
+
+// Focus areas (auditor-authored strings on VendorRiskSummaryObject) — heat
+// reflects how often a similar focus area translates to a formal Finding
+// across audits. Token matching against domain phrases that historically
+// have higher finding-conversion rates.
+export function scoreFocusArea(focusArea: string): HeatScore {
+  const f = focusArea.toLowerCase();
+
+  // High-finding-rate domains — change-control and regulatory hard lines
+  if (
+    f.includes('part 11') ||
+    f.includes('audit trail') ||
+    f.includes('change control') ||
+    f.includes('outage') ||
+    f.includes('continuity') ||
+    f.includes('validation')
+  ) {
+    return 'high';
+  }
+
+  // Moderate-finding-rate domains — data and process integrity
+  if (
+    f.includes('data integrity') ||
+    f.includes('scoring') ||
+    f.includes('pharmacovigilance') ||
+    f.includes('randomization') ||
+    f.includes('etmf')
+  ) {
+    return 'moderate';
+  }
+
+  // Hygiene / training / documentation — typically OFIs not findings
+  if (f.includes('hygiene') || f.includes('training') || f.includes('documentation')) {
+    return 'low';
+  }
+
+  // Default: minor signal so the layer surfaces something
   return 'low';
 }

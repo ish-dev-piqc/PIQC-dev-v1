@@ -10,6 +10,8 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useAuditData } from '../../../context/AuditDataContext';
 import { type MockRiskSummary } from '../../../lib/audit/mockRiskSummary';
 import type { ClinicalTrialPhase } from '../../../types/audit';
+import { scoreFocusArea } from '../../../lib/heatmap';
+import HeatIndicator from '../../heatmap/HeatIndicator';
 
 // =============================================================================
 // RiskSummaryPanel — right rail of the audit workspace.
@@ -312,7 +314,7 @@ export default function RiskSummaryPanel({
               ) : summary.focus_areas.length === 0 ? (
                 <p className={`text-xs italic ${mutedColor}`}>None specified</p>
               ) : (
-                <ul className="space-y-1">
+                <ul className="space-y-1.5">
                   {summary.focus_areas.map((f) => (
                     <li key={f} className={`text-xs flex items-start gap-2 ${headingColor}`}>
                       <span
@@ -320,7 +322,14 @@ export default function RiskSummaryPanel({
                           isLight ? 'bg-[#4a6fa5]/55' : 'bg-[#6e8fb5]/55'
                         }`}
                       />
-                      {f}
+                      <span className="flex-1 flex items-center gap-1.5 flex-wrap">
+                        <span>{f}</span>
+                        <HeatIndicator
+                          score={scoreFocusArea(f)}
+                          variant="chip"
+                          hint="cross-audit finding-conversion rate"
+                        />
+                      </span>
                     </li>
                   ))}
                 </ul>

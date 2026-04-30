@@ -3,6 +3,7 @@ import { MessageSquare, LayoutDashboard, Activity, FileText, Database, UserCircl
 import DashboardChat from './DashboardChat';
 import KnowledgeBase from './KnowledgeBase';
 import TodayTab from './site/TodayTab';
+import AskTab from './site/AskTab';
 import ParticipantsTab from './site/ParticipantsTab';
 import VisitsTab from './site/VisitsTab';
 import TeamTab from './site/TeamTab';
@@ -545,7 +546,7 @@ export default function Dashboard({
       case 'ask':
         return (
           <ProtocolRequiredGate label="Ask">
-            <DashboardChat
+            <AskTab
               messages={chatMessages}
               setMessages={setChatMessages}
               selectedDocIds={chatSelectedDocIds}

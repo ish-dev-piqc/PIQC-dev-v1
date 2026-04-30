@@ -1,6 +1,6 @@
 # PIQClinical — Build Plan & Status
 
-_Last updated: 2026-04-30 (Mobile responsiveness pass complete; heatmap on 3 surfaces)_
+_Last updated: 2026-04-30 (Ask tab redesigned with protocol-grounded framing; heatmap complete; mobile pass complete)_
 
 This document describes the current build of PIQClinical (PIQC), what's
 finished, and what's queued. It's the source of truth for "where are we" — the
@@ -62,7 +62,7 @@ ahead of the data pipeline.
 | Audit Mode Phase A — chassis | DB schema, 3-pane shell, stage nav, audit picker, state-delta helpers | ✓ Done |
 | Audit Mode Phase B — per-stage workspaces | Real UI for each of the 8 audit stages | ✓ All 8 done |
 | Real Supabase wire-up | Replace mock stores with Supabase RPCs and live data | ○ Not started |
-| Heatmap / intelligence overlay | Soft-gradient risk indicators per the UX spec | ○ Not started |
+| Heatmap / intelligence overlay | Soft-gradient risk indicators per the UX spec | ✓ Done (5 surfaces) |
 | Phase 2 audit stages (Report, Final Export) | Last two stages from the Vendor PIQC scope | ○ Stubbed only |
 | Stripe onboarding + landing page | Customer-facing marketing + checkout | ○ Not started |
 
@@ -176,8 +176,11 @@ phases:
   Spec calls for toggleable, default-on. Surface for it isn't reserved yet.
 - **Three-pane layout for Site Mode workspaces** — Site Mode currently uses a
   flat tab rail. Audit Mode has the three-pane shell.
-- **AI assistant right-pane with traceability** — the Ask tab in Site Mode and
-  the History drawer in Audit Mode are placeholders.
+- **AI assistant — partial.** Ask tab in Site Mode now wraps the existing RAG
+  chat with a protocol context strip, "grounded in this protocol" framing,
+  and protocol-specific suggested prompts. Per-protocol document scoping +
+  in-message citation traceability lands with the Supabase wire-up. The
+  History drawer in Audit Mode is still a placeholder.
 - **Reports tab content** — currently placeholder.
 - **Audit Mode stages 7 and 8** — Phase 2 stubs.
 - **Real Supabase wire-up across all stages** — every Phase B stage works
@@ -265,14 +268,36 @@ rv1_code/                                   Reference copy of the original Next.
 
 ---
 
+## Claude model guidance
+
+Use **Opus** for tasks that require architectural judgment, cross-file reasoning, or designing something new. Use **Sonnet** for well-scoped, single-file or mechanical changes where the pattern is already established.
+
+| Task | Model | Reason |
+|------|-------|--------|
+| Supabase wire-up — AuditDataContext replacement | **Opus** | Touches every stage; needs to reason across the full mock → RPC substitution pattern and keep cross-stage reactivity intact |
+| Supabase wire-up — individual RPC calls once pattern is set | Sonnet | Mechanical repetition of an established pattern |
+| Heatmap extension to StageNav + RiskSummaryPanel | **Opus** | Requires understanding scoring model, existing token system, and two distinct layout surfaces |
+| Adding a HeatIndicator to a new surface once the pattern is clear | Sonnet | Straightforward component application |
+| History drawer — wiring `get_object_history` RPC | **Opus** | New data layer; needs to reason about polymorphic history shape and UI state |
+| Ask tab + AI assistant pane redesign | **Opus** | New feature design; cross-cutting UX and data concerns |
+| Bug fixes in a single workspace stage | Sonnet | Isolated, well-understood surface |
+| Copy / label / enum changes | Sonnet | Mechanical |
+| Polish / accessibility / focus state pass | Sonnet | Well-scoped, no architectural decisions |
+| New mock data additions | Sonnet | Pattern already established in existing mock files |
+| Schema migrations (new columns, indexes) | **Opus** | Needs to reason about RLS, triggers, and downstream type impacts |
+| Stripe integration | **Opus** | New subsystem; auth + webhook + DB concerns |
+| Landing page / marketing UI | Sonnet | Self-contained; no product logic |
+
+---
+
 ## Next up
 
 In priority order:
 
 1. **Real Supabase wire-up** for all Phase B stages — replace mock context's seed data with `supabase.from(...)` queries and setters with `supabase.rpc(...)` calls. The `AuditDataContext` is the single replacement target. Blocked: migrations need to apply first.
-2. **Heatmap layer — partial.** Done: chassis (HeatmapContext, scoring utilities, HeatIndicator component with bar + chip variants), Navbar toggle (default ON, persisted), applied to calendar visit cells (right-edge bar), Audit Conduct workspace entries (chip), and ParticipantsTab rows (chip). Remaining: extend to more surfaces (StageNav stage-level signals, RiskSummaryPanel focus areas), real network-level scoring once data is live.
+2. **Heatmap layer — done.** Chassis (HeatmapContext, scoring utilities, HeatIndicator with bar + chip variants), Navbar toggle (default ON, persisted), applied to 5 surfaces: calendar visit cells (bar), Audit Conduct workspace entries (chip), ParticipantsTab rows (chip), StageNav rail (bar), RiskSummaryPanel focus areas (chip). Real network-level scoring lands when Supabase wires up and we have aggregated data; until then the heuristics in `lib/heatmap.ts` give honest mock signals.
 3. **History drawer** wired to `audit_mode_get_object_history` so change history shows real entries (depends on Supabase wire-up)
-4. **Ask tab + AI assistant pane** redesigned to match the UX spec
+4. **Ask tab — partial.** Site Mode Ask tab now wraps DashboardChat with: protocol context strip ("Asking about [code · sponsor · phase]"), protocol-specific suggested prompts in the empty state, "grounded in this protocol" framing, and a transparent caveat that document-level scoping ships with the Supabase wire-up. The chat engine is unchanged; the surface around it now matches the spec's "structured execution copilot" framing instead of generic LLM. Remaining: real per-protocol document scoping + in-message citation traceability (depends on Supabase + a documents↔protocol relationship).
 5. **Mobile responsiveness — done.** StageNav mobile collapse, RiskSummaryPanel drawer access below xl, audit context header tightening on phones, calendar week-view vertical stacking on phones (sm: breakpoint), drawer slide-in transitions across all six drawer instances (visit detail, day detail, visit drawer, participant drawer, risk summary drawer + history). Smaller polish items (gesture-to-dismiss, focus management) deferred.
 6. **Polish/cleanup pass** — typography consistency, focus states, accessibility, transitions
 
