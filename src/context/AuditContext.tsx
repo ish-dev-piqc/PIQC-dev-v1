@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase';
 import type {
   AuditStage,
   AuditStatus,
@@ -9,17 +10,13 @@ import type {
 // =============================================================================
 // AuditContext — active audit selection for Audit Mode
 //
-// Phase A uses mock data. Phase B replaces MOCK_AUDITS with a Supabase query
-// (`SELECT a.*, v.name AS vendor_name, p.title AS protocol_title, ...`) and
-// keeps the same shape. UI components import `useAudit` and don't need to
-// change when the data source flips.
+// Reads from Supabase: joins audits + vendors + protocols + protocol_versions.
+// RLS scopes results to the signed-in lead auditor. Re-fetches on auth changes.
 //
 // activeAudit is nullable: null means no audit is selected → workspace shows
 // the audit-required gate / worklist instead of stage content.
 // =============================================================================
 
-// Shape returned by the picker / context. Combines the core Audit row with
-// joined vendor + protocol fields needed for display.
 export interface AuditWithContext {
   id: string;
   audit_name: string;
@@ -35,78 +32,106 @@ export interface AuditWithContext {
 
 interface AuditContextValue {
   audits: AuditWithContext[];
+  loading: boolean;
+  error: string | null;
   activeAudit: AuditWithContext | null;
   setActiveAudit: (audit: AuditWithContext | null) => void;
-  // Mutates the active audit's current_stage in the in-session store. Phase B
-  // mock pattern; replace with a Supabase RPC call when wired.
+  // Currently in-session only. Phase 4 replaces with a Supabase RPC that
+  // updates audits.current_stage with server-side gating.
   advanceStage: (toStage: AuditStage) => void;
+  refresh: () => Promise<void>;
 }
 
 const AUDIT_STORAGE_KEY = 'piq-audit-v1';
 
-// Mock audits — illustrative data covering the spread of stages + statuses
-// the UI needs to render. Swap for a Supabase query in Phase B.
-const MOCK_AUDITS: AuditWithContext[] = [
-  {
-    id: 'audit-001',
-    audit_name: 'CRO QC oversight — BRIGHTEN-2',
-    audit_type: 'REMOTE',
-    status: 'IN_PROGRESS',
-    current_stage: 'QUESTIONNAIRE_REVIEW',
-    scheduled_date: '2026-05-15',
-    vendor_name: 'Aurora Clinical Services',
-    protocol_code: 'BRIGHTEN-2',
-    protocol_title: 'BRIGHTEN-2: Phase 3 Oncology Study',
-    clinical_trial_phase: 'PHASE_3',
-  },
-  {
-    id: 'audit-002',
-    audit_name: 'Central lab data integrity — CARDIAC-7',
-    audit_type: 'ONSITE',
-    status: 'DRAFT',
-    current_stage: 'INTAKE',
-    scheduled_date: '2026-06-08',
-    vendor_name: 'Helix Diagnostics',
-    protocol_code: 'CARDIAC-7',
-    protocol_title: 'CARDIAC-7: Heart Failure Intervention',
-    clinical_trial_phase: 'PHASE_2_3',
-  },
-  {
-    id: 'audit-003',
-    audit_name: 'ePRO platform GxP audit — IMMUNE-14',
-    audit_type: 'HYBRID',
-    status: 'IN_PROGRESS',
-    current_stage: 'PRE_AUDIT_DRAFTING',
-    scheduled_date: '2026-05-22',
-    vendor_name: 'PatientPulse Technologies',
-    protocol_code: 'IMMUNE-14',
-    protocol_title: 'IMMUNE-14: Autoimmune Biologic Trial',
-    clinical_trial_phase: 'PHASE_2',
-  },
-];
-
 const AuditContext = createContext<AuditContextValue>({
-  audits: MOCK_AUDITS,
+  audits: [],
+  loading: false,
+  error: null,
   activeAudit: null,
   setActiveAudit: () => {},
   advanceStage: () => {},
+  refresh: async () => {},
 });
 
+// Shape returned by the joined Supabase select. The nested `vendors`,
+// `protocols`, `protocol_versions` come back as objects when using foreign-key
+// joins via `!inner`.
+interface AuditRow {
+  id: string;
+  audit_name: string;
+  audit_type: AuditType;
+  status: AuditStatus;
+  current_stage: AuditStage;
+  scheduled_date: string | null;
+  vendors: { name: string } | null;
+  protocols: { study_number: string | null; title: string } | null;
+  protocol_versions: { clinical_trial_phase: ClinicalTrialPhase } | null;
+}
+
+function flatten(row: AuditRow): AuditWithContext {
+  return {
+    id: row.id,
+    audit_name: row.audit_name,
+    audit_type: row.audit_type,
+    status: row.status,
+    current_stage: row.current_stage,
+    scheduled_date: row.scheduled_date,
+    vendor_name: row.vendors?.name ?? '',
+    protocol_code: row.protocols?.study_number ?? '',
+    protocol_title: row.protocols?.title ?? '',
+    clinical_trial_phase: row.protocol_versions?.clinical_trial_phase ?? 'NOT_APPLICABLE',
+  };
+}
+
 export function AuditProvider({ children }: { children: React.ReactNode }) {
-  // In-session mutable copy of the audit list. Phase B mock pattern allows
-  // stage transitions to update Audit.current_stage; resets on page reload.
-  const [audits, setAudits] = useState<AuditWithContext[]>(MOCK_AUDITS);
+  const [audits, setAudits] = useState<AuditWithContext[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [activeId, setActiveId] = useState<string | null>(() => {
     try {
-      const stored = localStorage.getItem(AUDIT_STORAGE_KEY);
-      if (stored && MOCK_AUDITS.some((a) => a.id === stored)) return stored;
+      return localStorage.getItem(AUDIT_STORAGE_KEY);
     } catch {
-      /* ignore */
+      return null;
     }
-    return null;
   });
 
+  const fetchAudits = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    const { data, error: queryError } = await supabase
+      .from('audits')
+      .select(`
+        id, audit_name, audit_type, status, current_stage, scheduled_date,
+        vendors!inner ( name ),
+        protocols!inner ( study_number, title ),
+        protocol_versions!inner ( clinical_trial_phase )
+      `)
+      .order('updated_at', { ascending: false });
+
+    if (queryError) {
+      setError(queryError.message);
+      setAudits([]);
+    } else {
+      setAudits(((data ?? []) as unknown as AuditRow[]).map(flatten));
+    }
+    setLoading(false);
+  }, []);
+
+  // Initial load + react to auth state changes (sign-in/out re-fetches via RLS)
+  useEffect(() => {
+    fetchAudits();
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+        fetchAudits();
+      }
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [fetchAudits]);
+
+  // Persist active selection across reloads. Clear when the active audit is no
+  // longer in the visible list (e.g. after sign-out).
   useEffect(() => {
     try {
       if (activeId) localStorage.setItem(AUDIT_STORAGE_KEY, activeId);
@@ -115,6 +140,12 @@ export function AuditProvider({ children }: { children: React.ReactNode }) {
       /* ignore */
     }
   }, [activeId]);
+
+  useEffect(() => {
+    if (activeId && !loading && !audits.some((a) => a.id === activeId)) {
+      setActiveId(null);
+    }
+  }, [activeId, audits, loading]);
 
   const activeAudit = activeId
     ? audits.find((a) => a.id === activeId) ?? null
@@ -135,9 +166,12 @@ export function AuditProvider({ children }: { children: React.ReactNode }) {
     <AuditContext.Provider
       value={{
         audits,
+        loading,
+        error,
         activeAudit,
         setActiveAudit,
         advanceStage,
+        refresh: fetchAudits,
       }}
     >
       {children}
