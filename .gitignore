@@ -23,3 +23,6 @@ dist-ssr
 .env
 .env.local
 supabase/.temp/
+
+# Renamed-out stale folders (sandbox FUSE mount can't unlink — delete manually on host)
+**/_TRASH_*

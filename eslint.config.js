@@ -5,7 +5,10 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist'] },
+  // rv1_code is a read-only reference copy of the original Vendor PIQC build —
+  // it's not part of the Vite app and never gets shipped, so we don't lint it.
+  // _TRASH_* folders are renamed-out stale code (see .gitignore).
+  { ignores: ['dist', 'rv1_code', '**/_TRASH_*'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],
