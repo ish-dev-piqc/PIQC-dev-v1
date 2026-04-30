@@ -1,6 +1,5 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useState } from 'react';
 import { MOCK_PROTOCOL_RISKS, type TaggedSection } from '../lib/audit/mockProtocolRisks';
-import { fetchProtocolRisksForAudit } from '../lib/audit/intakeApi';
 import {
   MOCK_VENDOR_SERVICES,
   MOCK_SERVICE_MAPPINGS,
@@ -118,7 +117,6 @@ export function AuditDataProvider({ children }: { children: React.ReactNode }) {
   const [protocolRisks, setProtocolRisks] = useState<Record<string, TaggedSection[]>>(
     () => ({ ...MOCK_PROTOCOL_RISKS }),
   );
-  const [loadedRisksAuditIds, setLoadedRisksAuditIds] = useState<Set<string>>(new Set());
   const [vendorServices, setVendorServices] = useState<
     Record<string, MockVendorService | null>
   >(() => ({ ...MOCK_VENDOR_SERVICES }));

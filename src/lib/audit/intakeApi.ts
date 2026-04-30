@@ -42,32 +42,7 @@ function flattenRisk(row: ProtocolRiskRow): TaggedSection {
 }
 
 /**
- * Fetch all protocol risks for an audit (joined via audit → protocol_version).
- * RLS restricts results to audits where the signed-in user is the lead_auditor.
- */
-export async function fetchProtocolRisks(auditId: string): Promise<TaggedSection[]> {
-  const { data, error } = await supabase
-    .from('protocol_risk_objects')
-    .select('*')
-    .eq(
-      'protocol_version_id',
-      supabase
-        .from('audits')
-        .select('protocol_version_id')
-        .eq('id', auditId)
-        .single()
-    );
-
-  if (error) {
-    console.error('[intakeApi] fetchProtocolRisks error:', error);
-    return [];
-  }
-
-  return ((data ?? []) as ProtocolRiskRow[]).map(flattenRisk);
-}
-
-/**
- * Fetch protocol risks via a direct join (more efficient).
+ * Fetch protocol risks via a direct join.
  * Subquery: fetch the protocol_version_id from the audit, then filter risks by that version.
  */
 export async function fetchProtocolRisksForAudit(auditId: string): Promise<TaggedSection[]> {
