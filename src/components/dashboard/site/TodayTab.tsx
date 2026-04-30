@@ -17,6 +17,8 @@ import {
 import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useAuth } from '../../../context/AuthContext';
+import HeatIndicator from '../../heatmap/HeatIndicator';
+import { scoreVisit } from '../../../lib/heatmap';
 import {
   MOCK_VISITS,
   PROTOCOL_COLORS,
@@ -1015,27 +1017,36 @@ function WeekVisitRow({ visit, isLight, isHome, past, onClick }: WeekVisitRowPro
         e.stopPropagation();
         onClick();
       }}
-      className={`w-full text-left rounded-md border-l-2 ${accent} ${rowBg} px-1.5 py-1 transition-colors ${
+      className={`w-full text-left rounded-md border-l-2 ${accent} ${rowBg} flex items-stretch transition-colors ${
         past ? 'opacity-70' : ''
       }`}
     >
-      <div className="flex items-center gap-1 mb-0.5">
-        {statusIcon(visit.status, 11)}
-        {visit.time && (
-          <span className={`text-[10px] font-semibold ${textColor}`}>
-            {visit.time.replace(':00', '')}
-          </span>
-        )}
-        {isHome && (
-          <span className={`inline-block text-[9px] font-semibold px-1 py-[1px] rounded border ${chip}`}>
-            {protoCode(visit.protocolId)}
-          </span>
-        )}
+      <div className="flex-1 min-w-0 px-1.5 py-1">
+        <div className="flex items-center gap-1 mb-0.5">
+          {statusIcon(visit.status, 11)}
+          {visit.time && (
+            <span className={`text-[10px] font-semibold ${textColor}`}>
+              {visit.time.replace(':00', '')}
+            </span>
+          )}
+          {isHome && (
+            <span className={`inline-block text-[9px] font-semibold px-1 py-[1px] rounded border ${chip}`}>
+              {protoCode(visit.protocolId)}
+            </span>
+          )}
+        </div>
+        <div className={`text-[11px] font-medium truncate ${textColor}`}>{visit.participantId}</div>
+        <div className={`text-[10px] truncate ${mutedColor}`}>
+          Day {visit.studyDay} · {visit.visitName}
+        </div>
       </div>
-      <div className={`text-[11px] font-medium truncate ${textColor}`}>{visit.participantId}</div>
-      <div className={`text-[10px] truncate ${mutedColor}`}>
-        Day {visit.studyDay} · {visit.visitName}
-      </div>
+      {/* Heatmap right-edge bar — surfaces cross-study friction signal */}
+      <HeatIndicator
+        score={scoreVisit(visit)}
+        variant="bar"
+        hint="similar visits commonly drift on window or procedures"
+        className="my-1 mr-1"
+      />
     </button>
   );
 }
