@@ -3,7 +3,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useAudit } from '../../../context/AuditContext';
 import type { AuditStage } from '../../../types/audit';
 import { STAGE_LABELS, AUDIT_TYPE_LABELS, AUDIT_STATUS_LABELS } from '../../../lib/audit/labels';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Sparkles } from 'lucide-react';
 import StageNav from './StageNav';
 import AuditRequiredGate from './AuditRequiredGate';
 import RiskSummaryPanel from './RiskSummaryPanel';
@@ -55,6 +55,8 @@ export default function AuditWorkspaceShell() {
   const [viewedStage, setViewedStage] = useState<AuditStage>(
     activeAudit?.current_stage ?? 'INTAKE',
   );
+  // Mobile/tablet drawer for the risk summary panel (visible below xl).
+  const [summaryDrawerOpen, setSummaryDrawerOpen] = useState(false);
 
   // Snap the viewed stage to the audit's current_stage when the active audit
   // (or its workflow position) changes. We intentionally depend on the
@@ -94,7 +96,7 @@ export default function AuditWorkspaceShell() {
 
       <main className="flex-1 flex flex-col min-w-0">
         {/* Audit context header — shows what audit + stage you're in */}
-        <div className={`flex-shrink-0 border-b ${headerBg} px-6 py-3`}>
+        <div className={`flex-shrink-0 border-b ${headerBg} px-4 sm:px-6 py-3`}>
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -102,7 +104,7 @@ export default function AuditWorkspaceShell() {
                   {STAGE_LABELS[viewedStage]}
                 </span>
                 {viewedStage !== activeAudit.current_stage && (
-                  <span className={`text-[11px] ${mutedColor}`}>
+                  <span className={`text-[11px] ${mutedColor} hidden sm:inline`}>
                     Viewing earlier stage
                   </span>
                 )}
@@ -111,18 +113,35 @@ export default function AuditWorkspaceShell() {
                 {activeAudit.audit_name}
               </h2>
               <p className={`${subColor} text-xs mt-0.5 truncate`}>
-                {activeAudit.vendor_name} · {activeAudit.protocol_code} ·{' '}
-                {AUDIT_TYPE_LABELS[activeAudit.audit_type]} ·{' '}
-                {AUDIT_STATUS_LABELS[activeAudit.status]}
+                {activeAudit.vendor_name} · {activeAudit.protocol_code}
+                <span className="hidden sm:inline">
+                  {' '}· {AUDIT_TYPE_LABELS[activeAudit.audit_type]} ·{' '}
+                  {AUDIT_STATUS_LABELS[activeAudit.status]}
+                </span>
               </p>
             </div>
-            {/* Mobile-only stage picker — replaces the StageNav rail below md: */}
-            <MobileStagePicker
-              currentStage={activeAudit.current_stage}
-              viewedStage={viewedStage}
-              onSelectStage={setViewedStage}
-              isLight={isLight}
-            />
+            <div className="flex items-center gap-2 flex-shrink-0 self-start">
+              {/* Mobile-only stage picker — replaces the StageNav rail below md: */}
+              <MobileStagePicker
+                currentStage={activeAudit.current_stage}
+                viewedStage={viewedStage}
+                onSelectStage={setViewedStage}
+                isLight={isLight}
+              />
+              {/* Risk summary button — visible below xl where the right rail is hidden */}
+              <button
+                type="button"
+                onClick={() => setSummaryDrawerOpen(true)}
+                className={`xl:hidden inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors ${
+                  isLight
+                    ? 'bg-white border-[#dce4ed] text-[#374152] hover:bg-[#f5f7fa]'
+                    : 'bg-[#131a22] border-white/[0.08] text-[#d2d7e0] hover:bg-white/[0.04]'
+                }`}
+              >
+                <Sparkles size={12} />
+                Risk summary
+              </button>
+            </div>
           </div>
         </div>
 
@@ -137,6 +156,15 @@ export default function AuditWorkspaceShell() {
       </main>
 
       <RiskSummaryPanel auditId={activeAudit.id} />
+
+      {/* Mobile/tablet drawer variant — opens via the "Risk summary" header button */}
+      {summaryDrawerOpen && (
+        <RiskSummaryPanel
+          auditId={activeAudit.id}
+          variant="drawer"
+          onClose={() => setSummaryDrawerOpen(false)}
+        />
+      )}
     </div>
   );
 }

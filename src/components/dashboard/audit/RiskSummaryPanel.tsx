@@ -28,6 +28,11 @@ import type { ClinicalTrialPhase } from '../../../types/audit';
 
 interface RiskSummaryPanelProps {
   auditId: string;
+  // 'rail' (default) renders the always-visible right rail, hidden below xl.
+  // 'drawer' renders a slide-over overlay used on tablet/phone where there's
+  // no room for the rail.
+  variant?: 'rail' | 'drawer';
+  onClose?: () => void;
 }
 
 const PHASE_LABEL: Record<ClinicalTrialPhase, string> = {
@@ -40,7 +45,11 @@ const PHASE_LABEL: Record<ClinicalTrialPhase, string> = {
   NOT_APPLICABLE: 'N/A',
 };
 
-export default function RiskSummaryPanel({ auditId }: RiskSummaryPanelProps) {
+export default function RiskSummaryPanel({
+  auditId,
+  variant = 'rail',
+  onClose,
+}: RiskSummaryPanelProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
 
@@ -166,32 +175,50 @@ export default function RiskSummaryPanel({ auditId }: RiskSummaryPanelProps) {
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
-  return (
-    <aside
-      aria-label="Vendor risk summary"
-      className={`${panelBg} border-l flex-shrink-0 w-80 hidden xl:flex flex-col overflow-hidden`}
-    >
+  // Wrapper className differs between variants. Drawer adds an overlay panel
+  // with fixed positioning so it floats over the workspace.
+  const wrapperClass =
+    variant === 'rail'
+      ? `${panelBg} border-l flex-shrink-0 w-80 hidden xl:flex flex-col overflow-hidden`
+      : `${panelBg} border-l shadow-xl flex flex-col overflow-hidden w-full max-w-md h-full`;
+
+  const aside = (
+    <aside aria-label="Vendor risk summary" className={wrapperClass}>
       {/* Header */}
       <div className={`px-5 pt-5 pb-3 border-b ${isLight ? 'border-[#e2e8ee]' : 'border-white/5'} flex-shrink-0`}>
-        <p className={`text-[10px] uppercase tracking-wider font-semibold ${sectionHeader}`}>
-          Vendor risk summary
-        </p>
-        <div className="flex items-center gap-2 mt-1">
-          <p className={`${headingColor} text-sm font-semibold`}>Why this vendor matters</p>
-          {summary && (
-            <span
-              className={`inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-semibold uppercase tracking-wider ${
-                approved
-                  ? isLight
-                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                    : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
-                  : isLight
-                  ? 'bg-amber-50 border-amber-200 text-amber-700'
-                  : 'bg-amber-500/15 border-amber-500/30 text-amber-400'
-              }`}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className={`text-[10px] uppercase tracking-wider font-semibold ${sectionHeader}`}>
+              Vendor risk summary
+            </p>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              <p className={`${headingColor} text-sm font-semibold`}>Why this vendor matters</p>
+              {summary && (
+                <span
+                  className={`inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-semibold uppercase tracking-wider ${
+                    approved
+                      ? isLight
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                        : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                      : isLight
+                      ? 'bg-amber-50 border-amber-200 text-amber-700'
+                      : 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+                  }`}
+                >
+                  {approved ? 'Approved' : 'Draft'}
+                </span>
+              )}
+            </div>
+          </div>
+          {variant === 'drawer' && onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className={`flex-shrink-0 ${subColor} hover:opacity-75`}
+              aria-label="Close risk summary"
             >
-              {approved ? 'Approved' : 'Draft'}
-            </span>
+              <X size={18} />
+            </button>
           )}
         </div>
         {summary?.approved_at && (
@@ -422,6 +449,24 @@ export default function RiskSummaryPanel({ auditId }: RiskSummaryPanelProps) {
       )}
     </aside>
   );
+
+  // Drawer variant: wrap the aside in a fixed-position overlay panel that
+  // covers the right side. Click outside or the X to close.
+  if (variant === 'drawer') {
+    return (
+      <div
+        className="fixed inset-0 z-50 bg-black/30 flex justify-end"
+        onClick={onClose}
+        role="presentation"
+      >
+        <div onClick={(e) => e.stopPropagation()} className="h-full">
+          {aside}
+        </div>
+      </div>
+    );
+  }
+
+  return aside;
 }
 
 // ============================================================================
