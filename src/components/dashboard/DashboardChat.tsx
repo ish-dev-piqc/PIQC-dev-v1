@@ -491,11 +491,22 @@ function DocumentSelector({ selectedDocIds, onSelectionChange, isLight }: Docume
   );
 }
 
+interface ChatSuggestion {
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  text: string;
+}
+
 interface DashboardChatProps {
   messages: ExtendedMessage[];
   setMessages: React.Dispatch<React.SetStateAction<ExtendedMessage[]>>;
   selectedDocIds: string[];
   setSelectedDocIds: (ids: string[]) => void;
+  // Optional: override the default empty-state suggestion chips. Used by
+  // AskTab to inject protocol-specific prompts when scoped to a study.
+  customSuggestions?: ChatSuggestion[];
+  // Optional: override the empty-state title/subtitle for context-scoped use.
+  emptyHeading?: string;
+  emptySubtext?: string;
 }
 
 export default function DashboardChat({
@@ -503,6 +514,9 @@ export default function DashboardChat({
   setMessages,
   selectedDocIds,
   setSelectedDocIds,
+  customSuggestions,
+  emptyHeading,
+  emptySubtext,
 }: DashboardChatProps) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -702,13 +716,31 @@ export default function DashboardChat({
                 </div>
               </div>
               <h3 className={`font-bold text-lg mb-2 tracking-tight ${isLight ? 'text-[#1a2a32]' : 'text-[#e0e8f0]'}`}>
-                Clinical Protocol Assistant
+                {emptyHeading ?? 'Clinical Protocol Assistant'}
               </h3>
               <p className={`text-sm max-w-[280px] leading-relaxed ${isLight ? 'text-[#374152]/55' : 'text-[#8a9ab0]'}`}>
-                Ask me about care protocols, workflows, compliance requirements, or anything in your knowledge base.
+                {emptySubtext ??
+                  'Ask me about care protocols, workflows, compliance requirements, or anything in your knowledge base.'}
               </p>
 
-              {docSuggestions.length > 0 ? (
+              {customSuggestions && customSuggestions.length > 0 ? (
+                <div className="mt-6 w-full max-w-sm grid grid-cols-2 gap-2">
+                  {customSuggestions.map(({ icon: Icon, text }, i) => (
+                    <button
+                      key={i}
+                      onClick={() => handleSend(text)}
+                      className={`text-left text-xs px-3 py-3 rounded-xl border transition-all duration-150 group ${
+                        isLight
+                          ? 'bg-white border-[#dce8f0] text-[#2a3a45]/65 hover:border-[#5a7fa5]/40 hover:bg-[#f4fbfd] hover:text-[#2a3a45]'
+                          : 'bg-[#141c22] border-white/[0.07] text-[#8a9ab0] hover:border-[#5a7fa5]/30 hover:bg-[#192027] hover:text-[#b0c0cc]'
+                      }`}
+                    >
+                      <Icon size={14} className="text-[#5a7fa5] mb-2 group-hover:scale-110 transition-transform" />
+                      <span className="leading-snug">{text}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : docSuggestions.length > 0 ? (
                 <div className="mt-6 w-full max-w-sm space-y-2">
                   <p className={`text-[10px] font-semibold uppercase tracking-widest mb-3 ${isLight ? 'text-[#374152]/35' : 'text-[#8a9ab0]/60'}`}>
                     Suggested for selected documents

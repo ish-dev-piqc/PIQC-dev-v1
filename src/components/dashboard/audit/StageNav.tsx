@@ -2,6 +2,8 @@ import { Check, Lock } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { AUDIT_STAGES, type AuditStage } from '../../../types/audit';
 import { STAGE_LABELS } from '../../../lib/audit/labels';
+import { scoreStage } from '../../../lib/heatmap';
+import HeatIndicator from '../../heatmap/HeatIndicator';
 
 // =============================================================================
 // StageNav — left rail of the audit workspace.
@@ -107,6 +109,16 @@ export default function StageNav({ currentStage, viewedStage, onSelectStage }: S
                     {STAGE_LABELS[stage]}
                   </div>
                 </div>
+                {/* Heat: cross-audit "this stage commonly stalls" signal.
+                    Hidden on done stages (no signal needed once past it). */}
+                {!isDone && (
+                  <HeatIndicator
+                    score={scoreStage(stage)}
+                    variant="bar"
+                    hint="cross-audit stage friction"
+                    className="self-stretch my-0.5"
+                  />
+                )}
               </button>
             </li>
           );
