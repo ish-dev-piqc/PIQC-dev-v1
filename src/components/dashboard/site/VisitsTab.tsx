@@ -412,9 +412,9 @@ function VisitDrawer({
     : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]';
 
   return (
-    <div className={`fixed inset-0 z-50 ${overlay} flex justify-end`} onClick={onClose}>
+    <div className={`fixed inset-0 z-50 ${overlay} flex justify-end animate-fade-in`} onClick={onClose}>
       <div
-        className={`w-full max-w-md h-full ${panelBg} border-l shadow-xl flex flex-col`}
+        className={`w-full max-w-md h-full ${panelBg} border-l shadow-xl flex flex-col animate-slide-in-right`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className={`flex items-center justify-between px-5 py-4 border-b ${isLight ? 'border-[#e2e8ee]' : 'border-white/5'}`}>

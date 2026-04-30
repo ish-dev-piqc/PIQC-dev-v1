@@ -16,6 +16,8 @@ import {
   type ParticipantStatus,
 } from '../../../lib/mockSiteData';
 import { MOCK_VISITS } from '../../../lib/mockCalendarData';
+import HeatIndicator from '../../heatmap/HeatIndicator';
+import { scoreParticipant } from '../../../lib/heatmap';
 
 // =============================================================================
 // ParticipantsTab — Site Mode list of participants on the active protocol.
@@ -281,6 +283,11 @@ function ParticipantRow({
               {participant.open_deviations} open
             </span>
           )}
+          <HeatIndicator
+            score={scoreParticipant(participant)}
+            variant="chip"
+            hint="cross-study deviation/dropout pattern"
+          />
         </div>
         {participant.next_visit_date && (
           <div className={`flex items-center gap-1.5 mt-1 text-xs ${subColor}`}>
@@ -374,9 +381,9 @@ function ParticipantDrawer({
   );
 
   return (
-    <div className={`fixed inset-0 z-50 ${overlay} flex justify-end`} onClick={onClose}>
+    <div className={`fixed inset-0 z-50 ${overlay} flex justify-end animate-fade-in`} onClick={onClose}>
       <div
-        className={`w-full max-w-md h-full ${panelBg} border-l shadow-xl flex flex-col`}
+        className={`w-full max-w-md h-full ${panelBg} border-l shadow-xl flex flex-col animate-slide-in-right`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

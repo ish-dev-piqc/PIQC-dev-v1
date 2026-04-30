@@ -1,6 +1,6 @@
 # PIQClinical — Build Plan & Status
 
-_Last updated: 2026-04-30 (Heatmap layer chassis + first surfaces shipped)_
+_Last updated: 2026-04-30 (Mobile responsiveness pass complete; heatmap on 3 surfaces)_
 
 This document describes the current build of PIQClinical (PIQC), what's
 finished, and what's queued. It's the source of truth for "where are we" — the
@@ -270,10 +270,10 @@ rv1_code/                                   Reference copy of the original Next.
 In priority order:
 
 1. **Real Supabase wire-up** for all Phase B stages — replace mock context's seed data with `supabase.from(...)` queries and setters with `supabase.rpc(...)` calls. The `AuditDataContext` is the single replacement target. Blocked: migrations need to apply first.
-2. **Heatmap layer — partial.** Done: chassis (HeatmapContext, scoring utilities, HeatIndicator component with bar + chip variants), Navbar toggle (default ON, persisted), applied to calendar visit cells (right-edge bar) and Audit Conduct workspace entries (chip). Remaining: extend to more surfaces (StageNav stage-level signals, RiskSummaryPanel focus areas, ParticipantsTab rows), real network-level scoring once data is live.
+2. **Heatmap layer — partial.** Done: chassis (HeatmapContext, scoring utilities, HeatIndicator component with bar + chip variants), Navbar toggle (default ON, persisted), applied to calendar visit cells (right-edge bar), Audit Conduct workspace entries (chip), and ParticipantsTab rows (chip). Remaining: extend to more surfaces (StageNav stage-level signals, RiskSummaryPanel focus areas), real network-level scoring once data is live.
 3. **History drawer** wired to `audit_mode_get_object_history` so change history shows real entries (depends on Supabase wire-up)
 4. **Ask tab + AI assistant pane** redesigned to match the UX spec
-5. **Mobile responsiveness — partial.** Done: StageNav mobile collapse, RiskSummaryPanel drawer access below xl, audit context header tightening on phones. Remaining: drawer behaviour on phones (visit/day/history), Site Mode calendar week-view stacking on phones.
+5. **Mobile responsiveness — done.** StageNav mobile collapse, RiskSummaryPanel drawer access below xl, audit context header tightening on phones, calendar week-view vertical stacking on phones (sm: breakpoint), drawer slide-in transitions across all six drawer instances (visit detail, day detail, visit drawer, participant drawer, risk summary drawer + history). Smaller polish items (gesture-to-dismiss, focus management) deferred.
 6. **Polish/cleanup pass** — typography consistency, focus states, accessibility, transitions
 
 Stripe onboarding and landing page are external/marketing work, queued separately.
