@@ -1,6 +1,6 @@
 # PIQClinical — Build Plan & Status
 
-_Last updated: 2026-04-29 (Site Mode tabs built; StageNav mobile collapse)_
+_Last updated: 2026-04-29 (Phase B Audit Mode complete; mobile responsiveness pass — RiskSummary drawer, header tightening)_
 
 This document describes the current build of PIQClinical (PIQC), what's
 finished, and what's queued. It's the source of truth for "where are we" — the
@@ -60,7 +60,7 @@ ahead of the data pipeline.
 | Site Mode foundation | Auth, navbar, dashboard shell, protocol picker, theming | ✓ Done |
 | Site Mode Overview (calendar) | Calendar-first overview tab with filters, drawers, empty states | ✓ Done |
 | Audit Mode Phase A — chassis | DB schema, 3-pane shell, stage nav, audit picker, state-delta helpers | ✓ Done |
-| Audit Mode Phase B — per-stage workspaces | Real UI for each of the 8 audit stages | ◐ 6 of 8 done (last 2 are Phase 2 stubs) |
+| Audit Mode Phase B — per-stage workspaces | Real UI for each of the 8 audit stages | ✓ All 8 done |
 | Real Supabase wire-up | Replace mock stores with Supabase RPCs and live data | ○ Not started |
 | Heatmap / intelligence overlay | Soft-gradient risk indicators per the UX spec | ○ Not started |
 | Phase 2 audit stages (Report, Final Export) | Last two stages from the Vendor PIQC scope | ○ Stubbed only |
@@ -95,11 +95,8 @@ ahead of the data pipeline.
 | 4 | SCOPE_AND_RISK_REVIEW | ✓ Done | Read-only summary of upstream stages + dual approval gates + advance |
 | 5 | PRE_AUDIT_DRAFTING | ✓ Done | 3 tabs (confirmation letter, agenda, checklist) sharing the Revise/Save/Approve pattern |
 | 6 | AUDIT_CONDUCT | ✓ Done | Structured workspace entries with impact/classification chips, optional protocol-section linking |
-| 7 | REPORT_DRAFTING | ○ Phase 2 | Final report drafting from approved artefacts |
-| 8 | FINAL_REVIEW_EXPORT | ○ Phase 2 | Approval + docx export |
-
-Stages 7 and 8 are scoped as Phase 2 work in the source build and ship as
-placeholders for now.
+| 7 | REPORT_DRAFTING | ✓ Done | Auto-compiled report draft (scope, risk context, findings/observations/OFIs) + auditor-authored exec summary and conclusions; one approval gate |
+| 8 | FINAL_REVIEW_EXPORT | ✓ Done | Pre-export gate checklist auto-derived from upstream approvals; final auditor sign-off; Markdown / Word export stubs |
 
 ### Mock-backed pattern
 
@@ -232,8 +229,8 @@ src/
           ScopeReviewWorkspace.tsx          ✓ Real
           PreAuditDraftingWorkspace.tsx     ✓ Real (3 tabs: confirmation letter / agenda / checklist)
           AuditConductWorkspace.tsx         ✓ Real (entry list + form, impact/classification chips)
-          ReportDraftingWorkspace.tsx       ○ Phase 2 placeholder
-          FinalReviewExportWorkspace.tsx    ○ Phase 2 placeholder
+          ReportDraftingWorkspace.tsx       ✓ Real (auto-compiled + editable narrative)
+          FinalReviewExportWorkspace.tsx    ✓ Real (gate checklist + sign-off + export stubs)
           intake/                           Sub-components for INTAKE
           vendor-enrichment/                Sub-components for VENDOR_ENRICHMENT
   context/
@@ -250,6 +247,7 @@ src/
       mockQuestionnaire.ts                  QUESTIONNAIRE_REVIEW mock data
       mockPreAudit.ts                       PRE_AUDIT_DRAFTING mock data (3 deliverables)
       mockWorkspaceEntries.ts               AUDIT_CONDUCT mock data
+      mockReport.ts                         REPORT_DRAFTING / FINAL_REVIEW mock data
       mockRiskSummary.ts                    Risk summary panel mock data
     mockCalendarData.ts                     Site Mode Overview mock data
   types/
@@ -268,11 +266,12 @@ rv1_code/                                   Reference copy of the original Next.
 
 In priority order:
 
-1. **Real Supabase wire-up** for all Phase B stages — replace mock context's seed data with `supabase.from(...)` queries and setters with `supabase.rpc(...)` calls. The `AuditDataContext` is the single replacement target.
-2. **History drawer** wired to `audit_mode_get_object_history` so change history shows real entries
-3. **Heatmap layer** designed and added across visits + workspace entries
+1. **Real Supabase wire-up** for all Phase B stages — replace mock context's seed data with `supabase.from(...)` queries and setters with `supabase.rpc(...)` calls. The `AuditDataContext` is the single replacement target. Blocked: migrations need to apply first.
+2. **Heatmap layer** designed and added across visits + workspace entries (UX spec's missing co-primary feature)
+3. **History drawer** wired to `audit_mode_get_object_history` so change history shows real entries (depends on Supabase wire-up)
 4. **Ask tab + AI assistant pane** redesigned to match the UX spec
-5. **Stage 7 (Report Drafting)** and **Stage 8 (Final Review & Export)** — currently Phase 2 placeholders; real implementations come once data is live
+5. **Mobile responsiveness — partial.** Done: StageNav mobile collapse, RiskSummaryPanel drawer access below xl, audit context header tightening on phones. Remaining: drawer behaviour on phones (visit/day/history), Site Mode calendar week-view stacking on phones.
+6. **Polish/cleanup pass** — typography consistency, focus states, accessibility, transitions
 
 Stripe onboarding and landing page are external/marketing work, queued separately.
 
