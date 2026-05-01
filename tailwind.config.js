@@ -20,6 +20,16 @@ export default {
           600: '#2563eb',
           700: '#1d4ed8',
         },
+        // Semantic text-tone tokens (CSS-variable-backed; switch automatically
+        // with html.dark). Use as text-fg-heading / text-fg-sub / etc.
+        // See src/index.css for the variable definitions.
+        fg: {
+          heading: 'var(--fg-heading)',
+          body: 'var(--fg-body)',
+          sub: 'var(--fg-sub)',
+          muted: 'var(--fg-muted)',
+          label: 'var(--fg-label)',
+        },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
