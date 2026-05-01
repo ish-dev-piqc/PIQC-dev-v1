@@ -7,6 +7,29 @@
 @layer base {
   html {
     scroll-behavior: smooth;
+
+    /* Text-tone palette (light) — used by Tailwind utilities text-fg-heading,
+       text-fg-body, text-fg-sub, text-fg-muted, text-fg-label. Defining the
+       palette as CSS variables means components no longer need to thread an
+       isLight ternary through every theme token. New code should prefer the
+       Tailwind utilities over re-declaring `headingColor = isLight ? ...`.
+
+       Existing components that already declare those constants are not being
+       swept en masse; they keep working. */
+    --fg-heading: #1a1f28;        /* opaque headings, primary content */
+    --fg-body:    rgba(55, 65, 82, 0.85);  /* body copy at full strength */
+    --fg-sub:     rgba(55, 65, 82, 0.65);  /* sub-text, descriptions */
+    --fg-muted:   rgba(55, 65, 82, 0.40);  /* hints, metadata, separators */
+    --fg-label:   rgba(55, 65, 82, 0.45);  /* uppercase tracking labels */
+  }
+
+  html.dark {
+    /* Text-tone palette (dark) — same names, dark-mode values. */
+    --fg-heading: #ffffff;
+    --fg-body:    rgba(210, 215, 224, 0.75);
+    --fg-sub:     rgba(210, 215, 224, 0.55);
+    --fg-muted:   rgba(210, 215, 224, 0.35);
+    --fg-label:   rgba(210, 215, 224, 0.40);
   }
 
   body {

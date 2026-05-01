@@ -1,6 +1,6 @@
 # PIQClinical — Build Plan & Status
 
-_Last updated: 2026-04-30 (Ask tab redesigned with protocol-grounded framing; heatmap complete; mobile pass complete)_
+_Last updated: 2026-05-01 (Typography: semantic `text-fg-*` utilities added; rest of build state unchanged from prior polish + Supabase wire-up landings)_
 
 This document describes the current build of PIQClinical (PIQC), what's
 finished, and what's queued. It's the source of truth for "where are we" — the
@@ -61,9 +61,14 @@ ahead of the data pipeline.
 | Site Mode Overview (calendar) | Calendar-first overview tab with filters, drawers, empty states | ✓ Done |
 | Audit Mode Phase A — chassis | DB schema, 3-pane shell, stage nav, audit picker, state-delta helpers | ✓ Done |
 | Audit Mode Phase B — per-stage workspaces | Real UI for each of the 8 audit stages | ✓ All 8 done |
-| Real Supabase wire-up | Replace mock stores with Supabase RPCs and live data | ○ Not started |
+| Real Supabase wire-up | Replace mock stores with Supabase RPCs and live data | ◐ Substantially done — Phases 1–6 live; 7c–9 remaining |
 | Heatmap / intelligence overlay | Soft-gradient risk indicators per the UX spec | ✓ Done (5 surfaces) |
-| Phase 2 audit stages (Report, Final Export) | Last two stages from the Vendor PIQC scope | ○ Stubbed only |
+| Ask tab redesign — protocol-grounded copilot | Replace generic chat with protocol-anchored Ask experience | ✓ Done (per-protocol scoping awaits Supabase) |
+| Mobile responsiveness pass | StageNav collapse, drawer access, calendar stacking, transitions | ✓ Done |
+| History drawer | Per-object change history surfaced in each stage | ○ Stub only (`HistoryDrawerStub` in RiskSummaryPanel); real RPC + per-stage wiring not yet in |
+| Polish — semantic text tones | `text-fg-*` Tailwind utilities backed by CSS variables; dark-mode aware | ✓ Utilities live; adoption sweep is opportunistic |
+| Polish — drawer accessibility (ESC, scroll lock, focus trap, swipe dismiss) | Shared hooks for drawer behaviour | ○ Not yet in |
+| Stage 7–8 Supabase wire-up (Report / Final Review) | Persist report draft + final review state | ○ Not started |
 | Stripe onboarding + landing page | Customer-facing marketing + checkout | ○ Not started |
 
 ---
@@ -98,20 +103,45 @@ ahead of the data pipeline.
 | 7 | REPORT_DRAFTING | ✓ Done | Auto-compiled report draft (scope, risk context, findings/observations/OFIs) + auditor-authored exec summary and conclusions; one approval gate |
 | 8 | FINAL_REVIEW_EXPORT | ✓ Done | Pre-export gate checklist auto-derived from upstream approvals; final auditor sign-off; Markdown / Word export stubs |
 
-### Mock-backed pattern
+### Shared-store pattern
 
-Every Phase B stage reads and writes through a single shared store
-(`src/context/AuditDataContext.tsx`), seeded from the `src/lib/audit/mock*.ts`
-files. All eight per-audit stores (protocol risks, vendor services, mappings,
-trust assessments, risk summaries, questionnaires, pre-audit deliverables,
-workspace entries) live in one provider so cross-stage edits propagate
-immediately — approving the questionnaire in Stage 3 clears Stage 4's gate;
-approving the risk summary in the right rail does the same.
+`src/context/AuditDataContext.tsx` is an in-session cache keyed by audit_id,
+with one slice per stage (protocol risks, vendor services, mappings, trust
+assessments, risk summaries, questionnaires, pre-audit deliverables, workspace
+entries, reports). Cross-stage edits propagate immediately — approving the
+questionnaire in Stage 3 clears Stage 4's gate; approving the risk summary in
+the right rail does the same.
 
-Edits persist within a session but reset on page refresh. When the Supabase
-wire-up phase begins, the context is the single replacement target — initial
-state comes from `supabase.from(...).select()` and setters become
-`supabase.rpc(...)` calls. UI components don't change.
+Each slice is currently seeded from `src/lib/audit/mock*.ts`. Per-stage
+workspaces fetch real data from Supabase on `activeAudit` change and overwrite
+the relevant slice via per-stage API files (`src/lib/audit/*.Api.ts`) with
+optimistic updates. The seeds give the UI something to render before the
+fetch lands; for an honest end-to-end smoke test they should be dropped.
+
+### Supabase wire-up status
+
+Done (Phases 1–6):
+- Schema + RLS migrations deployed to local **and** remote Supabase
+- `seed_audit_mock_data` SECURITY DEFINER seeds 3 audits for testing
+- `AuditContext` reads from `supabase.from('audits').select(...)` with auth
+  state listener and localStorage-persisted active-audit selection
+- 8 API files under `src/lib/audit/`: intake, vendorEnrichment,
+  questionnaire, riskSummary, preAudit, workspaceEntries, audit, history
+- All 6 wired stage workspaces load real data on `activeAudit` change
+- Stages 1 and 2 are full CRUD with optimistic updates; Stages 3–6 load and
+  the primary mutation paths (approve, save) are wired
+- `advance_audit_stage` RPC wired through `AuditContext.advanceStage` with
+  server-side gating
+- `state_history_deltas` writes happen automatically on every mutation
+
+Remaining (Phases 7c–9):
+- **7c** — Update `auditApi.ts` to map the new RPC return shape
+- **7d** — Verify with smoke test
+- **8** — End-to-end smoke test across the full lifecycle
+- **9** — Delete the seven status `.md` docs at project root + final commit
+
+Stages 7–8 (Report Drafting, Final Review/Export) still on `mockReport.ts`;
+queued behind 7c–9.
 
 ---
 
@@ -172,19 +202,28 @@ The full decisions log lives in `rv1_code/docs/decisions.md`.
 These are called out in the Vendor Audit UX spec but are deferred until later
 phases:
 
-- **Heatmap / intelligence overlay** — soft yellow→orange→red risk indicators.
-  Spec calls for toggleable, default-on. Surface for it isn't reserved yet.
 - **Three-pane layout for Site Mode workspaces** — Site Mode currently uses a
   flat tab rail. Audit Mode has the three-pane shell.
-- **AI assistant — partial.** Ask tab in Site Mode now wraps the existing RAG
-  chat with a protocol context strip, "grounded in this protocol" framing,
-  and protocol-specific suggested prompts. Per-protocol document scoping +
-  in-message citation traceability lands with the Supabase wire-up. The
-  History drawer in Audit Mode is still a placeholder.
-- **Reports tab content** — currently placeholder.
-- **Audit Mode stages 7 and 8** — Phase 2 stubs.
-- **Real Supabase wire-up across all stages** — every Phase B stage works
-  against an in-session mock store.
+- **Ask tab — partial.** Site Mode Ask tab wraps DashboardChat with a
+  protocol context strip, "grounded in this protocol" framing, and
+  protocol-specific suggested prompts. Real per-protocol document scoping +
+  in-message citation traceability lands with the Supabase wire-up.
+- **Reports tab content (Site Mode)** — currently placeholder.
+- **Stages 7–8 Supabase wire-up** — Report Drafting and Final Review/Export
+  still read `mockReport.ts`. Queued behind Phases 7c–9.
+- **History drawer (real)** — schema captures deltas via
+  `state_history_deltas` and there's an `audit_mode_get_object_history` RPC,
+  but only a `HistoryDrawerStub` placeholder is wired in `RiskSummaryPanel`.
+  Still needs the real drawer component + per-stage button wiring.
+- **Drawer accessibility hooks** — ESC, body scroll lock, focus trap, focus
+  return on close, swipe-to-dismiss. Today each drawer rolls its own ad-hoc
+  handling. Should be centralised in shared hooks (`useOverlay`,
+  `useSwipeDismiss`).
+- **Adoption sweep of `text-fg-*` utilities** — the semantic text-tone
+  utilities exist (`text-fg-heading`, `-sub`, `-muted`, `-label`, `-body`)
+  and are dark-mode-aware; existing files still use per-component
+  `headingColor = isLight ? ...` constants. New code should prefer the
+  utilities; sweep is opportunistic.
 
 ---
 
@@ -201,9 +240,10 @@ phases:
    - **Central lab data integrity — CARDIAC-7** (Helix Diagnostics): Stage 1, fresh
    - **ePRO platform GxP audit — IMMUNE-14** (PatientPulse): Stage 5, mostly approved
 
-The migrations under `supabase/migrations/` haven't been applied to the live
-Supabase project yet — when they're applied, please flag any errors and we'll
-patch.
+The migrations under `supabase/migrations/` are deployed to both local and
+remote Supabase. The 3 seed audits above come from
+`20260429120000_seed_audit_mock_data.sql`. Stage advancement uses the
+`advance_audit_stage` RPC with server-side gating.
 
 ---
 
@@ -222,7 +262,7 @@ src/
       audit/
         AuditWorkspaceShell.tsx             3-pane layout owner
         StageNav.tsx                        Left rail
-        RiskSummaryPanel.tsx                Right rail
+        RiskSummaryPanel.tsx                Right rail (with internal HistoryDrawerStub)
         AuditRequiredGate.tsx               Empty state
         StagePlaceholder.tsx                Generic placeholder for unported stages
         stages/                             Per-stage workspaces
@@ -240,19 +280,30 @@ src/
     AuthContext, ThemeContext, ModeContext
     ProtocolContext.tsx                     Site Mode active protocol
     AuditContext.tsx                        Audit Mode active audit
+    AuditDataContext.tsx                    Per-stage shared cache, seeded
+                                            from mock fixtures; workspaces
+                                            fetch real data over the top
     HeatmapContext.tsx                      Heatmap layer toggle (default ON)
   lib/
     supabase.ts                             Supabase client
     audit/
       labels.ts                             Enum → display label maps
-      stateHistory.ts                       Client wrapper for state-delta RPCs
-      mockProtocolRisks.ts                  INTAKE mock data
-      mockVendorEnrichment.ts               VENDOR_ENRICHMENT mock data
-      mockQuestionnaire.ts                  QUESTIONNAIRE_REVIEW mock data
-      mockPreAudit.ts                       PRE_AUDIT_DRAFTING mock data (3 deliverables)
-      mockWorkspaceEntries.ts               AUDIT_CONDUCT mock data
-      mockReport.ts                         REPORT_DRAFTING / FINAL_REVIEW mock data
-      mockRiskSummary.ts                    Risk summary panel mock data
+      intakeApi.ts                          Stage 1 CRUD (Supabase)
+      vendorEnrichmentApi.ts                Stage 2 CRUD (Supabase)
+      questionnaireApi.ts                   Stage 3 (Supabase + RPC)
+      riskSummaryApi.ts                     Stage 4 approval state (Supabase)
+      preAuditApi.ts                        Stage 5 deliverables (Supabase)
+      workspaceEntriesApi.ts                Stage 6 entries (Supabase)
+      auditApi.ts                           advance_audit_stage RPC wrapper
+      historyApi.ts                         audit_mode_get_object_history RPC
+      stateHistory.ts                       Legacy client wrapper for state-delta RPCs
+      mockProtocolRisks.ts                  INTAKE mock fixtures
+      mockVendorEnrichment.ts               VENDOR_ENRICHMENT mock fixtures
+      mockQuestionnaire.ts                  QUESTIONNAIRE_REVIEW mock fixtures
+      mockPreAudit.ts                       PRE_AUDIT_DRAFTING mock fixtures
+      mockWorkspaceEntries.ts               AUDIT_CONDUCT mock fixtures
+      mockReport.ts                         REPORT_DRAFTING / FINAL_REVIEW (still seeded)
+      mockRiskSummary.ts                    Risk summary panel mock fixtures
     mockCalendarData.ts                     Site Mode Overview mock data
     mockSiteData.ts                         Participants + Team mock data
     heatmap.ts                              Heat scoring + tone tokens
@@ -294,14 +345,28 @@ Use **Opus** for tasks that require architectural judgment, cross-file reasoning
 
 In priority order:
 
-1. **Real Supabase wire-up** for all Phase B stages — replace mock context's seed data with `supabase.from(...)` queries and setters with `supabase.rpc(...)` calls. The `AuditDataContext` is the single replacement target. Blocked: migrations need to apply first.
-2. **Heatmap layer — done.** Chassis (HeatmapContext, scoring utilities, HeatIndicator with bar + chip variants), Navbar toggle (default ON, persisted), applied to 5 surfaces: calendar visit cells (bar), Audit Conduct workspace entries (chip), ParticipantsTab rows (chip), StageNav rail (bar), RiskSummaryPanel focus areas (chip). Real network-level scoring lands when Supabase wires up and we have aggregated data; until then the heuristics in `lib/heatmap.ts` give honest mock signals.
-3. **History drawer** wired to `audit_mode_get_object_history` so change history shows real entries (depends on Supabase wire-up)
-4. **Ask tab — partial.** Site Mode Ask tab now wraps DashboardChat with: protocol context strip ("Asking about [code · sponsor · phase]"), protocol-specific suggested prompts in the empty state, "grounded in this protocol" framing, and a transparent caveat that document-level scoping ships with the Supabase wire-up. The chat engine is unchanged; the surface around it now matches the spec's "structured execution copilot" framing instead of generic LLM. Remaining: real per-protocol document scoping + in-message citation traceability (depends on Supabase + a documents↔protocol relationship).
-5. **Mobile responsiveness — done.** StageNav mobile collapse, RiskSummaryPanel drawer access below xl, audit context header tightening on phones, calendar week-view vertical stacking on phones (sm: breakpoint), drawer slide-in transitions across all six drawer instances (visit detail, day detail, visit drawer, participant drawer, risk summary drawer + history). Smaller polish items (gesture-to-dismiss, focus management) deferred.
-6. **Polish/cleanup pass** — typography consistency, focus states, accessibility, transitions
+1. **Finish Supabase wire-up** — Phases 7c–9:
+   - 7c: Update `auditApi.ts` to map the new RPC return shape
+   - 7d: Verify with smoke test
+   - 8: End-to-end smoke test across the full lifecycle
+   - 9: Delete the seven status `.md` docs at project root + final commit
+2. **Stage 7–8 Supabase wire-up** (Report Drafting, Final Review/Export) — write `reportApi.ts`, replace `mockReport.ts` reads, drop the last MOCK seed in `AuditDataContext`. Queued behind Phases 7c–9.
+3. **History drawer** — pattern needs to be (re)built: a shared `HistoryDrawer` component that calls `audit_mode_get_object_history` and is embedded in each stage with the right `tracked_object_type`. Today only `RiskSummaryPanel` has a placeholder stub.
+4. **Reports tab content (Site Mode)** — currently a placeholder.
+5. **Polish — drawer behaviour** — shared hooks for ESC, body scroll lock, focus trap + return, and swipe-to-dismiss. Currently each drawer has bespoke handling (or none).
+6. **Polish — typography adoption sweep** — replace per-file `headingColor = isLight ? '#1a1f28' : 'white'` constants (50+ files) with the new `text-fg-*` utilities. Opportunistic; new code should already prefer the utilities.
+7. **Pre-existing typing bug** in `QuestionnaireReviewWorkspace.tsx` where the constructed `bundle` doesn't actually match `MockQuestionnaireBundle` (missing the `instance` wrapper). TS isn't catching it because of the explicit annotation.
+8. **Heatmap real-data refinement** — once enough audits exist, swap the Phase B heuristics in `heatmap.ts` for aggregated cross-audit signals.
 
 Stripe onboarding and landing page are external/marketing work, queued separately.
+
+## Polish system reference
+
+- **Text tones**: prefer `text-fg-heading`, `text-fg-body`, `text-fg-sub`,
+  `text-fg-muted`, `text-fg-label` over per-file `isLight ? '#1a1f28' : 'white'`
+  ternaries. Backed by CSS variables in `src/index.css` and a `fg.*` color
+  block in `tailwind.config.js`; switches automatically with `html.dark`.
+  No sweep yet — existing files keep working.
 
 ---
 
