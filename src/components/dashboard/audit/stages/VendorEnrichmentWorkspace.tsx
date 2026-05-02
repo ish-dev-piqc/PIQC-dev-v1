@@ -17,6 +17,8 @@ import {
 import VendorServiceForm, { type VendorServiceFormValues } from './vendor-enrichment/VendorServiceForm';
 import ServiceMappingTable from './vendor-enrichment/ServiceMappingTable';
 import TrustAssessmentForm, { type TrustAssessmentFormValues } from './vendor-enrichment/TrustAssessmentForm';
+import HistoryDrawer from '../HistoryDrawer';
+import type { TrackedObjectType } from '../../../../types/audit';
 
 // =============================================================================
 // VendorEnrichmentWorkspace — VENDOR_ENRICHMENT stage center pane.
@@ -53,6 +55,7 @@ export default function VendorEnrichmentWorkspace() {
   // Form modes
   const [serviceMode, setServiceMode] = useState<'view' | 'edit' | 'create'>('view');
   const [trustMode, setTrustMode] = useState<'view' | 'edit' | 'create'>('view');
+  const [historyTarget, setHistoryTarget] = useState<{ objectType: TrackedObjectType; objectId: string } | null>(null);
 
   // Reset modes when active audit changes
   useEffect(() => {
@@ -164,6 +167,7 @@ export default function VendorEnrichmentWorkspace() {
             service={service}
             isLight={isLight}
             onEdit={() => setServiceMode('edit')}
+            onHistoryClick={() => setHistoryTarget({ objectType: 'VENDOR_SERVICE_OBJECT', objectId: service.id })}
           />
         ) : (
           <VendorServiceForm
@@ -208,6 +212,7 @@ export default function VendorEnrichmentWorkspace() {
             assessment={assessment}
             isLight={isLight}
             onEdit={() => setTrustMode('edit')}
+            onHistoryClick={() => setHistoryTarget({ objectType: 'TRUST_ASSESSMENT_OBJECT', objectId: assessment.id })}
           />
         ) : (
           <TrustAssessmentForm
@@ -217,6 +222,15 @@ export default function VendorEnrichmentWorkspace() {
           />
         )}
       </SectionCard>
+
+      {historyTarget && (
+        <HistoryDrawer
+          objectType={historyTarget.objectType}
+          objectId={historyTarget.objectId}
+          title={historyTarget.objectType === 'VENDOR_SERVICE_OBJECT' ? 'Vendor service' : 'Trust assessment'}
+          onClose={() => setHistoryTarget(null)}
+        />
+      )}
     </div>
   );
 }
@@ -307,9 +321,10 @@ interface ServiceSummaryProps {
   service: MockVendorService;
   isLight: boolean;
   onEdit: () => void;
+  onHistoryClick: () => void;
 }
 
-function ServiceSummary({ service, isLight, onEdit }: ServiceSummaryProps) {
+function ServiceSummary({ service, isLight, onEdit, onHistoryClick }: ServiceSummaryProps) {
   const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
   const subColor = isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55';
   const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
@@ -356,7 +371,8 @@ function ServiceSummary({ service, isLight, onEdit }: ServiceSummaryProps) {
           <button
             type="button"
             className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
-            title="Change history (Phase B wires real history)"
+            title="Change history"
+            onClick={onHistoryClick}
           >
             <HistoryIcon size={12} />
             History
@@ -378,12 +394,14 @@ interface TrustAssessmentSummaryProps {
   assessment: MockTrustAssessment;
   isLight: boolean;
   onEdit: () => void;
+  onHistoryClick: () => void;
 }
 
 function TrustAssessmentSummary({
   assessment,
   isLight,
   onEdit,
+  onHistoryClick,
 }: TrustAssessmentSummaryProps) {
   const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
   const subColor = isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55';
@@ -486,7 +504,8 @@ function TrustAssessmentSummary({
         <button
           type="button"
           className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
-          title="Change history (Phase B wires real history)"
+          title="Change history"
+          onClick={onHistoryClick}
         >
           <HistoryIcon size={12} />
           History

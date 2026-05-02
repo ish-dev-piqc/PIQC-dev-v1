@@ -22,6 +22,7 @@ import type {
   ProvisionalClassification,
   ProvisionalImpact,
 } from '../../../../types/audit';
+import HistoryDrawer from '../HistoryDrawer';
 
 // =============================================================================
 // AuditConductWorkspace — AUDIT_CONDUCT stage center pane.
@@ -77,6 +78,7 @@ export default function AuditConductWorkspace() {
   const [mode, setMode] = useState<FormMode>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<EntryFormState>(EMPTY_FORM);
+  const [historyTarget, setHistoryTarget] = useState<{ objectId: string } | null>(null);
 
   useEffect(() => {
     setMode('list');
@@ -293,6 +295,7 @@ export default function AuditConductWorkspace() {
                     : null
                 }
                 onEdit={() => openEdit(e)}
+                onHistoryClick={() => setHistoryTarget({ objectId: e.id })}
                 isLight={isLight}
                 cardBg={cardBg}
                 headingColor={headingColor}
@@ -302,6 +305,15 @@ export default function AuditConductWorkspace() {
             ))}
           </div>
         </div>
+      )}
+
+      {historyTarget && (
+        <HistoryDrawer
+          objectType="AUDIT_WORKSPACE_ENTRY_OBJECT"
+          objectId={historyTarget.objectId}
+          title="Workspace entry"
+          onClose={() => setHistoryTarget(null)}
+        />
       )}
 
       {/* Stage transition */}
@@ -510,6 +522,7 @@ interface EntryRowProps {
   entry: MockWorkspaceEntry;
   protocolRisk: TaggedSection | null;
   onEdit: () => void;
+  onHistoryClick: () => void;
   isLight: boolean;
   cardBg: string;
   headingColor: string;
@@ -521,6 +534,7 @@ function EntryRow({
   entry,
   protocolRisk,
   onEdit,
+  onHistoryClick,
   isLight,
   cardBg,
   headingColor,
@@ -583,7 +597,8 @@ function EntryRow({
         <button
           type="button"
           className={`inline-flex items-center gap-1 ${subColor} hover:underline`}
-          title="Change history (Phase B wires real history)"
+          title="Change history"
+          onClick={onHistoryClick}
         >
           <HistoryIcon size={11} />
           History
