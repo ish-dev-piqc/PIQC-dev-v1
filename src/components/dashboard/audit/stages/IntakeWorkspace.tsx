@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, Clock, History as HistoryIcon } from 'lucide-react';
+import { Plus, Pencil, Clock, Trash2, History as HistoryIcon } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useAudit } from '../../../../context/AuditContext';
 import { useAuditData } from '../../../../context/AuditDataContext';
@@ -363,14 +363,29 @@ function SectionRow({
             )}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onEdit}
-          className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
-        >
-          <Pencil size={12} />
-          Edit
-        </button>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <button
+            type="button"
+            onClick={onEdit}
+            className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+          >
+            <Pencil size={12} />
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm(`Delete tagged section "${section.section_title}"? This cannot be undone.`)) {
+                void onDelete();
+              }
+            }}
+            className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+            title="Delete tagged section"
+            aria-label="Delete tagged section"
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
       </div>
     </div>
   );
