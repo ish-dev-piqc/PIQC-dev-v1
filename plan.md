@@ -1,6 +1,6 @@
 # PIQClinical — Build Plan & Status
 
-_Last updated: 2026-05-01 (Reports tab live; typing-bug note retired as stale)_
+_Last updated: 2026-05-01 ("View in Visits" cross-link wired; Reports tab live)_
 
 This document describes the current build of PIQClinical (PIQC), what's
 finished, and what's queued. It's the source of truth for "where are we" — the
@@ -170,7 +170,7 @@ queued behind 7c–9.
 - Week view: 7-day grid, 3 visits per cell with `+N more` overflow, today tinted
 - Month view: standard 42-cell grid, `+N more` per cell, day-detail drawer
 - Visit detail drawer with status, scheduled procedures, deviation/missed
-  callouts, "Start visit" stub, "View in Visits" link
+  callouts, "Start visit" stub, "View in Visits" link (navigates to Visits tab)
 - Empty-state cards for "nothing this week/month" vs "all hidden by filters"
 
 ### Other Site Mode tabs
@@ -208,7 +208,8 @@ phases:
   protocol context strip, "grounded in this protocol" framing, and
   protocol-specific suggested prompts. Real per-protocol document scoping +
   in-message citation traceability lands with the Supabase wire-up.
-- **Reports tab content (Site Mode)** — currently placeholder.
+- **"Start visit" action** — button exists in the visit detail drawer but has no handler; needs a flow (confirm modal, in-progress state, or navigation).
+- **Protocol tab** — currently shows the generic `KnowledgeBase` component. Should become a protocol-specific view (metadata, risk summary, outline) once the Reducto pipeline lands (D-009).
 - **Stages 7–8 Supabase wire-up** — Report Drafting and Final Review/Export
   still read `mockReport.ts`. Queued behind Phases 7c–9.
 
@@ -342,15 +343,25 @@ Use **Opus** for tasks that require architectural judgment, cross-file reasoning
 
 In priority order:
 
+**Backend / data:**
 1. **Finish Supabase wire-up** — Phases 7c–9:
    - 7c: Update `auditApi.ts` to map the new RPC return shape
    - 7d: Verify with smoke test
    - 8: End-to-end smoke test across the full lifecycle
    - 9: Delete the seven status `.md` docs at project root + final commit
 2. **Stage 7–8 Supabase wire-up** (Report Drafting, Final Review/Export) — write `reportApi.ts`, replace `mockReport.ts` reads, drop the last MOCK seed in `AuditDataContext`. Queued behind Phases 7c–9.
-3. **Heatmap real-data refinement** — once enough audits exist, swap the Phase B heuristics in `heatmap.ts` for aggregated cross-audit signals.
 
-Stripe onboarding and landing page are external/marketing work, queued separately.
+**Frontend polish (no backend dependency):**
+3. **"Start visit" flow** — the button in the visit detail drawer is a stub. Minimal: a "mark as in progress" state on the visit card. Full: a modal with procedure checklist.
+4. **ReportsTab → visit detail cross-link** — clicking a deviation or missed visit row in ReportsTab should open the visit detail drawer (same one used in the calendar). Needs `onVisitClick` threaded from Dashboard down to ReportsTab.
+5. **Heatmap on ReportsTab** — compliance rate stat card could carry a `HeatIndicator` once real data lands.
+
+**Blocked on D-009 / Reducto pipeline:**
+6. **Protocol tab** — replace `KnowledgeBase` with a protocol-specific view: metadata header, risk section outline, linked protocol risks. Blocked until document pipeline is resolved.
+
+**Deferred:**
+- Heatmap real-data refinement — swap Phase B heuristics once enough audits exist.
+- Stripe onboarding + landing page — external/marketing, queued separately.
 
 ## Polish system reference
 
