@@ -15,7 +15,11 @@ import {
   PROVISIONAL_CLASSIFICATION_LABELS,
   SERVICE_TYPE_OPTIONS,
 } from '../../../../lib/audit/labels';
-import type { MockReportDraft } from '../../../../lib/audit/mockReport';
+import {
+  fetchReportDraft,
+  upsertReportDraft,
+  approveReportDraft,
+} from '../../../../lib/audit/reportApi';
 import type { MockWorkspaceEntry } from '../../../../lib/audit/mockWorkspaceEntries';
 import type { ProvisionalClassification } from '../../../../types/audit';
 
@@ -42,7 +46,7 @@ const CLASSIFICATION_GROUPS: { key: ProvisionalClassification; label: string }[]
 export default function ReportDraftingWorkspace() {
   const { theme } = useTheme();
   const { activeAudit, advanceStage } = useAudit();
-  const data = useAuditData();
+  const { reports, setReports, ...data } = useAuditData();
   const isLight = theme === 'light';
 
   const [editing, setEditing] = useState<'summary' | 'conclusions' | null>(null);
@@ -53,9 +57,17 @@ export default function ReportDraftingWorkspace() {
     setEditing(null);
   }, [activeAudit?.id]);
 
+  useEffect(() => {
+    if (!activeAudit?.id) return;
+    const id = activeAudit.id;
+    fetchReportDraft(id).then((draft) => {
+      setReports((prev) => ({ ...prev, [id]: draft }));
+    });
+  }, [activeAudit?.id]);
+
   // Derive non-hook values (safe with null activeAudit since we read by key)
   const auditId = activeAudit?.id ?? null;
-  const report = auditId ? data.reports[auditId] ?? null : null;
+  const report = auditId ? reports[auditId] ?? null : null;
   const vendorService = auditId ? data.vendorServices[auditId] ?? null : null;
   const mappings = auditId ? data.serviceMappings[auditId] ?? [] : [];
   const protocolRisks = auditId ? data.protocolRisks[auditId] ?? [] : [];
@@ -83,23 +95,18 @@ export default function ReportDraftingWorkspace() {
   // ---------------------------------------------------------------------------
   // Mutations
   // ---------------------------------------------------------------------------
-  const generateStub = () => {
-    const stub: MockReportDraft = {
-      id: `rd-${auditId}-${Date.now()}`,
-      audit_id: auditId,
-      executive_summary:
-        '[Stub] This audit reviewed the contracted vendor service against the protocol-defined risk scope. Findings, observations, and OFIs are summarised below. Edit this paragraph down to your judgement.',
-      conclusions: '[Stub] Auditor conclusions go here.',
-      approval_status: 'DRAFT',
-      approved_at: null,
-      approved_by_name: null,
-      final_signed_off_at: null,
-      final_signed_off_by_name: null,
-      exported_at: null,
-    };
-    data.setReports((prev) => ({ ...prev, [auditId]: stub }));
-    setDraftSummary(stub.executive_summary);
-    setDraftConclusions(stub.conclusions);
+  const generateStub = async () => {
+    const stub = await upsertReportDraft(
+      auditId,
+      '[Stub] This audit reviewed the contracted vendor service against the protocol-defined risk scope. Findings, observations, and OFIs are summarised below. Edit this paragraph down to your judgement.',
+      '[Stub] Auditor conclusions go here.',
+      'Report stub generated',
+    );
+    if (stub) {
+      setReports((prev) => ({ ...prev, [auditId]: stub }));
+      setDraftSummary(stub.executive_summary);
+      setDraftConclusions(stub.conclusions);
+    }
   };
 
   const beginEdit = (which: 'summary' | 'conclusions') => {
@@ -109,48 +116,28 @@ export default function ReportDraftingWorkspace() {
     setEditing(which);
   };
 
-  const saveSummary = () => {
+  const saveSummary = async () => {
     if (!report) return;
-    data.setReports((prev) => ({
-      ...prev,
-      [auditId]: {
-        ...report,
-        executive_summary: draftSummary.trim(),
-        // Editing demotes to DRAFT
-        approval_status: 'DRAFT',
-        approved_at: null,
-        approved_by_name: null,
-      },
-    }));
-    setEditing(null);
+    const updated = await upsertReportDraft(auditId, draftSummary.trim(), report.conclusions);
+    if (updated) {
+      setReports((prev) => ({ ...prev, [auditId]: updated }));
+      setEditing(null);
+    }
   };
 
-  const saveConclusions = () => {
+  const saveConclusions = async () => {
     if (!report) return;
-    data.setReports((prev) => ({
-      ...prev,
-      [auditId]: {
-        ...report,
-        conclusions: draftConclusions.trim(),
-        approval_status: 'DRAFT',
-        approved_at: null,
-        approved_by_name: null,
-      },
-    }));
-    setEditing(null);
+    const updated = await upsertReportDraft(auditId, report.executive_summary, draftConclusions.trim());
+    if (updated) {
+      setReports((prev) => ({ ...prev, [auditId]: updated }));
+      setEditing(null);
+    }
   };
 
-  const approve = () => {
+  const approve = async () => {
     if (!report) return;
-    data.setReports((prev) => ({
-      ...prev,
-      [auditId]: {
-        ...report,
-        approval_status: 'APPROVED',
-        approved_at: new Date().toISOString(),
-        approved_by_name: 'You',
-      },
-    }));
+    const updated = await approveReportDraft(report.id);
+    if (updated) setReports((prev) => ({ ...prev, [auditId]: updated }));
   };
 
   // ---------------------------------------------------------------------------

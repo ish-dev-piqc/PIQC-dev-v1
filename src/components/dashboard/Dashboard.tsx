@@ -564,7 +564,14 @@ export default function Dashboard({
         );
       // Shared
       case 'reports':
-        return <ReportsTab />;
+        return (
+          <ReportsTab
+            onNavigateToVisits={() => {
+              onTabChange?.('visits');
+              if (!onTabChange) setInternalActiveTab('visits');
+            }}
+          />
+        );
       case 'settings':
         return (
           <SettingsTab
