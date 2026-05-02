@@ -22,6 +22,15 @@ import {
   type MockChecklist,
   type MockPreAuditBundle,
 } from '../../../../lib/audit/mockPreAudit';
+import {
+  fetchPreAuditDeliverables,
+  upsertConfirmationLetter,
+  approveConfirmationLetter,
+  upsertAgenda,
+  approveAgenda,
+  upsertChecklist,
+  approveChecklist,
+} from '../../../../lib/audit/preAuditApi';
 import type { DeliverableApprovalStatus } from '../../../../types/audit';
 
 // =============================================================================
@@ -80,6 +89,21 @@ export default function PreAuditDraftingWorkspace() {
     setActiveTab('confirmation_letter');
   }, [activeAudit?.id]);
 
+  useEffect(() => {
+    if (!activeAudit) return;
+    const load = async () => {
+      try {
+        const next = await fetchPreAuditDeliverables(activeAudit.id);
+        setBundles((prev) => ({ ...prev, [activeAudit.id]: next }));
+      } catch (err) {
+        console.error('[PreAuditDraftingWorkspace] Load error:', err);
+      }
+    };
+    load();
+    // Depend on activeAudit?.id only — see RiskSummaryPanel for rationale.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAudit?.id, setBundles]);
+
   if (!activeAudit) return null;
 
   const auditId = activeAudit.id;
@@ -90,18 +114,110 @@ export default function PreAuditDraftingWorkspace() {
   };
 
   // ---------------------------------------------------------------------------
-  // Mutations (mock-backed)
+  // Mutations
+  //
+  // Each tab calls onChange(next | null). We diff against the current bundle
+  // to figure out: was content edited? was approval transitioned?
+  // Then call the right RPC. Optimistic update, revert on failure.
   // ---------------------------------------------------------------------------
   const setBundle = (next: MockPreAuditBundle) => {
     setBundles((prev) => ({ ...prev, [auditId]: next }));
   };
 
-  const generateAllStubs = () => {
-    setBundle({
+  const persistConfirmationLetter = async (
+    prev: MockConfirmationLetter | null,
+    next: MockConfirmationLetter | null,
+  ) => {
+    if (!next) return;
+    try {
+      const isApprovalTransition =
+        !!prev &&
+        prev.approval_status !== 'APPROVED' &&
+        next.approval_status === 'APPROVED';
+
+      const persisted = isApprovalTransition
+        ? await approveConfirmationLetter(prev.id)
+        : await upsertConfirmationLetter(auditId, next.content);
+
+      if (persisted) {
+        setBundle({ ...bundle, confirmation_letter: persisted });
+      }
+    } catch (err) {
+      console.error('[PreAuditDraftingWorkspace] persistConfirmationLetter error:', err);
+      setBundle({ ...bundle, confirmation_letter: prev });
+    }
+  };
+
+  const persistAgenda = async (
+    prev: MockAgenda | null,
+    next: MockAgenda | null,
+  ) => {
+    if (!next) return;
+    try {
+      const isApprovalTransition =
+        !!prev &&
+        prev.approval_status !== 'APPROVED' &&
+        next.approval_status === 'APPROVED';
+
+      const persisted = isApprovalTransition
+        ? await approveAgenda(prev.id)
+        : await upsertAgenda(auditId, next.content);
+
+      if (persisted) {
+        setBundle({ ...bundle, agenda: persisted });
+      }
+    } catch (err) {
+      console.error('[PreAuditDraftingWorkspace] persistAgenda error:', err);
+      setBundle({ ...bundle, agenda: prev });
+    }
+  };
+
+  const persistChecklist = async (
+    prev: MockChecklist | null,
+    next: MockChecklist | null,
+  ) => {
+    if (!next) return;
+    try {
+      const isApprovalTransition =
+        !!prev &&
+        prev.approval_status !== 'APPROVED' &&
+        next.approval_status === 'APPROVED';
+
+      const persisted = isApprovalTransition
+        ? await approveChecklist(prev.id)
+        : await upsertChecklist(auditId, next.content);
+
+      if (persisted) {
+        setBundle({ ...bundle, checklist: persisted });
+      }
+    } catch (err) {
+      console.error('[PreAuditDraftingWorkspace] persistChecklist error:', err);
+      setBundle({ ...bundle, checklist: prev });
+    }
+  };
+
+  const generateAllStubs = async () => {
+    const stubs = {
       confirmation_letter: createConfirmationStub(auditId),
       agenda: createAgendaStub(auditId),
       checklist: createChecklistStub(auditId),
-    });
+    };
+    setBundle(stubs);
+
+    try {
+      const [letter, agenda, checklist] = await Promise.all([
+        upsertConfirmationLetter(auditId, stubs.confirmation_letter.content, 'Generated stub'),
+        upsertAgenda(auditId, stubs.agenda.content, 'Generated stub'),
+        upsertChecklist(auditId, stubs.checklist.content, 'Generated stub'),
+      ]);
+      setBundle({
+        confirmation_letter: letter ?? stubs.confirmation_letter,
+        agenda: agenda ?? stubs.agenda,
+        checklist: checklist ?? stubs.checklist,
+      });
+    } catch (err) {
+      console.error('[PreAuditDraftingWorkspace] generateAllStubs error:', err);
+    }
   };
 
   // ---------------------------------------------------------------------------
@@ -224,21 +340,30 @@ export default function PreAuditDraftingWorkspace() {
         <ConfirmationLetterTab
           deliverable={bundle.confirmation_letter}
           isLight={isLight}
-          onChange={(next) => setBundle({ ...bundle, confirmation_letter: next })}
+          onChange={(next) => {
+            setBundle({ ...bundle, confirmation_letter: next });
+            persistConfirmationLetter(bundle.confirmation_letter, next);
+          }}
         />
       )}
       {activeTab === 'agenda' && (
         <AgendaTab
           deliverable={bundle.agenda}
           isLight={isLight}
-          onChange={(next) => setBundle({ ...bundle, agenda: next })}
+          onChange={(next) => {
+            setBundle({ ...bundle, agenda: next });
+            persistAgenda(bundle.agenda, next);
+          }}
         />
       )}
       {activeTab === 'checklist' && (
         <ChecklistTab
           deliverable={bundle.checklist}
           isLight={isLight}
-          onChange={(next) => setBundle({ ...bundle, checklist: next })}
+          onChange={(next) => {
+            setBundle({ ...bundle, checklist: next });
+            persistChecklist(bundle.checklist, next);
+          }}
         />
       )}
 
