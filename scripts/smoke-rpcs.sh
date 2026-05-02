@@ -512,6 +512,92 @@ fi
 echo
 
 # ---------------------------------------------------------------------------
+# Test 11 — Stage 7: report draft lifecycle
+#   create → approve → same-text noop → edit-demote back to DRAFT
+# ---------------------------------------------------------------------------
+
+echo "════════════════════════════════════════════════════════════════"
+echo "  Test 11 — Stage 7: report_draft lifecycle"
+echo "════════════════════════════════════════════════════════════════"
+
+SUMMARY_A="Executive summary A $SMOKE_REASON_TAG"
+SUMMARY_B="Executive summary B (edit) $SMOKE_REASON_TAG"
+CONCLUSIONS_A="Conclusions A $SMOKE_REASON_TAG"
+
+# Step 1 — create
+rpc_call audit_mode_upsert_report_draft "$(jq -n \
+  --arg id "$AUDIT_003" --arg s "$SUMMARY_A" --arg c "$CONCLUSIONS_A" --arg reason "t11s1 $SMOKE_REASON_TAG" \
+  '{p_audit_id:$id, p_executive_summary:$s, p_conclusions:$c, p_reason:$reason}')"
+T11_S1=$(echo "$RESP" | jq -r '.approval_status // empty')
+NEW_RD_ID=$(echo "$RESP" | jq -r '.id // empty')
+CREATED_DELTA_REASONS+=("t11s1 $SMOKE_REASON_TAG")
+
+# Step 2 — approve
+rpc_call audit_mode_approve_report_draft "$(jq -n \
+  --arg id "$NEW_RD_ID" --arg reason "t11s2 $SMOKE_REASON_TAG" '{p_id:$id, p_reason:$reason}')"
+T11_S2=$(echo "$RESP" | jq -r '.approval_status // empty')
+CREATED_DELTA_REASONS+=("t11s2 $SMOKE_REASON_TAG")
+
+# Step 3 — same content (no-op — status should remain APPROVED)
+rpc_call audit_mode_upsert_report_draft "$(jq -n \
+  --arg id "$AUDIT_003" --arg s "$SUMMARY_A" --arg c "$CONCLUSIONS_A" --arg reason "t11s3 $SMOKE_REASON_TAG" \
+  '{p_audit_id:$id, p_executive_summary:$s, p_conclusions:$c, p_reason:$reason}')"
+T11_S3=$(echo "$RESP" | jq -r '.approval_status // empty')
+CREATED_DELTA_REASONS+=("t11s3 $SMOKE_REASON_TAG")
+
+# Step 4 — different text (should demote to DRAFT)
+rpc_call audit_mode_upsert_report_draft "$(jq -n \
+  --arg id "$AUDIT_003" --arg s "$SUMMARY_B" --arg c "$CONCLUSIONS_A" --arg reason "t11s4 $SMOKE_REASON_TAG" \
+  '{p_audit_id:$id, p_executive_summary:$s, p_conclusions:$c, p_reason:$reason}')"
+T11_S4=$(echo "$RESP" | jq -r '.approval_status // empty')
+CREATED_DELTA_REASONS+=("t11s4 $SMOKE_REASON_TAG")
+
+if [[ "$T11_S1" == "DRAFT" && "$T11_S2" == "APPROVED" && "$T11_S3" == "APPROVED" && "$T11_S4" == "DRAFT" ]]; then
+  pass "T11: lifecycle DRAFT → APPROVED → APPROVED (noop) → DRAFT (edit demote)"
+else
+  fail "T11: report_draft lifecycle" "s1=$T11_S1 s2=$T11_S2 s3=$T11_S3 s4=$T11_S4"
+fi
+echo
+
+# ---------------------------------------------------------------------------
+# Test 12 — Stage 8: final sign-off + export
+# ---------------------------------------------------------------------------
+
+echo "════════════════════════════════════════════════════════════════"
+echo "  Test 12 — Stage 8: final sign-off + export"
+echo "════════════════════════════════════════════════════════════════"
+
+# Re-approve the draft so sign-off has a valid approved report to lock
+rpc_call audit_mode_approve_report_draft "$(jq -n \
+  --arg id "$NEW_RD_ID" --arg reason "t12 pre-approve $SMOKE_REASON_TAG" '{p_id:$id, p_reason:$reason}')"
+CREATED_DELTA_REASONS+=("t12 pre-approve $SMOKE_REASON_TAG")
+
+# Step 1 — final sign-off
+rpc_call audit_mode_final_sign_off_report "$(jq -n \
+  --arg id "$NEW_RD_ID" --arg reason "t12 sign-off $SMOKE_REASON_TAG" '{p_id:$id, p_reason:$reason}')"
+T12_SIGNED=$(echo "$RESP" | jq -r '.final_signed_off_at // empty')
+T12_BY=$(echo "$RESP" | jq -r '.final_signed_off_by // empty')
+CREATED_DELTA_REASONS+=("t12 sign-off $SMOKE_REASON_TAG")
+
+# Step 2 — mark exported
+rpc_call audit_mode_mark_report_exported "$(jq -n --arg id "$NEW_RD_ID" '{p_id:$id}')"
+T12_EXPORTED=$(echo "$RESP" | jq -r '.exported_at // empty')
+CREATED_DELTA_REASONS+=("Report exported")
+
+if [[ -n "$T12_SIGNED" && "$T12_SIGNED" != "null" && -n "$T12_BY" && "$T12_BY" != "null" ]]; then
+  pass "T12a: final_signed_off_at stamped, actor=$T12_BY"
+else
+  fail "T12a: final sign-off" "signed_at=$T12_SIGNED signed_by=$T12_BY"
+fi
+
+if [[ -n "$T12_EXPORTED" && "$T12_EXPORTED" != "null" ]]; then
+  pass "T12b: exported_at stamped"
+else
+  fail "T12b: mark_report_exported" "exported_at=$T12_EXPORTED"
+fi
+echo
+
+# ---------------------------------------------------------------------------
 # Cleanup — delete all smoke-test deltas + the rows we created
 # ---------------------------------------------------------------------------
 
@@ -546,6 +632,13 @@ curl -s -X DELETE "$REST/state_history_deltas?reason=like.*$(printf '%s' "$SMOKE
 # Delete the questionnaire_response we created in T4 (also cleans T5)
 if [[ -n "${NEW_RESP_ID:-}" ]]; then
   curl -s -X DELETE "$REST/questionnaire_response_objects?id=eq.$NEW_RESP_ID" \
+    -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+    -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" >/dev/null
+fi
+
+# Delete the report_draft we created in T11 (also cleans T12)
+if [[ -n "${NEW_RD_ID:-}" ]]; then
+  curl -s -X DELETE "$REST/report_draft_objects?id=eq.$NEW_RD_ID" \
     -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
     -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" >/dev/null
 fi

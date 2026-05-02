@@ -27,13 +27,12 @@ import VisitDetailDrawer from './VisitDetailDrawer';
 // Mock-backed; real data lands with Supabase wire-up.
 // =============================================================================
 
-const TODAY = '2026-05-01';
-
-export default function ReportsTab() {
+export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?: () => void } = {}) {
   const { theme } = useTheme();
   const { activeProtocol, protocols } = useProtocol();
   const isLight = theme === 'light';
   const today = useMemo(() => new Date(), []);
+  const todayStr = useMemo(() => today.toISOString().slice(0, 10), [today]);
   const [selectedVisit, setSelectedVisit] = useState<CalendarVisit | null>(null);
 
   const headingColor = 'text-fg-heading';
@@ -76,7 +75,7 @@ export default function ReportsTab() {
         ? Math.round((completed / concluded.length) * 100)
         : null;
     const upcoming = scopedVisits.filter(
-      (v) => v.status === 'scheduled' && v.date >= TODAY,
+      (v) => v.status === 'scheduled' && v.date >= todayStr,
     ).length;
     return {
       completed,
@@ -88,7 +87,7 @@ export default function ReportsTab() {
       upcoming,
       concluded: concluded.length,
     };
-  }, [scopedVisits, scopedParticipants]);
+  }, [scopedVisits, scopedParticipants, todayStr]);
 
   const protocolRows = useMemo(
     () =>
@@ -203,7 +202,7 @@ export default function ReportsTab() {
         {/* Protocol compliance table (cross-protocol only) */}
         {!activeProtocol && (
           <div className={`${cardBg} border rounded-xl overflow-hidden`}>
-            <div className="px-5 py-3.5 border-b ${rowBorder}">
+            <div className={`px-5 py-3.5 border-b ${rowBorder}`}>
               <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
                 Protocol compliance
               </p>
@@ -376,6 +375,7 @@ export default function ReportsTab() {
           protocols={protocols}
           today={today}
           onClose={() => setSelectedVisit(null)}
+          onNavigateToVisits={onNavigateToVisits}
         />
       )}
     </div>

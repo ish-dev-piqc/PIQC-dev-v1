@@ -9,6 +9,7 @@ import {
   X,
   ExternalLink,
   Check,
+  Users,
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useOverlay } from '../../../hooks/useOverlay';
@@ -409,6 +410,14 @@ export default function VisitDetailDrawer({
               >
                 <ExternalLink size={14} />
                 View in Visits
+              </button>
+              <button
+                type="button"
+                disabled
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium opacity-40 cursor-not-allowed text-fg-muted"
+              >
+                <Users size={14} />
+                View participant profile
               </button>
             </>
           )}
