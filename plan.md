@@ -1,6 +1,6 @@
 # PIQClinical — Build Plan & Status
 
-_Last updated: 2026-05-01 (History drawer live + per-stage wired; drawer accessibility hooks in place)_
+_Last updated: 2026-05-01 (Reports tab live; typing-bug note retired as stale)_
 
 This document describes the current build of PIQClinical (PIQC), what's
 finished, and what's queued. It's the source of truth for "where are we" — the
@@ -66,8 +66,9 @@ ahead of the data pipeline.
 | Ask tab redesign — protocol-grounded copilot | Replace generic chat with protocol-anchored Ask experience | ✓ Done (per-protocol scoping awaits Supabase) |
 | Mobile responsiveness pass | StageNav collapse, drawer access, calendar stacking, transitions | ✓ Done |
 | History drawer | Per-object change history surfaced in each stage | ✓ Done — `HistoryDrawer` calls `audit_mode_get_object_history`; wired in RiskSummaryPanel + all 4 stages with history buttons |
-| Polish — semantic text tones | `text-fg-*` Tailwind utilities backed by CSS variables; dark-mode aware | ✓ Utilities live; adoption sweep is opportunistic |
+| Polish — semantic text tones | `text-fg-*` Tailwind utilities backed by CSS variables; dark-mode aware | ✓ Done — utilities live; adoption sweep complete (opacity-modified variants intentionally left as-is) |
 | Polish — drawer accessibility (ESC, scroll lock, focus trap, swipe dismiss) | Shared hooks for drawer behaviour | ✓ Done — `useOverlay` + `useSwipeDismiss` in `src/hooks/`; applied to all audit + site drawers |
+| Reports tab (Site Mode) | Compliance metrics, deviation log, missed visits — mock-backed | ✓ Done |
 | Stage 7–8 Supabase wire-up (Report / Final Review) | Persist report draft + final review state | ○ Not started |
 | Stripe onboarding + landing page | Customer-facing marketing + checkout | ○ Not started |
 
@@ -174,10 +175,9 @@ queued behind 7c–9.
 
 ### Other Site Mode tabs
 
-Participants, Visits, Protocol, Team, Ask, Reports are placeholders. They live
-behind the protocol-required gate so users see a "select a protocol" prompt
-when in cross-protocol scope. Real content lands as Site Mode features get
-prioritised.
+- **Participants, Visits, Team, Ask** — real content, behind ProtocolRequiredGate.
+- **Reports** — real content, NOT behind ProtocolRequiredGate (works in both all-protocols and single-protocol scope). Shows 4 stat cards (active participants, compliance rate, open deviations, upcoming visits), protocol compliance table (cross-protocol mode), deviation log, and missed visits log. Mock-backed.
+- **Protocol** — placeholder.
 
 ---
 
@@ -211,11 +211,6 @@ phases:
 - **Reports tab content (Site Mode)** — currently placeholder.
 - **Stages 7–8 Supabase wire-up** — Report Drafting and Final Review/Export
   still read `mockReport.ts`. Queued behind Phases 7c–9.
-- **Adoption sweep of `text-fg-*` utilities** — the semantic text-tone
-  utilities exist (`text-fg-heading`, `-sub`, `-muted`, `-label`, `-body`)
-  and are dark-mode-aware; existing files still use per-component
-  `headingColor = isLight ? ...` constants. New code should prefer the
-  utilities; sweep is opportunistic.
 
 ---
 
@@ -248,9 +243,14 @@ src/
     dashboard/
       Dashboard.tsx                         Mode dispatcher
       site/
-        TodayTab.tsx                        Calendar overview (renamed from Today)
-        ParticipantsTab.tsx, etc.           Placeholders
-        ProtocolRequiredGate.tsx
+        TodayTab.tsx                        Calendar overview (week + month views, drawers)
+        ParticipantsTab.tsx                 ✓ Real — participant roster + status filter + visit counts
+        VisitsTab.tsx                       ✓ Real — sortable visit list with status filters + search
+        TeamTab.tsx                         ✓ Real — delegation log, cert expiry callouts
+        AskTab.tsx                          ✓ Real — protocol-anchored copilot (doc scoping pending Supabase)
+        ReportsTab.tsx                      ✓ Real — compliance metrics, deviation log, missed visits
+        ProtocolRequiredGate.tsx            Protocol-scope guard for per-protocol tabs
+        SitePlaceholder.tsx                 Generic placeholder (unused after Reports)
       audit/
         AuditWorkspaceShell.tsx             3-pane layout owner
         StageNav.tsx                        Left rail
@@ -348,20 +348,18 @@ In priority order:
    - 8: End-to-end smoke test across the full lifecycle
    - 9: Delete the seven status `.md` docs at project root + final commit
 2. **Stage 7–8 Supabase wire-up** (Report Drafting, Final Review/Export) — write `reportApi.ts`, replace `mockReport.ts` reads, drop the last MOCK seed in `AuditDataContext`. Queued behind Phases 7c–9.
-3. **Reports tab content (Site Mode)** — currently a placeholder.
-4. **Polish — typography adoption sweep** — replace per-file `headingColor = isLight ? '#1a1f28' : 'white'` constants (50+ files) with the new `text-fg-*` utilities. Opportunistic; new code should already prefer the utilities.
-5. **Pre-existing typing bug** in `QuestionnaireReviewWorkspace.tsx` where the constructed `bundle` doesn't actually match `MockQuestionnaireBundle` (missing the `instance` wrapper). TS isn't catching it because of the explicit annotation.
-6. **Heatmap real-data refinement** — once enough audits exist, swap the Phase B heuristics in `heatmap.ts` for aggregated cross-audit signals.
+3. **Heatmap real-data refinement** — once enough audits exist, swap the Phase B heuristics in `heatmap.ts` for aggregated cross-audit signals.
 
 Stripe onboarding and landing page are external/marketing work, queued separately.
 
 ## Polish system reference
 
-- **Text tones**: prefer `text-fg-heading`, `text-fg-body`, `text-fg-sub`,
-  `text-fg-muted`, `text-fg-label` over per-file `isLight ? '#1a1f28' : 'white'`
-  ternaries. Backed by CSS variables in `src/index.css` and a `fg.*` color
-  block in `tailwind.config.js`; switches automatically with `html.dark`.
-  No sweep yet — existing files keep working.
+- **Text tones**: use `text-fg-heading`, `text-fg-body`, `text-fg-sub`,
+  `text-fg-muted`, `text-fg-label`. Backed by CSS variables in `src/index.css`
+  and a `fg.*` color block in `tailwind.config.js`; switches automatically with
+  `html.dark`. Adoption sweep is complete — all solid-color ternaries converted.
+  Opacity-modified variants (e.g. `text-[#374152]/25`) are intentionally left
+  as per-file constants since they can't collapse to a single token.
 
 ---
 

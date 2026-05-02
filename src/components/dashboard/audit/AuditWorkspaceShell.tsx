@@ -79,9 +79,9 @@ export default function AuditWorkspaceShell() {
   const headerBg = isLight
     ? 'bg-white border-[#e2e8ee]'
     : 'bg-[#131a22] border-white/5';
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
+  const mutedColor = 'text-fg-muted';
   const chipBg = isLight
     ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/20 text-[#4a6fa5]'
     : 'bg-[#4a6fa5]/15 border-[#4a6fa5]/30 text-[#6e8fb5]';

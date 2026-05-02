@@ -6,7 +6,7 @@ export default function Footer() {
   const isLight = theme === 'light';
 
   const bg = isLight ? 'bg-[#f5f7fa] border-[#e2e8ee]' : 'bg-[#0d1118] border-white/[0.06]';
-  const logoText = isLight ? 'text-[#1a1f28]' : 'text-white';
+  const logoText = 'text-fg-heading';
   const linkColor = isLight ? 'text-[#374152]/50 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.05]' : 'text-[#d2d7e0]/50 hover:text-white hover:bg-white/[0.06]';
   const divider = isLight ? 'border-[#e2e8ee]' : 'border-white/[0.05]';
   const footerMeta = isLight ? 'text-[#374152]/25' : 'text-[#d2d7e0]/25';

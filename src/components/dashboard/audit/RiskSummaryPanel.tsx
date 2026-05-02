@@ -83,10 +83,10 @@ export default function RiskSummaryPanel({
   // ---------------------------------------------------------------------------
   const panelBg = isLight ? 'bg-[#f9fafc] border-[#e2e8ee]' : 'bg-[#0e141b] border-white/5';
   const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
-  const sectionHeader = isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
+  const mutedColor = 'text-fg-muted';
+  const sectionHeader = 'text-fg-label';
   const inputBorder = isLight ? 'border-[#cbd2db] focus:border-[#4a6fa5]' : 'border-white/15 focus:border-[#6e8fb5]';
   const inputBg = isLight ? 'bg-white' : 'bg-[#131a22]';
   const buttonPrimary = isLight

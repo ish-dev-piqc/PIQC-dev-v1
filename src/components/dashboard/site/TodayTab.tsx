@@ -275,9 +275,9 @@ export default function TodayTab() {
   const clearFilters = () => setFilters({ hiddenProtocols: [], hiddenParticipants: [] });
 
   // Theme tokens.
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
+  const mutedColor = 'text-fg-muted';
   const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
 
   const displayName =
@@ -583,7 +583,7 @@ function NeedsAttentionBand({ items, isLight, isHome, onItemClick }: NeedsAttent
     : 'bg-amber-500/[0.04] border-amber-500/15';
   const labelColor = isLight ? 'text-amber-700' : 'text-amber-400';
   const textColor = isLight ? 'text-[#1a1f28]/85' : 'text-[#d2d7e0]/85';
-  const mutedColor = isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45';
+  const mutedColor = 'text-fg-muted';
   const popoverBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
   const rowHover = isLight ? 'hover:bg-[#f5f7fa]' : 'hover:bg-white/[0.03]';
   const moreChip = isLight
@@ -763,9 +763,9 @@ function CalendarFilters({
   onClose,
 }: CalendarFiltersProps) {
   const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
-  const sectionHeader = isLight ? 'text-[#374152]/50' : 'text-[#d2d7e0]/45';
-  const textColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const mutedColor = isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45';
+  const sectionHeader = 'text-fg-label';
+  const textColor = 'text-fg-heading';
+  const mutedColor = 'text-fg-muted';
 
   const shownProtocols = isHome ? protocols : protocols.filter((p) => p.id === activeProtocolId);
 
@@ -917,10 +917,10 @@ function WeekView({ isLight, isHome, anchorDate, today, visitsByDate, onVisitCli
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
 
   const headerBg = isLight ? 'bg-[#f9fafc]' : 'bg-[#0e141b]';
-  const headerText = isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45';
+  const headerText = 'text-fg-label';
   const dayBorder = isLight ? 'border-[#eef2f6]' : 'border-white/[0.04]';
   const todayTint = isLight ? 'bg-[#4a6fa5]/[0.04]' : 'bg-[#6e8fb5]/[0.04]';
-  const numberColor = isLight ? 'text-[#1a1f28]' : 'text-white';
+  const numberColor = 'text-fg-heading';
   const todayNumber = isLight ? 'bg-[#4a6fa5] text-white' : 'bg-[#6e8fb5] text-[#1a1f28]';
   const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
 
@@ -1067,8 +1067,8 @@ function WeekVisitRow({ visit, isLight, isHome, past, onClick }: WeekVisitRowPro
   const accent = colors ? (isLight ? colors.accentLight : colors.accentDark) : '';
   const chip = colors ? (isLight ? colors.chipLight : colors.chipDark) : '';
   const rowBg = isLight ? 'bg-white hover:bg-[#f5f7fa]' : 'bg-[#131a22] hover:bg-white/[0.03]';
-  const textColor = isLight ? 'text-[#1a1f28]' : 'text-[#d2d7e0]';
-  const mutedColor = isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45';
+  const textColor = 'text-fg-heading';
+  const mutedColor = 'text-fg-muted';
 
   return (
     <button
@@ -1121,13 +1121,13 @@ function MonthView({ isLight, isHome, anchorDate, today, visitsByDate, onVisitCl
   const days = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
 
   const headerBg = isLight ? 'bg-[#f9fafc]' : 'bg-[#0e141b]';
-  const headerText = isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45';
+  const headerText = 'text-fg-label';
   const dayBorder = isLight ? 'border-[#eef2f6]' : 'border-white/[0.04]';
   const todayTint = isLight ? 'bg-[#4a6fa5]/[0.04]' : 'bg-[#6e8fb5]/[0.04]';
-  const numberColor = isLight ? 'text-[#1a1f28]' : 'text-white';
+  const numberColor = 'text-fg-heading';
   const todayNumber = isLight ? 'bg-[#4a6fa5] text-white' : 'bg-[#6e8fb5] text-[#1a1f28]';
   const outsideMonth = isLight ? 'text-[#374152]/25' : 'text-[#d2d7e0]/20';
-  const mutedColor = isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45';
+  const mutedColor = 'text-fg-muted';
 
   const weekdayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -1250,9 +1250,9 @@ function DayDetailDrawer({ isLight, isHome, day, today, visits, onClose, onVisit
   const past = isPast(day, today);
   const bg = isLight ? 'bg-white' : 'bg-[#131a22]';
   const border = isLight ? 'border-[#e2e8ee]' : 'border-white/5';
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
+  const mutedColor = 'text-fg-muted';
 
   return (
     <div
@@ -1349,10 +1349,10 @@ function VisitDetailDrawer({ isLight, visit, protocols, today, onClose }: VisitD
 
   const bg = isLight ? 'bg-white' : 'bg-[#131a22]';
   const border = isLight ? 'border-[#e2e8ee]' : 'border-white/5';
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/60' : 'text-[#d2d7e0]/55';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
-  const sectionHeader = isLight ? 'text-[#374152]/50' : 'text-[#d2d7e0]/45';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
+  const mutedColor = 'text-fg-muted';
+  const sectionHeader = 'text-fg-label';
   const chip = colors ? (isLight ? colors.chipLight : colors.chipDark) : '';
   const panelBg = isLight ? 'bg-[#f9fafc] border-[#eef2f6]' : 'bg-white/[0.02] border-white/[0.04]';
   const deviationBg = isLight ? 'bg-amber-50 border-amber-200/80' : 'bg-amber-500/[0.06] border-amber-500/15';
@@ -1548,9 +1548,9 @@ function CalendarEmptyState({
   onJumpToToday,
   isToday,
 }: CalendarEmptyStateProps) {
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
+  const mutedColor = 'text-fg-muted';
   const iconBg = isLight
     ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/20 text-[#4a6fa5]'
     : 'bg-[#6e8fb5]/15 border-[#6e8fb5]/25 text-[#6e8fb5]';

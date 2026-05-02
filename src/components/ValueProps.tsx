@@ -69,9 +69,9 @@ export default function ValueProps() {
 
   const bg = isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]';
   const border = isLight ? 'border-[#e2e8ee]' : 'border-white/[0.05]';
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const bodyColor = isLight ? 'text-[#374152]/50' : 'text-[#d2d7e0]/50';
-  const stepHeadColor = isLight ? 'text-[#1a1f28]' : 'text-white';
+  const headingColor = 'text-fg-heading';
+  const bodyColor = 'text-fg-sub';
+  const stepHeadColor = 'text-fg-heading';
   const iconBg = isLight ? 'bg-[#4a6fa5]/10 border border-[#4a6fa5]/20' : 'bg-[#4a6fa5]/15 border border-[#4a6fa5]/25';
 
   return (

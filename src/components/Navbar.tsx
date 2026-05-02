@@ -392,7 +392,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
     ? 'border-t border-[#e2e8ee] bg-white px-4 pb-4 pt-2 shadow-lg'
     : 'border-t border-white/[0.06] bg-[#0d1118] px-4 pb-4 pt-2 shadow-lg';
 
-  const logoTextColor = isLight ? 'text-[#1a1f28]' : 'text-white';
+  const logoTextColor = 'text-fg-heading';
 
   return (
     <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${headerBg}`}>

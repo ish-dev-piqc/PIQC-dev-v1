@@ -81,10 +81,10 @@ export default function AskTab({
   // ---------------------------------------------------------------------------
   // Theme tokens
   // ---------------------------------------------------------------------------
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
-  const sectionHeader = isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
+  const mutedColor = 'text-fg-muted';
+  const sectionHeader = 'text-fg-label';
   const stripBg = isLight
     ? 'bg-[#4a6fa5]/[0.05] border-[#4a6fa5]/20'
     : 'bg-[#6e8fb5]/[0.06] border-[#6e8fb5]/25';

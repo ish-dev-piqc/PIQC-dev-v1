@@ -48,9 +48,9 @@ export default function ServiceMappingTable({
   const mappedRiskIds = new Set(mappings.map((m) => m.protocol_risk_id));
   const unmappedRisks = availableRisks.filter((r) => !mappedRiskIds.has(r.id));
 
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
+  const mutedColor = 'text-fg-muted';
   const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
   const emptyBg = isLight
     ? 'border-[#e2e8ee] bg-[#f9fafc]/40'
@@ -177,9 +177,9 @@ type MappingRowProps = MappingRowViewProps | MappingRowEditProps;
 
 function MappingRow(props: MappingRowProps) {
   const { mapping, risk, isLight, cardBg } = props;
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
+  const mutedColor = 'text-fg-muted';
   const buttonSecondary = isLight
     ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
     : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]';
@@ -363,7 +363,7 @@ function AddMappingForm({
   const [criticality, setCriticality] = useState<DerivedCriticality>('HIGH');
   const [rationale, setRationale] = useState<string>('');
 
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
+  const headingColor = 'text-fg-heading';
   const inputBg = isLight ? 'bg-white' : 'bg-[#131a22]';
   const inputBorder = isLight
     ? 'border-[#cbd2db] focus:border-[#4a6fa5] focus:ring-1 focus:ring-[#4a6fa5]/30'

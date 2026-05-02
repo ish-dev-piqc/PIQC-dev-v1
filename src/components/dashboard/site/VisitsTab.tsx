@@ -129,10 +129,10 @@ export default function VisitsTab() {
   }, [scoped, today]);
 
   // Theme tokens
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
-  const sectionHeader = isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
+  const mutedColor = 'text-fg-muted';
+  const sectionHeader = 'text-fg-label';
   const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
   const inputBg = isLight ? 'bg-white' : 'bg-[#131a22]';
   const inputBorder = isLight
@@ -400,10 +400,10 @@ function VisitDrawer({
 }) {
   const overlay = isLight ? 'bg-black/30' : 'bg-black/50';
   const panelBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
-  const sectionHeader = isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
+  const mutedColor = 'text-fg-muted';
+  const sectionHeader = 'text-fg-label';
   const buttonPrimary = isLight
     ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
     : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]';

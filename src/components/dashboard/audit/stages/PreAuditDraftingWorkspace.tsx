@@ -107,10 +107,10 @@ export default function PreAuditDraftingWorkspace() {
   // ---------------------------------------------------------------------------
   // Theme tokens
   // ---------------------------------------------------------------------------
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
-  const sectionHeader = isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
+  const mutedColor = 'text-fg-muted';
+  const sectionHeader = 'text-fg-label';
   const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
   const tabRail = isLight ? 'border-[#e2e8ee]' : 'border-white/5';
   const tabActive = isLight
@@ -590,9 +590,9 @@ function AgendaTab({ deliverable, isLight, onChange }: AgendaTabProps) {
 }
 
 function AgendaItemRow({ item, isLight }: { item: MockAgendaItem; isLight: boolean }) {
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
+  const mutedColor = 'text-fg-muted';
   const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-white/[0.02] border-white/[0.04]';
   return (
     <div className={`${cardBg} border rounded-md px-3 py-2.5`}>
@@ -619,7 +619,7 @@ function AgendaItemEditRow({
   onUpdate: (patch: Partial<MockAgendaItem>) => void;
   onRemove: () => void;
 }) {
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
+  const headingColor = 'text-fg-heading';
   const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
   const buttonGhost = isLight
     ? 'text-[#374152]/55 hover:text-red-600'
@@ -739,9 +739,9 @@ function ChecklistTab({ deliverable, isLight, onChange }: ChecklistTabProps) {
     setItems((prev) => prev.filter((it) => it.id !== id));
   };
 
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
+  const mutedColor = 'text-fg-muted';
   const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-white/[0.02] border-white/[0.04]';
   const buttonGhost = isLight
     ? 'text-[#374152]/55 hover:text-red-600'
@@ -893,9 +893,9 @@ function DeliverableShell({
   canSave,
   children,
 }: DeliverableShellProps) {
-  const subColor = isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
-  const sectionHeader = isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40';
+  const subColor = 'text-fg-sub';
+  const mutedColor = 'text-fg-muted';
+  const sectionHeader = 'text-fg-label';
   const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
   const buttonPrimary = isLight
     ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
@@ -1057,7 +1057,7 @@ function FieldLabel({
   isLight: boolean;
   children: React.ReactNode;
 }) {
-  const labelColor = isLight ? 'text-[#1a1f28]' : 'text-[#d2d7e0]';
+  const labelColor = 'text-fg-heading';
   return (
     <div>
       <label className={`block text-sm font-medium mb-1.5 ${labelColor}`}>{label}</label>
@@ -1075,7 +1075,7 @@ function SubSection({
   isLight: boolean;
   children: React.ReactNode;
 }) {
-  const sectionHeader = isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40';
+  const sectionHeader = 'text-fg-label';
   return (
     <div>
       <p className={`text-[10px] uppercase tracking-wider font-semibold mb-1.5 ${sectionHeader}`}>
@@ -1117,7 +1117,7 @@ interface ChipListEditorProps {
 
 function ChipListEditor({ label, placeholder, items, onChange, isLight, multiline }: ChipListEditorProps) {
   const [draft, setDraft] = useState('');
-  const labelColor = isLight ? 'text-[#1a1f28]' : 'text-[#d2d7e0]';
+  const labelColor = 'text-fg-heading';
 
   const add = () => {
     const v = draft.trim();

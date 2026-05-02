@@ -131,10 +131,10 @@ export default function QuestionnaireReviewWorkspace() {
   // ---------------------------------------------------------------------------
   // Theme tokens
   // ---------------------------------------------------------------------------
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
-  const sectionHeader = isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
+  const mutedColor = 'text-fg-muted';
+  const sectionHeader = 'text-fg-label';
   const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
   const buttonPrimary = isLight
     ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
@@ -499,7 +499,7 @@ interface LifecycleStepperProps {
 
 function LifecycleStepper({ status, isLight }: LifecycleStepperProps) {
   const idx = QUESTIONNAIRE_INSTANCE_STATUS_ORDER.indexOf(status);
-  const sectionHeader = isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40';
+  const sectionHeader = 'text-fg-label';
   return (
     <div>
       <p className={`text-[10px] uppercase tracking-wider font-semibold mb-2 ${sectionHeader}`}>
@@ -564,8 +564,8 @@ function QuestionRow({ question, response, onUpdate, isLight, readOnly }: Questi
     }
   }, [response?.response_text, response?.source_reference, editing]);
 
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
+  const headingColor = 'text-fg-heading';
+  const mutedColor = 'text-fg-muted';
   const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
   const inputBg = isLight ? 'bg-white' : 'bg-[#131a22]';
   const inputBorder = isLight

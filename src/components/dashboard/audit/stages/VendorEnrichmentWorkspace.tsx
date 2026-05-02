@@ -121,7 +121,7 @@ export default function VendorEnrichmentWorkspace() {
   // -----------------------------------------------------------------------
   // Theme tokens
   // -----------------------------------------------------------------------
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
+  const headingColor = 'text-fg-heading';
 
   // -----------------------------------------------------------------------
   // Render
@@ -134,8 +134,8 @@ export default function VendorEnrichmentWorkspace() {
     : 'pending';
   const trustStatus: SectionStatus = assessment ? 'done' : 'pending';
 
-  const sectionHeader = isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40';
-  const subColor = isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55';
+  const sectionHeader = 'text-fg-label';
+  const subColor = 'text-fg-sub';
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -259,9 +259,9 @@ function SectionCard({
   children,
 }: SectionCardProps) {
   const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55';
-  const sectionHeader = isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
+  const sectionHeader = 'text-fg-label';
   const borderTone = isLight ? 'border-[#eef2f6]' : 'border-white/5';
 
   const opacity = status === 'locked' ? 'opacity-60' : '';
@@ -325,9 +325,9 @@ interface ServiceSummaryProps {
 }
 
 function ServiceSummary({ service, isLight, onEdit, onHistoryClick }: ServiceSummaryProps) {
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
+  const mutedColor = 'text-fg-muted';
   const buttonSecondary = isLight
     ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
     : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]';
@@ -403,10 +403,10 @@ function TrustAssessmentSummary({
   onEdit,
   onHistoryClick,
 }: TrustAssessmentSummaryProps) {
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
-  const sectionHeader = isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
+  const mutedColor = 'text-fg-muted';
+  const sectionHeader = 'text-fg-label';
   const chipBg = isLight
     ? 'bg-[#eef2f6] border-[#cbd2db] text-[#1a1f28]'
     : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]';
@@ -532,7 +532,7 @@ function PostureSummary({ label, value, rawValue, isLight }: PostureSummaryProps
     : isLight
     ? 'bg-[#4a6fa5]/[0.06] border-[#4a6fa5]/20'
     : 'bg-[#4a6fa5]/[0.10] border-[#6e8fb5]/30';
-  const sectionHeader = isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40';
+  const sectionHeader = 'text-fg-label';
   const valueColor = isUnknown
     ? isLight
       ? 'text-[#374152]/55'
