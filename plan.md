@@ -69,7 +69,9 @@ ahead of the data pipeline.
 | Polish — semantic text tones | `text-fg-*` Tailwind utilities backed by CSS variables; dark-mode aware | ✓ Done — utilities live; adoption sweep complete (opacity-modified variants intentionally left as-is) |
 | Polish — drawer accessibility (ESC, scroll lock, focus trap, swipe dismiss) | Shared hooks for drawer behaviour | ✓ Done — `useOverlay` + `useSwipeDismiss` in `src/hooks/`; applied to all audit + site drawers |
 | Reports tab (Site Mode) | Compliance metrics, deviation log, missed visits — mock-backed | ✓ Done |
-| Stage 7–8 Supabase wire-up (Report / Final Review) | Persist report draft + final review state | ○ Not started |
+| Audit Mode Stage 7–8 Supabase wire-up | `report_draft_objects` table + 4 RPCs; `reportApi.ts`; both workspaces wired | ✓ Done — 2 migrations; remote deploy pending |
+| ProtocolContext wire-up | Replace `MOCK_PROTOCOLS` with live Supabase query + realtime subscription | ✓ Done |
+| Site Mode Supabase wire-up | Schema + RPCs for visits, participants, team | ○ Not started |
 | Stripe onboarding + landing page | Customer-facing marketing + checkout | ○ Not started |
 
 ---
@@ -135,14 +137,15 @@ Done (Phases 1–6):
   server-side gating
 - `state_history_deltas` writes happen automatically on every mutation
 
-Remaining (Phases 7c–9):
-- **7c** — Update `auditApi.ts` to map the new RPC return shape
-- **7d** — Verify with smoke test
-- **8** — End-to-end smoke test across the full lifecycle
-- **9** — Delete the seven status `.md` docs at project root + final commit
+All 8 stages wired — `reportApi.ts` covers Stages 7–8 (`report_draft_objects`
+table, 4 RPCs). `mockReport.ts` still defines the `MockReportDraft` type but
+`MOCK_REPORTS` data is dead; all live data comes from Supabase.
 
-Stages 7–8 (Report Drafting, Final Review/Export) still on `mockReport.ts`;
-queued behind 7c–9.
+**Remote migration deploy pending** (2 Stage 7–8 migrations):
+```
+SUPABASE_ACCESS_TOKEN=<token> npx supabase db push --project-ref ygfcjwgsjmathinqkppq
+```
+Then run `bash scripts/smoke-rpcs.sh --cloud` — T11 + T12 cover the new RPCs.
 
 ---
 
@@ -210,8 +213,7 @@ phases:
   in-message citation traceability lands with the Supabase wire-up.
 - **"Start visit" action** — button exists in the visit detail drawer but has no handler; needs a flow (confirm modal, in-progress state, or navigation).
 - **Protocol tab** — currently shows the generic `KnowledgeBase` component. Should become a protocol-specific view (metadata, risk summary, outline) once the Reducto pipeline lands (D-009).
-- **Stages 7–8 Supabase wire-up** — Report Drafting and Final Review/Export
-  still read `mockReport.ts`. Queued behind Phases 7c–9.
+- **Site Mode Supabase wire-up** — all site data (visits, participants, team) is mock. Large track; needs schema design first.
 
 ---
 
@@ -272,7 +274,7 @@ src/
           vendor-enrichment/                Sub-components for VENDOR_ENRICHMENT
   context/
     AuthContext, ThemeContext, ModeContext
-    ProtocolContext.tsx                     Site Mode active protocol
+    ProtocolContext.tsx                     Protocol picker — Supabase ✓ (SELECT + realtime)
     AuditContext.tsx                        Audit Mode active audit
     AuditDataContext.tsx                    Per-stage shared cache, seeded
                                             from mock fixtures; workspaces
@@ -288,6 +290,7 @@ src/
       riskSummaryApi.ts                     Stage 4 approval state (Supabase)
       preAuditApi.ts                        Stage 5 deliverables (Supabase)
       workspaceEntriesApi.ts                Stage 6 entries (Supabase)
+      reportApi.ts                          Stages 7–8 — report_draft_objects RPCs (Supabase)
       auditApi.ts                           advance_audit_stage RPC wrapper
       stateHistory.ts                       getObjectHistory + diffFields (wraps audit_mode_get_object_history)
       mockProtocolRisks.ts                  INTAKE mock fixtures
@@ -343,25 +346,21 @@ Use **Opus** for tasks that require architectural judgment, cross-file reasoning
 
 In priority order:
 
-**Backend / data:**
-1. **Finish Supabase wire-up** — Phases 7c–9:
-   - 7c: Update `auditApi.ts` to map the new RPC return shape
-   - 7d: Verify with smoke test
-   - 8: End-to-end smoke test across the full lifecycle
-   - 9: Delete the seven status `.md` docs at project root + final commit
-2. **Stage 7–8 Supabase wire-up** (Report Drafting, Final Review/Export) — write `reportApi.ts`, replace `mockReport.ts` reads, drop the last MOCK seed in `AuditDataContext`. Queued behind Phases 7c–9.
+**Immediate — deploy + verify Stage 7–8:**
+1. Push 2 pending migrations to remote Supabase (see command above).
+2. Run `bash scripts/smoke-rpcs.sh --cloud` — T11 + T12 cover the new RPCs.
 
-**Frontend polish (no backend dependency):**
-3. **"Start visit" flow** — the button in the visit detail drawer is a stub. Minimal: a "mark as in progress" state on the visit card. Full: a modal with procedure checklist.
-4. **ReportsTab → visit detail cross-link** — clicking a deviation or missed visit row in ReportsTab should open the visit detail drawer (same one used in the calendar). Needs `onVisitClick` threaded from Dashboard down to ReportsTab.
-5. **Heatmap on ReportsTab** — compliance rate stat card could carry a `HeatIndicator` once real data lands.
-
-**Blocked on D-009 / Reducto pipeline:**
-6. **Protocol tab** — replace `KnowledgeBase` with a protocol-specific view: metadata header, risk section outline, linked protocol risks. Blocked until document pipeline is resolved.
+**Track C — Site Mode Supabase wire-up (largest remaining track):**
+3. **Schema design** — `site_visits`, `site_participants`, `site_team_members`. Define RLS, foreign keys to `auth.users` + `protocols`. Decide visit/participant scope (protocol-scoped vs site-scoped). **Opus** for schema design.
+4. **API files** — `visitsApi.ts`, `participantsApi.ts`, `teamApi.ts` — follow the audit API pattern.
+5. **Wire UI** — swap mock reads in TodayTab, ParticipantsTab, VisitsTab, TeamTab. ReportsTab derives automatically once sources are live.
 
 **Deferred:**
-- Heatmap real-data refinement — swap Phase B heuristics once enough audits exist.
-- Stripe onboarding + landing page — external/marketing, queued separately.
+- Protocol tab content — blocked on D-009 (Reducto pipeline).
+- "Start visit" DB persistence — checklist completion is currently local-only; no DB write on complete.
+- Participant profile page — "View participant profile" is disabled everywhere.
+- Heatmap real-data refinement — swap heuristics once enough audits exist.
+- Stripe onboarding + landing page — external/marketing, separate track.
 
 ## Polish system reference
 
