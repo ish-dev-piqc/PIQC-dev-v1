@@ -22,8 +22,8 @@ export default function Contact() {
   };
 
   const bg = isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]';
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const bodyColor = isLight ? 'text-[#374152]/50' : 'text-[#d2d7e0]/50';
+  const headingColor = 'text-fg-heading';
+  const bodyColor = 'text-fg-sub';
   const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#161d25] border-white/[0.07]';
   const iconCardBg = isLight ? 'bg-[#f0f4f8] border-[#e2e8ee]' : 'bg-[#161d25] border-white/[0.07]';
   const inputBg = isLight ? 'bg-[#f5f7fa] border-[#d8dfe8] text-[#1a1f28] placeholder-[#374152]/30' : 'bg-[#0d1118] border-white/[0.1] text-white placeholder-[#3c3c3c]';

@@ -71,9 +71,9 @@ export default function HistoryDrawer({
   const overlay = isLight ? 'bg-black/30' : 'bg-black/50';
   const panelBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
   const headerBorder = isLight ? 'border-[#e2e8ee]' : 'border-white/5';
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
+  const mutedColor = 'text-fg-muted';
   const dividerColor = isLight ? 'border-[#e2e8ee]' : 'border-white/5';
   const fieldFromColor = isLight ? 'text-rose-500/70' : 'text-rose-400/70';
   const fieldToColor = isLight ? 'text-emerald-600' : 'text-emerald-400';

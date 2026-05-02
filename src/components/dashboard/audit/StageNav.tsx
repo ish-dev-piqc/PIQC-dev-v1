@@ -32,8 +32,8 @@ export default function StageNav({ currentStage, viewedStage, onSelectStage }: S
   const currentIdx = AUDIT_STAGES.indexOf(currentStage);
 
   const navBg = isLight ? 'bg-[#f9fafc] border-[#e2e8ee]' : 'bg-[#0e141b] border-white/5';
-  const headerColor = isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40';
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
+  const headerColor = 'text-fg-label';
+  const headingColor = 'text-fg-heading';
 
   return (
     <nav

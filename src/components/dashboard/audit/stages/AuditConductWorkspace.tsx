@@ -178,10 +178,10 @@ export default function AuditConductWorkspace() {
   // ---------------------------------------------------------------------------
   // Theme tokens
   // ---------------------------------------------------------------------------
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
-  const sectionHeader = isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
+  const mutedColor = 'text-fg-muted';
+  const sectionHeader = 'text-fg-label';
   const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
   const formCardBg = isLight
     ? 'bg-[#f9fafc] border-[#e2e8ee]'
@@ -367,10 +367,10 @@ interface EntryFormProps {
 }
 
 function EntryForm({ form, onChange, protocolRisks, isLight }: EntryFormProps) {
-  const labelColor = isLight ? 'text-[#1a1f28]' : 'text-[#d2d7e0]';
-  const subColor = isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
+  const labelColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
+  const mutedColor = 'text-fg-muted';
+  const headingColor = 'text-fg-heading';
   const inputBg = isLight ? 'bg-white' : 'bg-[#131a22]';
   const inputBorder = isLight
     ? 'border-[#cbd2db] focus:border-[#4a6fa5] focus:ring-1 focus:ring-[#4a6fa5]/30'
@@ -630,8 +630,8 @@ function EntryCounts({
     { findings: 0, observations: 0, ofis: 0, unclassified: 0 },
   );
 
-  const subColor = isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55';
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
+  const subColor = 'text-fg-sub';
+  const headingColor = 'text-fg-heading';
 
   return (
     <div className={`text-xs flex items-center gap-2 flex-wrap ${subColor}`}>

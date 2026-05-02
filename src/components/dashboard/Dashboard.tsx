@@ -7,6 +7,7 @@ import AskTab from './site/AskTab';
 import ParticipantsTab from './site/ParticipantsTab';
 import VisitsTab from './site/VisitsTab';
 import TeamTab from './site/TeamTab';
+import ReportsTab from './site/ReportsTab';
 import ProtocolRequiredGate from './site/ProtocolRequiredGate';
 import AuditWorkspaceShell from './audit/AuditWorkspaceShell';
 import { useTheme } from '../../context/ThemeContext';
@@ -78,9 +79,9 @@ function OverviewTab() {
   const isLight = theme === 'light';
 
   const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/40';
-  const statVal = isLight ? 'text-[#1a1f28]' : 'text-white';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
+  const statVal = 'text-fg-heading';
   const rowHover = isLight ? 'hover:bg-[#f5f7fa]' : 'hover:bg-white/[0.02]';
   const rowDivide = isLight ? 'divide-[#f0f4f8]' : 'divide-white/[0.03]';
   const protocolName = isLight ? 'text-[#1a1f28]/90' : 'text-[#d2d7e0]/90';
@@ -556,7 +557,7 @@ export default function Dashboard({
         );
       // Shared
       case 'reports':
-        return <PlaceholderTab label="Reports" />;
+        return <ReportsTab />;
       case 'settings':
         return (
           <SettingsTab

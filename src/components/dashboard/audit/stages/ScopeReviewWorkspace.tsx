@@ -68,10 +68,10 @@ export default function ScopeReviewWorkspace() {
   // ---------------------------------------------------------------------------
   // Theme tokens
   // ---------------------------------------------------------------------------
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
-  const sectionHeader = isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
+  const mutedColor = 'text-fg-muted';
+  const sectionHeader = 'text-fg-label';
   const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
   const rowBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-white/[0.02] border-white/[0.04]';
   const buttonApprove = isLight
@@ -373,8 +373,8 @@ function GateCard({
   hint: string | null;
   isLight: boolean;
 }) {
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
   const cardBg = approved
     ? isLight
       ? 'bg-emerald-50 border-emerald-200/80'
@@ -538,7 +538,7 @@ function PostureSummary({
     : isLight
     ? 'bg-[#4a6fa5]/[0.06] border-[#4a6fa5]/20'
     : 'bg-[#4a6fa5]/[0.10] border-[#6e8fb5]/30';
-  const sectionHeader = isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40';
+  const sectionHeader = 'text-fg-label';
   const valueColor = isUnknown
     ? isLight
       ? 'text-[#374152]/55'

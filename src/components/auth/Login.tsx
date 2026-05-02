@@ -34,9 +34,9 @@ export default function Login({ onViewChange }: LoginProps) {
   };
 
   const pageBg = isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]';
-  const logoText = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/45';
+  const logoText = 'text-fg-heading';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
   const backColor = isLight ? 'text-[#374152]/40 hover:text-[#374152]/70' : 'text-[#d2d7e0]/40 hover:text-[#d2d7e0]/70';
   const labelColor = isLight ? 'text-[#374152]/70' : 'text-[#d2d7e0]/70';
   const inputBg = isLight

@@ -17,8 +17,8 @@ export default function ProtocolRequiredGate({ label, description, children }: P
     return <>{children}</>;
   }
 
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45';
+  const headingColor = 'text-fg-heading';
+  const subColor = 'text-fg-sub';
   const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
   const iconBg = isLight ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/20 text-[#4a6fa5]' : 'bg-[#4a6fa5]/15 border-[#4a6fa5]/30 text-[#6e8fb5]';
 
