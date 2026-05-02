@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   CheckCircle2,
   XCircle,
@@ -13,10 +13,12 @@ import { useProtocol } from '../../../context/ProtocolContext';
 import {
   MOCK_VISITS,
   PROTOCOL_COLORS,
+  type CalendarVisit,
 } from '../../../lib/mockCalendarData';
 import {
   MOCK_PARTICIPANTS,
 } from '../../../lib/mockSiteData';
+import VisitDetailDrawer from './VisitDetailDrawer';
 
 // =============================================================================
 // ReportsTab — Site Mode summary metrics, protocol compliance, deviation log.
@@ -31,6 +33,8 @@ export default function ReportsTab() {
   const { theme } = useTheme();
   const { activeProtocol, protocols } = useProtocol();
   const isLight = theme === 'light';
+  const today = useMemo(() => new Date(), []);
+  const [selectedVisit, setSelectedVisit] = useState<CalendarVisit | null>(null);
 
   const headingColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
@@ -277,7 +281,12 @@ export default function ReportsTab() {
                 const protocol = protocols.find((p) => p.id === v.protocolId);
                 const colors = protocol ? PROTOCOL_COLORS[protocol.id] : null;
                 return (
-                  <div key={v.id} className="px-5 py-4">
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => setSelectedVisit(v)}
+                    className={`w-full text-left px-5 py-4 transition-colors ${isLight ? 'hover:bg-[#f9fafc]' : 'hover:bg-white/[0.02]'}`}
+                  >
                     <div className="flex items-center gap-2 flex-wrap mb-1.5">
                       <span className={`${headingColor} text-xs font-semibold`}>
                         {formatDate(v.date)}
@@ -299,7 +308,7 @@ export default function ReportsTab() {
                     {v.deviationReason && (
                       <p className={`${subColor} text-xs leading-relaxed`}>{v.deviationReason}</p>
                     )}
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -325,31 +334,34 @@ export default function ReportsTab() {
                 const protocol = protocols.find((p) => p.id === v.protocolId);
                 const colors = protocol ? PROTOCOL_COLORS[protocol.id] : null;
                 return (
-                  <div key={v.id} className="px-5 py-3.5 flex items-center gap-3 flex-wrap">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`${headingColor} text-xs font-semibold`}>
-                          {formatDate(v.date)}
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => setSelectedVisit(v)}
+                    className={`w-full text-left px-5 py-3.5 transition-colors ${isLight ? 'hover:bg-[#f9fafc]' : 'hover:bg-white/[0.02]'}`}
+                  >
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`${headingColor} text-xs font-semibold`}>
+                        {formatDate(v.date)}
+                      </span>
+                      <span className={mutedColor}>·</span>
+                      <span className={`${headingColor} text-xs`}>{v.participantId}</span>
+                      <span className={mutedColor}>·</span>
+                      <span className={`${subColor} text-xs`}>{v.visitName}</span>
+                      {protocol && colors && (
+                        <span
+                          className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${
+                            isLight ? colors.chipLight : colors.chipDark
+                          }`}
+                        >
+                          {protocol.code}
                         </span>
-                        <span className={mutedColor}>·</span>
-                        <span className={`${headingColor} text-xs`}>{v.participantId}</span>
-                        <span className={mutedColor}>·</span>
-                        <span className={`${subColor} text-xs`}>{v.visitName}</span>
-                        {protocol && colors && (
-                          <span
-                            className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${
-                              isLight ? colors.chipLight : colors.chipDark
-                            }`}
-                          >
-                            {protocol.code}
-                          </span>
-                        )}
-                      </div>
-                      {v.priorNote && (
-                        <p className={`${mutedColor} text-[11px] mt-1 leading-snug`}>{v.priorNote}</p>
                       )}
                     </div>
-                  </div>
+                    {v.priorNote && (
+                      <p className={`${mutedColor} text-[11px] mt-1 leading-snug`}>{v.priorNote}</p>
+                    )}
+                  </button>
                 );
               })}
             </div>
@@ -357,6 +369,15 @@ export default function ReportsTab() {
         </div>
 
       </div>
+
+      {selectedVisit && (
+        <VisitDetailDrawer
+          visit={selectedVisit}
+          protocols={protocols}
+          today={today}
+          onClose={() => setSelectedVisit(null)}
+        />
+      )}
     </div>
   );
 }

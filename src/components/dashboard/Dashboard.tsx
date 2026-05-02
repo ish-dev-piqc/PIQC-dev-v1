@@ -519,7 +519,14 @@ export default function Dashboard({
         return <PlaceholderTab label="Workflows" />;
       // Site Mode tabs
       case 'overview':
-        return <TodayTab />;
+        return (
+          <TodayTab
+            onNavigateToVisits={() => {
+              onTabChange?.('visits');
+              if (!onTabChange) setInternalActiveTab('visits');
+            }}
+          />
+        );
       case 'participants':
         return (
           <ProtocolRequiredGate label="Participants">
