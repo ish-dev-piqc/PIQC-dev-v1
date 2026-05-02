@@ -419,6 +419,21 @@ Deno.serve(async (req: Request) => {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
+  // Resolve user_id from the caller's JWT so documents are scoped to their owner.
+  const authHeader = req.headers.get("Authorization");
+  const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  let userId: string | null = null;
+  if (userToken) {
+    const { data: { user } } = await createClient(supabaseUrl, serviceRoleKey).auth.getUser(userToken);
+    userId = user?.id ?? null;
+  }
+  if (!userId) {
+    return new Response(
+      JSON.stringify({ error: "Authentication required" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
   let docId: string | null = null;
 
   try {
@@ -463,7 +478,7 @@ Deno.serve(async (req: Request) => {
     // Insert document — status defaults to 'pending' via column default
     const { data: doc, error: docError } = await supabase
       .from("documents")
-      .insert({ title: title ?? "", source: source ?? "" })
+      .insert({ title: title ?? "", source: source ?? "", user_id: userId })
       .select("id")
       .single();
 

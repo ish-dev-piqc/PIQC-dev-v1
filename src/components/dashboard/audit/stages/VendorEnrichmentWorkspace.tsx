@@ -14,6 +14,17 @@ import {
   type MockServiceMapping,
   type MockTrustAssessment,
 } from '../../../../lib/audit/mockVendorEnrichment';
+import {
+  fetchVendorService,
+  createVendorService,
+  updateVendorService,
+  fetchServiceMappingsByAudit,
+  createServiceMapping,
+  updateServiceMapping,
+  deleteServiceMapping,
+  fetchTrustAssessment,
+  upsertTrustAssessment,
+} from '../../../../lib/audit/vendorEnrichmentApi';
 import VendorServiceForm, { type VendorServiceFormValues } from './vendor-enrichment/VendorServiceForm';
 import ServiceMappingTable from './vendor-enrichment/ServiceMappingTable';
 import TrustAssessmentForm, { type TrustAssessmentFormValues } from './vendor-enrichment/TrustAssessmentForm';
@@ -28,8 +39,7 @@ import type { TrackedObjectType } from '../../../../types/audit';
 //   2. Protocol section mapping — locked until vendor service exists
 //   3. Trust intelligence — always available
 //
-// Phase A pattern: in-session local state. Replace mock stores with Supabase
-// reads + per-mutation RPCs in the wire-up phase.
+// Wired to Supabase via vendorEnrichmentApi; optimistic updates pattern.
 // =============================================================================
 
 type SectionStatus = 'pending' | 'done' | 'locked';
@@ -57,11 +67,38 @@ export default function VendorEnrichmentWorkspace() {
   const [trustMode, setTrustMode] = useState<'view' | 'edit' | 'create'>('view');
   const [historyTarget, setHistoryTarget] = useState<{ objectType: TrackedObjectType; objectId: string } | null>(null);
 
-  // Reset modes when active audit changes
+  // Load vendor data when active audit changes
   useEffect(() => {
+    if (!activeAudit) return;
+
+    const loadVendorData = async () => {
+      try {
+        const [service, mappings, assessment] = await Promise.all([
+          fetchVendorService(activeAudit.id),
+          fetchServiceMappingsByAudit(activeAudit.id),
+          fetchTrustAssessment(activeAudit.id),
+        ]);
+        
+        if (service) {
+          setServices((prev) => ({ ...prev, [activeAudit.id]: service }));
+        }
+        if (mappings.length > 0) {
+          setMappings((prev) => ({ ...prev, [activeAudit.id]: mappings }));
+        }
+        if (assessment) {
+          setAssessments((prev) => ({ ...prev, [activeAudit.id]: assessment }));
+        }
+      } catch (err) {
+        console.error('[VendorEnrichmentWorkspace] Load error:', err);
+      }
+    };
+
+    loadVendorData();
     setServiceMode('view');
     setTrustMode('view');
-  }, [activeAudit?.id]);
+    // Depend on activeAudit?.id only — see RiskSummaryPanel for rationale.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAudit?.id, setServices, setMappings, setAssessments]);
 
   if (!activeAudit) return null;
 
@@ -74,7 +111,7 @@ export default function VendorEnrichmentWorkspace() {
   // -----------------------------------------------------------------------
   // Mutation handlers
   // -----------------------------------------------------------------------
-  const saveService = (values: VendorServiceFormValues) => {
+  const saveService = async (values: VendorServiceFormValues) => {
     const next: MockVendorService = service
       ? { ...service, ...values }
       : {
@@ -82,40 +119,151 @@ export default function VendorEnrichmentWorkspace() {
           audit_id: auditId,
           ...values,
         };
+    
+    // Optimistic update
     setServices((prev) => ({ ...prev, [auditId]: next }));
     setServiceMode('view');
+
+    // Persist to database
+    try {
+      const result = service
+        ? await updateVendorService(service.id, values)
+        : await createVendorService(auditId, values);
+      
+      if (result) {
+        setServices((prev) => ({ ...prev, [auditId]: result }));
+      }
+    } catch (err) {
+      console.error('[VendorEnrichmentWorkspace] Save service error:', err);
+      // Revert on error
+      if (service) {
+        setServices((prev) => ({ ...prev, [auditId]: service }));
+      } else {
+        setServices((prev) => {
+          const updated = { ...prev };
+          delete updated[auditId];
+          return updated;
+        });
+      }
+    }
   };
 
-  const addMapping = (m: Omit<MockServiceMapping, 'id'>) => {
+  const addMapping = async (m: Omit<MockServiceMapping, 'id'>) => {
+    if (!service) return;
+    
     const newMapping: MockServiceMapping = { ...m, id: `sm-${auditId}-${Date.now()}` };
+    
+    // Optimistic update
     setMappings((prev) => ({
       ...prev,
       [auditId]: [...(prev[auditId] ?? []), newMapping],
     }));
+
+    // Persist to database — RPC derives criticality from the protocol risk
+    try {
+      const result = await createServiceMapping(
+        service.id,
+        m.protocol_risk_id,
+        m.criticality_rationale ?? null,
+      );
+      if (result) {
+        // Replace temp ID with real one
+        setMappings((prev) => ({
+          ...prev,
+          [auditId]: (prev[auditId] ?? []).map((x) =>
+            x.id === newMapping.id ? result : x
+          ),
+        }));
+      }
+    } catch (err) {
+      console.error('[VendorEnrichmentWorkspace] Add mapping error:', err);
+      // Revert on error
+      setMappings((prev) => ({
+        ...prev,
+        [auditId]: (prev[auditId] ?? []).filter((x) => x.id !== newMapping.id),
+      }));
+    }
   };
 
-  const updateMapping = (mappingId: string, updates: Partial<MockServiceMapping>) => {
+  const updateMapping = async (mappingId: string, updates: Partial<MockServiceMapping>) => {
+    // Optimistic update
     setMappings((prev) => ({
       ...prev,
       [auditId]: (prev[auditId] ?? []).map((m) =>
         m.id === mappingId ? { ...m, ...updates } : m,
       ),
     }));
+
+    // Persist to database
+    try {
+      await updateServiceMapping(mappingId, updates);
+    } catch (err) {
+      console.error('[VendorEnrichmentWorkspace] Update mapping error:', err);
+      // Revert on error
+      const currentMapping = auditMappings.find((m) => m.id === mappingId);
+      if (currentMapping) {
+        setMappings((prev) => ({
+          ...prev,
+          [auditId]: (prev[auditId] ?? []).map((m) =>
+            m.id === mappingId ? currentMapping : m,
+          ),
+        }));
+      }
+    }
   };
 
-  const removeMapping = (mappingId: string) => {
+  const removeMapping = async (mappingId: string) => {
+    const removedMapping = auditMappings.find((m) => m.id === mappingId);
+    
+    // Optimistic update
     setMappings((prev) => ({
       ...prev,
       [auditId]: (prev[auditId] ?? []).filter((m) => m.id !== mappingId),
     }));
+
+    // Persist to database
+    try {
+      await deleteServiceMapping(mappingId);
+    } catch (err) {
+      console.error('[VendorEnrichmentWorkspace] Remove mapping error:', err);
+      // Revert on error
+      if (removedMapping) {
+        setMappings((prev) => ({
+          ...prev,
+          [auditId]: [...(prev[auditId] ?? []), removedMapping],
+        }));
+      }
+    }
   };
 
-  const saveAssessment = (values: TrustAssessmentFormValues) => {
+  const saveAssessment = async (values: TrustAssessmentFormValues) => {
     const next: MockTrustAssessment = assessment
       ? { ...assessment, ...values }
       : { id: `ta-${auditId}-${Date.now()}`, audit_id: auditId, ...values };
+    
+    // Optimistic update
     setAssessments((prev) => ({ ...prev, [auditId]: next }));
     setTrustMode('view');
+
+    // Persist to database — upsert handles both create and update.
+    try {
+      const result = await upsertTrustAssessment(auditId, values);
+      if (result) {
+        setAssessments((prev) => ({ ...prev, [auditId]: result }));
+      }
+    } catch (err) {
+      console.error('[VendorEnrichmentWorkspace] Save assessment error:', err);
+      // Revert on error
+      if (assessment) {
+        setAssessments((prev) => ({ ...prev, [auditId]: assessment }));
+      } else {
+        setAssessments((prev) => {
+          const updated = { ...prev };
+          delete updated[auditId];
+          return updated;
+        });
+      }
+    }
   };
 
   // -----------------------------------------------------------------------
