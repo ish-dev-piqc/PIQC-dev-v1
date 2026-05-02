@@ -29,6 +29,7 @@ import type {
   QuestionnaireInstanceStatus,
   ResponseSource,
 } from '../../../../types/audit';
+import HistoryDrawer from '../HistoryDrawer';
 
 // =============================================================================
 // QuestionnaireReviewWorkspace — QUESTIONNAIRE_REVIEW stage center pane.
@@ -83,6 +84,7 @@ export default function QuestionnaireReviewWorkspace() {
 
   // Shared store across stages — Scope Review's gate reads from here.
   const { questionnaires: bundles, setQuestionnaires: setBundles } = useAuditData();
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
     // No-op for now; would reset edit state if any local-only flags existed.
@@ -356,7 +358,8 @@ export default function QuestionnaireReviewWorkspace() {
             <button
               type="button"
               className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
-              title="Change history (Phase B wires real history)"
+              title="Change history"
+              onClick={() => setHistoryOpen(true)}
             >
               <HistoryIcon size={12} />
               History
@@ -472,6 +475,15 @@ export default function QuestionnaireReviewWorkspace() {
           )}
         </div>
       </div>
+
+      {historyOpen && bundle && (
+        <HistoryDrawer
+          objectType="QUESTIONNAIRE_INSTANCE"
+          objectId={bundle.instance.id}
+          title="Questionnaire"
+          onClose={() => setHistoryOpen(false)}
+        />
+      )}
     </div>
   );
 }

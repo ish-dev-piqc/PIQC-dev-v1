@@ -12,6 +12,7 @@ import { type MockRiskSummary } from '../../../lib/audit/mockRiskSummary';
 import type { ClinicalTrialPhase } from '../../../types/audit';
 import { scoreFocusArea } from '../../../lib/heatmap';
 import HeatIndicator from '../../heatmap/HeatIndicator';
+import HistoryDrawer from './HistoryDrawer';
 
 // =============================================================================
 // RiskSummaryPanel — right rail of the audit workspace.
@@ -449,10 +450,11 @@ export default function RiskSummaryPanel({
         </div>
       )}
 
-      {/* History drawer (Phase A stub — Phase B wires getObjectHistory) */}
-      {historyOpen && (
-        <HistoryDrawerStub
-          isLight={isLight}
+      {historyOpen && summary && (
+        <HistoryDrawer
+          objectType="VENDOR_RISK_SUMMARY_OBJECT"
+          objectId={summary.id}
+          title="Risk summary"
           onClose={() => setHistoryOpen(false)}
         />
       )}
@@ -544,48 +546,6 @@ function Section({ title, sectionHeader, children }: SectionProps) {
       </h4>
       {children}
     </section>
-  );
-}
-
-function HistoryDrawerStub({ isLight, onClose }: { isLight: boolean; onClose: () => void }) {
-  const overlay = isLight ? 'bg-black/30' : 'bg-black/50';
-  const panelBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
-  const headingColor = isLight ? 'text-[#1a1f28]' : 'text-white';
-  const subColor = isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45';
-  const mutedColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
-
-  return (
-    <div className={`fixed inset-0 z-50 ${overlay} flex justify-end animate-fade-in`} onClick={onClose}>
-      <div
-        className={`w-full max-w-md h-full ${panelBg} border-l shadow-xl flex flex-col animate-slide-in-right`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className={`flex items-center justify-between px-5 py-4 border-b ${isLight ? 'border-[#e2e8ee]' : 'border-white/5'}`}>
-          <div>
-            <p className={`text-[11px] uppercase tracking-wider font-semibold ${subColor}`}>
-              Change history
-            </p>
-            <h3 className={`${headingColor} font-semibold text-base mt-0.5`}>Risk summary</h3>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className={`${subColor} hover:opacity-75`}
-            aria-label="Close history"
-          >
-            <X size={18} />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-5">
-          <p className={`${mutedColor} text-sm italic`}>
-            History panel will surface state-delta entries from{' '}
-            <code className="font-mono">audit_mode_get_object_history</code> once Phase B
-            wires it. For now, stage transitions, edits, and approvals will appear here
-            with timestamps and actor names.
-          </p>
-        </div>
-      </div>
-    </div>
   );
 }
 

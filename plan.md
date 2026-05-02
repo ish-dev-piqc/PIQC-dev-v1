@@ -1,6 +1,6 @@
 # PIQClinical — Build Plan & Status
 
-_Last updated: 2026-05-01 (Typography: semantic `text-fg-*` utilities added; rest of build state unchanged from prior polish + Supabase wire-up landings)_
+_Last updated: 2026-05-01 (History drawer live + per-stage wired; drawer accessibility hooks in place)_
 
 This document describes the current build of PIQClinical (PIQC), what's
 finished, and what's queued. It's the source of truth for "where are we" — the
@@ -65,9 +65,9 @@ ahead of the data pipeline.
 | Heatmap / intelligence overlay | Soft-gradient risk indicators per the UX spec | ✓ Done (5 surfaces) |
 | Ask tab redesign — protocol-grounded copilot | Replace generic chat with protocol-anchored Ask experience | ✓ Done (per-protocol scoping awaits Supabase) |
 | Mobile responsiveness pass | StageNav collapse, drawer access, calendar stacking, transitions | ✓ Done |
-| History drawer | Per-object change history surfaced in each stage | ○ Stub only (`HistoryDrawerStub` in RiskSummaryPanel); real RPC + per-stage wiring not yet in |
+| History drawer | Per-object change history surfaced in each stage | ✓ Done — `HistoryDrawer` calls `audit_mode_get_object_history`; wired in RiskSummaryPanel + all 4 stages with history buttons |
 | Polish — semantic text tones | `text-fg-*` Tailwind utilities backed by CSS variables; dark-mode aware | ✓ Utilities live; adoption sweep is opportunistic |
-| Polish — drawer accessibility (ESC, scroll lock, focus trap, swipe dismiss) | Shared hooks for drawer behaviour | ○ Not yet in |
+| Polish — drawer accessibility (ESC, scroll lock, focus trap, swipe dismiss) | Shared hooks for drawer behaviour | ✓ Done — `useOverlay` + `useSwipeDismiss` in `src/hooks/`; applied to all audit + site drawers |
 | Stage 7–8 Supabase wire-up (Report / Final Review) | Persist report draft + final review state | ○ Not started |
 | Stripe onboarding + landing page | Customer-facing marketing + checkout | ○ Not started |
 
@@ -211,14 +211,6 @@ phases:
 - **Reports tab content (Site Mode)** — currently placeholder.
 - **Stages 7–8 Supabase wire-up** — Report Drafting and Final Review/Export
   still read `mockReport.ts`. Queued behind Phases 7c–9.
-- **History drawer (real)** — schema captures deltas via
-  `state_history_deltas` and there's an `audit_mode_get_object_history` RPC,
-  but only a `HistoryDrawerStub` placeholder is wired in `RiskSummaryPanel`.
-  Still needs the real drawer component + per-stage button wiring.
-- **Drawer accessibility hooks** — ESC, body scroll lock, focus trap, focus
-  return on close, swipe-to-dismiss. Today each drawer rolls its own ad-hoc
-  handling. Should be centralised in shared hooks (`useOverlay`,
-  `useSwipeDismiss`).
 - **Adoption sweep of `text-fg-*` utilities** — the semantic text-tone
   utilities exist (`text-fg-heading`, `-sub`, `-muted`, `-label`, `-body`)
   and are dark-mode-aware; existing files still use per-component
@@ -262,7 +254,8 @@ src/
       audit/
         AuditWorkspaceShell.tsx             3-pane layout owner
         StageNav.tsx                        Left rail
-        RiskSummaryPanel.tsx                Right rail (with internal HistoryDrawerStub)
+        RiskSummaryPanel.tsx                Right rail
+        HistoryDrawer.tsx                   Per-object change history drawer (calls getObjectHistory RPC)
         AuditRequiredGate.tsx               Empty state
         StagePlaceholder.tsx                Generic placeholder for unported stages
         stages/                             Per-stage workspaces
@@ -295,8 +288,7 @@ src/
       preAuditApi.ts                        Stage 5 deliverables (Supabase)
       workspaceEntriesApi.ts                Stage 6 entries (Supabase)
       auditApi.ts                           advance_audit_stage RPC wrapper
-      historyApi.ts                         audit_mode_get_object_history RPC
-      stateHistory.ts                       Legacy client wrapper for state-delta RPCs
+      stateHistory.ts                       getObjectHistory + diffFields (wraps audit_mode_get_object_history)
       mockProtocolRisks.ts                  INTAKE mock fixtures
       mockVendorEnrichment.ts               VENDOR_ENRICHMENT mock fixtures
       mockQuestionnaire.ts                  QUESTIONNAIRE_REVIEW mock fixtures
@@ -307,6 +299,11 @@ src/
     mockCalendarData.ts                     Site Mode Overview mock data
     mockSiteData.ts                         Participants + Team mock data
     heatmap.ts                              Heat scoring + tone tokens
+  hooks/
+    useOverlay.ts                           ESC close, body scroll lock, focus trap, focus return
+    useSwipeDismiss.ts                      Touch swipe-right-to-dismiss for drawers
+    useCheckout.ts                          Stripe checkout hook
+    useSubscription.ts                      Subscription state hook
   types/
     audit/                                  TS mirrors of the audit-mode schema
 
@@ -351,12 +348,10 @@ In priority order:
    - 8: End-to-end smoke test across the full lifecycle
    - 9: Delete the seven status `.md` docs at project root + final commit
 2. **Stage 7–8 Supabase wire-up** (Report Drafting, Final Review/Export) — write `reportApi.ts`, replace `mockReport.ts` reads, drop the last MOCK seed in `AuditDataContext`. Queued behind Phases 7c–9.
-3. **History drawer** — pattern needs to be (re)built: a shared `HistoryDrawer` component that calls `audit_mode_get_object_history` and is embedded in each stage with the right `tracked_object_type`. Today only `RiskSummaryPanel` has a placeholder stub.
-4. **Reports tab content (Site Mode)** — currently a placeholder.
-5. **Polish — drawer behaviour** — shared hooks for ESC, body scroll lock, focus trap + return, and swipe-to-dismiss. Currently each drawer has bespoke handling (or none).
-6. **Polish — typography adoption sweep** — replace per-file `headingColor = isLight ? '#1a1f28' : 'white'` constants (50+ files) with the new `text-fg-*` utilities. Opportunistic; new code should already prefer the utilities.
-7. **Pre-existing typing bug** in `QuestionnaireReviewWorkspace.tsx` where the constructed `bundle` doesn't actually match `MockQuestionnaireBundle` (missing the `instance` wrapper). TS isn't catching it because of the explicit annotation.
-8. **Heatmap real-data refinement** — once enough audits exist, swap the Phase B heuristics in `heatmap.ts` for aggregated cross-audit signals.
+3. **Reports tab content (Site Mode)** — currently a placeholder.
+4. **Polish — typography adoption sweep** — replace per-file `headingColor = isLight ? '#1a1f28' : 'white'` constants (50+ files) with the new `text-fg-*` utilities. Opportunistic; new code should already prefer the utilities.
+5. **Pre-existing typing bug** in `QuestionnaireReviewWorkspace.tsx` where the constructed `bundle` doesn't actually match `MockQuestionnaireBundle` (missing the `instance` wrapper). TS isn't catching it because of the explicit annotation.
+6. **Heatmap real-data refinement** — once enough audits exist, swap the Phase B heuristics in `heatmap.ts` for aggregated cross-audit signals.
 
 Stripe onboarding and landing page are external/marketing work, queued separately.
 

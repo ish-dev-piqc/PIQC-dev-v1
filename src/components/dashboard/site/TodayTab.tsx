@@ -19,6 +19,8 @@ import { useProtocol } from '../../../context/ProtocolContext';
 import { useAuth } from '../../../context/AuthContext';
 import HeatIndicator from '../../heatmap/HeatIndicator';
 import { scoreVisit } from '../../../lib/heatmap';
+import { useOverlay } from '../../../hooks/useOverlay';
+import { useSwipeDismiss } from '../../../hooks/useSwipeDismiss';
 import {
   MOCK_VISITS,
   PROTOCOL_COLORS,
@@ -1242,6 +1244,9 @@ interface DayDetailDrawerProps {
 
 function DayDetailDrawer({ isLight, isHome, day, today, visits, onClose, onVisitClick }: DayDetailDrawerProps) {
   const overlayClick = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useOverlay({ isOpen: true, onClose, containerRef: panelRef });
+  const swipe = useSwipeDismiss({ onClose });
   const past = isPast(day, today);
   const bg = isLight ? 'bg-white' : 'bg-[#131a22]';
   const border = isLight ? 'border-[#e2e8ee]' : 'border-white/5';
@@ -1257,7 +1262,7 @@ function DayDetailDrawer({ isLight, isHome, day, today, visits, onClose, onVisit
       }}
       className="fixed inset-0 z-40 bg-black/30 flex justify-end animate-fade-in"
     >
-      <div className={`w-full max-w-md h-full ${bg} border-l ${border} shadow-xl flex flex-col animate-slide-in-right`}>
+      <div ref={panelRef} className={`w-full max-w-md h-full ${bg} border-l ${border} shadow-xl flex flex-col animate-slide-in-right`} {...swipe}>
         <div className={`flex items-center justify-between px-5 py-4 border-b ${border}`}>
           <div>
             <div className={`text-[11px] uppercase tracking-wider font-semibold ${subColor}`}>
@@ -1332,6 +1337,9 @@ interface VisitDetailDrawerProps {
 
 function VisitDetailDrawer({ isLight, visit, protocols, today, onClose }: VisitDetailDrawerProps) {
   const overlay = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useOverlay({ isOpen: true, onClose, containerRef: panelRef });
+  const swipe = useSwipeDismiss({ onClose });
   const day = parseYmd(visit.date);
   const past = isPast(day, today);
   const isToday = isSameDay(day, today);
@@ -1364,7 +1372,7 @@ function VisitDetailDrawer({ isLight, visit, protocols, today, onClose }: VisitD
       }}
       className="fixed inset-0 z-50 bg-black/30 flex justify-end animate-fade-in"
     >
-      <div className={`w-full max-w-md h-full ${bg} border-l ${border} shadow-xl flex flex-col animate-slide-in-right`}>
+      <div ref={panelRef} className={`w-full max-w-md h-full ${bg} border-l ${border} shadow-xl flex flex-col animate-slide-in-right`} {...swipe}>
         <div className={`flex items-center justify-between px-5 py-4 border-b ${border}`}>
           <div className="flex items-center gap-2">
             {statusIcon(visit.status, 14)}

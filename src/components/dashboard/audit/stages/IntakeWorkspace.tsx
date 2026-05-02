@@ -17,6 +17,7 @@ import {
   updateProtocolRisk,
   deleteProtocolRisk,
 } from '../../../../lib/audit/intakeApi';
+import HistoryDrawer from '../HistoryDrawer';
 
 // =============================================================================
 // IntakeWorkspace — INTAKE stage center pane
@@ -50,6 +51,7 @@ export default function IntakeWorkspace() {
   const [mode, setMode] = useState<FormMode>('list');
   const [editTarget, setEditTarget] = useState<TaggedSection | null>(null);
   const [loading, setLoading] = useState(false);
+  const [historyTarget, setHistoryTarget] = useState<{ objectId: string; title: string } | null>(null);
 
   // Load protocol risks from Supabase when the active audit changes
   useEffect(() => {
@@ -253,6 +255,9 @@ export default function IntakeWorkspace() {
                   }
                   setLoading(false);
                 }}
+                onHistoryClick={() =>
+                  setHistoryTarget({ objectId: s.id, title: s.section_title })
+                }
                 isLight={isLight}
                 cardBg={cardBg}
                 headingColor={headingColor}
@@ -262,6 +267,15 @@ export default function IntakeWorkspace() {
             ))}
           </div>
         </div>
+      )}
+
+      {historyTarget && (
+        <HistoryDrawer
+          objectType="PROTOCOL_RISK_OBJECT"
+          objectId={historyTarget.objectId}
+          title={historyTarget.title}
+          onClose={() => setHistoryTarget(null)}
+        />
       )}
     </div>
   );
@@ -275,6 +289,7 @@ interface SectionRowProps {
   section: TaggedSection;
   onEdit: () => void;
   onDelete: () => Promise<void>;
+  onHistoryClick: () => void;
   isLight: boolean;
   cardBg: string;
   headingColor: string;
@@ -286,6 +301,7 @@ function SectionRow({
   section,
   onEdit,
   onDelete,
+  onHistoryClick,
   isLight,
   cardBg,
   headingColor,
@@ -335,10 +351,8 @@ function SectionRow({
             <button
               type="button"
               className={`inline-flex items-center gap-1 text-[11px] ${subColor} hover:underline`}
-              title="Change history (Phase B wires real history)"
-              onClick={() => {
-                /* placeholder — wire to getObjectHistory in Phase B */
-              }}
+              title="Change history"
+              onClick={onHistoryClick}
             >
               <HistoryIcon size={11} />
               History
