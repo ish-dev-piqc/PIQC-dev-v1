@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { advanceAuditStage } from '../lib/audit/auditApi';
 import type {
   AuditStage,
   AuditStatus,
@@ -28,6 +29,7 @@ export interface AuditWithContext {
   protocol_code: string;       // study number / short label
   protocol_title: string;
   clinical_trial_phase: ClinicalTrialPhase;
+  protocol_version_id: string; // needed by Stage 1 (Intake) to scope risk-tag mutations
 }
 
 interface AuditContextValue {
@@ -64,6 +66,7 @@ interface AuditRow {
   status: AuditStatus;
   current_stage: AuditStage;
   scheduled_date: string | null;
+  protocol_version_id: string;
   vendors: { name: string } | null;
   protocols: { study_number: string | null; title: string } | null;
   protocol_versions: { clinical_trial_phase: ClinicalTrialPhase } | null;
@@ -81,6 +84,7 @@ function flatten(row: AuditRow): AuditWithContext {
     protocol_code: row.protocols?.study_number ?? '',
     protocol_title: row.protocols?.title ?? '',
     clinical_trial_phase: row.protocol_versions?.clinical_trial_phase ?? 'NOT_APPLICABLE',
+    protocol_version_id: row.protocol_version_id,
   };
 }
 
@@ -104,6 +108,7 @@ export function AuditProvider({ children }: { children: React.ReactNode }) {
       .from('audits')
       .select(`
         id, audit_name, audit_type, status, current_stage, scheduled_date,
+        protocol_version_id,
         vendors!inner ( name ),
         protocols!inner ( study_number, title ),
         protocol_versions!inner ( clinical_trial_phase )
@@ -155,11 +160,23 @@ export function AuditProvider({ children }: { children: React.ReactNode }) {
     setActiveId(audit ? audit.id : null);
   };
 
-  const advanceStage = (toStage: AuditStage) => {
+  const advanceStage = async (toStage: AuditStage) => {
     if (!activeId) return;
-    setAudits((prev) =>
-      prev.map((a) => (a.id === activeId ? { ...a, current_stage: toStage } : a)),
-    );
+    const result = await advanceAuditStage(activeId, toStage);
+    if (result.ok && result.currentStage) {
+      setAudits((prev) =>
+        prev.map((a) =>
+          a.id === activeId ? { ...a, current_stage: result.currentStage as AuditStage } : a,
+        ),
+      );
+    } else {
+      // Server-side gate / validation message bubbled up. Stage stays as-is.
+      console.error(
+        '[AuditContext] Stage advancement failed:',
+        result.errorHint ?? '',
+        result.errorMessage,
+      );
+    }
   };
 
   return (

@@ -16,6 +16,11 @@ import {
 } from '../../../../lib/audit/labels';
 import { type TaggedSection } from '../../../../lib/audit/mockProtocolRisks';
 import { type MockWorkspaceEntry } from '../../../../lib/audit/mockWorkspaceEntries';
+import {
+  fetchWorkspaceEntries,
+  createWorkspaceEntry,
+  updateWorkspaceEntry,
+} from '../../../../lib/audit/workspaceEntriesApi';
 import HeatIndicator from '../../../heatmap/HeatIndicator';
 import { scoreWorkspaceEntry } from '../../../../lib/heatmap';
 import type {
@@ -79,12 +84,33 @@ export default function AuditConductWorkspace() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<EntryFormState>(EMPTY_FORM);
   const [historyTarget, setHistoryTarget] = useState<{ objectId: string } | null>(null);
+  const [saving, setSaving] = useState(false);
 
+  // Reset edit state on audit switch.
   useEffect(() => {
     setMode('list');
     setEditingId(null);
     setForm(EMPTY_FORM);
   }, [activeAudit?.id]);
+
+  // Hydrate workspace entries from Supabase whenever the active audit changes.
+  // Avoids re-fetching if we already have entries for this audit (e.g. user
+  // navigated away and back within the same session and we already loaded).
+  useEffect(() => {
+    if (!activeAudit) return;
+    const auditIdLocal = activeAudit.id;
+    let cancelled = false;
+    void (async () => {
+      const rows = await fetchWorkspaceEntries(auditIdLocal);
+      if (cancelled) return;
+      setEntriesByAudit((prev) => ({ ...prev, [auditIdLocal]: rows }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Depend on activeAudit?.id only — see RiskSummaryPanel for rationale.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAudit?.id, setEntriesByAudit]);
 
   if (!activeAudit) return null;
 
@@ -120,60 +146,59 @@ export default function AuditConductWorkspace() {
     setForm(EMPTY_FORM);
   };
 
-  const saveEntry = () => {
+  // saveEntry: persists via RPC, then merges the canonical row back into the
+  // shared store. We don't optimistically mutate before the RPC because the
+  // server stamps `created_by_name` and the risk-attr snapshot — letting the
+  // RPC be source of truth keeps the UI honest.
+  const saveEntry = async () => {
+    if (saving) return;
     if (!form.vendor_domain.trim() || !form.observation_text.trim()) return;
 
-    // Pull risk-attr snapshot if a protocol risk is linked
-    const linkedRisk = form.protocol_risk_id
-      ? auditProtocolRisks.find((r) => r.id === form.protocol_risk_id) ?? null
-      : null;
+    setSaving(true);
+    const checkpointInput = form.checkpoint_ref.trim();
 
     if (mode === 'add') {
-      const newEntry: MockWorkspaceEntry = {
-        id: `we-${auditId}-${Date.now()}`,
-        audit_id: auditId,
-        protocol_risk_id: linkedRisk?.id ?? null,
-        vendor_service_mapping_id: null,
-        questionnaire_response_id: null,
-        checkpoint_ref: form.checkpoint_ref.trim() || null,
-        vendor_domain: form.vendor_domain.trim(),
-        observation_text: form.observation_text.trim(),
-        provisional_impact: form.provisional_impact,
-        provisional_classification: form.provisional_classification,
-        inherited_endpoint_tier: linkedRisk?.endpoint_tier ?? null,
-        inherited_impact_surface: linkedRisk?.impact_surface ?? null,
-        inherited_time_sensitivity: linkedRisk?.time_sensitivity ?? null,
-        risk_context_outdated: false,
-        created_by_name: 'You',
-        created_at: new Date().toISOString(),
-      };
-      setEntriesByAudit((prev) => ({
-        ...prev,
-        [auditId]: [...(prev[auditId] ?? []), newEntry],
-      }));
+      const created = await createWorkspaceEntry(auditId, {
+        vendorDomain: form.vendor_domain.trim(),
+        observationText: form.observation_text.trim(),
+        provisionalImpact: form.provisional_impact,
+        provisionalClassification: form.provisional_classification,
+        checkpointRef: checkpointInput || null,
+        protocolRiskId: form.protocol_risk_id || null,
+      });
+      if (created) {
+        setEntriesByAudit((prev) => ({
+          ...prev,
+          [auditId]: [...(prev[auditId] ?? []), created],
+        }));
+        cancel();
+      }
     } else if (mode === 'edit' && editingId) {
-      setEntriesByAudit((prev) => ({
-        ...prev,
-        [auditId]: (prev[auditId] ?? []).map((e) =>
-          e.id === editingId
-            ? {
-                ...e,
-                protocol_risk_id: linkedRisk?.id ?? null,
-                checkpoint_ref: form.checkpoint_ref.trim() || null,
-                vendor_domain: form.vendor_domain.trim(),
-                observation_text: form.observation_text.trim(),
-                provisional_impact: form.provisional_impact,
-                provisional_classification: form.provisional_classification,
-                inherited_endpoint_tier: linkedRisk?.endpoint_tier ?? null,
-                inherited_impact_surface: linkedRisk?.impact_surface ?? null,
-                inherited_time_sensitivity: linkedRisk?.time_sensitivity ?? null,
-              }
-            : e,
-        ),
-      }));
+      const previous = (entriesByAudit[auditId] ?? []).find((e) => e.id === editingId);
+      // Build an UpdateWorkspaceEntryInput that only sends fields the user
+      // actually changed. The RPC ignores nulls, so undefined-vs-null matters.
+      const updated = await updateWorkspaceEntry(editingId, {
+        vendorDomain: form.vendor_domain.trim(),
+        observationText: form.observation_text.trim(),
+        provisionalImpact: form.provisional_impact,
+        provisionalClassification: form.provisional_classification,
+        checkpointRef: checkpointInput || null,
+        clearCheckpointRef: !checkpointInput && !!previous?.checkpoint_ref,
+      });
+      if (updated) {
+        setEntriesByAudit((prev) => ({
+          ...prev,
+          [auditId]: (prev[auditId] ?? []).map((e) => (e.id === editingId ? updated : e)),
+        }));
+        cancel();
+      }
     }
-    cancel();
+    setSaving(false);
   };
+
+  // Note: workspace entries are NOT deletable (GxP audit-trail invariant —
+  // observations are corrected via update, never removed). See rv1_code/lib/
+  // workspace-entries.ts for the reference implementation.
 
   // ---------------------------------------------------------------------------
   // Theme tokens
@@ -245,10 +270,10 @@ export default function AuditConductWorkspace() {
             <button
               type="button"
               onClick={saveEntry}
-              disabled={!canSave}
+              disabled={!canSave || saving}
               className={`text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${buttonPrimary} disabled:opacity-50`}
             >
-              {mode === 'add' ? 'Save entry' : 'Save changes'}
+              {saving ? 'Saving…' : mode === 'add' ? 'Save entry' : 'Save changes'}
             </button>
             <button
               type="button"

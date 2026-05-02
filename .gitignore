@@ -26,3 +26,6 @@ supabase/.temp/
 
 # Renamed-out stale folders (sandbox FUSE mount can't unlink — delete manually on host)
 **/_TRASH_*
+
+# TypeScript incremental build cache
+*.tsbuildinfo

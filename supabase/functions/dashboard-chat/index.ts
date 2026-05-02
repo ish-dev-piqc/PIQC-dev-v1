@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -355,17 +356,18 @@ async function rerankChunks(
 async function validateDocIds(
   supabaseUrl: string,
   serviceRoleKey: string,
+  userId: string,
   docIds: string[]
 ): Promise<string[]> {
   if (docIds.length === 0) return [];
   const validFormat = docIds.filter((id) => UUID_RE.test(id)).slice(0, MAX_SELECTED_DOC_IDS);
   if (validFormat.length === 0) return [];
   const idList = validFormat.map((id) => `"${id}"`).join(",");
-  const url = `${supabaseUrl}/rest/v1/documents?id=in.(${idList})&select=id&status=eq.ready`;
+  const url = `${supabaseUrl}/rest/v1/documents?id=in.(${idList})&user_id=eq.${userId}&select=id&status=eq.ready`;
   const res = await fetch(url, {
     headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
   });
-  if (!res.ok) return validFormat; // fail open rather than blocking valid requests
+  if (!res.ok) return [];
   const docs = (await res.json()) as Array<{ id: string }>;
   return docs.map((d) => d.id);
 }
@@ -373,11 +375,12 @@ async function validateDocIds(
 async function fetchDocumentTitles(
   supabaseUrl: string,
   serviceRoleKey: string,
+  userId: string,
   docIds: string[]
 ): Promise<Map<string, string>> {
   if (docIds.length === 0) return new Map();
   const idList = docIds.map((id) => `"${id}"`).join(",");
-  const url = `${supabaseUrl}/rest/v1/documents?id=in.(${idList})&select=id,title&status=eq.ready`;
+  const url = `${supabaseUrl}/rest/v1/documents?id=in.(${idList})&user_id=eq.${userId}&select=id,title&status=eq.ready`;
   const res = await fetch(url, {
     headers: {
       apikey: serviceRoleKey,
@@ -444,13 +447,14 @@ function formatFact(label: string, raw: unknown): string | null {
 async function buildFactsBlock(
   supabaseUrl: string,
   serviceRoleKey: string,
+  userId: string,
   docIds: string[],
   titleMap?: Map<string, string>,
 ): Promise<string> {
   if (docIds.length === 0) return "";
 
   const idList = docIds.map((id) => `"${id}"`).join(",");
-  const url = `${supabaseUrl}/rest/v1/documents?id=in.(${idList})&select=id,title,extracted_fields&status=eq.ready&extracted_fields=not.is.null`;
+  const url = `${supabaseUrl}/rest/v1/documents?id=in.(${idList})&user_id=eq.${userId}&select=id,title,extracted_fields&status=eq.ready&extracted_fields=not.is.null`;
   const res = await fetch(url, {
     headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
   });
@@ -537,6 +541,7 @@ function sampleStructural(chunks: ChunkRow[], targetCount: number): ChunkRow[] {
 async function resolveSummaryDocumentId(
   supabaseUrl: string,
   serviceRoleKey: string,
+  userId: string,
   message: string,
   selectedDocIds: string[] | undefined
 ): Promise<string | null> {
@@ -547,7 +552,7 @@ async function resolveSummaryDocumentId(
     return null;
   }
 
-  const url = `${supabaseUrl}/rest/v1/documents?select=id,title&order=created_at.desc&limit=50&status=eq.ready`;
+  const url = `${supabaseUrl}/rest/v1/documents?user_id=eq.${userId}&select=id,title&order=created_at.desc&limit=50&status=eq.ready`;
   const res = await fetch(url, {
     headers: {
       apikey: serviceRoleKey,
@@ -648,6 +653,21 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+    // Resolve user_id from JWT — required so the user only sees their own documents.
+    const authHeader = req.headers.get("Authorization");
+    const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    let userId: string | null = null;
+    if (userToken) {
+      const { data: { user } } = await createClient(supabaseUrl, serviceRoleKey).auth.getUser(userToken);
+      userId = user?.id ?? null;
+    }
+    if (!userId) {
+      return new Response(
+        JSON.stringify({ error: "Authentication required" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const safeHistory: ChatMessage[] = Array.isArray(rawHistory)
       ? (rawHistory as Array<unknown>)
           .filter((m): m is { role: string; content: string } =>
@@ -672,7 +692,7 @@ Deno.serve(async (req: Request) => {
     // Validate selectedDocIds against the database
     const rawDocIdList = Array.isArray(rawDocIds) ? (rawDocIds as unknown[]).filter((id): id is string => typeof id === "string") : [];
     const selectedDocIds = rawDocIdList.length > 0
-      ? await validateDocIds(supabaseUrl, serviceRoleKey, rawDocIdList)
+      ? await validateDocIds(supabaseUrl, serviceRoleKey, userId, rawDocIdList)
       : [];
 
     log("info", "dashboard-chat.request", { ip, messageLen: message.length, historyLen: safeHistory.length, docIds: selectedDocIds.length });
@@ -693,6 +713,7 @@ Deno.serve(async (req: Request) => {
         const summaryDocId = await resolveSummaryDocumentId(
           supabaseUrl,
           serviceRoleKey,
+          userId,
           message,
           selectedDocIds
         );
@@ -706,7 +727,7 @@ Deno.serve(async (req: Request) => {
             summaryDocTitle = titleRows[0]?.title ?? "";
           }
 
-          factsBlock = await buildFactsBlock(supabaseUrl, serviceRoleKey, [summaryDocId]);
+          factsBlock = await buildFactsBlock(supabaseUrl, serviceRoleKey, userId, [summaryDocId]);
 
           // Two-pass: targeted semantic search for clinical substance + first few chunks for doc context
           const summarySearchQuery =
@@ -751,37 +772,50 @@ Deno.serve(async (req: Request) => {
         const queryEmbedding = await embedText(searchQuery, openaiKey);
         const hasDocFilter = Array.isArray(selectedDocIds) && selectedDocIds.length > 0;
 
-        // Fetch extracted facts for the scoped documents — gives the LLM clean
-        // structured fields alongside RAG chunks. Skipped when no doc filter
-        // (would dump every doc's fields into the prompt).
+        // Resolve user's documents to scope retrieval — without this, the service-role
+        // RPC would return chunks from every user's documents.
+        let scopedDocIds: string[] = selectedDocIds;
+        if (!hasDocFilter) {
+          const userDocsRes = await fetch(
+            `${supabaseUrl}/rest/v1/documents?user_id=eq.${userId}&status=eq.ready&select=id`,
+            { headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` } }
+          );
+          if (userDocsRes.ok) {
+            const userDocs = (await userDocsRes.json()) as Array<{ id: string }>;
+            scopedDocIds = userDocs.map((d) => d.id);
+          }
+        }
+
         if (hasDocFilter) {
-          factsBlock = await buildFactsBlock(supabaseUrl, serviceRoleKey, selectedDocIds);
+          factsBlock = await buildFactsBlock(supabaseUrl, serviceRoleKey, userId, selectedDocIds);
         }
 
-        const rpcBody: Record<string, unknown> = {
-          query_embedding: queryEmbedding,
-          query_text: searchQuery,
-          match_count: 10,
-          filter_document_ids: hasDocFilter ? selectedDocIds : null,
-        };
+        if (scopedDocIds.length === 0) {
+          rawChunks = [];
+        } else {
+          const rpcRes = await fetch(`${supabaseUrl}/rest/v1/rpc/hybrid_search`, {
+            method: "POST",
+            headers: {
+              "apikey": serviceRoleKey,
+              "Authorization": `Bearer ${serviceRoleKey}`,
+              "Content-Type": "application/json",
+              "Prefer": "return=representation",
+            },
+            body: JSON.stringify({
+              query_embedding: queryEmbedding,
+              query_text: searchQuery,
+              match_count: 10,
+              filter_document_ids: scopedDocIds,
+            }),
+          });
 
-        const rpcRes = await fetch(`${supabaseUrl}/rest/v1/rpc/hybrid_search`, {
-          method: "POST",
-          headers: {
-            "apikey": serviceRoleKey,
-            "Authorization": `Bearer ${serviceRoleKey}`,
-            "Content-Type": "application/json",
-            "Prefer": "return=representation",
-          },
-          body: JSON.stringify(rpcBody),
-        });
+          if (!rpcRes.ok) {
+            const errText = await rpcRes.text();
+            throw new Error(`Search RPC HTTP ${rpcRes.status}: ${errText}`);
+          }
 
-        if (!rpcRes.ok) {
-          const errText = await rpcRes.text();
-          throw new Error(`Search RPC HTTP ${rpcRes.status}: ${errText}`);
+          rawChunks = (await rpcRes.json()) as ChunkRow[];
         }
-
-        rawChunks = (await rpcRes.json()) as ChunkRow[];
       }
 
       if (rawChunks && rawChunks.length > 0) {
@@ -802,7 +836,7 @@ Deno.serve(async (req: Request) => {
 
           // Build citation sources (preview also cleaned)
           const uniqueDocIds = [...new Set(ordered.map((c) => c.document_id))];
-          const titleMap = await fetchDocumentTitles(supabaseUrl, serviceRoleKey, uniqueDocIds);
+          const titleMap = await fetchDocumentTitles(supabaseUrl, serviceRoleKey, userId, uniqueDocIds);
 
           sources = ordered.map((c, i) => ({
             n: i + 1,

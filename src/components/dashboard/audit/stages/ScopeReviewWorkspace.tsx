@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { CheckCircle2, Circle, ArrowRight, AlertCircle } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useAudit } from '../../../../context/AuditContext';
@@ -13,6 +14,14 @@ import {
   SERVICE_TYPE_OPTIONS,
 } from '../../../../lib/audit/labels';
 import type { DerivedCriticality, EndpointTier, ImpactSurface } from '../../../../types/audit';
+import { fetchProtocolRisksForAudit } from '../../../../lib/audit/intakeApi';
+import {
+  fetchVendorService,
+  fetchServiceMappingsByAudit,
+  fetchTrustAssessment,
+} from '../../../../lib/audit/vendorEnrichmentApi';
+import { fetchQuestionnaireBundle } from '../../../../lib/audit/questionnaireApi';
+import { fetchRiskSummary } from '../../../../lib/audit/riskSummaryApi';
 
 // =============================================================================
 // ScopeReviewWorkspace — SCOPE_AND_RISK_REVIEW stage center pane.
@@ -28,10 +37,12 @@ import type { DerivedCriticality, EndpointTier, ImpactSurface } from '../../../.
 // right-rail RiskSummaryPanel. The left two gates simply mirror the upstream
 // approval signals.
 //
-// Phase B caveat: gates read from the seeded mock data. Approvals you make
-// inside QuestionnaireReviewWorkspace or RiskSummaryPanel are component-local
-// state and don't propagate here yet — that lands when we lift mock stores
-// into shared contexts (or when real Supabase wires up).
+// Hydration: this stage might be the first one a user lands on (e.g. when an
+// audit was already at Stage 4+ at sign-in). In that case Stages 1–3's
+// components have not mounted, so the shared context is empty for those
+// stores. We fan out the upstream fetches here so the gates have real data
+// regardless of navigation order. RiskSummaryPanel separately hydrates the
+// risk summary on every stage's right rail.
 // =============================================================================
 
 export default function ScopeReviewWorkspace() {
@@ -39,6 +50,38 @@ export default function ScopeReviewWorkspace() {
   const { activeAudit, advanceStage } = useAudit();
   const data = useAuditData();
   const isLight = theme === 'light';
+
+  // Hydrate every upstream store this pane reads. The setters are stable
+  // (React.Dispatch refs from context), so depending only on the audit id is
+  // safe — see RiskSummaryPanel for the rationale.
+  useEffect(() => {
+    if (!activeAudit) return;
+    const auditId = activeAudit.id;
+    let cancelled = false;
+
+    void (async () => {
+      const [risks, service, mappings, trust, questionnaire, riskSummary] = await Promise.all([
+        fetchProtocolRisksForAudit(auditId),
+        fetchVendorService(auditId),
+        fetchServiceMappingsByAudit(auditId),
+        fetchTrustAssessment(auditId),
+        fetchQuestionnaireBundle(auditId),
+        fetchRiskSummary(auditId),
+      ]);
+      if (cancelled) return;
+      data.setProtocolRisks((prev) => ({ ...prev, [auditId]: risks }));
+      data.setVendorServices((prev) => ({ ...prev, [auditId]: service }));
+      data.setServiceMappings((prev) => ({ ...prev, [auditId]: mappings }));
+      data.setTrustAssessments((prev) => ({ ...prev, [auditId]: trust }));
+      data.setQuestionnaires((prev) => ({ ...prev, [auditId]: questionnaire }));
+      data.setRiskSummaries((prev) => ({ ...prev, [auditId]: riskSummary }));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAudit?.id]);
 
   if (!activeAudit) return null;
 

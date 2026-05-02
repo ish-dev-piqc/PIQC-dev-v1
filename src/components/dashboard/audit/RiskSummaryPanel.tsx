@@ -8,11 +8,15 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useAuditData } from '../../../context/AuditDataContext';
-import { type MockRiskSummary } from '../../../lib/audit/mockRiskSummary';
 import type { ClinicalTrialPhase } from '../../../types/audit';
 import { scoreFocusArea } from '../../../lib/heatmap';
 import HeatIndicator from '../../heatmap/HeatIndicator';
 import HistoryDrawer from './HistoryDrawer';
+import {
+  fetchRiskSummary,
+  upsertRiskSummary,
+  approveRiskSummary,
+} from '../../../lib/audit/riskSummaryApi';
 
 // =============================================================================
 // RiskSummaryPanel — right rail of the audit workspace.
@@ -78,6 +82,24 @@ export default function RiskSummaryPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auditId]);
 
+  // Hydrate the risk summary from Supabase on audit change.
+  useEffect(() => {
+    if (!auditId) return;
+    let cancelled = false;
+    void (async () => {
+      const fetched = await fetchRiskSummary(auditId);
+      if (cancelled) return;
+      if (fetched) {
+        setSummaries((prev) => ({ ...prev, [auditId]: fetched }));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // setSummaries is a stable React.Dispatch ref from context.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auditId]);
+
   // ---------------------------------------------------------------------------
   // Theme tokens
   // ---------------------------------------------------------------------------
@@ -100,48 +122,48 @@ export default function RiskSummaryPanel({
     : 'bg-emerald-500 text-[#0d1118] hover:bg-emerald-400';
 
   // ---------------------------------------------------------------------------
-  // Actions (mock — Phase B replaces with supabase.rpc calls)
+  // Actions — backed by audit_mode_* RPCs in
+  // supabase/migrations/20260430160000_audit_mode_risk_summary_rpcs.sql
   // ---------------------------------------------------------------------------
-  const generateStub = () => {
-    const stub: MockRiskSummary = {
-      id: `rs-${auditId}-${Date.now()}`,
-      audit_id: auditId,
-      study_context: {
-        therapeutic_space: 'TBD — capture from protocol',
-        primary_endpoints: [],
-        secondary_endpoints: [],
-        clinical_trial_phase: 'NOT_APPLICABLE',
-        captured_at: new Date().toISOString(),
-      },
-      vendor_relevance_narrative:
-        'Stub generated from study context, mapped protocol risks, and vendor service category. Edit this paragraph down to your judgment of why this vendor matters in the context of this study.',
-      focus_areas: [],
-      approval_status: 'DRAFT',
-      approved_at: null,
-      approved_by_name: null,
-      protocol_risk_refs: [],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+  const generateStub = async () => {
+    const stubNarrative =
+      'Stub generated from study context, mapped protocol risks, and vendor service category. Edit this paragraph down to your judgment of why this vendor matters in the context of this study.';
+    const stubContext = {
+      therapeutic_space: 'TBD — capture from protocol',
+      primary_endpoints: [],
+      secondary_endpoints: [],
+      clinical_trial_phase: 'NOT_APPLICABLE' as ClinicalTrialPhase,
+      captured_at: new Date().toISOString(),
     };
-    setSummaries((prev) => ({ ...prev, [auditId]: stub }));
-    setDraftNarrative(stub.vendor_relevance_narrative);
-    setDraftFocusAreas('');
+    const created = await upsertRiskSummary(
+      auditId,
+      {
+        study_context: stubContext,
+        vendor_relevance_narrative: stubNarrative,
+        focus_areas: [],
+      },
+      'Risk summary stub generated',
+    );
+    if (!created) return;
+    setSummaries((prev) => ({ ...prev, [auditId]: created }));
+    setDraftNarrative(created.vendor_relevance_narrative);
+    setDraftFocusAreas(created.focus_areas.join(', '));
   };
 
-  const saveEdits = () => {
+  const saveEdits = async () => {
     if (!summary) return;
     const focusAreas = parseFocusAreas(draftFocusAreas);
-    const updated: MockRiskSummary = {
-      ...summary,
-      vendor_relevance_narrative: draftNarrative,
-      focus_areas: focusAreas,
-      // Editing demotes to DRAFT — re-approval required.
-      approval_status: 'DRAFT',
-      approved_at: null,
-      approved_by_name: null,
-      updated_at: new Date().toISOString(),
-    };
-    setSummaries((prev) => ({ ...prev, [auditId]: updated }));
+    const persisted = await upsertRiskSummary(
+      auditId,
+      {
+        vendor_relevance_narrative: draftNarrative,
+        focus_areas: focusAreas,
+      },
+      'Risk summary edited',
+    );
+    if (persisted) {
+      setSummaries((prev) => ({ ...prev, [auditId]: persisted }));
+    }
     setEditing(false);
   };
 
@@ -152,16 +174,12 @@ export default function RiskSummaryPanel({
     setEditing(false);
   };
 
-  const approve = () => {
+  const approve = async () => {
     if (!summary) return;
-    const updated: MockRiskSummary = {
-      ...summary,
-      approval_status: 'APPROVED',
-      approved_at: new Date().toISOString(),
-      approved_by_name: 'You', // Phase B reads user_profiles.name
-      updated_at: new Date().toISOString(),
-    };
-    setSummaries((prev) => ({ ...prev, [auditId]: updated }));
+    const persisted = await approveRiskSummary(summary.id, 'Risk summary approved');
+    if (persisted) {
+      setSummaries((prev) => ({ ...prev, [auditId]: persisted }));
+    }
     setConfirmingApprove(false);
   };
 

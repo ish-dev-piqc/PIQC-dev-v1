@@ -1,30 +1,15 @@
 import { createContext, useContext, useState } from 'react';
-import { MOCK_PROTOCOL_RISKS, type TaggedSection } from '../lib/audit/mockProtocolRisks';
-import {
-  MOCK_VENDOR_SERVICES,
-  MOCK_SERVICE_MAPPINGS,
-  MOCK_TRUST_ASSESSMENTS,
-  type MockVendorService,
-  type MockServiceMapping,
-  type MockTrustAssessment,
+import type { TaggedSection } from '../lib/audit/mockProtocolRisks';
+import type {
+  MockVendorService,
+  MockServiceMapping,
+  MockTrustAssessment,
 } from '../lib/audit/mockVendorEnrichment';
-import {
-  MOCK_RISK_SUMMARIES,
-  type MockRiskSummary,
-} from '../lib/audit/mockRiskSummary';
-import {
-  MOCK_QUESTIONNAIRES,
-  type MockQuestionnaireBundle,
-} from '../lib/audit/mockQuestionnaire';
-import {
-  MOCK_PRE_AUDIT,
-  type MockPreAuditBundle,
-} from '../lib/audit/mockPreAudit';
-import {
-  MOCK_WORKSPACE_ENTRIES,
-  type MockWorkspaceEntry,
-} from '../lib/audit/mockWorkspaceEntries';
-import { MOCK_REPORTS, type MockReportDraft } from '../lib/audit/mockReport';
+import type { MockRiskSummary } from '../lib/audit/mockRiskSummary';
+import type { MockQuestionnaireBundle } from '../lib/audit/mockQuestionnaire';
+import type { MockPreAuditBundle } from '../lib/audit/mockPreAudit';
+import type { MockWorkspaceEntry } from '../lib/audit/mockWorkspaceEntries';
+import type { MockReportDraft } from '../lib/audit/mockReport';
 
 // =============================================================================
 // AuditDataContext — the shared in-session store for Audit Mode mock data.
@@ -114,33 +99,33 @@ const AuditDataContext = createContext<AuditDataContextValue>({
 });
 
 export function AuditDataProvider({ children }: { children: React.ReactNode }) {
-  const [protocolRisks, setProtocolRisks] = useState<Record<string, TaggedSection[]>>(
-    () => ({ ...MOCK_PROTOCOL_RISKS }),
-  );
+  // All stores start empty. Each stage workspace's load `useEffect` populates
+  // its slice via Supabase RPCs/SELECTs on mount. This means the UI shows
+  // briefly empty (no flash-of-mock-data) and reflects only what the backend
+  // actually returns under the current user's RLS scope.
+  const [protocolRisks, setProtocolRisks] = useState<Record<string, TaggedSection[]>>({});
   const [vendorServices, setVendorServices] = useState<
     Record<string, MockVendorService | null>
-  >(() => ({ ...MOCK_VENDOR_SERVICES }));
+  >({});
   const [serviceMappings, setServiceMappings] = useState<
     Record<string, MockServiceMapping[]>
-  >(() => ({ ...MOCK_SERVICE_MAPPINGS }));
+  >({});
   const [trustAssessments, setTrustAssessments] = useState<
     Record<string, MockTrustAssessment | null>
-  >(() => ({ ...MOCK_TRUST_ASSESSMENTS }));
+  >({});
   const [riskSummaries, setRiskSummaries] = useState<
     Record<string, MockRiskSummary | null>
-  >(() => ({ ...MOCK_RISK_SUMMARIES }));
+  >({});
   const [questionnaires, setQuestionnaires] = useState<
     Record<string, MockQuestionnaireBundle | null>
-  >(() => ({ ...MOCK_QUESTIONNAIRES }));
+  >({});
   const [preAuditBundles, setPreAuditBundles] = useState<
     Record<string, MockPreAuditBundle>
-  >(() => ({ ...MOCK_PRE_AUDIT }));
+  >({});
   const [workspaceEntries, setWorkspaceEntries] = useState<
     Record<string, MockWorkspaceEntry[]>
-  >(() => ({ ...MOCK_WORKSPACE_ENTRIES }));
-  const [reports, setReports] = useState<Record<string, MockReportDraft | null>>(
-    () => ({ ...MOCK_REPORTS }),
-  );
+  >({});
+  const [reports, setReports] = useState<Record<string, MockReportDraft | null>>({});
 
   return (
     <AuditDataContext.Provider

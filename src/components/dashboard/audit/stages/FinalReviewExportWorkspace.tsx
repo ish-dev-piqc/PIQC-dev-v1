@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   CheckCircle2,
   Circle,
@@ -10,6 +10,11 @@ import {
 import { useTheme } from '../../../../context/ThemeContext';
 import { useAudit } from '../../../../context/AuditContext';
 import { useAuditData } from '../../../../context/AuditDataContext';
+import {
+  fetchReportDraft,
+  finalSignOffReport,
+  markReportExported,
+} from '../../../../lib/audit/reportApi';
 
 // =============================================================================
 // FinalReviewExportWorkspace — FINAL_REVIEW_EXPORT (Stage 8) center pane.
@@ -28,10 +33,18 @@ interface GateItem {
 export default function FinalReviewExportWorkspace() {
   const { theme } = useTheme();
   const { activeAudit } = useAudit();
-  const data = useAuditData();
+  const { reports, setReports, ...data } = useAuditData();
   const isLight = theme === 'light';
 
   const [confirmingSignoff, setConfirmingSignoff] = useState(false);
+
+  useEffect(() => {
+    if (!activeAudit?.id) return;
+    const id = activeAudit.id;
+    fetchReportDraft(id).then((draft) => {
+      setReports((prev) => ({ ...prev, [id]: draft }));
+    });
+  }, [activeAudit?.id]);
 
   if (!activeAudit) return null;
 
@@ -44,7 +57,7 @@ export default function FinalReviewExportWorkspace() {
     checklist: null,
   };
   const entries = data.workspaceEntries[auditId] ?? [];
-  const report = data.reports[auditId] ?? null;
+  const report = reports[auditId] ?? null;
 
   // Compute gates
   const gates: GateItem[] = [
@@ -94,27 +107,19 @@ export default function FinalReviewExportWorkspace() {
   // ---------------------------------------------------------------------------
   // Mutations
   // ---------------------------------------------------------------------------
-  const finalSignOff = () => {
+  const finalSignOff = async () => {
     if (!report || !allPassed) return;
-    data.setReports((prev) => ({
-      ...prev,
-      [auditId]: {
-        ...report,
-        final_signed_off_at: new Date().toISOString(),
-        final_signed_off_by_name: 'You',
-      },
-    }));
-    setConfirmingSignoff(false);
+    const updated = await finalSignOffReport(report.id);
+    if (updated) {
+      setReports((prev) => ({ ...prev, [auditId]: updated }));
+      setConfirmingSignoff(false);
+    }
   };
 
-  const stubExport = (format: 'markdown' | 'docx') => {
+  const stubExport = async (format: 'markdown' | 'docx') => {
     if (!report) return;
-    data.setReports((prev) => ({
-      ...prev,
-      [auditId]: { ...report, exported_at: new Date().toISOString() },
-    }));
-    // Stub — real export would generate the file. Phase B: just flag it as
-    // exported. Tell the user what would happen.
+    const updated = await markReportExported(report.id);
+    if (updated) setReports((prev) => ({ ...prev, [auditId]: updated }));
     alert(
       `Export to ${format === 'markdown' ? 'Markdown' : 'Word (.docx)'}: stub.\n\nIn the wired build, this generates a sponsor-name-free draft for polish in external tooling.`,
     );

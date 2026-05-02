@@ -1,25 +1,41 @@
 import { supabase } from '../supabase';
 import type { TaggedSection } from './mockProtocolRisks';
+import type {
+  EndpointTier,
+  ImpactSurface,
+  TaggingMode,
+  VersionChangeType,
+} from '../../types/audit';
 
 // =============================================================================
-// Intake (Stage 1) API — protocol risk tagging reads and writes.
+// Intake (Stage 1) API — protocol risk tagging.
 //
-// Replaces mockProtocolRisks with real Supabase queries. RLS ensures you only
-// see/edit risks belonging to audits you lead.
+// Reads: direct SELECT against protocol_risk_objects (RLS lets any
+// authenticated user read; ProtocolRiskObjects are reference data).
+//
+// Writes: route through SECURITY DEFINER RPCs in
+// supabase/migrations/20260430190000_audit_mode_intake_rpcs.sql. Those gate
+// on `audit_mode_can_write_protocol_version` so only the lead auditor of
+// some audit on that protocol_version can mutate its risks. Each mutation
+// also writes a state_history_delta atomically.
+//
+// Note on tagged_at / tagging_mode: server stamps these. Clients send the
+// values they want recorded for endpoint_tier / impact_surface / etc. — the
+// server fills in tagged_by = auth.uid() and tagging_mode = 'MANUAL'.
 // =============================================================================
 
-export interface ProtocolRiskRow {
+interface ProtocolRiskRow {
   id: string;
+  protocol_version_id: string;
   section_identifier: string;
   section_title: string;
-  endpoint_tier: 'PRIMARY' | 'SECONDARY' | 'SAFETY' | 'SUPPORTIVE';
-  impact_surface: 'DATA_INTEGRITY' | 'PATIENT_SAFETY' | 'BOTH';
+  endpoint_tier: EndpointTier;
+  impact_surface: ImpactSurface;
   time_sensitivity: boolean;
   vendor_dependency_flags: string[];
   operational_domain_tag: string;
-  tagging_mode: 'MANUAL' | 'PIQC_ASSISTED' | 'LLM_ASSISTED';
-  version_change_type: 'ADDED' | 'MODIFIED' | 'UNCHANGED';
-  protocol_version_id: string;
+  tagging_mode: TaggingMode;
+  version_change_type: VersionChangeType;
   tagged_by: string;
   tagged_at: string;
   created_at: string;
@@ -41,69 +57,73 @@ function flattenRisk(row: ProtocolRiskRow): TaggedSection {
   };
 }
 
+// ============================================================================
+// Reads
+// ============================================================================
+
 /**
- * Fetch protocol risks via a direct join.
- * Subquery: fetch the protocol_version_id from the audit, then filter risks by that version.
+ * Fetch all protocol risks for an audit by joining via its protocol_version.
+ * Two queries instead of a Postgres view because the audit→version FK can
+ * change (very rarely) and we'd rather re-read it than denormalise.
  */
 export async function fetchProtocolRisksForAudit(auditId: string): Promise<TaggedSection[]> {
-  // First, get the audit to find its protocol_version_id
-  const { data: auditData, error: auditError } = await supabase
+  const { data: auditRow, error: auditErr } = await supabase
     .from('audits')
     .select('protocol_version_id')
     .eq('id', auditId)
     .single();
 
-  if (auditError || !auditData) {
-    console.error('[intakeApi] fetchProtocolRisksForAudit - audit lookup failed:', auditError);
+  if (auditErr || !auditRow) {
+    console.error('[intakeApi] fetchProtocolRisksForAudit — audit lookup failed:', auditErr);
     return [];
   }
 
-  // Then fetch all risks for that protocol version
   const { data, error } = await supabase
     .from('protocol_risk_objects')
     .select('*')
-    .eq('protocol_version_id', auditData.protocol_version_id);
+    .eq('protocol_version_id', (auditRow as { protocol_version_id: string }).protocol_version_id)
+    .order('section_identifier', { ascending: true });
 
   if (error) {
-    console.error('[intakeApi] fetchProtocolRisksForAudit - risks lookup failed:', error);
+    console.error('[intakeApi] fetchProtocolRisksForAudit — risks lookup failed:', error);
     return [];
   }
 
   return ((data ?? []) as ProtocolRiskRow[]).map(flattenRisk);
 }
 
-/**
- * Create a new protocol risk and write a state_history_delta.
- * Tags are recorded with the current user and timestamp.
- */
+// ============================================================================
+// Mutations (RPCs — atomic with delta tracking)
+// ============================================================================
+
+export interface CreateProtocolRiskInput {
+  sectionIdentifier: string;
+  sectionTitle: string;
+  endpointTier: EndpointTier;
+  impactSurface: ImpactSurface;
+  timeSensitivity: boolean;
+  vendorDependencyFlags: string[];
+  operationalDomainTag: string;
+  versionChangeType?: VersionChangeType;
+  reason?: string;
+}
+
 export async function createProtocolRisk(
   protocolVersionId: string,
-  risk: Omit<TaggedSection, 'id'>
+  input: CreateProtocolRiskInput,
 ): Promise<TaggedSection | null> {
-  const userId = (await supabase.auth.getUser()).data.user?.id;
-  if (!userId) {
-    console.error('[intakeApi] createProtocolRisk: no authenticated user');
-    return null;
-  }
-
-  const { data, error } = await supabase
-    .from('protocol_risk_objects')
-    .insert({
-      protocol_version_id: protocolVersionId,
-      section_identifier: risk.section_identifier,
-      section_title: risk.section_title,
-      endpoint_tier: risk.endpoint_tier,
-      impact_surface: risk.impact_surface,
-      time_sensitivity: risk.time_sensitivity,
-      vendor_dependency_flags: risk.vendor_dependency_flags,
-      operational_domain_tag: risk.operational_domain_tag,
-      tagging_mode: risk.tagging_mode,
-      version_change_type: risk.version_change_type,
-      tagged_by: userId,
-      tagged_at: new Date().toISOString(),
-    })
-    .select('*')
-    .single();
+  const { data, error } = await supabase.rpc('audit_mode_create_protocol_risk', {
+    p_protocol_version_id: protocolVersionId,
+    p_section_identifier: input.sectionIdentifier,
+    p_section_title: input.sectionTitle,
+    p_endpoint_tier: input.endpointTier,
+    p_impact_surface: input.impactSurface,
+    p_time_sensitivity: input.timeSensitivity,
+    p_vendor_dependency_flags: input.vendorDependencyFlags,
+    p_operational_domain_tag: input.operationalDomainTag,
+    p_version_change_type: input.versionChangeType ?? 'ADDED',
+    p_reason: input.reason ?? null,
+  });
 
   if (error) {
     console.error('[intakeApi] createProtocolRisk error:', error);
@@ -113,19 +133,30 @@ export async function createProtocolRisk(
   return flattenRisk(data as ProtocolRiskRow);
 }
 
-/**
- * Update an existing protocol risk.
- */
+export interface UpdateProtocolRiskInput {
+  endpointTier?: EndpointTier;
+  impactSurface?: ImpactSurface;
+  timeSensitivity?: boolean;
+  vendorDependencyFlags?: string[];
+  operationalDomainTag?: string;
+  versionChangeType?: VersionChangeType;
+  reason?: string;
+}
+
 export async function updateProtocolRisk(
   riskId: string,
-  updates: Partial<Omit<TaggedSection, 'id'>>
+  input: UpdateProtocolRiskInput,
 ): Promise<TaggedSection | null> {
-  const { data, error } = await supabase
-    .from('protocol_risk_objects')
-    .update(updates)
-    .eq('id', riskId)
-    .select('*')
-    .single();
+  const { data, error } = await supabase.rpc('audit_mode_update_protocol_risk', {
+    p_id: riskId,
+    p_endpoint_tier: input.endpointTier ?? null,
+    p_impact_surface: input.impactSurface ?? null,
+    p_time_sensitivity: input.timeSensitivity ?? null,
+    p_vendor_dependency_flags: input.vendorDependencyFlags ?? null,
+    p_operational_domain_tag: input.operationalDomainTag ?? null,
+    p_version_change_type: input.versionChangeType ?? null,
+    p_reason: input.reason ?? null,
+  });
 
   if (error) {
     console.error('[intakeApi] updateProtocolRisk error:', error);
@@ -136,15 +167,28 @@ export async function updateProtocolRisk(
 }
 
 /**
- * Delete a protocol risk.
+ * Delete a protocol risk. Use sparingly — protocol risks are reference data
+ * with downstream references (vendor_service_mapping_objects, etc.); a delete
+ * will fail with a FK violation if anything depends on it. Corrections
+ * usually happen via updateProtocolRisk; amendment ingest produces new rows
+ * tied via previous_version_risk_id.
+ *
+ * The RPC writes a PROTOCOL_RISK_OBJECT delta with the deleted state captured
+ * in the from-values so the audit trail can reconstruct what was removed.
  */
-export async function deleteProtocolRisk(riskId: string): Promise<boolean> {
-  const { error } = await supabase.from('protocol_risk_objects').delete().eq('id', riskId);
+export async function deleteProtocolRisk(
+  riskId: string,
+  reason?: string,
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc('audit_mode_delete_protocol_risk', {
+    p_id: riskId,
+    p_reason: reason ?? null,
+  });
 
   if (error) {
     console.error('[intakeApi] deleteProtocolRisk error:', error);
     return false;
   }
 
-  return true;
+  return Boolean(data);
 }
