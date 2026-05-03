@@ -167,6 +167,7 @@ export default function VisitDetailDrawer({
   };
 
   return (
+    <>
     <div
       ref={overlay}
       onClick={(e) => {
@@ -434,5 +435,6 @@ export default function VisitDetailDrawer({
         onClose={() => setShowProfile(false)}
       />
     )}
+    </>
   );
 }
