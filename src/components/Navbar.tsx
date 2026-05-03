@@ -34,7 +34,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
   const { enabled: heatmapEnabled, toggle: toggleHeatmap } = useHeatmap();
   const { theme, toggleTheme } = useTheme();
   const { mode, setMode } = useMode();
-  const { protocols, activeProtocol, setActiveProtocol } = useProtocol();
+  const { protocols, isLoading: protocolsLoading, activeProtocol, setActiveProtocol } = useProtocol();
   const { audits, activeAudit, setActiveAudit } = useAudit();
 
   const STAGE_LABELS: Record<AuditStage, string> = {
@@ -193,7 +193,15 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
               Your protocols
             </p>
           </div>
-          {protocols.map((p) => {
+          {protocolsLoading ? (
+            <div className={`px-3 py-3 text-[11px] ${isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40'}`}>
+              Loading protocols…
+            </div>
+          ) : protocols.length === 0 ? (
+            <div className={`px-3 py-3 text-[11px] ${isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40'}`}>
+              No protocols found
+            </div>
+          ) : protocols.map((p) => {
             const active = !isHomeScope && p.id === activeProtocol.id;
             return (
               <button
