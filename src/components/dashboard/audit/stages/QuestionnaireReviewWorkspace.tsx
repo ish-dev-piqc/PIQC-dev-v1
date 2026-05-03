@@ -20,6 +20,14 @@ import {
   type MockResponse,
 } from '../../../../lib/audit/mockQuestionnaire';
 import {
+  fetchQuestionnaireBundle,
+  createQuestionnaireInstance,
+  transitionQuestionnaireStatus,
+  approveQuestionnaire,
+  upsertResponse,
+  setResponseInconsistency,
+} from '../../../../lib/audit/questionnaireApi';
+import {
   QUESTIONNAIRE_INSTANCE_STATUS_LABELS,
   QUESTIONNAIRE_INSTANCE_STATUS_ORDER,
   QUESTION_ANSWER_TYPE_LABELS,
@@ -87,8 +95,23 @@ export default function QuestionnaireReviewWorkspace() {
   const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
-    // No-op for now; would reset edit state if any local-only flags existed.
-  }, [activeAudit?.id]);
+    if (!activeAudit) return;
+
+    const loadQuestionnaire = async () => {
+      try {
+        const bundle = await fetchQuestionnaireBundle(activeAudit.id);
+        if (bundle) {
+          setBundles((prev) => ({ ...prev, [activeAudit.id]: bundle }));
+        }
+      } catch (err) {
+        console.error('[QuestionnaireReviewWorkspace] Load error:', err);
+      }
+    };
+
+    loadQuestionnaire();
+    // Depend on activeAudit?.id only — see RiskSummaryPanel for rationale.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAudit?.id, setBundles]);
 
   // Derived values — computed before early returns so hooks below stay unconditional.
   const auditId = activeAudit?.id ?? null;
@@ -146,26 +169,19 @@ export default function QuestionnaireReviewWorkspace() {
   // ---------------------------------------------------------------------------
   // Empty state — create instance
   // ---------------------------------------------------------------------------
-  const createInstance = () => {
-    const newBundle: MockQuestionnaireBundle = {
-      instance: {
-        id: `qi-${auditId}-${Date.now()}`,
-        audit_id: auditId,
-        status: 'DRAFT',
-        vendor_contact_name: null,
-        vendor_contact_email: null,
-        vendor_contact_title: null,
-        addenda_generated_at: null,
-        sent_to_vendor_at: null,
-        vendor_responded_at: null,
-        completed_at: null,
-        approved_at: null,
-        approved_by_name: null,
-      },
-      questions: [...TEMPLATE_QUESTIONS],
-      responses: {},
-    };
-    setBundles((prev) => ({ ...prev, [auditId]: newBundle }));
+  const createInstance = async () => {
+    try {
+      const instance = await createQuestionnaireInstance(auditId);
+      if (!instance) return;
+      const newBundle: MockQuestionnaireBundle = {
+        instance,
+        questions: [...TEMPLATE_QUESTIONS],
+        responses: {},
+      };
+      setBundles((prev) => ({ ...prev, [auditId]: newBundle }));
+    } catch (err) {
+      console.error('[QuestionnaireReviewWorkspace] Create instance error:', err);
+    }
   };
 
   if (!bundle) {
@@ -199,41 +215,37 @@ export default function QuestionnaireReviewWorkspace() {
   // ---------------------------------------------------------------------------
   // Lifecycle transition (only Phase B mock — no validation)
   // ---------------------------------------------------------------------------
-  const transitionStatus = (toStatus: QuestionnaireInstanceStatus) => {
-    setBundles((prev) => {
-      const cur = prev[auditId];
-      if (!cur) return prev;
-      const now = new Date().toISOString();
-      const updated: MockQuestionnaireBundle = {
-        ...cur,
-        instance: {
-          ...cur.instance,
-          status: toStatus,
-          sent_to_vendor_at:
-            toStatus === 'SENT_TO_VENDOR' ? now : cur.instance.sent_to_vendor_at,
-          vendor_responded_at:
-            toStatus === 'VENDOR_RESPONDED' ? now : cur.instance.vendor_responded_at,
-          completed_at: toStatus === 'COMPLETE' ? now : cur.instance.completed_at,
-        },
-      };
-      return { ...prev, [auditId]: updated };
-    });
+  const transitionStatus = async (toStatus: QuestionnaireInstanceStatus) => {
+    if (!bundle) return;
+    try {
+      const updated = await transitionQuestionnaireStatus(bundle.instance.id, toStatus);
+      if (updated) {
+        setBundles((prev) => {
+          const cur = prev[auditId];
+          if (!cur) return prev;
+          return { ...prev, [auditId]: { ...cur, instance: updated } };
+        });
+      }
+    } catch (err) {
+      console.error('[QuestionnaireReviewWorkspace] Transition status error:', err);
+    }
   };
 
-  const approve = () => {
-    setBundles((prev) => {
-      const cur = prev[auditId];
-      if (!cur) return prev;
-      const updated: MockQuestionnaireBundle = {
-        ...cur,
-        instance: {
-          ...cur.instance,
-          approved_at: new Date().toISOString(),
-          approved_by_name: 'You',
-        },
-      };
-      return { ...prev, [auditId]: updated };
-    });
+  const approve = async () => {
+    if (!bundle) return;
+
+    try {
+      const updated = await approveQuestionnaire(bundle.instance.id);
+      if (updated) {
+        setBundles((prev) => {
+          const cur = prev[auditId];
+          if (!cur) return prev;
+          return { ...prev, [auditId]: { ...cur, instance: updated } };
+        });
+      }
+    } catch (err) {
+      console.error('[QuestionnaireReviewWorkspace] Approve error:', err);
+    }
   };
 
   const generateAddenda = () => {
@@ -271,30 +283,76 @@ export default function QuestionnaireReviewWorkspace() {
 
   // ---------------------------------------------------------------------------
   // Per-question response mutation
+  //
+  // Optimistic update + RPC persist. The inconsistency flag has its own RPC
+  // (it carries a separate audit-trail entry) — route accordingly.
   // ---------------------------------------------------------------------------
-  const updateResponse = (questionId: string, patch: Partial<MockResponse>) => {
+  const updateResponse = async (questionId: string, patch: Partial<MockResponse>) => {
+    if (!bundle) return;
+    const existing = bundle.responses[questionId];
+    const next: MockResponse = existing
+      ? { ...existing, ...patch }
+      : {
+          id: `qr-${auditId}-${Date.now()}`,
+          instance_id: bundle.instance.id,
+          question_id: questionId,
+          response_text: patch.response_text ?? null,
+          response_status: patch.response_status ?? 'UNANSWERED',
+          source: patch.source ?? 'PENDING',
+          source_reference: patch.source_reference ?? null,
+          inconsistency_flag: patch.inconsistency_flag ?? false,
+          inconsistency_note: patch.inconsistency_note ?? null,
+        };
+
     setBundles((prev) => {
       const cur = prev[auditId];
       if (!cur) return prev;
-      const existing = cur.responses[questionId];
-      const next: MockResponse = existing
-        ? { ...existing, ...patch }
-        : {
-            id: `qr-${auditId}-${Date.now()}`,
-            instance_id: cur.instance.id,
-            question_id: questionId,
-            response_text: patch.response_text ?? null,
-            response_status: patch.response_status ?? 'UNANSWERED',
-            source: patch.source ?? 'PENDING',
-            source_reference: patch.source_reference ?? null,
-            inconsistency_flag: patch.inconsistency_flag ?? false,
-            inconsistency_note: patch.inconsistency_note ?? null,
-          };
       return {
         ...prev,
         [auditId]: { ...cur, responses: { ...cur.responses, [questionId]: next } },
       };
     });
+
+    try {
+      const isInconsistencyOnlyChange =
+        existing &&
+        Object.keys(patch).length > 0 &&
+        Object.keys(patch).every((k) => k === 'inconsistency_flag' || k === 'inconsistency_note');
+
+      const persisted = isInconsistencyOnlyChange
+        ? await setResponseInconsistency(
+            existing.id,
+            next.inconsistency_flag,
+            next.inconsistency_note,
+          )
+        : await upsertResponse(bundle.instance.id, questionId, next.response_text, {
+            response_status: next.response_status,
+            source: next.source,
+            source_reference: next.source_reference,
+          });
+
+      if (persisted) {
+        setBundles((prev) => {
+          const cur = prev[auditId];
+          if (!cur) return prev;
+          return {
+            ...prev,
+            [auditId]: { ...cur, responses: { ...cur.responses, [questionId]: persisted } },
+          };
+        });
+      }
+    } catch (err) {
+      console.error('[QuestionnaireReviewWorkspace] Update response error:', err);
+      // Revert on failure
+      setBundles((prev) => {
+        const cur = prev[auditId];
+        if (!cur) return prev;
+        const reverted = { ...cur.responses };
+        if (existing) reverted[questionId] = existing;
+        else delete reverted[questionId];
+        return { ...prev, [auditId]: { ...cur, responses: reverted } };
+      });
+    }
   };
 
   const approved = !!bundle.instance.approved_at;

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, Clock, History as HistoryIcon } from 'lucide-react';
+import { Plus, Pencil, Clock, Trash2, History as HistoryIcon } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useAudit } from '../../../../context/AuditContext';
 import { useAuditData } from '../../../../context/AuditDataContext';
@@ -70,6 +70,8 @@ export default function IntakeWorkspace() {
     loadRisks();
     setMode('list');
     setEditTarget(null);
+    // Depend on activeAudit?.id only — see RiskSummaryPanel for rationale.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAudit?.id, setSectionsByAudit]);
 
   if (!activeAudit) {
@@ -84,16 +86,15 @@ export default function IntakeWorkspace() {
   // ---------------------------------------------------------------------------
   const handleAdd = async (values: RiskTagFormValues) => {
     setLoading(true);
-    const created = await createProtocolRisk(activeAudit.protocol_version_id || '', {
-      section_identifier: values.section_identifier,
-      section_title: values.section_title,
-      endpoint_tier: values.endpoint_tier,
-      impact_surface: values.impact_surface,
-      time_sensitivity: values.time_sensitivity,
-      vendor_dependency_flags: values.vendor_dependency_flags,
-      operational_domain_tag: values.operational_domain_tag,
-      tagging_mode: 'MANUAL',
-      version_change_type: 'ADDED',
+    const created = await createProtocolRisk(activeAudit.protocol_version_id, {
+      sectionIdentifier: values.section_identifier,
+      sectionTitle: values.section_title,
+      endpointTier: values.endpoint_tier,
+      impactSurface: values.impact_surface,
+      timeSensitivity: values.time_sensitivity,
+      vendorDependencyFlags: values.vendor_dependency_flags,
+      operationalDomainTag: values.operational_domain_tag,
+      versionChangeType: 'ADDED',
     });
     if (created) {
       setSectionsByAudit((prev) => ({
@@ -109,12 +110,12 @@ export default function IntakeWorkspace() {
     if (!editTarget) return;
     setLoading(true);
     const updated = await updateProtocolRisk(editTarget.id, {
-      endpoint_tier: values.endpoint_tier,
-      impact_surface: values.impact_surface,
-      time_sensitivity: values.time_sensitivity,
-      vendor_dependency_flags: values.vendor_dependency_flags,
-      operational_domain_tag: values.operational_domain_tag,
-      version_change_type: editTarget.version_change_type === 'ADDED' ? 'ADDED' : 'MODIFIED',
+      endpointTier: values.endpoint_tier,
+      impactSurface: values.impact_surface,
+      timeSensitivity: values.time_sensitivity,
+      vendorDependencyFlags: values.vendor_dependency_flags,
+      operationalDomainTag: values.operational_domain_tag,
+      versionChangeType: editTarget.version_change_type === 'ADDED' ? 'ADDED' : 'MODIFIED',
     });
     if (updated) {
       setSectionsByAudit((prev) => ({
@@ -185,10 +186,11 @@ export default function IntakeWorkspace() {
           <button
             type="button"
             onClick={openAdd}
-            className={`flex-shrink-0 inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${buttonPrimary}`}
+            disabled={loading}
+            className={`flex-shrink-0 inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors disabled:opacity-50 ${buttonPrimary}`}
           >
             <Plus size={14} />
-            Tag a section
+            {loading ? 'Loading…' : 'Tag a section'}
           </button>
         )}
       </div>
@@ -308,7 +310,6 @@ function SectionRow({
   subColor,
   mutedColor,
 }: SectionRowProps) {
-  const [deleting, setDeleting] = useState(false);
   const buttonSecondary = isLight
     ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
     : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]';
@@ -362,7 +363,7 @@ function SectionRow({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 flex-shrink-0">
           <button
             type="button"
             onClick={onEdit}
@@ -373,16 +374,16 @@ function SectionRow({
           </button>
           <button
             type="button"
-            onClick={async () => {
-              setDeleting(true);
-              await onDelete();
-              setDeleting(false);
+            onClick={() => {
+              if (window.confirm(`Delete tagged section "${section.section_title}"? This cannot be undone.`)) {
+                void onDelete();
+              }
             }}
-            disabled={deleting}
-            className={`text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors opacity-50 hover:opacity-75 disabled:opacity-50 cursor-pointer ${buttonSecondary}`}
-            title="Delete this risk"
+            className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+            title="Delete tagged section"
+            aria-label="Delete tagged section"
           >
-            {deleting ? 'Deleting…' : 'Delete'}
+            <Trash2 size={12} />
           </button>
         </div>
       </div>

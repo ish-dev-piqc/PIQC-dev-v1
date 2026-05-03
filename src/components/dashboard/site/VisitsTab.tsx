@@ -9,10 +9,10 @@ import {
   FileWarning,
   Calendar as CalendarIcon,
   ChevronRight,
-  Play,
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
+import VisitDetailDrawer from './VisitDetailDrawer';
 import {
   MOCK_VISITS,
   PROTOCOL_COLORS,
@@ -57,7 +57,7 @@ const STATUS_FILTERS: StatusFilter[] = [
 
 export default function VisitsTab() {
   const { theme } = useTheme();
-  const { activeProtocol } = useProtocol();
+  const { activeProtocol, protocols } = useProtocol();
   const isLight = theme === 'light';
 
   const [search, setSearch] = useState('');
@@ -79,6 +79,7 @@ export default function VisitsTab() {
     const d = new Date();
     return d.toISOString().slice(0, 10);
   }, []);
+  const todayDate = useMemo(() => new Date(), []);
 
   // Filter + search
   const visible = useMemo(() => {
@@ -308,11 +309,11 @@ export default function VisitsTab() {
         </div>
       )}
 
-      {/* Detail drawer */}
       {openVisit && (
-        <VisitDrawer
+        <VisitDetailDrawer
           visit={openVisit}
-          isLight={isLight}
+          protocols={protocols}
+          today={todayDate}
           onClose={() => setOpenVisit(null)}
         />
       )}
@@ -382,180 +383,6 @@ function VisitRow({
       </div>
       <ChevronRight size={14} className={`flex-shrink-0 ${mutedColor}`} />
     </button>
-  );
-}
-
-// ============================================================================
-// VisitDrawer (lightweight version of TodayTab's drawer)
-// ============================================================================
-
-function VisitDrawer({
-  visit,
-  isLight,
-  onClose,
-}: {
-  visit: CalendarVisit;
-  isLight: boolean;
-  onClose: () => void;
-}) {
-  const overlay = isLight ? 'bg-black/30' : 'bg-black/50';
-  const panelBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
-  const headingColor = 'text-fg-heading';
-  const subColor = 'text-fg-sub';
-  const mutedColor = 'text-fg-muted';
-  const sectionHeader = 'text-fg-label';
-  const buttonPrimary = isLight
-    ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
-    : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]';
-  const buttonSecondary = isLight
-    ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-    : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]';
-
-  return (
-    <div className={`fixed inset-0 z-50 ${overlay} flex justify-end animate-fade-in`} onClick={onClose}>
-      <div
-        className={`w-full max-w-md h-full ${panelBg} border-l shadow-xl flex flex-col animate-slide-in-right`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className={`flex items-center justify-between px-5 py-4 border-b ${isLight ? 'border-[#e2e8ee]' : 'border-white/5'}`}>
-          <div className="flex items-center gap-2 min-w-0">
-            {statusIcon(visit.status, 14)}
-            <div className="min-w-0">
-              <p className={`${subColor} text-[11px] uppercase tracking-wider font-semibold`}>
-                {statusLabel(visit.status)}
-              </p>
-              <h3 className={`${headingColor} font-semibold text-base truncate`}>
-                {formatDate(visit.date)}
-                {visit.time && <span className={`${mutedColor} font-normal ml-2`}>{visit.time}</span>}
-              </h3>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className={`${subColor} hover:opacity-75`}
-            aria-label="Close"
-          >
-            <X size={18} />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-5 space-y-5">
-          <div>
-            <h4 className={`${headingColor} font-semibold text-lg`}>
-              {visit.participantId} · Day {visit.studyDay}
-            </h4>
-            <p className={`${subColor} text-sm`}>{visit.visitName}</p>
-          </div>
-
-          {visit.windowCloses && (
-            <div
-              className={`border rounded-md px-3 py-2 ${
-                visit.status === 'overdue' || visit.status === 'closing_soon'
-                  ? isLight
-                    ? 'bg-amber-50 border-amber-200/80'
-                    : 'bg-amber-500/[0.06] border-amber-500/15'
-                  : isLight
-                  ? 'bg-[#f9fafc] border-[#eef2f6]'
-                  : 'bg-white/[0.02] border-white/[0.04]'
-              }`}
-            >
-              <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
-                Visit window
-              </p>
-              <p className={`${headingColor} text-sm font-medium mt-0.5`}>
-                Closes{' '}
-                {new Date(visit.windowCloses).toLocaleString('en-US', {
-                  weekday: 'short',
-                  month: 'short',
-                  day: 'numeric',
-                  hour: 'numeric',
-                  minute: '2-digit',
-                })}
-              </p>
-            </div>
-          )}
-
-          {visit.procedures && visit.procedures.length > 0 && (
-            <div>
-              <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold mb-2`}>
-                Scheduled procedures
-              </p>
-              <ul className="space-y-1.5">
-                {visit.procedures.map((p, i) => (
-                  <li key={i} className={`text-sm flex items-start gap-2 ${headingColor}`}>
-                    <span
-                      className={`mt-1.5 w-1 h-1 rounded-full flex-shrink-0 ${
-                        isLight ? 'bg-[#4a6fa5]/55' : 'bg-[#6e8fb5]/55'
-                      }`}
-                    />
-                    {p}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {visit.priorNote && (
-            <div>
-              <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold mb-2`}>
-                Context
-              </p>
-              <div
-                className={`border rounded-md px-3 py-2 ${
-                  isLight
-                    ? 'bg-[#f9fafc] border-[#eef2f6]'
-                    : 'bg-white/[0.02] border-white/[0.04]'
-                }`}
-              >
-                <p className={`${subColor} text-sm`}>{visit.priorNote}</p>
-              </div>
-            </div>
-          )}
-
-          {visit.deviationReason && (
-            <div
-              className={`border rounded-md px-3 py-2 ${
-                isLight
-                  ? 'bg-amber-50 border-amber-200/80'
-                  : 'bg-amber-500/[0.06] border-amber-500/15'
-              }`}
-            >
-              <p
-                className={`${
-                  isLight ? 'text-amber-700' : 'text-amber-300'
-                } text-[10px] uppercase tracking-wider font-semibold mb-1`}
-              >
-                Deviation logged
-              </p>
-              <p className={`${headingColor} text-sm`}>{visit.deviationReason}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div
-          className={`border-t px-5 py-4 flex items-center gap-2 ${
-            isLight ? 'border-[#e2e8ee]' : 'border-white/5'
-          }`}
-        >
-          {visit.status === 'scheduled' || visit.status === 'closing_soon' || visit.status === 'overdue' ? (
-            <button
-              type="button"
-              className={`inline-flex items-center gap-2 text-sm font-semibold px-3.5 py-2 rounded-md ${buttonPrimary}`}
-            >
-              <Play size={14} />
-              Start visit
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className={`inline-flex items-center gap-2 text-sm font-medium px-3.5 py-2 rounded-md ${buttonSecondary}`}
-          >
-            View participant profile
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }
 
