@@ -25,7 +25,7 @@ export default function Footer() {
           </a>
 
           <nav className="flex items-center gap-1">
-            {[{ label: 'How It Works', href: '#what-it-does' }, { label: 'Contact', href: '#contact' }].map((item) => (
+            {[{ label: 'How It Works', href: '#what-it-does' }, { label: 'Pricing', href: '#pricing' }, { label: 'Contact', href: '#contact' }].map((item) => (
               <a
                 key={item.label}
                 href={item.href}

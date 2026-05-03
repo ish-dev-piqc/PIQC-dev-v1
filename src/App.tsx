@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import ValueProps from './components/ValueProps';
+import Pricing from './components/Pricing';
 import Contact from './components/Contact';
 import Footer from './components/Footer';
 import Chatbot from './components/Chatbot';
@@ -123,6 +124,7 @@ function AppContent() {
       <main>
         <Hero onViewChange={handleViewChange} />
         <ValueProps />
+        <Pricing onViewChange={handleViewChange} />
         <Contact />
       </main>
       <Footer />
