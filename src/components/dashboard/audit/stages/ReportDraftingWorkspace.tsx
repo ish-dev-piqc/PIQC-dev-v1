@@ -96,6 +96,7 @@ export default function ReportDraftingWorkspace() {
   // Mutations
   // ---------------------------------------------------------------------------
   const generateStub = async () => {
+    if (!auditId) return;
     const stub = await upsertReportDraft(
       auditId,
       '[Stub] This audit reviewed the contracted vendor service against the protocol-defined risk scope. Findings, observations, and OFIs are summarised below. Edit this paragraph down to your judgement.',
@@ -117,7 +118,7 @@ export default function ReportDraftingWorkspace() {
   };
 
   const saveSummary = async () => {
-    if (!report) return;
+    if (!report || !auditId) return;
     const updated = await upsertReportDraft(auditId, draftSummary.trim(), report.conclusions);
     if (updated) {
       setReports((prev) => ({ ...prev, [auditId]: updated }));
@@ -126,7 +127,7 @@ export default function ReportDraftingWorkspace() {
   };
 
   const saveConclusions = async () => {
-    if (!report) return;
+    if (!report || !auditId) return;
     const updated = await upsertReportDraft(auditId, report.executive_summary, draftConclusions.trim());
     if (updated) {
       setReports((prev) => ({ ...prev, [auditId]: updated }));
@@ -135,7 +136,7 @@ export default function ReportDraftingWorkspace() {
   };
 
   const approve = async () => {
-    if (!report) return;
+    if (!report || !auditId) return;
     const updated = await approveReportDraft(report.id);
     if (updated) setReports((prev) => ({ ...prev, [auditId]: updated }));
   };
