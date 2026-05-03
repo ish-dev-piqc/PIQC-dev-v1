@@ -129,6 +129,27 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
     [scopedVisits],
   );
 
+  const exportCSV = () => {
+    const headers = ['Date', 'Participant', 'Protocol', 'Visit', 'Status', 'Deviation Reason', 'Note'];
+    const rows = scopedVisits
+      .slice()
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .map((v) => {
+        const protocol = protocols.find((p) => p.id === v.protocolId);
+        return [v.date, v.participantId, protocol?.code ?? '', v.visitName, v.status, v.deviationReason ?? '', v.priorNote ?? '']
+          .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
+          .join(',');
+      });
+    const csv = [headers.map((h) => `"${h}"`).join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `visits_${activeProtocol ? activeProtocol.code : 'all-protocols'}_${todayStr}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className={`${pageBg} h-full overflow-y-auto`}>
       <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -148,8 +169,8 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
           </div>
           <button
             type="button"
+            onClick={exportCSV}
             className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
-            title="Export as CSV — coming soon"
           >
             <Download size={13} />
             Export CSV

@@ -1,6 +1,6 @@
 # PIQClinical — Build Plan & Status
 
-_Last updated: 2026-05-01 (Audit Mode fully wired; button fixes; smoke tests extended to T12)_
+_Last updated: 2026-05-02 (ProtocolContext live; Site Mode schema designed; Markdown export real)_
 
 This document is the source of truth for "where are we." The codebase is the
 source of truth for "what does it do."
@@ -65,8 +65,9 @@ once that pipeline is wired. The upstream API contract is unresolved (**D-009**)
 | Visit detail drawer — Start Visit flow | Procedure checklist; Complete visit action | ✓ Done |
 | ReportsTab → visit detail cross-link | Deviation/missed rows open `VisitDetailDrawer` | ✓ Done |
 | Site Mode button fixes | "View in Visits" wired from ReportsTab; VisitsTab uses VisitDetailDrawer; "View participant profile" disabled | ✓ Done |
-| ProtocolContext wire-up | Replace `MOCK_PROTOCOLS` with Supabase query | ○ Not started |
-| Site Mode Supabase wire-up | Schema + RPCs for visits, participants, team | ○ Not started |
+| ProtocolContext wire-up | Replace `MOCK_PROTOCOLS` with Supabase query + realtime subscription | ✓ Done |
+| Site Mode schema design | `site_participants`, `site_visits`, `site_team_members` + RLS | ✓ Done — migration written; remote deploy pending |
+| Site Mode Supabase wire-up | API files + UI wire for visits, participants, team | ○ Not started |
 | Stripe onboarding + landing page | Marketing + checkout | ○ Not started |
 
 ---
@@ -119,8 +120,10 @@ SUPABASE_ACCESS_TOKEN=<token> npx supabase db push --project-ref ygfcjwgsjmathin
 Auth, theme switcher, mode switcher, protocol picker (`ProtocolContext`),
 per-protocol gate, tab architecture.
 
-**Gap**: `ProtocolContext` uses a hardcoded `MOCK_PROTOCOLS` array. It needs to
-query Supabase for real protocols. Affects both modes.
+**ProtocolContext** queries `protocols` with a join on `protocol_versions` for
+phase. Realtime subscription re-fetches on table changes. `MOCK_PROTOCOLS` is
+gone. Maps `study_number` → `code`, `title` → `name`, `clinical_trial_phase`
+→ display label.
 
 ### Tabs
 
@@ -159,11 +162,11 @@ query Supabase for real protocols. Affects both modes.
 
 ## What's NOT built
 
-- **ProtocolContext wire-up** — hardcoded `MOCK_PROTOCOLS`; both modes affected.
-- **Site Mode Supabase wire-up** — all site data is mock. Large track; needs schema design first.
+- **Site Mode Supabase wire-up** — schema is designed (`20260502000000`); API files + UI wire still needed.
 - **Protocol tab content** — shows KnowledgeBase today; blocked on D-009 (Reducto pipeline).
 - **"Start visit" persistence** — checklist state is local only; no DB write on complete.
-- **Export handlers** — CSV export (Reports tab), Markdown/Word export (Stage 8) are stubs.
+- **CSV export** — Reports tab Export CSV button is a stub.
+- **Word (.docx) export** — Stage 8 docx button disabled; Markdown export is real (downloads `.md`).
 - **Participant profiles** — "View participant profile" button exists but is disabled everywhere.
 
 ---
@@ -222,7 +225,7 @@ src/
           FinalReviewExportWorkspace.tsx    Stage 8 — ✓ Supabase
   context/
     AuthContext, ThemeContext, ModeContext
-    ProtocolContext.tsx                     Protocol picker — MOCK_PROTOCOLS (not yet wired)
+    ProtocolContext.tsx                     Protocol picker — Supabase ✓ (SELECT + realtime)
     AuditContext.tsx                        Audit picker — Supabase ✓
     AuditDataContext.tsx                    Per-stage cache; all 8 stages load from Supabase
     HeatmapContext.tsx                      Heatmap layer toggle
@@ -252,7 +255,7 @@ src/
     audit/                                  TS mirrors of the audit schema
 
 supabase/
-  migrations/                               29 migrations — schema, RLS, RPCs, seeds
+  migrations/                               32 migrations — schema, RLS, RPCs, seeds
   functions/
     dashboard-chat/                         RAG chat edge function
     ingest/                                 Document ingestion edge function
@@ -269,21 +272,25 @@ rv1_code/                                   Reference Next.js build. Read-only.
 
 In priority order:
 
-**Immediate — deploy + verify Stage 7–8:**
-1. Push 2 pending migrations to remote Supabase (see command above)
-2. Run `bash scripts/smoke-rpcs.sh --cloud` — T11 + T12 cover the new RPCs
-3. Delete `cleanup_old_docs.sql` and any leftover status docs at project root
+**Immediate — deploy all pending migrations:**
+1. Push 3 pending migrations to remote Supabase:
+   - `20260501000000` + `20260501010000` — Stage 7–8 report draft schema + RPCs
+   - `20260502000000` — Site Mode schema (`site_participants`, `site_visits`, `site_team_members`)
+   ```
+   SUPABASE_ACCESS_TOKEN=<token> npx supabase db push --project-ref ygfcjwgsjmathinqkppq
+   ```
+2. Run `bash scripts/smoke-rpcs.sh --cloud` — T11 + T12 cover Stage 7–8 RPCs.
 
-**Track B — ProtocolContext wire-up (unblocks Site Mode Ask + Protocol tab foundation):**
-4. Replace `MOCK_PROTOCOLS` in `ProtocolContext.tsx` with a live Supabase query. The `protocols` table already exists in the schema (referenced by audits); simple SELECT + realtime subscription.
-
-**Track C — Site Mode Supabase wire-up (largest track):**
-5. **Schema design** — `site_visits`, `site_participants`, `site_team_members` (or equivalent). Define RLS, foreign keys to auth.users + protocols. Decide whether visits/participants are protocol-scoped or site-scoped.
-6. **API files** — `visitsApi.ts`, `participantsApi.ts`, `teamApi.ts` — mirror the audit API pattern.
-7. **Wire UI** — swap mock reads in TodayTab, ParticipantsTab, VisitsTab, TeamTab. ReportsTab derives from live data automatically once its sources are live.
+**Track C — Site Mode Supabase wire-up:**
+3. **API files** — `visitsApi.ts`, `participantsApi.ts`, `teamApi.ts` — mirror the audit API pattern. Schema is already designed.
+4. **Wire UI** — swap mock reads in TodayTab, ParticipantsTab, VisitsTab, TeamTab. ReportsTab derives automatically once sources are live.
 
 **Deferred:**
 - Protocol tab content — blocked on D-009 (Reducto pipeline).
+- "Start visit" DB persistence — checklist completion local-only.
+- Participant profile page — button disabled everywhere.
+- CSV export (Reports tab) — stub.
+- Stripe onboarding + landing page — external/marketing, separate track.
 - Heatmap real-data refinement — swap heuristics once enough audits exist.
 - Stripe onboarding + landing page — external/marketing track, separate.
 - "Start visit" DB persistence — checklist completion currently local-only.

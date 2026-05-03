@@ -11,6 +11,7 @@ export interface Protocol {
 
 interface ProtocolContextValue {
   protocols: Protocol[];
+  isLoading: boolean;
   // null = Home (cross-protocol scope). Non-null = scoped to this protocol.
   activeProtocol: Protocol | null;
   setActiveProtocol: (protocol: Protocol | null) => void;
@@ -60,12 +61,14 @@ function rowToProtocol(row: ProtocolRow): Protocol {
 // ---------------------------------------------------------------------------
 const ProtocolContext = createContext<ProtocolContextValue>({
   protocols: [],
+  isLoading: false,
   activeProtocol: null,
   setActiveProtocol: () => {},
 });
 
 export function ProtocolProvider({ children }: { children: React.ReactNode }) {
   const [protocols, setProtocols] = useState<Protocol[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeId, setActiveId] = useState<string>(() => {
     try {
       return localStorage.getItem(PROTOCOL_STORAGE_KEY) ?? HOME_SENTINEL;
@@ -86,6 +89,7 @@ export function ProtocolProvider({ children }: { children: React.ReactNode }) {
   // Fetch protocols + realtime subscription
   useEffect(() => {
     async function load() {
+      setIsLoading(true);
       const { data, error } = await supabase
         .from('protocols')
         .select('id, study_number, title, sponsor, protocol_versions(clinical_trial_phase, status)')
@@ -93,9 +97,10 @@ export function ProtocolProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         console.error('[ProtocolContext] fetch error:', error);
-        return;
+      } else if (data) {
+        setProtocols((data as unknown as ProtocolRow[]).map(rowToProtocol));
       }
-      if (data) setProtocols((data as unknown as ProtocolRow[]).map(rowToProtocol));
+      setIsLoading(false);
     }
 
     load();
@@ -121,7 +126,7 @@ export function ProtocolProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <ProtocolContext.Provider value={{ protocols, activeProtocol, setActiveProtocol }}>
+    <ProtocolContext.Provider value={{ protocols, isLoading, activeProtocol, setActiveProtocol }}>
       {children}
     </ProtocolContext.Provider>
   );

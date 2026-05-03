@@ -8,6 +8,7 @@ import ParticipantsTab from './site/ParticipantsTab';
 import VisitsTab from './site/VisitsTab';
 import TeamTab from './site/TeamTab';
 import ReportsTab from './site/ReportsTab';
+import ProtocolTab from './site/ProtocolTab';
 import ProtocolRequiredGate from './site/ProtocolRequiredGate';
 import AuditWorkspaceShell from './audit/AuditWorkspaceShell';
 import { useTheme } from '../../context/ThemeContext';
@@ -542,7 +543,7 @@ export default function Dashboard({
       case 'protocol':
         return (
           <ProtocolRequiredGate label="Protocol">
-            <KnowledgeBase />
+            <ProtocolTab />
           </ProtocolRequiredGate>
         );
       case 'team':

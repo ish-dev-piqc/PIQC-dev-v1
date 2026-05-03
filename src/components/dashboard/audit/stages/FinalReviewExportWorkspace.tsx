@@ -15,6 +15,14 @@ import {
   finalSignOffReport,
   markReportExported,
 } from '../../../../lib/audit/reportApi';
+import {
+  PROVISIONAL_IMPACT_LABELS,
+  PROVISIONAL_CLASSIFICATION_LABELS,
+} from '../../../../lib/audit/labels';
+import type { AuditWithContext } from '../../../../context/AuditContext';
+import type { MockReportDraft } from '../../../../lib/audit/mockReport';
+import type { MockWorkspaceEntry } from '../../../../lib/audit/mockWorkspaceEntries';
+import type { MockRiskSummary } from '../../../../lib/audit/mockRiskSummary';
 
 // =============================================================================
 // FinalReviewExportWorkspace — FINAL_REVIEW_EXPORT (Stage 8) center pane.
@@ -116,13 +124,18 @@ export default function FinalReviewExportWorkspace() {
     }
   };
 
-  const stubExport = async (format: 'markdown' | 'docx') => {
+  const exportMarkdown = async () => {
     if (!report) return;
     const updated = await markReportExported(report.id);
     if (updated) setReports((prev) => ({ ...prev, [auditId]: updated }));
-    alert(
-      `Export to ${format === 'markdown' ? 'Markdown' : 'Word (.docx)'}: stub.\n\nIn the wired build, this generates a sponsor-name-free draft for polish in external tooling.`,
-    );
+    const md = buildMarkdown(activeAudit, report, riskSummary, entries);
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${activeAudit.audit_name.replace(/[^a-z0-9]/gi, '_')}_draft.md`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   // ---------------------------------------------------------------------------
@@ -319,7 +332,7 @@ export default function FinalReviewExportWorkspace() {
         <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
-            onClick={() => stubExport('markdown')}
+            onClick={exportMarkdown}
             disabled={!finalSignedOff}
             className={`inline-flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-md transition-colors ${buttonPrimary} disabled:opacity-50 disabled:cursor-not-allowed`}
           >
@@ -328,9 +341,9 @@ export default function FinalReviewExportWorkspace() {
           </button>
           <button
             type="button"
-            onClick={() => stubExport('docx')}
-            disabled={!finalSignedOff}
-            className={`inline-flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-md transition-colors ${buttonSecondary} disabled:opacity-50 disabled:cursor-not-allowed`}
+            disabled
+            title="Paste the Markdown into Word or Google Docs to generate .docx"
+            className={`inline-flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-md transition-colors ${buttonSecondary} opacity-50 cursor-not-allowed`}
           >
             <FileText size={14} />
             Word (.docx)
@@ -345,6 +358,73 @@ export default function FinalReviewExportWorkspace() {
       </div>
     </div>
   );
+}
+
+function buildMarkdown(
+  audit: AuditWithContext,
+  report: MockReportDraft,
+  riskSummary: MockRiskSummary | null,
+  entries: MockWorkspaceEntry[],
+): string {
+  const lines: string[] = [];
+
+  const push = (...l: string[]) => lines.push(...l);
+  const hr = () => push('', '---', '');
+
+  push(`# ${audit.audit_name}`, '');
+  push(`**Vendor:** ${audit.vendor_name}  `);
+  push(`**Protocol:** ${audit.protocol_code} — ${audit.protocol_title}  `);
+  push(`**Phase:** ${audit.clinical_trial_phase.replace(/_/g, ' ').replace('PHASE ', 'Phase ')}  `);
+  push(`**Audit type:** ${audit.audit_type}  `);
+  if (audit.scheduled_date) push(`**Scheduled date:** ${audit.scheduled_date}  `);
+  if (report.final_signed_off_at)
+    push(`**Signed off:** ${formatTimestamp(report.final_signed_off_at)}${report.final_signed_off_by_name ? ` · ${report.final_signed_off_by_name}` : ''}  `);
+
+  hr();
+  push('## Executive Summary', '', report.executive_summary);
+
+  if (riskSummary) {
+    hr();
+    push('## Risk Context', '', riskSummary.vendor_relevance_narrative);
+    if (riskSummary.focus_areas.length > 0)
+      push('', `**Focus areas:** ${riskSummary.focus_areas.join(', ')}`);
+  }
+
+  const groups: { key: 'FINDING' | 'OBSERVATION' | 'OPPORTUNITY_FOR_IMPROVEMENT'; label: string }[] = [
+    { key: 'FINDING', label: 'Findings' },
+    { key: 'OBSERVATION', label: 'Observations' },
+    { key: 'OPPORTUNITY_FOR_IMPROVEMENT', label: 'Opportunities for Improvement' },
+  ];
+
+  for (const { key, label } of groups) {
+    const items = entries.filter((e) => e.provisional_classification === key);
+    hr();
+    push(`## ${label} (${items.length})`);
+    if (items.length === 0) {
+      push('', '_None recorded._');
+    } else {
+      for (let i = 0; i < items.length; i++) {
+        const e = items[i];
+        push('');
+        push(`**${i + 1}. ${e.vendor_domain}**  `);
+        push(`Impact: ${PROVISIONAL_IMPACT_LABELS[e.provisional_impact]} · Classification: ${PROVISIONAL_CLASSIFICATION_LABELS[e.provisional_classification]}  `);
+        push('');
+        push(e.observation_text);
+        if (e.checkpoint_ref) push('', `*Ref: \`${e.checkpoint_ref}\`*`);
+      }
+    }
+  }
+
+  hr();
+  push('## Conclusions', '', report.conclusions);
+
+  hr();
+  push(
+    '*Generated by PIQClinical. Add sponsor branding, header/footer, and institutional sign-off before external distribution.*',
+    `*Exported: ${new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}*`,
+  );
+
+  return lines.join('\n');
 }
 
 function formatTimestamp(iso: string): string {
