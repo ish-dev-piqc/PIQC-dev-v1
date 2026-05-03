@@ -20,6 +20,7 @@ import {
   type VisitStatus,
 } from '../../../lib/mockCalendarData';
 import type { Protocol } from '../../../context/ProtocolContext';
+import ParticipantProfileDrawer from './ParticipantProfileDrawer';
 
 // =============================================================================
 // VisitDetailDrawer — slide-in right panel for a single CalendarVisit.
@@ -112,6 +113,7 @@ export default function VisitDetailDrawer({
 
   const [startMode, setStartMode] = useState(false);
   const [checked, setChecked] = useState<Set<number>>(new Set());
+  const [showProfile, setShowProfile] = useState(false);
 
   const day = parseYmd(visit.date);
   const past = isPast(day, today);
@@ -165,6 +167,7 @@ export default function VisitDetailDrawer({
   };
 
   return (
+    <>
     <div
       ref={overlay}
       onClick={(e) => {
@@ -413,8 +416,8 @@ export default function VisitDetailDrawer({
               </button>
               <button
                 type="button"
-                disabled
-                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium opacity-40 cursor-not-allowed text-fg-muted"
+                onClick={() => setShowProfile(true)}
+                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors ${isLight ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]' : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]'}`}
               >
                 <Users size={14} />
                 View participant profile
@@ -424,5 +427,14 @@ export default function VisitDetailDrawer({
         </div>
       </div>
     </div>
+
+    {showProfile && (
+      <ParticipantProfileDrawer
+        participantId={visit.participantId}
+        protocols={protocols}
+        onClose={() => setShowProfile(false)}
+      />
+    )}
+    </>
   );
 }
