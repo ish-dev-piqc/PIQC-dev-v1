@@ -113,6 +113,7 @@ export default function VisitDetailDrawer({
 
   const [startMode, setStartMode] = useState(false);
   const [checked, setChecked] = useState<Set<number>>(new Set());
+  const [visitComplete, setVisitComplete] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
 
   const day = parseYmd(visit.date);
@@ -362,11 +363,25 @@ export default function VisitDetailDrawer({
 
         {/* Footer */}
         <div className={`border-t ${border} px-5 py-4 flex items-center gap-2 flex-wrap`}>
-          {startMode ? (
+          {visitComplete ? (
             <>
+              <span className={`inline-flex items-center gap-2 text-sm font-semibold ${isLight ? 'text-emerald-700' : 'text-emerald-400'}`}>
+                <CheckCircle2 size={16} />
+                Visit logged as complete
+              </span>
               <button
                 type="button"
                 onClick={onClose}
+                className={`ml-auto inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors ${buttonSecondary}`}
+              >
+                Close
+              </button>
+            </>
+          ) : startMode ? (
+            <>
+              <button
+                type="button"
+                onClick={() => { if (allChecked) setVisitComplete(true); else onClose(); }}
                 className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors ${
                   allChecked
                     ? isLight

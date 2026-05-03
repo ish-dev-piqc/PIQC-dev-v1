@@ -1,6 +1,6 @@
 # PIQClinical — Build Plan & Status
 
-_Last updated: 2026-05-02 (ProtocolContext live; Site Mode schema designed; Markdown export real)_
+_Last updated: 2026-05-02 (participant profiles live; CSV + docx exports real; pricing section added; completion state wired)_
 
 This document is the source of truth for "where are we." The codebase is the
 source of truth for "what does it do."
@@ -32,6 +32,8 @@ fully wired. Mode selection is a header-level toggle.
 - **Frontend**: Vite + React 18 + TypeScript + Tailwind CSS
 - **Auth + DB**: Supabase (Postgres with RLS + auth.users)
 - **AI**: Supabase Edge Functions — `dashboard-chat` (RAG), `ingest` (document pipeline)
+- **Payments**: Stripe via `stripe-checkout` Edge Function; `useCheckout` + `useSubscription` hooks in place
+- **Export**: Markdown (Blob download); Word (.docx) via `docx` npm package (v9)
 - **Components**: lucide-react icons; pure Tailwind styling
 - **Tests**: `scripts/smoke-rpcs.sh` covers Audit Mode RPCs (T1–T12); broader test suite not yet in place
 
@@ -64,11 +66,17 @@ once that pipeline is wired. The upstream API contract is unresolved (**D-009**)
 | Polish — drawer accessibility | `useOverlay` + `useSwipeDismiss`; all drawers covered | ✓ Done |
 | Visit detail drawer — Start Visit flow | Procedure checklist; Complete visit action | ✓ Done |
 | ReportsTab → visit detail cross-link | Deviation/missed rows open `VisitDetailDrawer` | ✓ Done |
-| Site Mode button fixes | "View in Visits" wired from ReportsTab; VisitsTab uses VisitDetailDrawer; "View participant profile" disabled | ✓ Done |
-| ProtocolContext wire-up | Replace `MOCK_PROTOCOLS` with Supabase query + realtime subscription | ✓ Done |
+| Site Mode button fixes | "View in Visits" wired from ReportsTab; VisitsTab uses VisitDetailDrawer | ✓ Done |
+| ProtocolContext wire-up | Replace `MOCK_PROTOCOLS` with Supabase query + realtime subscription; `isLoading` exposed | ✓ Done |
 | Site Mode schema design | `site_participants`, `site_visits`, `site_team_members` + RLS | ✓ Done — migration written; remote deploy pending |
+| Participant profile panel | `ParticipantProfileDrawer` — enrollment, visits, deviations, notes; shared across all surfaces | ✓ Done |
+| Reports CSV export | Real CSV download from visit data; scoped to active protocol | ✓ Done |
+| Word (.docx) export | Stage 8 — real OOXML via `docx` package; same gate as Markdown | ✓ Done |
+| Start visit completion state | "Visit logged as complete" confirmation footer before drawer closes | ✓ Done |
+| Protocol tab | Metadata panel (`ProtocolTab`) — code, sponsor, phase; documents-pending callout | ✓ Done |
+| Landing page — Pricing section | `Pricing.tsx` — Starter ($10/mo) + Enterprise cards; CTA → login or dashboard | ✓ Done |
 | Site Mode Supabase wire-up | API files + UI wire for visits, participants, team | ○ Not started |
-| Stripe onboarding + landing page | Marketing + checkout | ○ Not started |
+| Stripe checkout wiring | Pricing CTA triggers checkout for authenticated users | ○ Not started |
 
 ---
 
@@ -123,19 +131,20 @@ per-protocol gate, tab architecture.
 **ProtocolContext** queries `protocols` with a join on `protocol_versions` for
 phase. Realtime subscription re-fetches on table changes. `MOCK_PROTOCOLS` is
 gone. Maps `study_number` → `code`, `title` → `name`, `clinical_trial_phase`
-→ display label.
+→ display label. Exposes `isLoading: boolean` — Navbar protocol picker shows
+"Loading protocols…" / "No protocols found" while fetching.
 
 ### Tabs
 
 | Tab | UI | Supabase |
 |-----|----|----------|
 | Overview (calendar) | ✓ Week + month views, drawers, filters | ✗ — `mockCalendarData.ts` |
-| Participants | ✓ Roster, status filter, visit counts | ✗ — `mockSiteData.ts` |
-| Visits | ✓ Sortable list, status filters, search; Start Visit wired to `VisitDetailDrawer` | ✗ — `mockCalendarData.ts` |
+| Participants | ✓ Roster, status filter; row click → `ParticipantProfileDrawer` | ✗ — `mockSiteData.ts` |
+| Visits | ✓ Sortable list, status filters, search; Start Visit → checklist → completion state | ✗ — `mockCalendarData.ts` |
 | Team | ✓ Delegation log, cert expiry callouts | ✗ — `mockSiteData.ts` |
-| Ask | ✓ Protocol-anchored copilot | ◐ — AI real; doc scoping needs ProtocolContext wire-up |
-| Reports | ✓ Compliance metrics, deviation/missed logs; "View in Visits" wired | ✗ — derived from mock data |
-| Protocol | KnowledgeBase component | ✗ — blocked on D-009 |
+| Ask | ✓ Protocol-anchored copilot | ◐ — AI real; doc scoping needs Reducto pipeline |
+| Reports | ✓ Compliance metrics, deviation/missed logs; CSV export real | ✗ — derived from mock data |
+| Protocol | ✓ Metadata panel — code, sponsor, phase; documents-pending callout | ✗ — blocked on D-009 |
 
 ### Button state
 
@@ -144,8 +153,12 @@ gone. Maps `study_number` → `code`, `title` → `name`, `clinical_trial_phase`
 | View in Visits | `VisitDetailDrawer` from TodayTab | ✓ navigates to Visits tab |
 | View in Visits | `VisitDetailDrawer` from ReportsTab | ✓ navigates to Visits tab |
 | Start visit | `VisitsTab` detail panel | ✓ opens `VisitDetailDrawer` with checklist |
-| Start visit | `VisitDetailDrawer` (TodayTab / ReportsTab) | ✓ checklist mode |
-| View participant profile | `VisitDetailDrawer` (all surfaces) | ⊘ disabled — no profile page yet |
+| Start visit | `VisitDetailDrawer` (TodayTab / ReportsTab) | ✓ checklist → completion confirmation state |
+| View participant profile | `VisitDetailDrawer` (all surfaces) | ✓ opens `ParticipantProfileDrawer` |
+| Participant row | `ParticipantsTab` | ✓ opens `ParticipantProfileDrawer` |
+| Export CSV | `ReportsTab` | ✓ real download — visits scoped to active protocol |
+| Export Markdown | `FinalReviewExportWorkspace` Stage 8 | ✓ real `.md` download |
+| Export Word (.docx) | `FinalReviewExportWorkspace` Stage 8 | ✓ real `.docx` via `docx` package |
 
 ---
 
@@ -163,11 +176,10 @@ gone. Maps `study_number` → `code`, `title` → `name`, `clinical_trial_phase`
 ## What's NOT built
 
 - **Site Mode Supabase wire-up** — schema is designed (`20260502000000`); API files + UI wire still needed.
-- **Protocol tab content** — shows KnowledgeBase today; blocked on D-009 (Reducto pipeline).
-- **"Start visit" persistence** — checklist state is local only; no DB write on complete.
-- **CSV export** — Reports tab Export CSV button is a stub.
-- **Word (.docx) export** — Stage 8 docx button disabled; Markdown export is real (downloads `.md`).
-- **Participant profiles** — "View participant profile" button exists but is disabled everywhere.
+- **Protocol tab documents** — metadata panel is live; full document content blocked on D-009 (Reducto pipeline).
+- **"Start visit" persistence** — checklist completion and confirmation state are local only; no DB write.
+- **Stripe checkout wiring** — `Pricing.tsx` CTA goes to login; `useCheckout` hook exists but checkout not triggered from the landing page yet.
+- **Participant profile — full page** — `ParticipantProfileDrawer` is mock-backed; no dedicated route or Supabase-backed profile page.
 
 ---
 
@@ -198,16 +210,24 @@ gone. Maps `study_number` → `code`, `title` → `name`, `clinical_trial_phase`
 src/
   components/
     Navbar.tsx                              Header — mode + protocol/audit pickers
+    Hero.tsx                                Landing — hero section
+    ValueProps.tsx                          Landing — how it works + why it matters + modes
+    Pricing.tsx                             Landing — Starter ($10/mo) + Enterprise pricing cards
+    Contact.tsx                             Landing — contact form
+    Footer.tsx                              Landing — footer nav
+    Chatbot.tsx                             Landing — floating AI chatbot (streaming)
     dashboard/
       Dashboard.tsx                         Mode dispatcher + tab rail
       site/
         TodayTab.tsx                        Calendar (week + month, drawers)
-        VisitDetailDrawer.tsx               Shared visit detail panel (TodayTab + VisitsTab + ReportsTab)
-        ParticipantsTab.tsx                 Participant roster, status filter
+        VisitDetailDrawer.tsx               Shared visit detail panel; Start Visit checklist + completion state
+        ParticipantProfileDrawer.tsx        Participant profile — enrollment, visits, deviations, notes
+        ParticipantsTab.tsx                 Participant roster, status filter; row click → ParticipantProfileDrawer
         VisitsTab.tsx                       Visit list, status filters + search; uses VisitDetailDrawer
+        ProtocolTab.tsx                     Protocol metadata panel — code, sponsor, phase; documents callout
         TeamTab.tsx                         Delegation log, cert expiry
         AskTab.tsx                          Protocol-anchored copilot
-        ReportsTab.tsx                      Compliance metrics, deviation/missed logs
+        ReportsTab.tsx                      Compliance metrics, deviation/missed logs; real CSV export
         ProtocolRequiredGate.tsx            Gate for per-protocol tabs
       audit/
         AuditWorkspaceShell.tsx             3-pane layout
@@ -281,20 +301,18 @@ In priority order:
    ```
 2. Run `bash scripts/smoke-rpcs.sh --cloud` — T11 + T12 cover Stage 7–8 RPCs.
 
-**Track C — Site Mode Supabase wire-up:**
-3. **API files** — `visitsApi.ts`, `participantsApi.ts`, `teamApi.ts` — mirror the audit API pattern. Schema is already designed.
-4. **Wire UI** — swap mock reads in TodayTab, ParticipantsTab, VisitsTab, TeamTab. ReportsTab derives automatically once sources are live.
+**Track C — Site Mode Supabase wire-up (schema deployed; ready to build):**
+3. **API files** — `visitsApi.ts`, `participantsApi.ts`, `teamApi.ts` — mirror the audit API pattern.
+4. **Wire UI** — swap mock reads in TodayTab, ParticipantsTab, VisitsTab, TeamTab. ReportsTab + ParticipantProfileDrawer derive automatically once sources are live.
+
+**Track D — Stripe checkout:**
+5. Wire `Pricing.tsx` "Get started" CTA to `useCheckout` for authenticated users (currently sends to login).
+6. Post-login redirect to checkout (or dashboard-level upgrade flow).
 
 **Deferred:**
-- Protocol tab content — blocked on D-009 (Reducto pipeline).
-- "Start visit" DB persistence — checklist completion local-only.
-- Participant profile page — button disabled everywhere.
-- CSV export (Reports tab) — stub.
-- Stripe onboarding + landing page — external/marketing, separate track.
+- Protocol tab documents — blocked on D-009 (Reducto pipeline).
+- "Start visit" DB persistence — checklist completion local-only; no write on complete.
 - Heatmap real-data refinement — swap heuristics once enough audits exist.
-- Stripe onboarding + landing page — external/marketing track, separate.
-- "Start visit" DB persistence — checklist completion currently local-only.
-- Participant profile page — "View participant profile" button is stubbed disabled everywhere.
 
 ---
 

@@ -15,9 +15,9 @@ import {
   type MockParticipant,
   type ParticipantStatus,
 } from '../../../lib/mockSiteData';
-import { MOCK_VISITS } from '../../../lib/mockCalendarData';
 import HeatIndicator from '../../heatmap/HeatIndicator';
 import { scoreParticipant } from '../../../lib/heatmap';
+import ParticipantProfileDrawer from './ParticipantProfileDrawer';
 
 // =============================================================================
 // ParticipantsTab — Site Mode list of participants on the active protocol.
@@ -37,7 +37,7 @@ type StatusFilter = ParticipantStatus | 'ALL';
 
 export default function ParticipantsTab() {
   const { theme } = useTheme();
-  const { activeProtocol } = useProtocol();
+  const { activeProtocol, protocols } = useProtocol();
   const isLight = theme === 'light';
 
   const [search, setSearch] = useState('');
@@ -226,11 +226,10 @@ export default function ParticipantsTab() {
         </div>
       )}
 
-      {/* Detail drawer */}
       {openParticipant && (
-        <ParticipantDrawer
-          participant={openParticipant}
-          isLight={isLight}
+        <ParticipantProfileDrawer
+          participantId={openParticipant.id}
+          protocols={protocols}
           onClose={() => setOpenParticipant(null)}
         />
       )}
@@ -356,197 +355,6 @@ function StatusChip({
 }
 
 // ============================================================================
-// ParticipantDrawer
-// ============================================================================
-
-function ParticipantDrawer({
-  participant,
-  isLight,
-  onClose,
-}: {
-  participant: MockParticipant;
-  isLight: boolean;
-  onClose: () => void;
-}) {
-  const overlay = isLight ? 'bg-black/30' : 'bg-black/50';
-  const panelBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
-  const headingColor = 'text-fg-heading';
-  const subColor = 'text-fg-sub';
-  const mutedColor = 'text-fg-muted';
-  const sectionHeader = 'text-fg-label';
-
-  // Pull this participant's visits from the calendar mock
-  const visits = MOCK_VISITS.filter((v) => v.participantId === participant.id).sort(
-    (a, b) => a.date.localeCompare(b.date),
-  );
-
-  return (
-    <div className={`fixed inset-0 z-50 ${overlay} flex justify-end animate-fade-in`} onClick={onClose}>
-      <div
-        className={`w-full max-w-md h-full ${panelBg} border-l shadow-xl flex flex-col animate-slide-in-right`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div
-          className={`flex items-center justify-between px-5 py-4 border-b ${
-            isLight ? 'border-[#e2e8ee]' : 'border-white/5'
-          }`}
-        >
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className={`${headingColor} font-semibold text-base`}>{participant.id}</h3>
-              <StatusChip status={participant.status} isLight={isLight} />
-            </div>
-            <p className={`${subColor} text-xs mt-0.5`}>
-              Coordinator · {participant.assigned_coordinator}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className={`${subColor} hover:opacity-75`}
-            aria-label="Close"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-5">
-          {/* Key dates */}
-          <Section title="Key dates" sectionHeader={sectionHeader}>
-            <dl className="space-y-1 text-xs">
-              <Row
-                label="Enrolled"
-                value={participant.enrolled_at ? formatDate(participant.enrolled_at) : '—'}
-                subColor={subColor}
-                headingColor={headingColor}
-              />
-              <Row
-                label="Current day"
-                value={
-                  participant.current_study_day !== null
-                    ? `Day ${participant.current_study_day}`
-                    : '—'
-                }
-                subColor={subColor}
-                headingColor={headingColor}
-              />
-              <Row
-                label="Next visit"
-                value={
-                  participant.next_visit_date
-                    ? `${formatDate(participant.next_visit_date)} · ${participant.next_visit_name ?? '—'}`
-                    : '—'
-                }
-                subColor={subColor}
-                headingColor={headingColor}
-              />
-            </dl>
-          </Section>
-
-          {/* Open deviations */}
-          {participant.open_deviations > 0 && (
-            <Section title="Open deviations" sectionHeader={sectionHeader}>
-              <div
-                className={`flex items-start gap-2 px-3 py-2 rounded-md border ${
-                  isLight
-                    ? 'bg-amber-50 border-amber-200/80'
-                    : 'bg-amber-500/[0.06] border-amber-500/15'
-                }`}
-              >
-                <AlertCircle size={12} className="text-amber-500 flex-shrink-0 mt-0.5" />
-                <p className={`text-xs leading-relaxed ${headingColor}`}>
-                  {participant.open_deviations}{' '}
-                  {participant.open_deviations === 1 ? 'deviation' : 'deviations'} pending review.
-                </p>
-              </div>
-            </Section>
-          )}
-
-          {/* Notes */}
-          {participant.notes && (
-            <Section title="Notes" sectionHeader={sectionHeader}>
-              <p className={`${headingColor} text-sm leading-relaxed`}>{participant.notes}</p>
-            </Section>
-          )}
-
-          {/* Visit history */}
-          <Section
-            title={`Visits (${visits.length})`}
-            sectionHeader={sectionHeader}
-          >
-            {visits.length === 0 ? (
-              <p className={`${mutedColor} text-xs italic`}>No visits scheduled.</p>
-            ) : (
-              <ul className="space-y-1.5">
-                {visits.map((v) => (
-                  <li key={v.id} className={`text-xs flex items-start gap-2 ${headingColor}`}>
-                    <span
-                      className={`mt-1.5 w-1 h-1 rounded-full flex-shrink-0 ${
-                        isLight ? 'bg-[#4a6fa5]/55' : 'bg-[#6e8fb5]/55'
-                      }`}
-                    />
-                    <span>
-                      <span className="font-medium">{formatDate(v.date)}</span>
-                      <span className={`${mutedColor} mx-1`}>·</span>
-                      <span>Day {v.studyDay}</span>
-                      <span className={`${mutedColor} mx-1`}>·</span>
-                      <span>{v.visitName}</span>
-                      <span className={`${subColor} block text-[11px] mt-0.5`}>
-                        {statusLabel(v.status)}
-                      </span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Section>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Section({
-  title,
-  sectionHeader,
-  children,
-}: {
-  title: string;
-  sectionHeader: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section>
-      <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold mb-2`}>
-        {title}
-      </p>
-      {children}
-    </section>
-  );
-}
-
-function Row({
-  label,
-  value,
-  subColor,
-  headingColor,
-}: {
-  label: string;
-  value: string;
-  subColor: string;
-  headingColor: string;
-}) {
-  return (
-    <div className="flex gap-2">
-      <dt className={`${subColor} flex-shrink-0 w-24`}>{label}</dt>
-      <dd className={`${headingColor} m-0 flex-1`}>{value}</dd>
-    </div>
-  );
-}
-
-// ============================================================================
 // Helpers
 // ============================================================================
 
@@ -557,23 +365,4 @@ function formatDate(iso: string): string {
     day: 'numeric',
     year: 'numeric',
   });
-}
-
-function statusLabel(status: string): string {
-  switch (status) {
-    case 'completed':
-      return 'Completed';
-    case 'scheduled':
-      return 'Scheduled';
-    case 'missed':
-      return 'Missed';
-    case 'deviation':
-      return 'Logged with deviation';
-    case 'overdue':
-      return 'Overdue';
-    case 'closing_soon':
-      return 'Closing soon';
-    default:
-      return status;
-  }
 }
