@@ -115,7 +115,7 @@ $$;
 --
 -- Creates the report draft if none exists for the audit, or updates the
 -- executive_summary and conclusions. Editing demotes an APPROVED draft back to
--- DRAFT and clears approved_at/by — matching the pre-audit deliverable pattern.
+-- DRAFT and clears approved_at/by. No delta is written on a no-op save.
 -- Returns the full updated row.
 -- =============================================================================
 
@@ -269,8 +269,8 @@ GRANT EXECUTE ON FUNCTION audit_mode_approve_report_draft(uuid, text)
 -- =============================================================================
 -- audit_mode_final_sign_off_report
 --
--- Stamps final_signed_off_at/by. Called from Stage 8 once all pre-export
--- gates pass. This is the GxP-significant lock action.
+-- Stamps final_signed_off_at/by. Idempotent — returns existing row if already
+-- signed off. Called from Stage 8 once all pre-export gates pass.
 -- Returns the updated row.
 -- =============================================================================
 
@@ -298,6 +298,7 @@ BEGIN
     RAISE EXCEPTION 'Report draft not found' USING ERRCODE = 'P0002';
   END IF;
 
+  -- Idempotency guard: don't overwrite an existing sign-off timestamp.
   IF v_before.final_signed_off_at IS NOT NULL THEN
     RETURN v_before;
   END IF;
