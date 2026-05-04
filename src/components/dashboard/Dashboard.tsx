@@ -62,90 +62,6 @@ const AUDIT_TABS: TabConfig[] = [
   { id: 'reports', label: 'Reports', icon: FileText },
 ];
 
-const STAT_CARDS = [
-  { label: 'Active Protocols', value: '24', change: '+3 this week', positive: true },
-  { label: 'Avg. Resolution Time', value: '4.2h', change: '-12% vs last month', positive: true },
-  { label: 'Compliance Score', value: '98.4%', change: '+0.6% this month', positive: true },
-  { label: 'Staff Trained', value: '187', change: '12 pending', positive: false },
-];
-
-const RECENT_PROTOCOLS = [
-  { name: 'Sepsis Early Detection', status: 'Active', updated: '2h ago', category: 'Critical Care' },
-  { name: 'Fall Prevention Bundle', status: 'Active', updated: '1d ago', category: 'Patient Safety' },
-  { name: 'Medication Reconciliation', status: 'Review', updated: '3d ago', category: 'Pharmacy' },
-  { name: 'Hand Hygiene Compliance', status: 'Active', updated: '4d ago', category: 'Infection Control' },
-  { name: 'Chest Pain Triage', status: 'Active', updated: '1w ago', category: 'Emergency' },
-];
-
-function OverviewTab() {
-  const { theme } = useTheme();
-  const isLight = theme === 'light';
-
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
-  const headingColor = 'text-fg-heading';
-  const subColor = 'text-fg-sub';
-  const statVal = 'text-fg-heading';
-  const rowHover = isLight ? 'hover:bg-[#f5f7fa]' : 'hover:bg-white/[0.02]';
-  const rowDivide = isLight ? 'divide-[#f0f4f8]' : 'divide-white/[0.03]';
-  const protocolName = isLight ? 'text-[#1a1f28]/90' : 'text-[#d2d7e0]/90';
-  const protocolCat = isLight ? 'text-[#374152]/30' : 'text-[#d2d7e0]/30';
-  const lastUpdated = isLight ? 'text-[#374152]/25' : 'text-[#d2d7e0]/25';
-  const tableHeader = isLight ? 'text-[#374152]/25' : 'text-[#d2d7e0]/25';
-  const tableBorder = isLight ? 'border-[#f0f4f8]' : 'border-white/5';
-
-  return (
-    <div className="p-6 space-y-6 overflow-y-auto h-full">
-      <div>
-        <h2 className={`${headingColor} font-semibold text-lg mb-1`}>Dashboard Overview</h2>
-        <p className={`${subColor} text-sm`}>Clinical workflow performance at a glance</p>
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {STAT_CARDS.map((card, i) => (
-          <div key={i} className={`${cardBg} border rounded-xl p-4`}>
-            <p className={`${subColor} text-xs mb-2`}>{card.label}</p>
-            <p className={`${statVal} font-bold text-2xl mb-1`}>{card.value}</p>
-            <p className={`text-xs ${card.positive ? 'text-blue-500' : 'text-amber-500'}`}>
-              {card.change}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      <div className={`${cardBg} border rounded-xl overflow-hidden`}>
-        <div className={`px-5 py-4 border-b ${tableBorder} flex items-center justify-between`}>
-          <h3 className={`${headingColor} font-medium text-sm`}>Recent Protocols</h3>
-          <span className={`text-xs ${tableHeader}`}>Last updated</span>
-        </div>
-        <div className={`divide-y ${rowDivide}`}>
-          {RECENT_PROTOCOLS.map((p, i) => (
-            <div key={i} className={`px-5 py-3.5 flex items-center justify-between ${rowHover} transition-colors`}>
-              <div className="flex items-center gap-3">
-                <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                  p.status === 'Active' ? 'bg-blue-400' : 'bg-amber-400'
-                }`} />
-                <div>
-                  <p className={`${protocolName} text-sm font-medium`}>{p.name}</p>
-                  <p className={`${protocolCat} text-xs mt-0.5`}>{p.category}</p>
-                </div>
-              </div>
-              <div className="text-right flex-shrink-0 ml-4">
-                <span className={`text-xs px-2 py-0.5 rounded-full border ${
-                  p.status === 'Active'
-                    ? 'text-blue-500 bg-blue-500/10 border-blue-500/20'
-                    : 'text-amber-500 bg-amber-500/10 border-amber-500/20'
-                }`}>
-                  {p.status}
-                </span>
-                <p className={`${lastUpdated} text-xs mt-1`}>{p.updated}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function PlaceholderTab({ label }: { label: string }) {
   const { theme } = useTheme();
@@ -593,9 +509,6 @@ export default function Dashboard({
 
   const renderContent = () => {
     switch (resolvedActiveTab) {
-      // Audit Mode tabs (kept as-is for now)
-      case 'audit-overview':
-        return <OverviewTab />;
       case 'chat':
         return (
           <DashboardChat
