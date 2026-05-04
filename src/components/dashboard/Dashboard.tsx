@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { MessageSquare, LayoutDashboard, Activity, FileText, Database, UserCircle2, KeyRound, Shield, Users, CalendarCheck, UserCog } from 'lucide-react';
+import { MessageSquare, LayoutDashboard, Activity, FileText, Database, UserCircle2, KeyRound, Shield, Users, CalendarCheck, UserCog, CreditCard, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useSubscription } from '../../hooks/useSubscription';
+import { usePortal } from '../../hooks/usePortal';
 import DashboardChat from './DashboardChat';
 import KnowledgeBase from './KnowledgeBase';
 import TodayTab from './site/TodayTab';
@@ -34,7 +36,7 @@ export type DashboardTab =
   // Shared
   | 'reports'
   | 'settings';
-export type SettingsSection = 'account' | 'security';
+export type SettingsSection = 'account' | 'security' | 'billing';
 
 interface TabConfig {
   id: DashboardTab;
@@ -188,6 +190,11 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
   const [passwordMessage, setPasswordMessage] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
+  const { subscription, loading: subLoading } = useSubscription();
+  const { openPortal } = usePortal();
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [portalError, setPortalError] = useState('');
+
   useEffect(() => {
     if (!user) return;
     const metadata = user.user_metadata ?? {};
@@ -264,12 +271,96 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
     setPasswordMessage('Password updated.');
   };
 
+  const handleManageBilling = async () => {
+    setPortalError('');
+    setPortalLoading(true);
+    try {
+      await openPortal(window.location.origin);
+    } catch (err) {
+      setPortalError(err instanceof Error ? err.message : 'Failed to open billing portal');
+      setPortalLoading(false);
+    }
+  };
+
   const navItems: Array<{ id: SettingsSection; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }> = [
     { id: 'account', label: 'Account', icon: UserCircle2 },
     { id: 'security', label: 'Security', icon: Shield },
+    { id: 'billing', label: 'Billing', icon: CreditCard },
   ];
 
   const renderSectionContent = () => {
+    if (activeSection === 'billing') {
+      const hasActiveSub = subscription?.status === 'active' || subscription?.status === 'trialing';
+      return (
+        <section className={`${cardClass} border rounded-xl p-5`}>
+          <div className="flex items-center gap-2 mb-4">
+            <CreditCard size={16} className="text-[#6e8fb5]" />
+            <h3 className={`${isLight ? 'text-[#1a1f28]' : 'text-white'} font-medium text-sm`}>Subscription</h3>
+          </div>
+
+          {subLoading ? (
+            <p className={`text-sm ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'}`}>
+              Loading subscription info…
+            </p>
+          ) : subscription ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <p className={`text-sm font-medium ${isLight ? 'text-[#1a1f28]' : 'text-white'}`}>
+                    {subscription.planName}
+                  </p>
+                  {subscription.currentPeriodEnd && (
+                    <p className={`text-xs mt-0.5 ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'}`}>
+                      Renews {subscription.currentPeriodEnd}
+                    </p>
+                  )}
+                </div>
+                <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${
+                  hasActiveSub
+                    ? isLight
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                      : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                    : isLight
+                      ? 'bg-amber-50 border-amber-200 text-amber-700'
+                      : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                }`}>
+                  {hasActiveSub ? <CheckCircle2 size={11} /> : <AlertCircle size={11} />}
+                  {subscription.status}
+                </span>
+              </div>
+
+              {portalError && <p className="text-sm text-red-500">{portalError}</p>}
+
+              <button
+                type="button"
+                onClick={handleManageBilling}
+                disabled={portalLoading}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors disabled:opacity-50"
+              >
+                {portalLoading ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    Opening…
+                  </>
+                ) : (
+                  'Manage billing'
+                )}
+              </button>
+              <p className={`text-xs ${isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/35'}`}>
+                Update payment method, download invoices, or cancel your subscription.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className={`text-sm ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'}`}>
+                No active subscription found.
+              </p>
+            </div>
+          )}
+        </section>
+      );
+    }
+
     if (activeSection === 'account') {
       return (
         <div className="space-y-6">
