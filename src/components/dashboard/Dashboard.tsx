@@ -106,11 +106,6 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
   const [passwordMessage, setPasswordMessage] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
-  const { subscription, loading: subLoading } = useSubscription();
-  const { openPortal } = usePortal();
-  const [portalLoading, setPortalLoading] = useState(false);
-  const [portalError, setPortalError] = useState('');
-
   useEffect(() => {
     if (!user) return;
     const metadata = user.user_metadata ?? {};
