@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Menu, X, Activity, Home, LogOut, ChevronDown, User, Sun, Moon, ClipboardList, Flame, UserCircle2, Shield, CreditCard } from 'lucide-react';
+import { Menu, X, Activity, LogOut, ChevronDown, User, Home, Sun, Moon, ClipboardList, Flame, UserCircle2, Shield, CreditCard } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useMode, type DashboardMode } from '../context/ModeContext';
@@ -606,7 +606,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                 Security
               </button>
               <button
-                onClick={() => handleOpenSettingsSection('billing')}
+                onClick={() => { handleOpenSettingsSection('billing'); setMobileOpen(false); }}
                 className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#374152]/70 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.06]' : 'text-[#d2d7e0]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
               >
                 <CreditCard size={14} />
