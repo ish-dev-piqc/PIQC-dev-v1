@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:#f5f7fa; margin:0; padding:32px 16px;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:480px; margin:0 auto; background:#ffffff; border:1px solid #d8dfe8; border-radius:12px; padding:32px;">
+      <tr>
+        <td>
+          <h1 style="margin:0 0 16px; color:#1a1f28; font-size:20px; font-weight:600;">Sign in to PIQClinical</h1>
+          <p style="margin:0 0 20px; color:#374152; font-size:14px; line-height:1.5;">
+            Click the button below to sign in. <strong>No password required</strong> — this link works whether you're new to PIQClinical or returning.
+          </p>
+          <p style="margin:0 0 24px;">
+            <a
+              href="{{ .ConfirmationURL }}"
+              style="display:inline-block; padding:12px 20px; background:#4a6fa5; color:#ffffff; text-decoration:none; font-size:14px; font-weight:600; border-radius:8px;"
+            >Sign in</a>
+          </p>
+          <p style="margin:0 0 8px; color:#6b7280; font-size:12px; line-height:1.5;">
+            Or paste this URL into your browser:<br />
+            <span style="color:#6e8fb5; word-break:break-all;">{{ .ConfirmationURL }}</span>
+          </p>
+          <p style="margin:24px 0 0; color:#9ca3af; font-size:12px; line-height:1.5;">
+            This link expires in 1 hour. If you didn't request this, you can safely ignore this email.
+          </p>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
