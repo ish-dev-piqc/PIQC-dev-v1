@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Activity, LogOut } from 'lucide-react';
+import { Activity, ArrowLeft } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -110,7 +110,7 @@ export default function ProfileCompletion() {
     ? 'bg-white border-[#d8dfe8] text-[#1a1f28] placeholder-[#374152]/20 focus:border-[#4a6fa5]/60 focus:ring-[#4a6fa5]/30'
     : 'bg-[#131a22] border-white/[0.08] text-white placeholder-[#d2d7e0]/20 focus:border-[#4a6fa5]/60 focus:ring-[#4a6fa5]/30';
   const subColor = isLight ? 'text-[#374152]/60' : 'text-[#d2d7e0]/60';
-  const signOutColor = isLight ? 'text-[#374152]/40 hover:text-[#374152]/70' : 'text-[#d2d7e0]/40 hover:text-[#d2d7e0]/70';
+  const backColor = isLight ? 'text-[#374152]/40 hover:text-[#374152]/70' : 'text-[#d2d7e0]/40 hover:text-[#d2d7e0]/70';
 
   return (
     <div className={`min-h-screen ${pageBg} flex flex-col items-center justify-center px-4 py-10 relative overflow-hidden`}>
@@ -124,6 +124,15 @@ export default function ProfileCompletion() {
       />
 
       <div className="relative z-10 w-full max-w-md">
+        <button
+          type="button"
+          onClick={signOut}
+          className={`flex items-center gap-1.5 text-sm ${backColor} transition-colors mb-8 group`}
+        >
+          <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
+          Back to sign in
+        </button>
+
         <div className="flex items-center gap-2.5 mb-8">
           <div className="w-8 h-8 rounded-lg bg-[#4a6fa5] flex items-center justify-center shadow-btn">
             <Activity className="w-4 h-4 text-white" strokeWidth={2.5} />
@@ -219,15 +228,6 @@ export default function ProfileCompletion() {
             {submitting ? 'Saving...' : 'Continue to dashboard'}
           </button>
         </form>
-
-        <button
-          type="button"
-          onClick={signOut}
-          className={`mt-6 inline-flex items-center gap-1.5 text-xs ${signOutColor} transition-colors`}
-        >
-          <LogOut size={12} />
-          Sign out
-        </button>
       </div>
     </div>
   );
