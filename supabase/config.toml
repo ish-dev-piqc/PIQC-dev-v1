@@ -1,5 +1,32 @@
 project_id = "ygfcjwgsjmathinqkppq"
 
+[auth]
+# Default URL referenced in email templates and as the post-auth redirect
+# fallback. The app overrides this per-call via emailRedirectTo, so this is
+# just the display/fallback. Update to the Hostinger production URL when ready.
+site_url = "http://localhost:5173/PIQC-dev-v1/"
+# Allowlist of URLs Supabase will redirect to after auth. Wildcards required
+# because the app runs at a /PIQC-dev-v1/ base path. Add the Hostinger URL
+# here when production goes live.
+additional_redirect_urls = [
+  "http://localhost:5173/**",
+  "https://ish-dev-piqc.github.io/**",
+]
+# Self-signup is allowed (anyone with the URL can create an account).
+enable_signup = true
+# Merge users with the same email across sign-in methods (magic link +
+# email/password). Belt-and-suspenders for our magic-link-first flow.
+enable_manual_linking = true
+
+[auth.email]
+# How long the same recipient must wait between auth emails (magic link,
+# confirmation, etc.). Matches the client-side 30s Resend cooldown comfortably
+# and prevents the same email from being spammed.
+max_frequency = "1m0s"
+# 8-digit one-time codes (used in confirmation emails, not magic-link URLs).
+# Matches the prior remote setting.
+otp_length = 8
+
 [auth.email.template.magic_link]
 subject = "Your PIQClinical sign-in link"
 content_path = "./supabase/templates/magic_link.html"
