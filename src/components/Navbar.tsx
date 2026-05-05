@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Menu, X, Activity, LogOut, ChevronDown, User, Sun, Moon, ClipboardList, Flame, UserCircle2, Shield, CreditCard } from 'lucide-react';
+import { Menu, X, Activity, Home, LogOut, ChevronDown, User, Sun, Moon, ClipboardList, Flame, UserCircle2, Shield, CreditCard } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useMode, type DashboardMode } from '../context/ModeContext';
