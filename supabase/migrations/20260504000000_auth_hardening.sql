@@ -4,7 +4,7 @@
 --      timezone, phone, profile_completed_at).
 --   2) Installs an on_auth_user_created trigger that auto-provisions a
 --      user_profiles row whenever a new auth.users row is inserted (covers both
---      email/password signups and OAuth — currently Google).
+--      email/password signups and magic link via signInWithOtp).
 --   3) Backfills user_profiles for any pre-existing auth.users without one.
 --
 -- The app gates the dashboard on profile_completed_at IS NOT NULL — that's

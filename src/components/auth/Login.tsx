@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Activity, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Activity, Eye, EyeOff, ArrowLeft, Mail } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
 import type { AppView } from '../../App';
@@ -8,15 +8,48 @@ interface LoginProps {
   onViewChange: (view: AppView, anchor?: string) => void;
 }
 
+const RESEND_COOLDOWN_SECONDS = 30;
+
 export default function Login({ onViewChange }: LoginProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const [magicOpen, setMagicOpen] = useState(false);
+  const [magicEmail, setMagicEmail] = useState('');
+  const [magicLoading, setMagicLoading] = useState(false);
+  const [magicSent, setMagicSent] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resending, setResending] = useState(false);
+  const cooldownRef = useRef<number | null>(null);
+
   const { theme } = useTheme();
   const isLight = theme === 'light';
+
+  const passwordInUse = email.length > 0 || password.length > 0;
+
+  useEffect(() => {
+    return () => {
+      if (cooldownRef.current) window.clearInterval(cooldownRef.current);
+    };
+  }, []);
+
+  const startCooldown = () => {
+    setResendCooldown(RESEND_COOLDOWN_SECONDS);
+    if (cooldownRef.current) window.clearInterval(cooldownRef.current);
+    cooldownRef.current = window.setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          if (cooldownRef.current) window.clearInterval(cooldownRef.current);
+          cooldownRef.current = null;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,17 +67,46 @@ export default function Login({ onViewChange }: LoginProps) {
     onViewChange('dashboard');
   };
 
-  const handleGoogleSignIn = async () => {
-    setError('');
-    setGoogleLoading(true);
-    const { error: authError } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin },
+  const sendMagicLink = async (targetEmail: string) => {
+    const { error: authError } = await supabase.auth.signInWithOtp({
+      email: targetEmail,
+      options: { emailRedirectTo: window.location.origin + import.meta.env.BASE_URL },
     });
+    return authError;
+  };
+
+  const handleMagicLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setMagicLoading(true);
+    const authError = await sendMagicLink(magicEmail);
     if (authError) {
       setError(authError.message);
-      setGoogleLoading(false);
+      setMagicLoading(false);
+      return;
     }
+    setMagicSent(true);
+    setMagicLoading(false);
+    startCooldown();
+  };
+
+  const handleResend = async () => {
+    if (resendCooldown > 0 || resending) return;
+    setError('');
+    setResending(true);
+    const authError = await sendMagicLink(magicEmail);
+    setResending(false);
+    if (authError) {
+      setError(authError.message);
+      return;
+    }
+    startCooldown();
+  };
+
+  const handleUseDifferentEmail = () => {
+    setMagicSent(false);
+    setMagicEmail('');
+    setError('');
   };
 
   const pageBg = isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]';
@@ -60,9 +122,13 @@ export default function Login({ onViewChange }: LoginProps) {
   const footerColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/40';
   const dividerLine = isLight ? 'bg-[#d8dfe8]' : 'bg-white/[0.08]';
   const dividerText = isLight ? 'text-[#374152]/40 bg-[#f5f7fa]' : 'text-[#d2d7e0]/40 bg-[#0d1118]';
-  const googleButtonBg = isLight
+  const magicButtonBg = isLight
     ? 'bg-white border-[#d8dfe8] hover:bg-[#f5f7fa] text-[#1a1f28]'
     : 'bg-[#131a22] border-white/[0.08] hover:bg-[#1a2230] text-white';
+  const magicCardBg = isLight
+    ? 'bg-white border-[#d8dfe8]'
+    : 'bg-[#131a22] border-white/[0.08]';
+  const linkColor = 'text-[#6e8fb5] hover:text-[#87b5c7]';
 
   return (
     <div className={`min-h-screen ${pageBg} flex flex-col items-center justify-center px-4 relative overflow-hidden`}>
@@ -98,30 +164,103 @@ export default function Login({ onViewChange }: LoginProps) {
           <p className={`${subColor} text-sm`}>Sign in to your account to continue</p>
         </div>
 
-        <button
-          type="button"
-          onClick={handleGoogleSignIn}
-          disabled={googleLoading || loading}
-          className={`w-full flex items-center justify-center gap-2.5 px-4 py-2.5 ${googleButtonBg} border rounded-lg text-sm font-medium transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed`}
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
-            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.76h3.56c2.08-1.92 3.28-4.74 3.28-8.09Z" />
-            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.56-2.76c-.99.66-2.25 1.06-3.72 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23Z" />
-            <path fill="#FBBC05" d="M5.84 14.11A6.6 6.6 0 0 1 5.5 12c0-.73.13-1.44.34-2.11V7.05H2.18A11 11 0 0 0 1 12c0 1.78.43 3.46 1.18 4.95l3.66-2.84Z" />
-            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.05l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38Z" />
-          </svg>
-          {googleLoading ? 'Redirecting...' : 'Continue with Google'}
-        </button>
-
-        <div className="relative my-5">
-          <div className={`absolute inset-0 flex items-center`}>
-            <div className={`w-full h-px ${dividerLine}`} />
+        {!magicOpen && !passwordInUse && (
+          <div>
+            <button
+              type="button"
+              onClick={() => setMagicOpen(true)}
+              disabled={loading}
+              className={`w-full flex items-center justify-center gap-2.5 px-4 py-2.5 ${magicButtonBg} border rounded-lg text-sm font-medium transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              <Mail size={15} />
+              Continue with magic link
+            </button>
+            <p className={`mt-2 text-center text-xs ${subColor}`}>
+              No password needed — works for new and returning users
+            </p>
           </div>
-          <div className="relative flex justify-center">
-            <span className={`px-3 text-xs ${dividerText}`}>or</span>
-          </div>
-        </div>
+        )}
 
+        {magicOpen && !magicSent && (
+          <form onSubmit={handleMagicLink} className={`p-4 ${magicCardBg} border rounded-lg space-y-3`}>
+            <div className="flex items-center gap-2 text-sm font-medium text-fg-heading">
+              <Mail size={15} />
+              Continue with magic link
+            </div>
+            <div>
+              <label className={`block text-xs font-medium ${labelColor} mb-1.5`}>
+                Email address
+              </label>
+              <input
+                type="email"
+                value={magicEmail}
+                onChange={(e) => setMagicEmail(e.target.value)}
+                required
+                autoComplete="email"
+                placeholder="you@organization.com"
+                className={`w-full px-3.5 py-2.5 ${inputBg} border rounded-lg text-sm focus:outline-none focus:ring-1 transition-all`}
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="submit"
+                disabled={magicLoading || !magicEmail}
+                className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-all duration-150 shadow-btn hover:shadow-btn-hover disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {magicLoading ? 'Sending...' : 'Send link'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMagicOpen(false)}
+                className={`text-xs ${linkColor} transition-colors font-medium`}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+
+        {magicOpen && magicSent && (
+          <div className={`p-4 ${magicCardBg} border rounded-lg space-y-3`}>
+            <div className="flex items-center gap-2 text-sm font-medium text-fg-heading">
+              <Mail size={15} />
+              Check your inbox
+            </div>
+            <p className={`text-sm ${subColor}`}>
+              We sent a sign-in link to <span className="font-medium text-fg-heading">{magicEmail}</span>. Click it to continue.
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resendCooldown > 0 || resending}
+                className={`flex-1 px-4 py-2.5 text-sm font-semibold border rounded-lg transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed ${magicButtonBg}`}
+              >
+                {resending ? 'Sending...' : resendCooldown > 0 ? `Resend link (${resendCooldown}s)` : 'Resend link'}
+              </button>
+              <button
+                type="button"
+                onClick={handleUseDifferentEmail}
+                className={`text-xs ${linkColor} transition-colors font-medium whitespace-nowrap`}
+              >
+                Use a different email
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!magicOpen && !passwordInUse && (
+          <div className="relative my-5">
+            <div className={`absolute inset-0 flex items-center`}>
+              <div className={`w-full h-px ${dividerLine}`} />
+            </div>
+            <div className="relative flex justify-center">
+              <span className={`px-3 text-xs ${dividerText}`}>or</span>
+            </div>
+          </div>
+        )}
+
+        {!magicOpen && (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className={`block text-sm font-medium ${labelColor} mb-1.5`}>
@@ -185,16 +324,10 @@ export default function Login({ onViewChange }: LoginProps) {
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
+        )}
 
         <p className={`mt-6 text-center text-sm ${footerColor}`}>
-          Don't have an account?{' '}
-          <button
-            type="button"
-            onClick={() => onViewChange('landing', 'contact')}
-            className="text-[#6e8fb5] hover:text-[#87b5c7] transition-colors font-medium"
-          >
-            Request access
-          </button>
+          Don't have a password? Use the magic link option — it works whether you're new or returning.
         </p>
       </div>
     </div>
