@@ -53,7 +53,7 @@ export default function FinalReviewExportWorkspace() {
     fetchReportDraft(id).then((draft) => {
       setReports((prev) => ({ ...prev, [id]: draft }));
     });
-  }, [activeAudit?.id]);
+  }, [activeAudit?.id, setReports]);
 
   if (!activeAudit) return null;
 

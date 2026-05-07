@@ -6,18 +6,20 @@ import {
   ChevronRight,
   Calendar,
   UserCircle2,
+  Plus,
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
+import { useSiteData } from '../../../context/SiteDataContext';
 import {
-  MOCK_PARTICIPANTS,
   PARTICIPANT_STATUS_LABELS,
-  type MockParticipant,
   type ParticipantStatus,
 } from '../../../lib/mockSiteData';
+import type { SiteParticipant } from '../../../lib/site/types';
 import HeatIndicator from '../../heatmap/HeatIndicator';
 import { scoreParticipant } from '../../../lib/heatmap';
 import ParticipantProfileDrawer from './ParticipantProfileDrawer';
+import ParticipantFormDrawer from './ParticipantFormDrawer';
 
 // =============================================================================
 // ParticipantsTab — Site Mode list of participants on the active protocol.
@@ -38,20 +40,22 @@ type StatusFilter = ParticipantStatus | 'ALL';
 export default function ParticipantsTab() {
   const { theme } = useTheme();
   const { activeProtocol, protocols } = useProtocol();
+  const { participants, loading, error } = useSiteData();
   const isLight = theme === 'light';
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
-  const [openParticipant, setOpenParticipant] = useState<MockParticipant | null>(null);
+  const [openParticipant, setOpenParticipant] = useState<SiteParticipant | null>(null);
+  const [formMode, setFormMode] = useState<'create' | null>(null);
 
   // Scope to the active protocol — empty array when no protocol selected so
   // the hooks below can run unconditionally.
   const scoped = useMemo(
     () =>
       activeProtocol
-        ? MOCK_PARTICIPANTS.filter((p) => p.protocol_id === activeProtocol.id)
+        ? participants.filter((p) => p.protocol_id === activeProtocol.id)
         : [],
-    [activeProtocol],
+    [activeProtocol, participants],
   );
 
   // Status-filtered + search-filtered + sorted
@@ -122,10 +126,32 @@ export default function ParticipantsTab() {
             Everyone enrolled on this protocol and where they stand.
           </p>
         </div>
-        <p className={`${subColor} text-sm`}>
-          {scoped.length} total · {counts.ACTIVE} active
-        </p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <p className={`${subColor} text-sm`}>
+            {scoped.length} total · {counts.ACTIVE} active
+          </p>
+          <button
+            type="button"
+            onClick={() => setFormMode('create')}
+            className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md text-white transition-colors ${
+              isLight ? 'bg-[#4a6fa5] hover:bg-[#3a5f95]' : 'bg-[#6e8fb5] hover:bg-[#7e9fc5]'
+            }`}
+          >
+            <Plus size={13} />
+            New participant
+          </button>
+        </div>
       </div>
+
+      {error && (
+        <div
+          className={`border rounded-md px-3 py-2 text-xs ${
+            isLight ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-rose-500/[0.06] border-rose-500/20 text-rose-300'
+          }`}
+        >
+          Failed to load participants: {error}
+        </div>
+      )}
 
       {/* Filter row */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -190,7 +216,13 @@ export default function ParticipantsTab() {
         >
           <UserCircle2 className={`mx-auto mb-2 ${mutedColor}`} size={28} />
           <p className={`${subColor} text-sm`}>
-            {search ? 'No participants match your search.' : 'No participants in this status.'}
+            {loading
+              ? 'Loading participants…'
+              : search
+                ? 'No participants match your search.'
+                : scoped.length === 0
+                  ? 'No participants on this protocol yet. Click "New participant" to add one.'
+                  : 'No participants in this status.'}
           </p>
         </div>
       ) : (
@@ -233,6 +265,18 @@ export default function ParticipantsTab() {
           onClose={() => setOpenParticipant(null)}
         />
       )}
+
+      {formMode === 'create' && (
+        <ParticipantFormDrawer
+          mode="create"
+          protocolId={activeProtocol.id}
+          protocolCode={activeProtocol.code}
+          onSaved={() => {
+            // Realtime subscription will refresh the list; no extra work needed.
+          }}
+          onClose={() => setFormMode(null)}
+        />
+      )}
     </div>
   );
 }
@@ -242,7 +286,7 @@ export default function ParticipantsTab() {
 // ============================================================================
 
 interface ParticipantRowProps {
-  participant: MockParticipant;
+  participant: SiteParticipant;
   onClick: () => void;
   isLight: boolean;
   rowHover: string;

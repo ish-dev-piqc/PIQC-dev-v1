@@ -26,6 +26,17 @@ export default tseslint.config(
         'warn',
         { allowConstantExport: true },
       ],
+      // Allow underscore-prefixed args / vars to be unused — standard convention
+      // for "I need to destructure this prop but don't read it".
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+          destructuredArrayIgnorePattern: '^_',
+        },
+      ],
     },
   }
 );

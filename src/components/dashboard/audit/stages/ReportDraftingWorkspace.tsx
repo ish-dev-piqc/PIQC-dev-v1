@@ -63,7 +63,7 @@ export default function ReportDraftingWorkspace() {
     fetchReportDraft(id).then((draft) => {
       setReports((prev) => ({ ...prev, [id]: draft }));
     });
-  }, [activeAudit?.id]);
+  }, [activeAudit?.id, setReports]);
 
   // Derive non-hook values (safe with null activeAudit since we read by key)
   const auditId = activeAudit?.id ?? null;

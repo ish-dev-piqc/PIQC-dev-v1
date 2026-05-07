@@ -88,6 +88,38 @@ const CLINICAL_EXTRACT_SCHEMA = {
       type: ["string", "null"],
       description: "Brief summary of changes made in this amendment. Null if not an amendment.",
     },
+    schedule_of_events: {
+      type: "array",
+      description:
+        "Schedule of events / visit schedule. Each entry is one planned visit with its study-day offset and procedures. Day numbers are integers relative to a Day 0 reference (typically first dose). Pre-baseline / screening visits have negative or zero study days.",
+      items: {
+        type: "object",
+        properties: {
+          visit_name: {
+            type: "string",
+            description: "Visit name as labelled in the protocol (e.g. 'Screening', 'Day 14', 'Week 6 follow-up')",
+          },
+          study_day: {
+            type: "integer",
+            description: "Study day relative to Day 0. Negative for pre-baseline; 0 = first dose / activation; positive after.",
+          },
+          window_minus_days: {
+            type: "integer",
+            description: "Permissible visit window — days before the scheduled date that are still in window (0 if not specified).",
+          },
+          window_plus_days: {
+            type: "integer",
+            description: "Permissible visit window — days after the scheduled date that are still in window (0 if not specified).",
+          },
+          procedures: {
+            type: "array",
+            items: { type: "string" },
+            description: "List of procedures, assessments, or activities performed at this visit",
+          },
+        },
+        required: ["visit_name", "study_day"],
+      },
+    },
   },
   required: ["protocol_title"],
 };
@@ -521,12 +553,101 @@ Deno.serve(async (req: Request) => {
       .eq("id", docId);
     if (updateError) throw updateError;
 
+    // ---------------------------------------------------------------------
+    // Phase E: schedule-of-events → protocol_visit_templates upsert.
+    //
+    // The documents.protocol_id auto-tag trigger has already run on the
+    // UPDATE above, so we re-read the row to get the resolved protocol_id.
+    // If extraction returned no schedule, we log telemetry and move on.
+    // ---------------------------------------------------------------------
+    let templatesInserted = 0;
+    let templateMaterialized = false;
+    try {
+      const { data: docRow } = await supabase
+        .from("documents")
+        .select("protocol_id")
+        .eq("id", docId)
+        .maybeSingle();
+
+      const resolvedProtocolId = docRow?.protocol_id ?? null;
+      const schedule = Array.isArray(extractedFields?.schedule_of_events)
+        ? extractedFields!.schedule_of_events
+        : [];
+
+      console.log("[ingest] schedule_extracted", {
+        document_id: docId,
+        protocol_id: resolvedProtocolId,
+        entry_count: schedule.length,
+      });
+
+      if (resolvedProtocolId && schedule.length > 0) {
+        type ScheduleEntry = {
+          visit_name?: unknown;
+          study_day?: unknown;
+          window_minus_days?: unknown;
+          window_plus_days?: unknown;
+          procedures?: unknown;
+        };
+        const rows = (schedule as ScheduleEntry[])
+          .filter((s) => s && typeof s.visit_name === "string" && typeof s.study_day === "number")
+          .map((s) => ({
+            protocol_id: resolvedProtocolId,
+            visit_name: String(s.visit_name).trim(),
+            study_day: Math.trunc(s.study_day as number),
+            window_minus_days: typeof s.window_minus_days === "number" ? Math.max(0, Math.trunc(s.window_minus_days)) : 0,
+            window_plus_days: typeof s.window_plus_days === "number" ? Math.max(0, Math.trunc(s.window_plus_days)) : 0,
+            procedures: Array.isArray(s.procedures)
+              ? (s.procedures as unknown[]).filter((p): p is string => typeof p === "string")
+              : [],
+            source_document_id: docId,
+          }));
+
+        if (rows.length > 0) {
+          const { error: tplError } = await supabase
+            .from("protocol_visit_templates")
+            .upsert(rows, { onConflict: "protocol_id,visit_name,study_day" });
+          if (tplError) {
+            console.error("[ingest] template_upsert_failed", { error: tplError.message });
+          } else {
+            templatesInserted = rows.length;
+
+            // If the protocol already has an anchor date, materialize visits
+            // immediately so the user sees them on the calendar without
+            // needing a second click.
+            const { data: protoRow } = await supabase
+              .from("protocols")
+              .select("demo_anchor_date")
+              .eq("id", resolvedProtocolId)
+              .maybeSingle();
+            if (protoRow?.demo_anchor_date) {
+              const { error: matError } = await supabase.rpc("materialize_protocol_visits", {
+                p_protocol_id: resolvedProtocolId,
+              });
+              if (matError) {
+                console.error("[ingest] materialize_failed", { error: matError.message });
+              } else {
+                templateMaterialized = true;
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // Schedule processing is best-effort — don't fail the whole ingest
+      // if it goes sideways.
+      console.error("[ingest] schedule_processing_failed", {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         document_id: docId,
         chunks_created: inserted,
         extracted_fields: extractedFields,
+        templates_inserted: templatesInserted,
+        templates_materialized: templateMaterialized,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

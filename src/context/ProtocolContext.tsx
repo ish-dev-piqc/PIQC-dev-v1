@@ -7,6 +7,7 @@ export interface Protocol {
   name: string;
   sponsor: string;
   phase: string;
+  demoAnchorDate: string | null;  // protocols.demo_anchor_date — for visit projection
 }
 
 interface ProtocolContextValue {
@@ -42,6 +43,7 @@ interface ProtocolRow {
   study_number: string | null;
   title: string;
   sponsor: string;
+  demo_anchor_date: string | null;
   protocol_versions: { clinical_trial_phase: string; status: string }[];
 }
 
@@ -53,6 +55,7 @@ function rowToProtocol(row: ProtocolRow): Protocol {
     name: row.title,
     sponsor: row.sponsor,
     phase: phaseLabel(activeVersion?.clinical_trial_phase),
+    demoAnchorDate: row.demo_anchor_date,
   };
 }
 
@@ -92,7 +95,7 @@ export function ProtocolProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(true);
       const { data, error } = await supabase
         .from('protocols')
-        .select('id, study_number, title, sponsor, protocol_versions(clinical_trial_phase, status)')
+        .select('id, study_number, title, sponsor, demo_anchor_date, protocol_versions(clinical_trial_phase, status)')
         .order('created_at', { ascending: true });
 
       if (error) {
@@ -132,6 +135,7 @@ export function ProtocolProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useProtocol() {
   return useContext(ProtocolContext);
 }

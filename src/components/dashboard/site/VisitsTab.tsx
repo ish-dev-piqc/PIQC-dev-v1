@@ -12,10 +12,11 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
+import { useSiteData } from '../../../context/SiteDataContext';
 import VisitDetailDrawer from './VisitDetailDrawer';
+import { getProtocolColorsById } from '../../../lib/site/protocolColors';
+import MockCalendarToggle, { MockCalendarBanner } from './MockCalendarToggle';
 import {
-  MOCK_VISITS,
-  PROTOCOL_COLORS,
   type CalendarVisit,
   type VisitStatus,
 } from '../../../lib/mockCalendarData';
@@ -58,6 +59,7 @@ const STATUS_FILTERS: StatusFilter[] = [
 export default function VisitsTab() {
   const { theme } = useTheme();
   const { activeProtocol, protocols } = useProtocol();
+  const { visits, loading, error } = useSiteData();
   const isLight = theme === 'light';
 
   const [search, setSearch] = useState('');
@@ -70,9 +72,9 @@ export default function VisitsTab() {
   const scoped = useMemo(
     () =>
       activeProtocol
-        ? MOCK_VISITS.filter((v) => v.protocolId === activeProtocol.id)
+        ? visits.filter((v) => v.protocolId === activeProtocol.id)
         : [],
-    [activeProtocol],
+    [activeProtocol, visits],
   );
 
   const today = useMemo(() => {
@@ -175,10 +177,15 @@ export default function VisitsTab() {
             All visits across participants on this protocol.
           </p>
         </div>
-        <p className={`${subColor} text-sm`}>
-          {scoped.length} total · {counts.UPCOMING} upcoming
-        </p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <p className={`${subColor} text-sm`}>
+            {scoped.length} total · {counts.UPCOMING} upcoming
+          </p>
+          <MockCalendarToggle />
+        </div>
       </div>
+
+      <MockCalendarBanner />
 
       {/* Filter row */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -266,12 +273,28 @@ export default function VisitsTab() {
         </div>
       </div>
 
+      {error && (
+        <div
+          className={`border rounded-md px-3 py-2 text-xs ${
+            isLight ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-rose-500/[0.06] border-rose-500/20 text-rose-300'
+          }`}
+        >
+          Failed to load visits: {error}
+        </div>
+      )}
+
       {/* Visit list */}
       {visible.length === 0 ? (
         <div className={`${cardBg} border rounded-xl px-6 py-10 text-center border-dashed`}>
           <CalendarIcon className={`mx-auto mb-2 ${mutedColor}`} size={28} />
           <p className={`${subColor} text-sm`}>
-            {search ? 'No visits match your search.' : 'No visits in this status.'}
+            {loading
+              ? 'Loading visits…'
+              : search
+                ? 'No visits match your search.'
+                : scoped.length === 0
+                  ? 'No visits scheduled for this protocol yet.'
+                  : 'No visits in this status.'}
           </p>
         </div>
       ) : (
@@ -295,6 +318,7 @@ export default function VisitsTab() {
                     visit={v}
                     showDate={groupMode === 'participant'}
                     showParticipant={groupMode === 'date'}
+                    protocols={protocols}
                     isLight={isLight}
                     rowHover={rowHover}
                     headingColor={headingColor}
@@ -329,6 +353,7 @@ interface VisitRowProps {
   visit: CalendarVisit;
   showDate: boolean;
   showParticipant: boolean;
+  protocols: { id: string; code: string }[];
   isLight: boolean;
   rowHover: string;
   headingColor: string;
@@ -341,6 +366,7 @@ function VisitRow({
   visit,
   showDate,
   showParticipant,
+  protocols,
   isLight,
   rowHover,
   headingColor,
@@ -348,8 +374,8 @@ function VisitRow({
   mutedColor,
   onClick,
 }: VisitRowProps) {
-  const colors = PROTOCOL_COLORS[visit.protocolId];
-  const accent = colors ? (isLight ? colors.accentLight : colors.accentDark) : '';
+  const colors = getProtocolColorsById(visit.protocolId, protocols);
+  const accent = isLight ? colors.accentLight : colors.accentDark;
 
   return (
     <button

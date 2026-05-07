@@ -10,26 +10,22 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
-import {
-  MOCK_VISITS,
-  PROTOCOL_COLORS,
-  type CalendarVisit,
-} from '../../../lib/mockCalendarData';
-import {
-  MOCK_PARTICIPANTS,
-} from '../../../lib/mockSiteData';
+import { useSiteData } from '../../../context/SiteDataContext';
+import { getProtocolColors } from '../../../lib/site/protocolColors';
+import { type CalendarVisit } from '../../../lib/mockCalendarData';
+import MockCalendarToggle, { MockCalendarBanner } from './MockCalendarToggle';
 import VisitDetailDrawer from './VisitDetailDrawer';
 
 // =============================================================================
 // ReportsTab — Site Mode summary metrics, protocol compliance, deviation log.
 //
 // Works in cross-protocol ("All protocols") and single-protocol scope.
-// Mock-backed; real data lands with Supabase wire-up.
 // =============================================================================
 
 export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?: () => void } = {}) {
   const { theme } = useTheme();
   const { activeProtocol, protocols } = useProtocol();
+  const { visits: allSiteVisits, participants: allSiteParticipants, error } = useSiteData();
   const isLight = theme === 'light';
   const today = useMemo(() => new Date(), []);
   const todayStr = useMemo(() => today.toISOString().slice(0, 10), [today]);
@@ -47,14 +43,14 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
     : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]';
 
   const scopedVisits = useMemo(() => {
-    if (!activeProtocol) return MOCK_VISITS;
-    return MOCK_VISITS.filter((v) => v.protocolId === activeProtocol.id);
-  }, [activeProtocol]);
+    if (!activeProtocol) return allSiteVisits;
+    return allSiteVisits.filter((v) => v.protocolId === activeProtocol.id);
+  }, [activeProtocol, allSiteVisits]);
 
   const scopedParticipants = useMemo(() => {
-    if (!activeProtocol) return MOCK_PARTICIPANTS;
-    return MOCK_PARTICIPANTS.filter((p) => p.protocol_id === activeProtocol.id);
-  }, [activeProtocol]);
+    if (!activeProtocol) return allSiteParticipants;
+    return allSiteParticipants.filter((p) => p.protocol_id === activeProtocol.id);
+  }, [activeProtocol, allSiteParticipants]);
 
   const stats = useMemo(() => {
     const concluded = scopedVisits.filter((v) =>
@@ -92,14 +88,14 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
   const protocolRows = useMemo(
     () =>
       protocols.map((p) => {
-        const pv = MOCK_VISITS.filter((v) => v.protocolId === p.id);
+        const pv = allSiteVisits.filter((v) => v.protocolId === p.id);
         const concluded = pv.filter((v) =>
           ['completed', 'missed', 'deviation'].includes(v.status),
         );
         const completed = concluded.filter((v) => v.status === 'completed').length;
         const missed = concluded.filter((v) => v.status === 'missed').length;
         const deviation = concluded.filter((v) => v.status === 'deviation').length;
-        const enrolled = MOCK_PARTICIPANTS.filter(
+        const enrolled = allSiteParticipants.filter(
           (pt) =>
             pt.protocol_id === p.id &&
             ['ACTIVE', 'COMPLETED'].includes(pt.status),
@@ -110,7 +106,7 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
             : null;
         return { protocol: p, enrolled, completed, missed, deviation, rate, total: concluded.length };
       }),
-    [protocols],
+    [protocols, allSiteVisits, allSiteParticipants],
   );
 
   const deviationLog = useMemo(
@@ -167,15 +163,30 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
                 : 'Summary across all active protocols'}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={exportCSV}
-            className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
-          >
-            <Download size={13} />
-            Export CSV
-          </button>
+          <div className="flex items-center gap-2">
+            <MockCalendarToggle />
+            <button
+              type="button"
+              onClick={exportCSV}
+              className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+            >
+              <Download size={13} />
+              Export CSV
+            </button>
+          </div>
         </div>
+
+        <MockCalendarBanner />
+
+        {error && (
+          <div
+            className={`border rounded-md px-3 py-2 text-xs ${
+              isLight ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-rose-500/[0.06] border-rose-500/20 text-rose-300'
+            }`}
+          >
+            Failed to load report data: {error}
+          </div>
+        )}
 
         {/* Stat cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -230,7 +241,7 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
             </div>
             <div className="divide-y divide-inherit">
               {protocolRows.map(({ protocol, enrolled, completed, missed, deviation, rate, total }) => {
-                const colors = PROTOCOL_COLORS[protocol.id];
+                const colors = getProtocolColors(protocol);
                 return (
                   <div
                     key={protocol.id}
@@ -299,7 +310,7 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
             <div className="divide-y divide-inherit">
               {deviationLog.map((v) => {
                 const protocol = protocols.find((p) => p.id === v.protocolId);
-                const colors = protocol ? PROTOCOL_COLORS[protocol.id] : null;
+                const colors = protocol ? getProtocolColors(protocol) : null;
                 return (
                   <button
                     key={v.id}
@@ -352,7 +363,7 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
             <div className="divide-y divide-inherit">
               {missedLog.map((v) => {
                 const protocol = protocols.find((p) => p.id === v.protocolId);
-                const colors = protocol ? PROTOCOL_COLORS[protocol.id] : null;
+                const colors = protocol ? getProtocolColors(protocol) : null;
                 return (
                   <button
                     key={v.id}

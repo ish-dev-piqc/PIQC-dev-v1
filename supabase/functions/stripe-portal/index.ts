@@ -61,8 +61,9 @@ Deno.serve(async (req) => {
     });
 
     return corsResponse({ url: session.url });
-  } catch (error: any) {
-    console.error(`Portal error: ${error.message}`);
-    return corsResponse({ error: error.message }, 500);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`Portal error: ${message}`);
+    return corsResponse({ error: message }, 500);
   }
 });
