@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, StopCircle, BookOpen, Stethoscope, User, ChevronDown, Search, FileText, ChevronUp, X, Check, Sparkles, Activity, Shield, GitBranch, AlertTriangle, Database, HelpCircle } from 'lucide-react';
+import { Send, StopCircle, BookOpen, Stethoscope, User, ChevronDown, Search, FileText, ChevronUp, X, Check, Sparkles, Activity, Shield, GitBranch, AlertTriangle, Database, HelpCircle, type LucideIcon } from 'lucide-react';
 import { streamDashboardChat, ChatMessage, RagStatus, SourceCitation, supabase } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -492,7 +492,7 @@ function DocumentSelector({ selectedDocIds, onSelectionChange, isLight }: Docume
 }
 
 interface ChatSuggestion {
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
   text: string;
 }
 
@@ -603,9 +603,10 @@ export default function DashboardChat({
       finalRagStatus = result.ragStatus;
       finalRagError = result.ragError;
       if (result.sources.length > 0) collectedSources = result.sources;
-    } catch (err: any) {
-      if (err.name !== 'AbortError') {
-        const errorMsg = err.message || 'Something went wrong. Please try again.';
+    } catch (err: unknown) {
+      const e = err as { name?: string; message?: string };
+      if (e.name !== 'AbortError') {
+        const errorMsg = e.message || 'Something went wrong. Please try again.';
         setChatError(errorMsg);
         setMessages(prev => {
           const updated = [...prev];

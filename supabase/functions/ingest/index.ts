@@ -581,16 +581,23 @@ Deno.serve(async (req: Request) => {
       });
 
       if (resolvedProtocolId && schedule.length > 0) {
-        const rows = schedule
-          .filter((s: any) => s && typeof s.visit_name === "string" && typeof s.study_day === "number")
-          .map((s: any) => ({
+        type ScheduleEntry = {
+          visit_name?: unknown;
+          study_day?: unknown;
+          window_minus_days?: unknown;
+          window_plus_days?: unknown;
+          procedures?: unknown;
+        };
+        const rows = (schedule as ScheduleEntry[])
+          .filter((s) => s && typeof s.visit_name === "string" && typeof s.study_day === "number")
+          .map((s) => ({
             protocol_id: resolvedProtocolId,
             visit_name: String(s.visit_name).trim(),
-            study_day: Math.trunc(s.study_day),
+            study_day: Math.trunc(s.study_day as number),
             window_minus_days: typeof s.window_minus_days === "number" ? Math.max(0, Math.trunc(s.window_minus_days)) : 0,
             window_plus_days: typeof s.window_plus_days === "number" ? Math.max(0, Math.trunc(s.window_plus_days)) : 0,
             procedures: Array.isArray(s.procedures)
-              ? s.procedures.filter((p: unknown) => typeof p === "string")
+              ? (s.procedures as unknown[]).filter((p): p is string => typeof p === "string")
               : [],
             source_document_id: docId,
           }));

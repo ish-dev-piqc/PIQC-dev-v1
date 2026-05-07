@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   Clock,
@@ -296,13 +296,16 @@ export default function TodayTab({ onNavigateToVisits }: { onNavigateToVisits?: 
     return { start: gridStart, end: addDays(gridStart, 41) };
   }, [view, anchorDate]);
 
-  const isInRange = (v: CalendarVisit) => {
-    const d = parseYmd(v.date);
-    return d >= viewRange.start && d <= viewRange.end;
-  };
+  const isInRange = useCallback(
+    (v: CalendarVisit) => {
+      const d = parseYmd(v.date);
+      return d >= viewRange.start && d <= viewRange.end;
+    },
+    [viewRange],
+  );
 
-  const visibleInRange = useMemo(() => visibleVisits.filter(isInRange), [visibleVisits, viewRange]);
-  const scopedInRange = useMemo(() => scopedVisits.filter(isInRange), [scopedVisits, viewRange]);
+  const visibleInRange = useMemo(() => visibleVisits.filter(isInRange), [visibleVisits, isInRange]);
+  const scopedInRange = useMemo(() => scopedVisits.filter(isInRange), [scopedVisits, isInRange]);
 
   const isEmptyRange = visibleInRange.length === 0;
   const isFilteredEmpty = isEmptyRange && scopedInRange.length > 0;

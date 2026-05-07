@@ -155,6 +155,7 @@ export function AuditDataProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuditData() {
   return useContext(AuditDataContext);
 }
