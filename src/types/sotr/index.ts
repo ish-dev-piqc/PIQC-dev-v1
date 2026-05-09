@@ -74,7 +74,7 @@ export interface ExtractedItemRecord {
   missing_source_reason: MissingSourceReason | null;
   /** PR-5 draft review fields. */
   version?: number;
-  review_status?: 'draft' | 'accepted_for_draft' | 'edited' | 'rejected_from_draft' | 'flagged';
+  review_status?: DraftReviewStatus;
   /** Edited text; takes precedence over extracted_value for display when set. */
   current_text?: string | null;
   created_at: string;
@@ -225,7 +225,7 @@ export interface WorksheetItemSourceEvidence {
   sources: SourceEvidenceForReview[];
   missing_source_reason: MissingSourceReason | null;
   /** PR-5 additions — present after the PR-5 RPC update lands. */
-  review_status?: 'draft' | 'accepted_for_draft' | 'edited' | 'rejected_from_draft' | 'flagged';
+  review_status?: DraftReviewStatus;
   version?: number;
   current_text?: string | null;
   /** Display text: current_text || stringified extracted_value. */
