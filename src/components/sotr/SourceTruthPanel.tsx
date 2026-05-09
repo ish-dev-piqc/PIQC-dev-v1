@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight, FileSearch, AlertTriangle, MapPinOff } from 'lucide-react';
 import ConfidenceBadge from './ConfidenceBadge';
+import ViewCitedPageButton from './ViewCitedPageButton';
 import type {
   WorksheetItemSourceEvidence,
   SourceEvidenceForReview,
@@ -22,6 +23,12 @@ interface Props {
   /** Optional label for the worksheet item itself (e.g. extracted text). */
   itemLabel?: string | null;
   data: WorksheetItemSourceEvidence;
+  /**
+   * Study (protocol) ID — threaded through so per-source "View cited page"
+   * buttons can request a signed URL for that source's protocol_document_id.
+   * Optional: when absent, the cited-page action is hidden.
+   */
+  studyId?: string;
 }
 
 const MISSING_SOURCE_LABELS: Record<MissingSourceReason, string> = {
@@ -40,7 +47,7 @@ const SUPPORT_LABELS: Record<SourceEvidenceForReview['support_type'], string> = 
   conflict:  'Conflict',
 };
 
-export default function SourceTruthPanel({ itemLabel, data }: Props) {
+export default function SourceTruthPanel({ itemLabel, data, studyId }: Props) {
   const sources = data.sources;
   const [index, setIndex] = useState(0);
 
@@ -98,7 +105,7 @@ export default function SourceTruthPanel({ itemLabel, data }: Props) {
           )}
 
           {/* Active source */}
-          <SourceCard source={current} />
+          <SourceCard source={current} studyId={studyId} />
         </>
       )}
     </div>
@@ -155,7 +162,7 @@ function SourceNavigator({ count, index, onPrev, onNext }: NavProps) {
 // SourceCard — citation metadata + quoted source text + missing-coords hint
 // -----------------------------------------------------------------------------
 
-function SourceCard({ source }: { source: SourceEvidenceForReview }) {
+function SourceCard({ source, studyId }: { source: SourceEvidenceForReview; studyId?: string }) {
   const headerParts = [
     source.protocol_version || 'Protocol document',
     source.section_number ? `Section ${source.section_number}` : null,
@@ -204,6 +211,13 @@ function SourceCard({ source }: { source: SourceEvidenceForReview }) {
           <p className="text-fg-muted text-xs italic">
             Quoted source text was not captured for this citation.
           </p>
+        )}
+
+        {studyId && (
+          <ViewCitedPageButton
+            studyId={studyId}
+            documentId={source.protocol_document_id}
+          />
         )}
       </div>
     </article>
