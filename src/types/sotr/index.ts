@@ -175,3 +175,56 @@ export interface AdapterOutput {
   evidence: NewSourceEvidence[];
   links: NewItemEvidenceLink[];
 }
+
+
+// ---------------------------------------------------------------------------
+// Review-screen API response shapes (PR-2).
+//
+// These are the response shapes returned by sotr_get_worksheet_item_evidence
+// and sotr_get_worksheet_items_evidence_batch. They use snake_case to match
+// the JSON the RPCs produce; the worksheet review UI renders them directly.
+// ---------------------------------------------------------------------------
+
+/** Single source evidence record as it appears in the review-screen response. */
+export interface SourceEvidenceForReview {
+  id: string;
+  support_type: EvidenceSupportType;
+  protocol_document_id: string;
+  protocol_version: string | null;
+  page_number: number | null;
+  section_number: string | null;
+  section_title: string | null;
+  /** Sensitive — never log. Returned to the authorized caller for display. */
+  source_text: string | null;
+  text_start_offset: number | null;
+  text_end_offset: number | null;
+  /** Always an array — empty when Reducto did not provide coordinates. */
+  bounding_boxes: BoundingBox[];
+  extraction_confidence: number | null;
+  relevance_score: number | null;
+  is_primary: boolean;
+}
+
+/** Worksheet item + its source evidence list. */
+export interface WorksheetItemSourceEvidence {
+  worksheet_item_id: string;
+  confidence_state: ConfidenceState;
+  confidence_score: number | null;
+  confidence_reason: string | null;
+  ambiguity_reason: string | null;
+  /**
+   * Sources sorted by support_type (primary → secondary → context → conflict),
+   * then relevance_score DESC, then created_at ASC. Empty when no evidence
+   * has been linked yet.
+   */
+  sources: SourceEvidenceForReview[];
+  missing_source_reason: MissingSourceReason | null;
+}
+
+/** Batch response — items returned in DB order; missing/inaccessible IDs omitted. */
+export interface WorksheetItemsSourceEvidenceBatch {
+  items: WorksheetItemSourceEvidence[];
+}
+
+/** Maximum worksheet item IDs accepted by the batch endpoint. */
+export const MAX_WORKSHEET_ITEM_BATCH_SIZE = 100;

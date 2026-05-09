@@ -728,6 +728,262 @@ if [[ -n "${SOTR_DOC_ID:-}" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
+# T18–T26  SOTR review-screen RPCs
+#
+# Requires: 20260508020000_sotr_review_rpcs.sql deployed.
+#
+# Setup (service role):
+#   - looks up two seeded protocol IDs (study A and study B)
+#   - creates one document per study, owned by the auditor
+#   - under doc-A: creates one fully-cited item with 3 sources (primary,
+#     secondary, context — to verify sort order) AND one needs_review item
+#     with no sources
+#   - under doc-B: creates one item (used to test cross-study isolation)
+#
+# Tests use the auditor's USER_JWT.
+# ---------------------------------------------------------------------------
+
+echo "════════════════════════════════════════════════════════════════"
+echo "  SOTR — review-screen RPCs (T18–T26)"
+echo "════════════════════════════════════════════════════════════════"
+echo
+
+# --- Setup -----------------------------------------------------------------
+PROTOCOLS_RESP=$(curl -s "$REST/protocols?select=id&limit=2" \
+  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY")
+STUDY_A=$(echo "$PROTOCOLS_RESP" | jq -r '.[0].id // empty')
+STUDY_B=$(echo "$PROTOCOLS_RESP" | jq -r '.[1].id // empty')
+
+if [[ -z "$STUDY_A" || -z "$STUDY_B" ]]; then
+  fail "T18-setup: lookup two protocols" "resp=$PROTOCOLS_RESP"
+else
+  # Doc under study A
+  DOC_A_RESP=$(curl -s -X POST "$REST/documents" \
+    -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+    -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+    -H "Content-Type: application/json" -H "Prefer: return=representation" \
+    -d "{\"title\":\"Smoke PR-2 doc A\",\"source\":\"smoke\",\"user_id\":\"$AUDITOR_ID\",\"protocol_id\":\"$STUDY_A\"}")
+  DOC_A=$(echo "$DOC_A_RESP" | jq -r '.[0].id // empty')
+
+  # Doc under study B
+  DOC_B_RESP=$(curl -s -X POST "$REST/documents" \
+    -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+    -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+    -H "Content-Type: application/json" -H "Prefer: return=representation" \
+    -d "{\"title\":\"Smoke PR-2 doc B\",\"source\":\"smoke\",\"user_id\":\"$AUDITOR_ID\",\"protocol_id\":\"$STUDY_B\"}")
+  DOC_B=$(echo "$DOC_B_RESP" | jq -r '.[0].id // empty')
+fi
+
+if [[ -n "${DOC_A:-}" && -n "${DOC_B:-}" ]]; then
+  # Item with multi-source evidence under study A
+  ITEM_A_RESP=$(curl -s -X POST "$REST/rpc/sotr_upsert_extracted_item" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_document_id\":\"$DOC_A\",\"p_field_path\":\"primary_endpoints[0]\",\"p_field_type\":\"endpoint\",\"p_extracted_value\":\"\\\"PANSS change\\\"\",\"p_confidence_state\":\"high\",\"p_confidence_reason\":\"Exact source found\"}")
+  ITEM_A=$(echo "$ITEM_A_RESP" | jq -r '.id // empty')
+
+  # Three sources with different support_types and relevance scores
+  EV_PRIMARY_RESP=$(curl -s -X POST "$REST/rpc/sotr_upsert_source_evidence" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_document_id\":\"$DOC_A\",\"p_page_number\":48,\"p_section_number\":\"7.2\",\"p_section_title\":\"Vital Signs\",\"p_quoted_text\":\"Primary endpoint text\",\"p_support_type\":\"primary\",\"p_confidence_score\":0.94}")
+  EV_PRIMARY=$(echo "$EV_PRIMARY_RESP" | jq -r '.id // empty')
+
+  EV_SECONDARY_RESP=$(curl -s -X POST "$REST/rpc/sotr_upsert_source_evidence" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_document_id\":\"$DOC_A\",\"p_page_number\":52,\"p_quoted_text\":\"Secondary corroborating text\",\"p_support_type\":\"secondary\",\"p_confidence_score\":0.7}")
+  EV_SECONDARY=$(echo "$EV_SECONDARY_RESP" | jq -r '.id // empty')
+
+  EV_CONTEXT_RESP=$(curl -s -X POST "$REST/rpc/sotr_upsert_source_evidence" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_document_id\":\"$DOC_A\",\"p_page_number\":12,\"p_quoted_text\":\"Background context paragraph\",\"p_support_type\":\"context\",\"p_confidence_score\":0.5}")
+  EV_CONTEXT=$(echo "$EV_CONTEXT_RESP" | jq -r '.id // empty')
+
+  # Link sources with relevance scores: primary highest, secondary mid, context lowest
+  curl -s -X POST "$REST/rpc/sotr_link_item_evidence" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_extracted_item_id\":\"$ITEM_A\",\"p_source_evidence_id\":\"$EV_PRIMARY\",\"p_is_primary_source\":true,\"p_relevance_score\":0.98}" >/dev/null
+  curl -s -X POST "$REST/rpc/sotr_link_item_evidence" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_extracted_item_id\":\"$ITEM_A\",\"p_source_evidence_id\":\"$EV_SECONDARY\",\"p_is_primary_source\":false,\"p_relevance_score\":0.7}" >/dev/null
+  curl -s -X POST "$REST/rpc/sotr_link_item_evidence" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_extracted_item_id\":\"$ITEM_A\",\"p_source_evidence_id\":\"$EV_CONTEXT\",\"p_is_primary_source\":false,\"p_relevance_score\":0.4}" >/dev/null
+
+  # needs_review item under study A
+  ITEM_NR_RESP=$(curl -s -X POST "$REST/rpc/sotr_upsert_extracted_item" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_document_id\":\"$DOC_A\",\"p_field_path\":\"sponsor_name\",\"p_field_type\":\"metadata\",\"p_extracted_value\":\"\\\"Acme\\\"\",\"p_confidence_state\":\"needs_review\",\"p_missing_source_reason\":\"parser_output_missing_citation\"}")
+  ITEM_NR=$(echo "$ITEM_NR_RESP" | jq -r '.id // empty')
+
+  # Item under study B (used by T20 to verify cross-study isolation)
+  ITEM_B_RESP=$(curl -s -X POST "$REST/rpc/sotr_upsert_extracted_item" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_document_id\":\"$DOC_B\",\"p_field_path\":\"protocol_title\",\"p_field_type\":\"metadata\",\"p_extracted_value\":\"\\\"Other Study\\\"\",\"p_confidence_state\":\"high\"}")
+  ITEM_B=$(echo "$ITEM_B_RESP" | jq -r '.id // empty')
+fi
+echo
+
+# --- T18 — authorized fetch returns the item with sources -----------------
+if [[ -n "${ITEM_A:-}" ]]; then
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_get_worksheet_item_evidence" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_study_id\":\"$STUDY_A\",\"p_worksheet_item_id\":\"$ITEM_A\"}")
+  T18_WID=$(echo "$RESP" | jq -r '.worksheet_item_id // empty')
+  T18_STATE=$(echo "$RESP" | jq -r '.confidence_state // empty')
+  T18_COUNT=$(echo "$RESP" | jq '.sources | length')
+  if [[ "$T18_WID" == "$ITEM_A" && "$T18_STATE" == "high" && "$T18_COUNT" -eq 3 ]]; then
+    pass "T18: authorized fetch single → 3 sources"
+  else
+    fail "T18: authorized fetch" "wid=$T18_WID state=$T18_STATE count=$T18_COUNT"
+  fi
+fi
+echo
+
+# --- T19 — wrong study rejects the item -----------------------------------
+if [[ -n "${ITEM_A:-}" && -n "${STUDY_B:-}" ]]; then
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_get_worksheet_item_evidence" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_study_id\":\"$STUDY_B\",\"p_worksheet_item_id\":\"$ITEM_A\"}")
+  T19_CODE=$(echo "$RESP" | jq -r '.code // empty')
+  if [[ "$T19_CODE" == "42501" || $(echo "$RESP" | grep -c "access denied") -ge 1 ]]; then
+    pass "T19: cross-study fetch rejected"
+  else
+    fail "T19: cross-study fetch should be rejected" "resp=$RESP"
+  fi
+fi
+echo
+
+# --- T20 — item from another study returns access-denied (same as T19,    -
+#           but using ITEM_B (study B item) with STUDY_A) ------------------
+if [[ -n "${ITEM_B:-}" && -n "${STUDY_A:-}" ]]; then
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_get_worksheet_item_evidence" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_study_id\":\"$STUDY_A\",\"p_worksheet_item_id\":\"$ITEM_B\"}")
+  T20_CODE=$(echo "$RESP" | jq -r '.code // empty')
+  if [[ "$T20_CODE" == "42501" || $(echo "$RESP" | grep -c "access denied") -ge 1 ]]; then
+    pass "T20: foreign-study item rejected"
+  else
+    fail "T20: foreign-study item should be rejected" "resp=$RESP"
+  fi
+fi
+echo
+
+# --- T21 — needs_review item returns 200 with empty sources ---------------
+if [[ -n "${ITEM_NR:-}" ]]; then
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_get_worksheet_item_evidence" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_study_id\":\"$STUDY_A\",\"p_worksheet_item_id\":\"$ITEM_NR\"}")
+  T21_STATE=$(echo "$RESP" | jq -r '.confidence_state // empty')
+  T21_COUNT=$(echo "$RESP" | jq '.sources | length')
+  T21_REASON=$(echo "$RESP" | jq -r '.missing_source_reason // empty')
+  if [[ "$T21_STATE" == "needs_review" && "$T21_COUNT" -eq 0 && "$T21_REASON" == "parser_output_missing_citation" ]]; then
+    pass "T21: needs_review item → 200 / empty sources / reason set"
+  else
+    fail "T21: needs_review fetch" "state=$T21_STATE count=$T21_COUNT reason=$T21_REASON"
+  fi
+fi
+echo
+
+# --- T22 — sources sorted: primary < secondary < context ------------------
+if [[ -n "${ITEM_A:-}" ]]; then
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_get_worksheet_item_evidence" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_study_id\":\"$STUDY_A\",\"p_worksheet_item_id\":\"$ITEM_A\"}")
+  T22_ORDER=$(echo "$RESP" | jq -r '[.sources[].support_type] | join(",")')
+  if [[ "$T22_ORDER" == "primary,secondary,context" ]]; then
+    pass "T22: sources sorted by support_type then relevance"
+  else
+    fail "T22: sources sort order" "order=$T22_ORDER"
+  fi
+fi
+echo
+
+# --- T23 — batch returns multiple items in one call -----------------------
+if [[ -n "${ITEM_A:-}" && -n "${ITEM_NR:-}" ]]; then
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_get_worksheet_items_evidence_batch" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_study_id\":\"$STUDY_A\",\"p_worksheet_item_ids\":[\"$ITEM_A\",\"$ITEM_NR\"]}")
+  T23_COUNT=$(echo "$RESP" | jq '.items | length')
+  if [[ "$T23_COUNT" -eq 2 ]]; then
+    pass "T23: batch fetch returned 2 items"
+  else
+    fail "T23: batch fetch" "count=$T23_COUNT resp=$RESP"
+  fi
+fi
+echo
+
+# --- T24 — batch > 100 ids is rejected ------------------------------------
+if [[ -n "${STUDY_A:-}" ]]; then
+  BIG_ARR=$(python3 -c 'import json; print(json.dumps(["00000000-0000-0000-0000-"+f"{i:012d}" for i in range(101)]))')
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_get_worksheet_items_evidence_batch" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_study_id\":\"$STUDY_A\",\"p_worksheet_item_ids\":$BIG_ARR}")
+  if [[ $(echo "$RESP" | grep -c "Batch size exceeds maximum") -ge 1 ]]; then
+    pass "T24: batch size > 100 rejected"
+  else
+    fail "T24: batch size > 100 should be rejected" "resp=$(echo "$RESP" | head -c 200)"
+  fi
+fi
+echo
+
+# --- T25 — response does not contain raw storage URLs ---------------------
+if [[ -n "${ITEM_A:-}" ]]; then
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_get_worksheet_item_evidence" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_study_id\":\"$STUDY_A\",\"p_worksheet_item_id\":\"$ITEM_A\"}")
+  if echo "$RESP" | grep -qE '"(storage_url|file_url|signed_url|public_url)"' \
+     || echo "$RESP" | grep -qE 'https?://[^"]*\.(pdf|supabase\.co/storage)'; then
+    fail "T25: response contains storage URL" "resp=$(echo "$RESP" | head -c 300)"
+  else
+    pass "T25: response contains no raw storage URLs"
+  fi
+fi
+echo
+
+# --- T26 — coordinates are not required (bounding_boxes can be empty) -----
+if [[ -n "${ITEM_A:-}" ]]; then
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_get_worksheet_item_evidence" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_study_id\":\"$STUDY_A\",\"p_worksheet_item_id\":\"$ITEM_A\"}")
+  T26_BBOX_TYPES=$(echo "$RESP" | jq -r '[.sources[].bounding_boxes | type] | unique | join(",")')
+  if [[ "$T26_BBOX_TYPES" == "array" ]]; then
+    pass "T26: bounding_boxes is always an array (coordinates optional)"
+  else
+    fail "T26: bounding_boxes should always be an array" "types=$T26_BBOX_TYPES"
+  fi
+fi
+echo
+
+# --- Cleanup PR-2 setup ---------------------------------------------------
+for d in "${DOC_A:-}" "${DOC_B:-}"; do
+  if [[ -n "$d" ]]; then
+    curl -s -X DELETE "$REST/documents?id=eq.$d" \
+      -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+      -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" >/dev/null
+  fi
+done
+echo "[cleanup] PR-2 SOTR review smoke rows deleted (documents + cascade)"
+echo
+
+# ---------------------------------------------------------------------------
 # Cleanup — delete all smoke-test deltas + the rows we created
 # ---------------------------------------------------------------------------
 
