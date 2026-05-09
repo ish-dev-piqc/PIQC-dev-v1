@@ -4,6 +4,7 @@ import { listWorksheetItemsForStudy } from '../../lib/sotr/sourceEvidenceApi';
 import type { ExtractedItemRecord } from '../../types/sotr';
 import WorksheetItemRow from './WorksheetItemRow';
 import SourceTruthDrawer from './SourceTruthDrawer';
+import DownloadDraftPacketButton from './DownloadDraftPacketButton';
 import { formatExtractedValue } from './WorksheetItemRow';
 
 // Fetches worksheet items for a study, groups by field_type, and renders
@@ -12,6 +13,8 @@ import { formatExtractedValue } from './WorksheetItemRow';
 
 interface Props {
   studyId: string;
+  /** Optional human-friendly study code used in the export filename. */
+  studyCode?: string | null;
 }
 
 const FIELD_TYPE_LABELS: Record<string, string> = {
@@ -24,7 +27,7 @@ const FIELD_TYPE_LABELS: Record<string, string> = {
   other:               'Other',
 };
 
-export default function WorksheetItemsList({ studyId }: Props) {
+export default function WorksheetItemsList({ studyId, studyCode }: Props) {
   const [items, setItems] = useState<ExtractedItemRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,11 +60,14 @@ export default function WorksheetItemsList({ studyId }: Props) {
       data-testid="sotr-worksheet-items-list"
       className="bg-white dark:bg-[#131a22] border border-[#e2e8ee] dark:border-white/5 rounded-xl overflow-hidden"
     >
-      <div className="px-5 py-3.5 border-b border-[#f0f3f6] dark:border-white/[0.04] flex items-center gap-2">
-        <ListChecks size={14} className="text-fg-muted" />
-        <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold">
-          Parsed protocol items
-        </p>
+      <div className="px-5 py-3.5 border-b border-[#f0f3f6] dark:border-white/[0.04] flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <ListChecks size={14} className="text-fg-muted" />
+          <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold">
+            Parsed protocol items
+          </p>
+        </div>
+        <DownloadDraftPacketButton studyId={studyId} studyCode={studyCode} />
       </div>
 
       {loading && (
