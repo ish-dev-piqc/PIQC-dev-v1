@@ -23,6 +23,12 @@ interface Props {
   worksheetItemId: string;
   itemLabel?: string | null;
   onClose: () => void;
+  /**
+   * Fired after any draft review action — parent (worksheet items list)
+   * uses this to re-fetch its row data so status badges + edited text
+   * reflect the latest server state once the drawer closes.
+   */
+  onReviewActionCompleted?: () => void;
 }
 
 export default function SourceTruthDrawer({
@@ -30,6 +36,7 @@ export default function SourceTruthDrawer({
   worksheetItemId,
   itemLabel,
   onClose,
+  onReviewActionCompleted,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
   useOverlay({ isOpen: true, onClose, containerRef: panelRef });
@@ -80,6 +87,10 @@ export default function SourceTruthDrawer({
               itemLabel={itemLabel}
               data={evidence.data}
               studyId={studyId}
+              onReviewActionCompleted={() => {
+                evidence.refresh();
+                onReviewActionCompleted?.();
+              }}
             />
           )}
         </div>

@@ -72,6 +72,11 @@ export interface ExtractedItemRecord {
   confidence_reason: string | null;
   ambiguity_reason: string | null;
   missing_source_reason: MissingSourceReason | null;
+  /** PR-5 draft review fields. */
+  version?: number;
+  review_status?: 'draft' | 'accepted_for_draft' | 'edited' | 'rejected_from_draft' | 'flagged';
+  /** Edited text; takes precedence over extracted_value for display when set. */
+  current_text?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -219,6 +224,12 @@ export interface WorksheetItemSourceEvidence {
    */
   sources: SourceEvidenceForReview[];
   missing_source_reason: MissingSourceReason | null;
+  /** PR-5 additions — present after the PR-5 RPC update lands. */
+  review_status?: 'draft' | 'accepted_for_draft' | 'edited' | 'rejected_from_draft' | 'flagged';
+  version?: number;
+  current_text?: string | null;
+  /** Display text: current_text || stringified extracted_value. */
+  worksheet_item_text?: string;
 }
 
 /** Batch response — items returned in DB order; missing/inaccessible IDs omitted. */
@@ -228,3 +239,76 @@ export interface WorksheetItemsSourceEvidenceBatch {
 
 /** Maximum worksheet item IDs accepted by the batch endpoint. */
 export const MAX_WORKSHEET_ITEM_BATCH_SIZE = 100;
+
+
+// ---------------------------------------------------------------------------
+// Draft review (PR-5). All names use draft / review language deliberately —
+// PIQC is a drafting + review aid, not a final approval / signature system.
+// ---------------------------------------------------------------------------
+
+export type DraftReviewAction =
+  | 'accept_for_draft'
+  | 'edit_draft_item'
+  | 'reject_from_draft'
+  | 'flag_item'
+  | 'flag_source';
+
+export type DraftReviewStatus =
+  | 'draft'
+  | 'accepted_for_draft'
+  | 'edited'
+  | 'rejected_from_draft'
+  | 'flagged';
+
+/** Snapshot of one source evidence row at the moment of review. */
+export interface ReviewSourceEvidenceSnapshot {
+  id: string;
+  document_id: string;
+  protocol_version: string | null;
+  page_number: number | null;
+  section_number: string | null;
+  section_title: string | null;
+  support_type: EvidenceSupportType;
+  /** Sensitive — never log. */
+  quoted_text: string | null;
+  confidence_score: number | null;
+}
+
+/** Row returned by worksheet_review_events queries. */
+export interface WorksheetReviewEvent {
+  id: string;
+  worksheet_item_id: string;
+  reviewer_id: string;
+  action: DraftReviewAction;
+  previous_item_text: string | null;
+  new_item_text: string | null;
+  /** Sensitive — never log. */
+  reviewer_note: string | null;
+  worksheet_item_version: number;
+  protocol_document_id: string;
+  protocol_version: string | null;
+  source_evidence_snapshot: ReviewSourceEvidenceSnapshot[];
+  created_at: string;
+}
+
+/** Request body for sotr_create_review_event. */
+export interface CreateReviewEventInput {
+  action: DraftReviewAction;
+  /** Required for edit_draft_item; ignored otherwise. */
+  new_item_text?: string;
+  /** Optional. Trimmed server-side; empty becomes NULL. */
+  reviewer_note?: string;
+  /** Source evidence the reviewer was looking at. May be empty. */
+  source_evidence_record_ids?: string[];
+}
+
+/** Response body from sotr_create_review_event. */
+export interface CreateReviewEventResult {
+  review_event_id: string;
+  worksheet_item_id: string;
+  review_status: DraftReviewStatus;
+  version: number;
+  current_text: string | null;
+  /** User-visible text after the action: current_text || extracted_value-as-string. */
+  worksheet_item_text: string;
+}

@@ -1,5 +1,6 @@
 import { FileSearch } from 'lucide-react';
 import ConfidenceBadge from './ConfidenceBadge';
+import ReviewStatusBadge from './ReviewStatusBadge';
 import type { ExtractedItemRecord } from '../../types/sotr';
 
 // One row in the worksheet items list. Renders the extracted value, the
@@ -12,7 +13,8 @@ interface Props {
 }
 
 export default function WorksheetItemRow({ item, onViewSource }: Props) {
-  const display = formatExtractedValue(item.extracted_value);
+  // Edited current_text takes precedence over the parser output for display.
+  const display = item.current_text ?? formatExtractedValue(item.extracted_value);
   return (
     <div
       data-testid="sotr-worksheet-item-row"
@@ -28,6 +30,7 @@ export default function WorksheetItemRow({ item, onViewSource }: Props) {
         </p>
         <div className="mt-1.5 flex items-center gap-2 flex-wrap">
           <ConfidenceBadge state={item.confidence_state} />
+          <ReviewStatusBadge status={item.review_status} />
           <span className="text-fg-muted text-[10px] uppercase tracking-wider font-semibold">
             {item.field_type}
           </span>

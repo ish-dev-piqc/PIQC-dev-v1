@@ -15,7 +15,7 @@ export type UseWorksheetItemEvidence =
 export function useWorksheetItemEvidence(
   studyId: string | null,
   worksheetItemId: string | null,
-): UseWorksheetItemEvidence & { retry: () => void } {
+): UseWorksheetItemEvidence & { retry: () => void; refresh: () => void } {
   const [state, setState] = useState<UseWorksheetItemEvidence>({ status: 'idle' });
   const [retryToken, setRetryToken] = useState(0);
 
@@ -55,5 +55,8 @@ export function useWorksheetItemEvidence(
   }, [studyId, worksheetItemId, retryToken]);
 
   const retry = useCallback(() => setRetryToken((n) => n + 1), []);
-  return { ...state, retry };
+  // refresh() re-fetches without showing the loading spinner (silent
+  // re-sync used after a review action completes).
+  const refresh = retry;
+  return { ...state, retry, refresh };
 }
