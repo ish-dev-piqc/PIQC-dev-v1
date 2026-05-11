@@ -44,6 +44,17 @@ export type VisitStatus =
   | 'overdue'
   | 'closing_soon';
 
+// One additional mention of a visit found elsewhere in the protocol's
+// documents — populated by the ingest pipeline (Phase B) and rendered in
+// VisitDetailDrawer's "From the protocol documents" section.
+export interface VisitCrossReference {
+  source_section: string;       // e.g. "7.4 Safety monitoring"
+  snippet: string;              // verbatim passage that adds context
+  page?: number;                // page number if known
+  document_id?: string;         // null = same doc that produced the SoA row
+  document_title?: string;      // populated frontend-side via documents join
+}
+
 export interface SiteVisit {
   id: string;
   date: string;             // yyyy-mm-dd
@@ -57,6 +68,7 @@ export interface SiteVisit {
   procedures?: string[];
   priorNote?: string;
   deviationReason?: string;
+  crossReferences?: VisitCrossReference[];  // Phase B — joined from template
 }
 
 // -----------------------------------------------------------------------------
@@ -101,6 +113,7 @@ export interface ProtocolVisitTemplate {
   window_plus_days: number;
   procedures: string[];
   source_document_id: string | null;
+  cross_references: VisitCrossReference[];
 }
 
 export interface MaterializeResult {

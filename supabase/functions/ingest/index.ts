@@ -116,6 +116,31 @@ const CLINICAL_EXTRACT_SCHEMA = {
             items: { type: "string" },
             description: "List of procedures, assessments, or activities performed at this visit",
           },
+          cross_references: {
+            type: "array",
+            description:
+              "Every OTHER place in this document that references this visit by ANY name (the visit_name string, the study day as 'Day N' or 'D N', the visit number as 'Visit N' or 'V N', or any other alias the protocol uses). Each entry is a verbatim passage that adds context not already captured in `procedures` — examples include: dosing rules, safety monitoring requirements, lab handling instructions, eligibility constraints, procedural dependencies, or exceptions. Skip the original Schedule of Assessments table itself; only include passages from elsewhere in the document. If the visit is not referenced anywhere outside the schedule, return an empty array.",
+            items: {
+              type: "object",
+              properties: {
+                source_section: {
+                  type: "string",
+                  description:
+                    "Heading of the section the passage was found in, e.g. '7.4 Safety monitoring' or 'Appendix B: Lab handling'. Include the section number if the protocol uses one.",
+                },
+                snippet: {
+                  type: "string",
+                  description:
+                    "Verbatim passage from the document that mentions this visit and adds context. One to three sentences, trimmed to what actually adds information about the visit.",
+                },
+                page: {
+                  type: ["integer", "null"],
+                  description: "Page number where the passage appears, if known.",
+                },
+              },
+              required: ["source_section", "snippet"],
+            },
+          },
         },
         required: ["visit_name", "study_day"],
       },
@@ -375,6 +400,248 @@ async function parsePdfWithReducto(fileId: string, reductoKey: string): Promise<
   }, "parsePdfWithReducto");
 }
 
+// -----------------------------------------------------------------------------
+// Phase B3 — cross-reference extraction for a *known* visit list.
+//
+// Called against any previously-parsed document (via its stored Reducto
+// job_id) when a sibling document supplies a Schedule of Assessments. The
+// LLM is asked to scan THIS document for every place that mentions any of
+// the known visits and return a flat array of cross-references keyed by
+// visit_name + study_day.
+//
+// Returns an array of CrossRefHit; the caller groups them by
+// (visit_name, study_day) and merges into protocol_visit_templates.
+// -----------------------------------------------------------------------------
+
+interface CrossRefHit {
+  visit_name: string;
+  study_day: number;
+  source_section: string;
+  snippet: string;
+  page: number | null;
+}
+
+function buildCrossRefSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    properties: {
+      cross_references: {
+        type: "array",
+        description:
+          "Every passage in this document that references one of the known visits by ANY alias " +
+          "(visit_name, 'Day N', 'D N', 'Visit N', 'V N', or any other naming convention the " +
+          "document uses). For each, return a verbatim passage that adds context not already in " +
+          "the schedule (dosing rules, safety monitoring requirements, lab handling, eligibility " +
+          "constraints, procedural dependencies, exceptions). Skip Schedule-of-Assessments tables. " +
+          "If the document doesn't reference any of the visits, return an empty array.",
+        items: {
+          type: "object",
+          properties: {
+            visit_name: {
+              type: "string",
+              description:
+                "Must exactly match one of the visit_name values from the system prompt's visit list.",
+            },
+            study_day: {
+              type: "integer",
+              description:
+                "Must exactly match the study_day paired with that visit_name in the visit list.",
+            },
+            source_section: {
+              type: "string",
+              description: "Heading of the section the passage was found in (with section number if present).",
+            },
+            snippet: {
+              type: "string",
+              description: "Verbatim passage, 1–3 sentences, trimmed to what actually adds context.",
+            },
+            page: {
+              type: ["integer", "null"],
+              description: "Page number where the passage appears, if known.",
+            },
+          },
+          required: ["visit_name", "study_day", "source_section", "snippet"],
+        },
+      },
+    },
+    required: ["cross_references"],
+  };
+}
+
+async function extractCrossReferencesForVisits(
+  jobId: string,
+  visits: Array<{ visit_name: string; study_day: number }>,
+  reductoKey: string,
+): Promise<CrossRefHit[]> {
+  if (visits.length === 0) return [];
+
+  const visitList = visits
+    .map((v) => `- visit_name: "${v.visit_name}", study_day: ${v.study_day}`)
+    .join("\n");
+
+  return withRetry(async () => {
+    const res = await fetch(`${REDUCTO_BASE_URL}/extract`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${reductoKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        input: `jobid://${jobId}`,
+        instructions: {
+          schema: buildCrossRefSchema(),
+          system_prompt:
+            "You are scanning a clinical trial document for cross-references to a known list of " +
+            "study visits. For each visit, look anywhere in the document outside the Schedule-of-" +
+            "Assessments table for passages that mention it (by any alias) and add context.\n\n" +
+            "Known visits:\n" +
+            visitList +
+            "\n\nReturn only passages explicitly in the document. Do not infer or fabricate. " +
+            "When you return a cross_reference, the visit_name + study_day MUST match one of the " +
+            "pairs above exactly.",
+        },
+        settings: {
+          citations: { enabled: true, numerical_confidence: false },
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      if (res.status < 500) throw new NonRetryableError(`Reducto extract error: ${err}`);
+      throw new Error(`Reducto extract error: ${err}`);
+    }
+
+    const data = await res.json();
+    const result = (data.result ?? data) as { cross_references?: unknown };
+    if (!Array.isArray(result.cross_references)) return [];
+
+    return (result.cross_references as unknown[])
+      .filter(
+        (r): r is Record<string, unknown> =>
+          !!r &&
+          typeof r === "object" &&
+          typeof (r as Record<string, unknown>).visit_name === "string" &&
+          typeof (r as Record<string, unknown>).study_day === "number" &&
+          typeof (r as Record<string, unknown>).source_section === "string" &&
+          typeof (r as Record<string, unknown>).snippet === "string" &&
+          String((r as Record<string, unknown>).source_section).trim().length > 0 &&
+          String((r as Record<string, unknown>).snippet).trim().length > 0,
+      )
+      .map((r) => ({
+        visit_name: String(r.visit_name).trim(),
+        study_day: Math.trunc(r.study_day as number),
+        source_section: String(r.source_section).trim(),
+        snippet: String(r.snippet).trim(),
+        page: typeof r.page === "number" ? Math.trunc(r.page) : null,
+      }));
+  }, "extractCrossReferencesForVisits");
+}
+
+// -----------------------------------------------------------------------------
+// Phase B3 — merge cross-references into protocol_visit_templates,
+// partitioned by source document.
+//
+// On re-ingest of the same source document, we want its old contributions
+// removed and the new ones inserted (idempotent). Entries from OTHER
+// documents are preserved. The partition key is `document_id` stamped on
+// every cross-reference at write time.
+//
+// supabase: a service-role client (RLS bypass) since we may merge across
+// documents the caller doesn't directly own.
+// -----------------------------------------------------------------------------
+
+interface MergeTarget {
+  protocol_id: string;
+  source_document_id: string;
+  hits: CrossRefHit[];
+}
+
+// Group hits by (visit_name, study_day). Returns a Map keyed by `${name}|${day}`.
+function groupHitsByVisit(hits: CrossRefHit[]): Map<string, CrossRefHit[]> {
+  const out = new Map<string, CrossRefHit[]>();
+  for (const h of hits) {
+    const key = `${h.visit_name}|${h.study_day}`;
+    const arr = out.get(key) ?? [];
+    arr.push(h);
+    out.set(key, arr);
+  }
+  return out;
+}
+
+async function mergeCrossReferencesIntoTemplates(
+  supabase: ReturnType<typeof createClient>,
+  target: MergeTarget,
+): Promise<{ templatesTouched: number; entriesInserted: number }> {
+  if (target.hits.length === 0) return { templatesTouched: 0, entriesInserted: 0 };
+
+  const { data: templates, error } = await supabase
+    .from("protocol_visit_templates")
+    .select("id, visit_name, study_day, cross_references")
+    .eq("protocol_id", target.protocol_id);
+
+  if (error) {
+    console.error("[ingest] cross_ref_merge_load_failed", { error: error.message });
+    return { templatesTouched: 0, entriesInserted: 0 };
+  }
+
+  type TemplateRow = {
+    id: string;
+    visit_name: string;
+    study_day: number;
+    cross_references: unknown;
+  };
+
+  const byKey = new Map<string, TemplateRow>();
+  for (const t of (templates ?? []) as TemplateRow[]) {
+    byKey.set(`${t.visit_name}|${t.study_day}`, t);
+  }
+
+  const grouped = groupHitsByVisit(target.hits);
+  let templatesTouched = 0;
+  let entriesInserted = 0;
+
+  for (const [key, newHits] of grouped) {
+    const template = byKey.get(key);
+    if (!template) continue;
+
+    const existing = Array.isArray(template.cross_references)
+      ? (template.cross_references as Array<Record<string, unknown>>)
+      : [];
+
+    // Drop prior contributions from this source document, keep the rest,
+    // then append the new ones with the source document_id stamped on each.
+    const preserved = existing.filter(
+      (r) => r && r.document_id !== target.source_document_id,
+    );
+    const appended = newHits.map((h) => ({
+      source_section: h.source_section,
+      snippet: h.snippet,
+      page: h.page,
+      document_id: target.source_document_id,
+    }));
+    const next = [...preserved, ...appended];
+
+    const { error: upErr } = await supabase
+      .from("protocol_visit_templates")
+      .update({ cross_references: next })
+      .eq("id", template.id);
+
+    if (upErr) {
+      console.error("[ingest] cross_ref_merge_update_failed", {
+        template_id: template.id,
+        error: upErr.message,
+      });
+      continue;
+    }
+
+    templatesTouched += 1;
+    entriesInserted += appended.length;
+  }
+
+  return { templatesTouched, entriesInserted };
+}
+
 async function extractClinicalFields(
   jobId: string,
   reductoKey: string,
@@ -474,6 +741,9 @@ Deno.serve(async (req: Request) => {
 
     let chunks: ChunkData[] = [];
     let extractedFields: Record<string, unknown> | null = null;
+    // Persisted on the documents row so Phase B3 fan-out can re-Extract
+    // against this parse later (when a sibling document with an SoA lands).
+    let reductoJobId: string | null = null;
 
     if (pdf_base64) {
       const reductoKey = Deno.env.get("REDUCTO_API_KEY");
@@ -488,6 +758,7 @@ Deno.serve(async (req: Request) => {
       const fileId = await uploadToReducto(pdfBytes, reductoKey);
       const parseResult = await parsePdfWithReducto(fileId, reductoKey);
       chunks = parseResult.chunks;
+      reductoJobId = parseResult.jobId ?? null;
 
       if (chunks.length === 0) {
         throw new Error("Reducto returned no text chunks from the PDF");
@@ -549,6 +820,7 @@ Deno.serve(async (req: Request) => {
       .update({
         status: "ready",
         ...(extractedFields ? { extracted_fields: extractedFields } : {}),
+        ...(reductoJobId ? { reducto_job_id: reductoJobId } : {}),
       })
       .eq("id", docId);
     if (updateError) throw updateError;
@@ -574,20 +846,60 @@ Deno.serve(async (req: Request) => {
         ? extractedFields!.schedule_of_events
         : [];
 
+      const totalCrossRefs = (schedule as Array<{ cross_references?: unknown[] }>)
+        .reduce((acc, s) => acc + (Array.isArray(s.cross_references) ? s.cross_references.length : 0), 0);
+
       console.log("[ingest] schedule_extracted", {
         document_id: docId,
         protocol_id: resolvedProtocolId,
         entry_count: schedule.length,
+        cross_reference_count: totalCrossRefs,
       });
 
       if (resolvedProtocolId && schedule.length > 0) {
+        type CrossRefEntry = {
+          source_section?: unknown;
+          snippet?: unknown;
+          page?: unknown;
+        };
         type ScheduleEntry = {
           visit_name?: unknown;
           study_day?: unknown;
           window_minus_days?: unknown;
           window_plus_days?: unknown;
           procedures?: unknown;
+          cross_references?: unknown;
         };
+
+        // Per-visit cross-reference sanitiser. Reducto sometimes returns
+        // stray objects with missing fields; we drop anything without both
+        // a source_section and a snippet rather than upsert garbage. The
+        // document_id is stamped in here (not by the LLM) so future cross-
+        // document merges can attribute each entry back to its origin doc.
+        const sanitizeCrossRefs = (raw: unknown): Array<{
+          source_section: string;
+          snippet: string;
+          page: number | null;
+          document_id: string;
+        }> => {
+          if (!Array.isArray(raw)) return [];
+          return (raw as CrossRefEntry[])
+            .filter(
+              (r): r is CrossRefEntry =>
+                !!r &&
+                typeof r.source_section === "string" &&
+                typeof r.snippet === "string" &&
+                String(r.source_section).trim().length > 0 &&
+                String(r.snippet).trim().length > 0,
+            )
+            .map((r) => ({
+              source_section: String(r.source_section).trim(),
+              snippet: String(r.snippet).trim(),
+              page: typeof r.page === "number" ? Math.trunc(r.page) : null,
+              document_id: docId,
+            }));
+        };
+
         const rows = (schedule as ScheduleEntry[])
           .filter((s) => s && typeof s.visit_name === "string" && typeof s.study_day === "number")
           .map((s) => ({
@@ -599,6 +911,7 @@ Deno.serve(async (req: Request) => {
             procedures: Array.isArray(s.procedures)
               ? (s.procedures as unknown[]).filter((p): p is string => typeof p === "string")
               : [],
+            cross_references: sanitizeCrossRefs(s.cross_references),
             source_document_id: docId,
           }));
 
@@ -640,6 +953,142 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // ---------------------------------------------------------------------
+    // Phase B3 — cross-document fan-out.
+    //
+    // Two paths, depending on what THIS document contributed:
+    //
+    //   Path A: this doc supplied an SoA (schedule.length > 0). Templates
+    //   were just upserted with this doc's intra-doc cross-references.
+    //   For every OTHER document tagged to the same protocol that has a
+    //   stored Reducto job_id, re-Extract against the new visit list and
+    //   merge that sibling's cross-references in.
+    //
+    //   Path B: this doc had no SoA, but auto-tag landed it on a protocol
+    //   that already has templates. Scan THIS doc for cross-references to
+    //   the existing visit list.
+    //
+    // Both paths share the merge helper, which partitions cross_references
+    // by document_id so re-ingesting one doc replaces only its own entries
+    // without disturbing what other docs contributed.
+    //
+    // Best-effort — failures don't fail the whole ingest.
+    // ---------------------------------------------------------------------
+    let fanoutDocsScanned = 0;
+    let fanoutEntriesMerged = 0;
+    try {
+      const { data: docRow2 } = await supabase
+        .from("documents")
+        .select("protocol_id")
+        .eq("id", docId)
+        .maybeSingle();
+      const protocolId = docRow2?.protocol_id ?? null;
+      const reductoKey = Deno.env.get("REDUCTO_API_KEY");
+
+      if (protocolId && reductoKey) {
+        const schedule = Array.isArray(extractedFields?.schedule_of_events)
+          ? (extractedFields!.schedule_of_events as Array<{
+              visit_name?: unknown;
+              study_day?: unknown;
+            }>)
+          : [];
+
+        if (schedule.length > 0 && templatesInserted > 0) {
+          // Path A — fan out to siblings.
+          const visitListForFanOut = schedule
+            .filter(
+              (s) =>
+                typeof s.visit_name === "string" &&
+                typeof s.study_day === "number",
+            )
+            .map((s) => ({
+              visit_name: String(s.visit_name).trim(),
+              study_day: Math.trunc(s.study_day as number),
+            }));
+
+          const { data: siblings } = await supabase
+            .from("documents")
+            .select("id, reducto_job_id, title")
+            .eq("protocol_id", protocolId)
+            .neq("id", docId)
+            .not("reducto_job_id", "is", null);
+
+          for (const s of (siblings ?? []) as Array<{
+            id: string;
+            reducto_job_id: string;
+            title: string | null;
+          }>) {
+            try {
+              const hits = await extractCrossReferencesForVisits(
+                s.reducto_job_id,
+                visitListForFanOut,
+                reductoKey,
+              );
+              const merge = await mergeCrossReferencesIntoTemplates(supabase, {
+                protocol_id: protocolId,
+                source_document_id: s.id,
+                hits,
+              });
+              fanoutDocsScanned += 1;
+              fanoutEntriesMerged += merge.entriesInserted;
+            } catch (e) {
+              console.error("[ingest] fanout_sibling_failed", {
+                sibling_id: s.id,
+                sibling_title: s.title,
+                error: e instanceof Error ? e.message : String(e),
+              });
+            }
+          }
+        } else if (schedule.length === 0 && reductoJobId !== null) {
+          // Path B — scan THIS doc against existing templates.
+          const { data: existing } = await supabase
+            .from("protocol_visit_templates")
+            .select("visit_name, study_day")
+            .eq("protocol_id", protocolId);
+
+          const visits = ((existing ?? []) as Array<{
+            visit_name: string;
+            study_day: number;
+          }>).map((v) => ({
+            visit_name: v.visit_name,
+            study_day: v.study_day,
+          }));
+
+          if (visits.length > 0) {
+            try {
+              const hits = await extractCrossReferencesForVisits(
+                reductoJobId,
+                visits,
+                reductoKey,
+              );
+              const merge = await mergeCrossReferencesIntoTemplates(supabase, {
+                protocol_id: protocolId,
+                source_document_id: docId,
+                hits,
+              });
+              fanoutDocsScanned += 1;
+              fanoutEntriesMerged += merge.entriesInserted;
+            } catch (e) {
+              console.error("[ingest] fanout_self_failed", {
+                document_id: docId,
+                error: e instanceof Error ? e.message : String(e),
+              });
+            }
+          }
+        }
+      }
+
+      console.log("[ingest] cross_ref_fanout", {
+        document_id: docId,
+        docs_scanned: fanoutDocsScanned,
+        entries_merged: fanoutEntriesMerged,
+      });
+    } catch (e) {
+      console.error("[ingest] fanout_processing_failed", {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -648,6 +1097,8 @@ Deno.serve(async (req: Request) => {
         extracted_fields: extractedFields,
         templates_inserted: templatesInserted,
         templates_materialized: templateMaterialized,
+        cross_ref_docs_scanned: fanoutDocsScanned,
+        cross_ref_entries_merged: fanoutEntriesMerged,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

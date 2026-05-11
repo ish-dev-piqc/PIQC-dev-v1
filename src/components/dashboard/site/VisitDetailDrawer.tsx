@@ -21,6 +21,7 @@ import {
 } from '../../../lib/mockCalendarData';
 import type { Protocol } from '../../../context/ProtocolContext';
 import ParticipantProfileDrawer from './ParticipantProfileDrawer';
+import { updateVisit } from '../../../lib/site/siteApi';
 
 // =============================================================================
 // VisitDetailDrawer — slide-in right panel for a single CalendarVisit.
@@ -115,6 +116,8 @@ export default function VisitDetailDrawer({
   const [checked, setChecked] = useState<Set<number>>(new Set());
   const [visitComplete, setVisitComplete] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [persisting, setPersisting] = useState(false);
+  const [persistError, setPersistError] = useState<string | null>(null);
 
   const day = parseYmd(visit.date);
   const past = isPast(day, today);
@@ -165,6 +168,22 @@ export default function VisitDetailDrawer({
       else next.add(i);
       return next;
     });
+  };
+
+  // Persist completion to site_visits.status. If the update fails (e.g.
+  // offline) we surface the error and keep the drawer in checklist mode so
+  // the coordinator can retry — no silent local-only success.
+  const completeVisit = async () => {
+    if (persisting) return;
+    setPersisting(true);
+    setPersistError(null);
+    const result = await updateVisit(visit.id, { status: 'completed' });
+    setPersisting(false);
+    if (!result.ok) {
+      setPersistError(result.error);
+      return;
+    }
+    setVisitComplete(true);
   };
 
   return (
@@ -348,6 +367,41 @@ export default function VisitDetailDrawer({
             </div>
           )}
 
+          {/* Cross-references — additional mentions of this visit pulled
+              from the protocol's documents during ingest. Hidden if the
+              ingest pipeline hasn't surfaced any (or if the docs don't
+              mention this visit elsewhere). Grouped by source_section so
+              repeated callouts to the same section collapse visually. */}
+          {visit.crossReferences && visit.crossReferences.length > 0 && (
+            <div>
+              <div className={`text-[11px] uppercase tracking-wider font-semibold mb-2 ${sectionHeader}`}>
+                From the protocol documents
+              </div>
+              <ul className="space-y-2">
+                {visit.crossReferences.map((ref, i) => (
+                  <li
+                    key={`${ref.source_section}-${i}`}
+                    className={`border rounded-lg p-3 ${panelBg}`}
+                  >
+                    <div className={`flex items-baseline justify-between gap-2 flex-wrap mb-1`}>
+                      <span className={`text-[11px] font-semibold ${headingColor}`}>
+                        {ref.source_section}
+                      </span>
+                      {(ref.document_title || ref.page) && (
+                        <span className={`text-[10px] ${mutedColor}`}>
+                          {ref.document_title ?? ''}
+                          {ref.document_title && ref.page ? ' · ' : ''}
+                          {ref.page ? `p. ${ref.page}` : ''}
+                        </span>
+                      )}
+                    </div>
+                    <p className={`${subColor} text-sm leading-relaxed`}>{ref.snippet}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* Prior visit note */}
           {visit.priorNote && (
             <div>
@@ -378,34 +432,59 @@ export default function VisitDetailDrawer({
               </button>
             </>
           ) : startMode ? (
-            <>
-              <button
-                type="button"
-                onClick={() => { if (allChecked) setVisitComplete(true); else onClose(); }}
-                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  allChecked
-                    ? isLight
-                      ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                      : 'bg-emerald-500 text-[#0d1118] hover:bg-emerald-400'
-                    : buttonPrimary
-                }`}
-              >
-                <CheckCircle2 size={14} />
-                {allChecked
-                  ? 'Complete visit'
-                  : `Complete visit (${checked.size}/${procedures.length})`}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setStartMode(false);
-                  setChecked(new Set());
-                }}
-                className={`text-sm ${mutedColor} hover:opacity-75 px-2`}
-              >
-                Cancel
-              </button>
-            </>
+            <div className="flex flex-col gap-2 w-full">
+              {persistError && (
+                <div
+                  className={`flex items-start gap-2 border rounded-md px-3 py-2 text-xs ${
+                    isLight
+                      ? 'bg-rose-50 border-rose-200 text-rose-700'
+                      : 'bg-rose-500/[0.06] border-rose-500/20 text-rose-300'
+                  }`}
+                >
+                  <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                  <span>Couldn't save visit completion: {persistError}</span>
+                </div>
+              )}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  disabled={persisting}
+                  onClick={() => {
+                    if (!allChecked) {
+                      onClose();
+                      return;
+                    }
+                    void completeVisit();
+                  }}
+                  className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
+                    allChecked
+                      ? isLight
+                        ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                        : 'bg-emerald-500 text-[#0d1118] hover:bg-emerald-400'
+                      : buttonPrimary
+                  }`}
+                >
+                  <CheckCircle2 size={14} />
+                  {persisting
+                    ? 'Saving…'
+                    : allChecked
+                    ? 'Complete visit'
+                    : `Complete visit (${checked.size}/${procedures.length})`}
+                </button>
+                <button
+                  type="button"
+                  disabled={persisting}
+                  onClick={() => {
+                    setStartMode(false);
+                    setChecked(new Set());
+                    setPersistError(null);
+                  }}
+                  className={`text-sm ${mutedColor} hover:opacity-75 px-2 disabled:opacity-50`}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           ) : (
             <>
               {!reviewMode && !past && (

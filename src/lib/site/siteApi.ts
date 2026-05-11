@@ -13,6 +13,7 @@ import type {
   ProtocolDocument,
   ProtocolVisitTemplate,
   MaterializeResult,
+  VisitCrossReference,
 } from './types';
 
 export type Result<T> =
@@ -176,7 +177,13 @@ interface VisitRow {
   procedures: string[] | null;
   prior_note: string | null;
   deviation_reason: string | null;
+  template_id: string | null;
   site_participants: { participant_code: string } | { participant_code: string }[] | null;
+  // PostgREST returns the joined relation as an object for one-to-one nested
+  // selects; we always pull a single template row via template_id.
+  protocol_visit_templates: {
+    cross_references: VisitCrossReference[] | null;
+  } | { cross_references: VisitCrossReference[] | null }[] | null;
 }
 
 function rowToVisit(row: VisitRow): SiteVisit {
@@ -186,6 +193,12 @@ function rowToVisit(row: VisitRow): SiteVisit {
     ? row.site_participants[0]
     : row.site_participants;
   const code = joined?.participant_code ?? '';
+
+  const templateJoin = Array.isArray(row.protocol_visit_templates)
+    ? row.protocol_visit_templates[0]
+    : row.protocol_visit_templates;
+  const crossRefs = templateJoin?.cross_references ?? null;
+
   return {
     id: row.id,
     date: row.date,
@@ -199,6 +212,7 @@ function rowToVisit(row: VisitRow): SiteVisit {
     procedures: row.procedures ?? undefined,
     priorNote: row.prior_note ?? undefined,
     deviationReason: row.deviation_reason ?? undefined,
+    crossReferences: crossRefs && crossRefs.length > 0 ? crossRefs : undefined,
   };
 }
 
@@ -208,13 +222,48 @@ export async function fetchVisitsForProtocol(
   try {
     const { data, error } = await supabase
       .from('site_visits')
-      .select('id, participant_id, protocol_id, date, time_of_day, study_day, visit_name, window_closes, status, procedures, prior_note, deviation_reason, site_participants!inner(participant_code)')
+      .select('id, participant_id, protocol_id, date, time_of_day, study_day, visit_name, window_closes, status, procedures, prior_note, deviation_reason, template_id, site_participants!inner(participant_code), protocol_visit_templates(cross_references)')
       .eq('protocol_id', protocolId)
       .order('date', { ascending: true });
     if (error) throw error;
     return { ok: true, data: (data as unknown as VisitRow[]).map(rowToVisit) };
   } catch (e) {
     return fail('fetchVisitsForProtocol', e);
+  }
+}
+
+/**
+ * Patch a single field on a site_visit. Used by the Start-visit completion
+ * flow in VisitDetailDrawer; returns the updated row so the caller can swap
+ * it in optimistically before the realtime subscription catches up.
+ *
+ * Note: the materialize_protocol_visits RPC wipes template-derived visits on
+ * re-projection (e.g. when a participant's enrolled_at changes), which means
+ * a "completed" status set here can be lost if the protocol is later
+ * re-materialized. That's a separate backend concern — flagging here so the
+ * follow-up is obvious.
+ */
+export async function updateVisit(
+  visitId: string,
+  patch: Partial<{
+    status: SiteVisit['status'];
+    deviation_reason: string | null;
+    prior_note: string | null;
+  }>,
+): Promise<Result<SiteVisit>> {
+  try {
+    const { data, error } = await supabase
+      .from('site_visits')
+      .update(patch)
+      .eq('id', visitId)
+      .select(
+        'id, participant_id, protocol_id, date, time_of_day, study_day, visit_name, window_closes, status, procedures, prior_note, deviation_reason, template_id, site_participants!inner(participant_code), protocol_visit_templates(cross_references)',
+      )
+      .single();
+    if (error) throw error;
+    return { ok: true, data: rowToVisit(data as unknown as VisitRow) };
+  } catch (e) {
+    return fail('updateVisit', e);
   }
 }
 
@@ -297,7 +346,7 @@ export async function fetchVisitTemplates(
   try {
     const { data, error } = await supabase
       .from('protocol_visit_templates')
-      .select('id, protocol_id, visit_name, study_day, window_minus_days, window_plus_days, procedures, source_document_id')
+      .select('id, protocol_id, visit_name, study_day, window_minus_days, window_plus_days, procedures, source_document_id, cross_references')
       .eq('protocol_id', protocolId)
       .order('study_day', { ascending: true });
     if (error) throw error;

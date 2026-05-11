@@ -1,6 +1,6 @@
 # PIQClinical — Build Plan & Status
 
-_Last updated: 2026-05-02 (participant profiles live; CSV + docx exports real; pricing section added; completion state wired)_
+_Last updated: 2026-05-08 (Phase B end-to-end: column + ingest intra-doc extraction + cross-document fan-out + drawer rendering. Deploy pending: 2 new migrations + redeploy of `ingest` Edge Function.)_
 
 This document is the source of truth for "where are we." The codebase is the
 source of truth for "what does it do."
@@ -72,10 +72,12 @@ once that pipeline is wired. The upstream API contract is unresolved (**D-009**)
 | Participant profile panel | `ParticipantProfileDrawer` — enrollment, visits, deviations, notes; shared across all surfaces | ✓ Done |
 | Reports CSV export | Real CSV download from visit data; scoped to active protocol | ✓ Done |
 | Word (.docx) export | Stage 8 — real OOXML via `docx` package; same gate as Markdown | ✓ Done |
-| Start visit completion state | "Visit logged as complete" confirmation footer before drawer closes | ✓ Done |
+| Start visit completion state | Completion footer + DB persistence via `siteApi.updateVisit({status: 'completed'})` | ✓ Done |
 | Protocol tab | Metadata panel (`ProtocolTab`) — code, sponsor, phase; documents-pending callout | ✓ Done |
 | Landing page — Pricing section | `Pricing.tsx` — Starter ($10/mo) + Enterprise cards; CTA → login or dashboard | ✓ Done |
-| Site Mode Supabase wire-up | API files + UI wire for visits, participants, team | ○ Not started |
+| Site Mode Supabase wire-up | `siteApi.ts` + `SiteDataContext` (realtime); all 4 tabs consume live data | ✓ Done |
+| Calendar autopopulate from PDFs (Phase A) | Ingest extracts SoA → `protocol_visit_templates` → anchor date → `materialize_protocol_visits` → `site_visits` | ✓ Done |
+| Calendar cross-doc consistency check (Phase B) | For each visit template, aggregate other mentions of the same day/visit across the protocol's documents | ✓ Done — B1+B2+B3+B4 all in: `cross_references` JSONB column on `protocol_visit_templates`; ingest extracts intra-document refs (B2) and fans out across sibling documents tagged to the same protocol (B3); drawer renders them. **Remote migration deploy pending** for `20260508000000_visit_template_cross_references.sql` + `20260508010000_documents_reducto_job_id.sql`; edge function redeploy needed too. |
 | Stripe checkout wiring | Pricing CTA triggers checkout for authenticated users | ○ Not started |
 
 ---
@@ -177,7 +179,7 @@ gone. Maps `study_number` → `code`, `title` → `name`, `clinical_trial_phase`
 
 - **Site Mode Supabase wire-up** — schema is designed (`20260502000000`); API files + UI wire still needed.
 - **Protocol tab documents** — metadata panel is live; full document content blocked on D-009 (Reducto pipeline).
-- **"Start visit" persistence** — checklist completion and confirmation state are local only; no DB write.
+- **"Start visit" persistence — done.** Complete-visit button calls `siteApi.updateVisit({ status: 'completed' })`; the in-drawer "Visit logged as complete" footer is now backed by a real DB write (and surfaces an error inline if the update fails). Note: the materialize_protocol_visits RPC wipes template-derived rows on re-projection, so a completion can be lost if the protocol is re-materialized later — flagged for follow-up.
 - **Stripe checkout wiring** — `Pricing.tsx` CTA goes to login; `useCheckout` hook exists but checkout not triggered from the landing page yet.
 - **Participant profile — full page** — `ParticipantProfileDrawer` is mock-backed; no dedicated route or Supabase-backed profile page.
 
@@ -292,14 +294,21 @@ rv1_code/                                   Reference Next.js build. Read-only.
 
 In priority order:
 
-**Immediate — deploy all pending migrations:**
-1. Push 3 pending migrations to remote Supabase:
+**Immediate — deploy all pending migrations + redeploy edge function:**
+1. Push pending migrations to remote Supabase (includes Stage 7–8 schema + Site Mode schema + Phase B columns):
    - `20260501000000` + `20260501010000` — Stage 7–8 report draft schema + RPCs
    - `20260502000000` — Site Mode schema (`site_participants`, `site_visits`, `site_team_members`)
+   - `20260508000000` — `protocol_visit_templates.cross_references` JSONB column
+   - `20260508010000` — `documents.reducto_job_id` text column
    ```
    SUPABASE_ACCESS_TOKEN=<token> npx supabase db push --project-ref ygfcjwgsjmathinqkppq
    ```
-2. Run `bash scripts/smoke-rpcs.sh --cloud` — T11 + T12 cover Stage 7–8 RPCs.
+2. Redeploy the `ingest` Edge Function (Phase B2 + B3 — extended Reducto schema, cross-doc fan-out):
+   ```
+   SUPABASE_ACCESS_TOKEN=<token> npx supabase functions deploy ingest --project-ref ygfcjwgsjmathinqkppq
+   ```
+3. Run `bash scripts/smoke-rpcs.sh --cloud` — T11 + T12 cover Stage 7–8 RPCs.
+4. Smoke-test Phase B end-to-end: upload a protocol PDF → check `protocol_visit_templates.cross_references` populated; upload a second doc (IB/lab manual) with same protocol number → confirm its entries get merged onto the existing templates.
 
 **Track C — Site Mode Supabase wire-up (schema deployed; ready to build):**
 3. **API files** — `visitsApi.ts`, `participantsApi.ts`, `teamApi.ts` — mirror the audit API pattern.
