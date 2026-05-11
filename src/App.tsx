@@ -13,6 +13,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { ModeProvider } from './context/ModeContext';
 import { ProtocolProvider } from './context/ProtocolContext';
+import { SiteDataProvider } from './context/SiteDataContext';
 import { AuditProvider } from './context/AuditContext';
 import { AuditDataProvider } from './context/AuditDataContext';
 import { HeatmapProvider } from './context/HeatmapContext';
@@ -139,13 +140,15 @@ export default function App() {
       <AuthProvider>
         <ModeProvider>
           <ProtocolProvider>
-            <AuditProvider>
-              <AuditDataProvider>
-                <HeatmapProvider>
-                  <AppContent />
-                </HeatmapProvider>
-              </AuditDataProvider>
-            </AuditProvider>
+            <SiteDataProvider>
+              <AuditProvider>
+                <AuditDataProvider>
+                  <HeatmapProvider>
+                    <AppContent />
+                  </HeatmapProvider>
+                </AuditDataProvider>
+              </AuditProvider>
+            </SiteDataProvider>
           </ProtocolProvider>
         </ModeProvider>
       </AuthProvider>
