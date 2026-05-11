@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader, Trash2, RefreshCw, FilePlus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
+import { useProtocol } from '../../context/ProtocolContext';
 
 interface Document {
   id: string;
@@ -43,6 +44,17 @@ function UploadForm({ onSuccess, isLight }: { onSuccess: () => void; isLight: bo
   const [state, setState] = useState<UploadState>({ status: 'idle', message: '' });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Optional protocol linkage. Defaults to the currently-active protocol so
+  // a user uploading from a protocol-scoped context doesn't have to re-pick.
+  // "" means unlinked — the ingest function falls back to the auto-tag
+  // trigger (which reads protocol_number from Reducto's extracted fields).
+  const { protocols, activeProtocol } = useProtocol();
+  const [protocolId, setProtocolId] = useState<string>('');
+  useEffect(() => {
+    // Pre-select once protocols load (or when active protocol changes).
+    if (activeProtocol && !protocolId) setProtocolId(activeProtocol.id);
+  }, [activeProtocol, protocolId]);
+
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
@@ -83,12 +95,14 @@ function UploadForm({ onSuccess, isLight }: { onSuccess: () => void; isLight: bo
           title: title.trim() || pdfFile.name.replace(/\.pdf$/i, ''),
           source: source.trim() || 'PDF Upload',
           pdf_base64,
+          ...(protocolId ? { protocol_id: protocolId } : {}),
         };
       } else {
         body = {
           title: title.trim() || 'Untitled Document',
           source: source.trim() || 'Manual upload',
           content: content.trim(),
+          ...(protocolId ? { protocol_id: protocolId } : {}),
         };
       }
 
@@ -190,6 +204,34 @@ function UploadForm({ onSuccess, isLight }: { onSuccess: () => void; isLight: bo
             className={`w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none transition-colors ${inputClass}`}
           />
         </div>
+      </div>
+
+      {/* Optional protocol linkage. Defaults to the active protocol; the
+          ingest function honours an explicit protocol_id and skips the
+          extracted_fields.protocol_number auto-tag path when one is set.
+          Critical for Phase B cross-doc fan-out: sibling documents must
+          share a protocol_id for the fan-out scan to find them. */}
+      <div>
+        <label className={`block text-xs mb-1.5 font-medium uppercase tracking-wider ${labelClass}`}>
+          Link to protocol
+        </label>
+        <select
+          value={protocolId}
+          onChange={e => setProtocolId(e.target.value)}
+          className={`w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none transition-colors ${inputClass}`}
+        >
+          <option value="">No protocol — auto-link from extracted fields</option>
+          {protocols.map(p => (
+            <option key={p.id} value={p.id}>
+              {p.code} — {p.name}
+            </option>
+          ))}
+        </select>
+        <p className={`text-[11px] mt-1 ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'}`}>
+          {protocolId
+            ? 'Document will be attached to this protocol regardless of what Reducto extracts.'
+            : 'For protocol PDFs the parser will auto-link via the protocol number. For supplemental docs (IB, lab manual, pharmacy manual) pick the protocol explicitly so Phase B cross-references work.'}
+        </p>
       </div>
 
       {mode === 'pdf' ? (
