@@ -1,6 +1,6 @@
 # PIQClinical — Build Plan & Status
 
-_Last updated: 2026-05-02 (participant profiles live; CSV + docx exports real; pricing section added; completion state wired)_
+_Last updated: 2026-05-08 (Phase A + B rebuild in progress — data layer (migrations, types, siteApi, SiteDataContext) shipped; tabs + ingest + drawer pending)_
 
 This document is the source of truth for "where are we." The codebase is the
 source of truth for "what does it do."
@@ -75,7 +75,11 @@ once that pipeline is wired. The upstream API contract is unresolved (**D-009**)
 | Start visit completion state | "Visit logged as complete" confirmation footer before drawer closes | ✓ Done |
 | Protocol tab | Metadata panel (`ProtocolTab`) — code, sponsor, phase; documents-pending callout | ✓ Done |
 | Landing page — Pricing section | `Pricing.tsx` — Starter ($10/mo) + Enterprise cards; CTA → login or dashboard | ✓ Done |
-| Site Mode Supabase wire-up | API files + UI wire for visits, participants, team | ○ Not started |
+| Site Mode Supabase wire-up | `siteApi.ts` + `SiteDataContext`; tabs consume live data | ○ **Not in repo** — Site tabs still read `mockCalendarData` / `mockSiteData` |
+| Calendar autopopulate from PDFs (Phase A) | Ingest extracts SoA → `protocol_visit_templates` → anchor date → `materialize_protocol_visits` → `site_visits` | ○ **Not in repo** — needs to be rebuilt |
+| Calendar cross-doc consistency check (Phase B) | Per-visit `cross_references` JSONB on templates; ingest fan-out across sibling docs; drawer renders "From the protocol documents" section | ○ **Not in repo** — needs to be rebuilt on top of Phase A |
+| Start-visit persistence | Complete-visit button writes `site_visits.status = 'completed'` | ○ Blocked on Site Mode wire-up (no `site_visits` reads/writes yet) |
+| Protocol-linked document uploads | KnowledgeBase upload form has "Link to protocol" picker (defaults to active protocol); `ingest` honours explicit `protocol_id` | ✓ Done — edge function redeploy pending |
 | Stripe checkout wiring | Pricing CTA triggers checkout for authenticated users | ○ Not started |
 
 ---
@@ -287,6 +291,35 @@ rv1_code/                                   Reference Next.js build. Read-only.
 ```
 
 ---
+
+## Site Mode + Phase A + Phase B rebuild plan
+
+Status — what's landed in this session vs. what remains:
+
+**✓ Shipped (typecheck-clean, ready to deploy):**
+
+1. **Migrations (5 SQL files in `supabase/migrations/`):**
+   - `20260506000000_protocol_number_normalization.sql` — `normalize_protocol_number(text)` + `protocols.study_number_normalized` column / unique index / sync trigger
+   - `20260506000100_add_protocol_id_to_documents.sql` — `documents.protocol_id` FK + `documents_autotag_protocol_trg` + backfill
+   - `20260507000000_protocol_visit_templates.sql` — table + `protocols.demo_anchor_date` + `site_visits.template_id` + `site_visits.is_seed` + `materialize_protocol_visits` RPC + `trg_participant_anchor_changed` auto-rematerialize trigger
+   - `20260508000000_visit_template_cross_references.sql` — `cross_references JSONB` column (Phase B)
+   - `20260508010000_documents_reducto_job_id.sql` — `reducto_job_id` text column (Phase B fan-out)
+2. **Site Mode data layer (`src/lib/site/`):** `types.ts` (all DB-mirror types incl. `VisitCrossReference`), `siteApi.ts` (participant CRUD, visits fetch with cross_references JOIN, `updateVisit`, team / docs / templates / `setAnchorDate` / `materializeVisits`), `protocolColors.ts` (re-export + `getProtocolColors` + `getProtocolColorsById`).
+3. **Site Mode context (`src/context/SiteDataContext.tsx`):** fetches participants / visits / team / documents on `activeProtocol.id` change with realtime subscriptions; preserves mock toggle for offline screenshots. Provider wired into `App.tsx` between `ProtocolProvider` and `AuditProvider`.
+
+**○ Remaining (next session's work):**
+
+4. **AnchorDateModal + ingest Phase A logic:**
+   - `src/components/dashboard/site/AnchorDateModal.tsx` — calendar-date picker → `setAnchorDate(protocolId, date)` + `materializeVisits(protocolId)`; surfaced from ProtocolTab + TodayTab.
+   - `supabase/functions/ingest/index.ts` — extend Reducto Extract schema to include `schedule_of_events` array per visit; after parse, upsert into `protocol_visit_templates` with `onConflict: "protocol_id,visit_name,study_day"`; if `demo_anchor_date` is set, call `materialize_protocol_visits` so the calendar populates immediately.
+5. **Rewire tabs from MOCK_* to useSiteData:**
+   TodayTab, VisitsTab, ParticipantsTab, ReportsTab, TeamTab. The mock toggle path is preserved by SiteDataContext (`useMockCalendar`).
+6. **Phase B in `ingest`:**
+   Extend SoA schema with `cross_references` per visit; sanitise + include in upsert; persist `reducto_job_id`; add `extractCrossReferencesForVisits(jobId, visits, key)` helper + `mergeCrossReferencesIntoTemplates(supabase, target)` helper; wire fan-out — Path A (this doc has SoA → scan every sibling document with a stored job_id) and Path B (this doc has no SoA but tagged onto a protocol with templates → scan this doc).
+7. **Phase B drawer rendering:**
+   Extend `CalendarVisit` with `crossReferences?:` (matches `SiteVisit`); add a "From the protocol documents" section to the visit drawer (likely `TodayTab`'s inline `VisitDetailDrawer` or wherever it lives in the current tree) grouped by `source_section` with doc title + page metadata.
+
+After 4–7 land: `npx tsc --noEmit`, `npx supabase db push`, redeploy `ingest`, smoke-test end-to-end.
 
 ## Next up
 
