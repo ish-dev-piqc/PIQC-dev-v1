@@ -9,14 +9,16 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
+import { useSiteData } from '../../../context/SiteDataContext';
 import {
-  MOCK_TEAM,
   TEAM_ROLE_LABELS,
   TEAM_ROLE_SHORT,
-  type MockTeamMember,
-  type TeamRole,
-  type TeamMemberStatus,
 } from '../../../lib/mockSiteData';
+import type {
+  SiteTeamMember,
+  TeamRole,
+  TeamMemberStatus,
+} from '../../../lib/site/types';
 
 // =============================================================================
 // TeamTab — Site Mode delegation log for the active protocol.
@@ -41,6 +43,7 @@ type RoleFilter = TeamRole | 'ALL';
 export default function TeamTab() {
   const { theme } = useTheme();
   const { activeProtocol } = useProtocol();
+  const { teamMembers, loading, error } = useSiteData();
   const isLight = theme === 'light';
 
   const [search, setSearch] = useState('');
@@ -48,13 +51,14 @@ export default function TeamTab() {
   const [showInactive, setShowInactive] = useState(true);
 
   // Scope to the active protocol — empty array when no protocol selected so
-  // the hooks below can run unconditionally.
+  // the hooks below can run unconditionally. The context also pre-filters by
+  // active protocol, but we re-filter defensively in case scope drifts.
   const scoped = useMemo(
     () =>
       activeProtocol
-        ? MOCK_TEAM.filter((m) => m.protocol_id === activeProtocol.id)
+        ? teamMembers.filter((m) => m.protocol_id === activeProtocol.id)
         : [],
-    [activeProtocol],
+    [activeProtocol, teamMembers],
   );
 
   // Filter + search
@@ -138,6 +142,17 @@ export default function TeamTab() {
           {scoped.filter((m) => m.status === 'ACTIVE').length} active
         </p>
       </div>
+
+      {/* Error banner */}
+      {error && (
+        <div
+          className={`border rounded-md px-3 py-2 text-xs ${
+            isLight ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-rose-500/[0.06] border-rose-500/20 text-rose-300'
+          }`}
+        >
+          Failed to load team data: {error}
+        </div>
+      )}
 
       {/* Cert-expiring callout */}
       {expiringSoon.length > 0 && (
@@ -238,7 +253,11 @@ export default function TeamTab() {
         <div className={`${cardBg} border rounded-xl px-6 py-10 text-center border-dashed`}>
           <Users className={`mx-auto mb-2 ${mutedColor}`} size={28} />
           <p className={`${subColor} text-sm`}>
-            {search ? 'No team members match your search.' : 'No team members in this view.'}
+            {loading
+              ? 'Loading team…'
+              : search
+                ? 'No team members match your search.'
+                : 'No team members in this view.'}
           </p>
         </div>
       ) : (
@@ -265,7 +284,7 @@ export default function TeamTab() {
 // ============================================================================
 
 interface TeamCardProps {
-  member: MockTeamMember;
+  member: SiteTeamMember;
   isLight: boolean;
   cardBg: string;
   headingColor: string;

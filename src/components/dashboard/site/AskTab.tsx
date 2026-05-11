@@ -1,13 +1,15 @@
+import { useMemo, useState } from 'react';
 import {
   Calendar,
   ShieldCheck,
   ClipboardList,
   Pill,
   Sparkles,
-  AlertCircle,
+  Upload,
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
+import { useSiteData } from '../../../context/SiteDataContext';
 import DashboardChat from '../DashboardChat';
 import type { ChatMessage, RagStatus } from '../../../lib/supabase';
 
@@ -38,22 +40,31 @@ type ExtendedMessage = ChatMessage & {
 interface AskTabProps {
   messages: ExtendedMessage[];
   setMessages: React.Dispatch<React.SetStateAction<ExtendedMessage[]>>;
-  selectedDocIds: string[];
-  setSelectedDocIds: (ids: string[]) => void;
+  // selectedDocIds + setter are accepted for prop-shape compatibility with
+  // Dashboard's switch case but intentionally NOT used by Site Mode's Ask.
+  // Site Ask derives its own scope from the active protocol's tagged docs so
+  // we don't pollute Audit-mode chat selection.
+  selectedDocIds?: string[];
+  setSelectedDocIds?: (ids: string[]) => void;
 }
 
 export default function AskTab({
   messages,
   setMessages,
-  selectedDocIds,
-  setSelectedDocIds,
 }: AskTabProps) {
   const { theme } = useTheme();
   const { activeProtocol } = useProtocol();
+  const { documents, loading } = useSiteData();
   const isLight = theme === 'light';
 
-  // ProtocolRequiredGate wraps this component, so activeProtocol is non-null
-  // by the time we render. Guard defensively anyway.
+  // Local doc-id list scoped to this protocol's tagged documents. Recomputes
+  // when the documents array changes (including realtime updates). Held in
+  // local state so Audit-mode chat selection isn't affected by Site Ask.
+  const protocolDocIds = useMemo(() => documents.map((d) => d.id), [documents]);
+  const [_localOverride, _setLocalOverride] = useState<string[] | null>(null);
+  const localSelectedDocIds = _localOverride ?? protocolDocIds;
+  const setLocalSelectedDocIds = (ids: string[]) => _setLocalOverride(ids);
+
   if (!activeProtocol) return null;
 
   // Protocol-specific suggested prompts. Phase B: hand-tuned per phase /
@@ -121,33 +132,39 @@ export default function AskTab({
         </div>
       </div>
 
-      {/* Mock-data caveat — surfaces honestly until live RAG is wired */}
-      <div
-        className={`flex-shrink-0 px-5 py-2 text-[11px] flex items-center gap-2 border-b ${
-          isLight
-            ? 'bg-amber-50/50 border-amber-200/60 text-amber-700'
-            : 'bg-amber-500/[0.04] border-amber-500/15 text-amber-300'
-        }`}
-      >
-        <AlertCircle size={11} className="flex-shrink-0" />
-        <span>
-          This assistant currently runs over the general knowledge base. Per-protocol
-          scoping ships with the Supabase wire-up.
-        </span>
-      </div>
-
-      {/* Chat — unchanged engine, custom empty-state framing for the active protocol */}
-      <div className="flex-1 min-h-0">
-        <DashboardChat
-          messages={messages}
-          setMessages={setMessages}
-          selectedDocIds={selectedDocIds}
-          setSelectedDocIds={setSelectedDocIds}
-          customSuggestions={protocolSuggestions}
-          emptyHeading={`Ask about ${activeProtocol.code}`}
-          emptySubtext={`Grounded in ${activeProtocol.code} (${activeProtocol.phase}, ${activeProtocol.sponsor}). Pick a starter or ask anything.`}
-        />
-      </div>
+      {/* Hard-block when no protocol documents exist for this protocol */}
+      {documents.length === 0 ? (
+        <div className="flex-1 min-h-0 overflow-y-auto p-8">
+          <div
+            className={`max-w-md mx-auto text-center border rounded-xl px-6 py-10 ${
+              isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5'
+            }`}
+          >
+            <Upload className={`mx-auto mb-3 ${mutedColor}`} size={28} />
+            <p className={`${headingColor} text-base font-semibold`}>
+              {loading ? 'Loading documents…' : 'Upload a protocol document to enable Ask'}
+            </p>
+            <p className={`${subColor} text-xs mt-2 leading-relaxed`}>
+              Ask is grounded in the documents tagged to{' '}
+              <span className="font-mono font-semibold">{activeProtocol.code}</span>. Upload a
+              protocol PDF in the document library — once Reducto extracts the protocol
+              number, it will be auto-tagged here and the assistant will switch on.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 min-h-0">
+          <DashboardChat
+            messages={messages}
+            setMessages={setMessages}
+            selectedDocIds={localSelectedDocIds}
+            setSelectedDocIds={setLocalSelectedDocIds}
+            customSuggestions={protocolSuggestions}
+            emptyHeading={`Ask about ${activeProtocol.code}`}
+            emptySubtext={`Grounded in ${documents.length} document${documents.length === 1 ? '' : 's'} for ${activeProtocol.code}. Pick a starter or ask anything.`}
+          />
+        </div>
+      )}
     </div>
   );
 }

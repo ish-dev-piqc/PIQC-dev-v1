@@ -9,6 +9,7 @@ import Chatbot from './components/Chatbot';
 import Dashboard, { type DashboardTab, type SettingsSection } from './components/dashboard/Dashboard';
 import Login from './components/auth/Login';
 import ForgotPassword from './components/auth/ForgotPassword';
+import ProfileCompletion from './components/auth/ProfileCompletion';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { ModeProvider } from './context/ModeContext';
@@ -25,8 +26,11 @@ function AppContent() {
   const [dashboardTab, setDashboardTab] = useState<DashboardTab>('overview');
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('account');
   const [scrollTarget, setScrollTarget] = useState<string | null>(null);
-  const { session, loading } = useAuth();
+  const { session, loading, profile, profileLoading } = useAuth();
   const { theme } = useTheme();
+
+  const profileComplete = !!profile?.profile_completed_at;
+  const needsProfileCompletion = !!session && !profileLoading && !profileComplete;
 
   useEffect(() => {
     if (!loading && session && (view === 'login' || view === 'landing')) {
@@ -79,7 +83,7 @@ function AppContent() {
   const pageBg = theme === 'light' ? 'bg-[#f5f7fa]' : 'bg-[#070d1a]';
   const textColor = theme === 'light' ? 'text-[#1a1f28]' : 'text-white';
 
-  if (loading) {
+  if (loading || (session && profileLoading && !profile)) {
     return (
       <div className={`min-h-screen ${theme === 'light' ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]'} flex items-center justify-center`}>
         <div className="w-6 h-6 border-2 border-[#4a6fa5] border-t-transparent rounded-full animate-spin" />
@@ -93,6 +97,10 @@ function AppContent() {
 
   if (view === 'forgot-password') {
     return <ForgotPassword onViewChange={handleViewChange} />;
+  }
+
+  if (needsProfileCompletion) {
+    return <ProfileCompletion />;
   }
 
   if (view === 'dashboard') {

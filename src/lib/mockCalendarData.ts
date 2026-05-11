@@ -1,6 +1,22 @@
-// Mock calendar data for the Today tab.
-// Dates are ISO yyyy-mm-dd in local time. Anchor: today = 2026-04-22 (Wed).
-// Replace with Supabase-backed data later.
+// =============================================================================
+// Backup demo dataset for Site Mode's calendar.
+//
+// The MOCK_VISITS array is kept as the runtime source for the calendar's
+// "Demo data" toggle (TodayTab, VisitsTab, ReportsTab). When the toggle is
+// off, the wired components read from Supabase instead.
+//
+// Color palette and helpers have moved to src/lib/site/protocolColors.ts.
+// Type definitions stay here for back-compat with still-mock consumers
+// (VisitDetailDrawer, etc.); they will move to src/lib/site/types.ts later.
+// =============================================================================
+
+// Re-export from the new home so legacy imports keep working.
+export {
+  PROTOCOL_COLORS,
+  getProtocolColors,
+  getProtocolColorsById,
+  type ProtocolColors,
+} from './site/protocolColors';
 
 export type VisitStatus =
   | 'scheduled' // future or today, not yet done
@@ -25,41 +41,7 @@ export interface CalendarVisit {
   deviationReason?: string; // populated when status = 'deviation'
 }
 
-// Each protocol gets a consistent color used throughout the calendar.
-export const PROTOCOL_COLORS: Record<
-  string,
-  { dotLight: string; dotDark: string; chipLight: string; chipDark: string; accentLight: string; accentDark: string }
-> = {
-  'proto-001': {
-    // BRIGHTEN-2 — blue
-    dotLight: 'bg-[#4a6fa5]',
-    dotDark: 'bg-[#6e8fb5]',
-    chipLight: 'bg-[#4a6fa5]/10 text-[#4a6fa5] border-[#4a6fa5]/20',
-    chipDark: 'bg-[#6e8fb5]/15 text-[#6e8fb5] border-[#6e8fb5]/25',
-    accentLight: 'border-l-[#4a6fa5]',
-    accentDark: 'border-l-[#6e8fb5]',
-  },
-  'proto-002': {
-    // CARDIAC-7 — teal
-    dotLight: 'bg-[#2f8f86]',
-    dotDark: 'bg-[#4fb5ab]',
-    chipLight: 'bg-[#2f8f86]/10 text-[#2f8f86] border-[#2f8f86]/20',
-    chipDark: 'bg-[#4fb5ab]/15 text-[#4fb5ab] border-[#4fb5ab]/25',
-    accentLight: 'border-l-[#2f8f86]',
-    accentDark: 'border-l-[#4fb5ab]',
-  },
-  'proto-003': {
-    // IMMUNE-14 — violet
-    dotLight: 'bg-[#8866b0]',
-    dotDark: 'bg-[#a884cc]',
-    chipLight: 'bg-[#8866b0]/10 text-[#8866b0] border-[#8866b0]/20',
-    chipDark: 'bg-[#a884cc]/15 text-[#a884cc] border-[#a884cc]/25',
-    accentLight: 'border-l-[#8866b0]',
-    accentDark: 'border-l-[#a884cc]',
-  },
-};
-
-// Participants grouped by protocol — used for filter panel.
+// Participants grouped by protocol — used by the Demo-data toggle path.
 export const PROTOCOL_PARTICIPANTS: Record<string, string[]> = {
   'proto-001': ['P-0019', 'P-0023', 'P-0045', 'P-0051'],
   'proto-002': ['P-0008', 'P-0012'],

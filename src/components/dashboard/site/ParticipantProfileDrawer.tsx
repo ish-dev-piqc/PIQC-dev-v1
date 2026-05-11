@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import {
   X,
   AlertTriangle,
@@ -9,24 +9,31 @@ import {
   AlertCircle,
   Clock,
   UserCircle2,
+  Pencil,
+  Trash2,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useOverlay } from '../../../hooks/useOverlay';
 import { useSwipeDismiss } from '../../../hooks/useSwipeDismiss';
+import { useSiteData } from '../../../context/SiteDataContext';
 import {
-  MOCK_PARTICIPANTS,
   PARTICIPANT_STATUS_LABELS,
   type ParticipantStatus,
 } from '../../../lib/mockSiteData';
-import { MOCK_VISITS, type VisitStatus } from '../../../lib/mockCalendarData';
+import { type VisitStatus } from '../../../lib/mockCalendarData';
+import { deleteParticipant } from '../../../lib/site/siteApi';
 import type { Protocol } from '../../../context/ProtocolContext';
+import ParticipantFormDrawer from './ParticipantFormDrawer';
 
 // =============================================================================
-// ParticipantProfileDrawer — participant detail panel, mock-backed.
+// ParticipantProfileDrawer — participant detail panel, Supabase-backed.
 //
 // Stacks above VisitDetailDrawer (z-[60]). Shows enrollment info, visit
-// history, open deviations, and coordinator. Supabase wire-up deferred until
-// Site Mode API files land.
+// history (from site_visits), open deviations, coordinator, and the row's
+// internal UUID. Header has Edit + Delete affordances.
+// Delete uses a soft 2-click confirm (cascades to site_visits per FK).
 // =============================================================================
 
 interface Props {
@@ -83,13 +90,45 @@ export default function ParticipantProfileDrawer({ participantId, protocols, onC
   useOverlay({ isOpen: true, onClose, containerRef: panelRef });
   const swipe = useSwipeDismiss({ onClose });
 
-  const participant = MOCK_PARTICIPANTS.find((p) => p.id === participantId) ?? null;
-  const participantVisits = MOCK_VISITS
+  const { participants, visits } = useSiteData();
+  const participant = participants.find((p) => p.id === participantId) ?? null;
+  const participantVisits = visits
     .filter((v) => v.participantId === participantId)
     .sort((a, b) => b.date.localeCompare(a.date));
   const protocol = participant
     ? protocols.find((p) => p.id === participant.protocol_id) ?? null
     : null;
+
+  const [editing, setEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyUuid = async () => {
+    if (!participant) return;
+    try {
+      await navigator.clipboard.writeText(participant.uuid);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!participant) return;
+    setDeleting(true);
+    setDeleteError(null);
+    const r = await deleteParticipant(participant.uuid);
+    setDeleting(false);
+    if (!r.ok) {
+      setDeleteError(r.error);
+      setConfirmingDelete(false);
+      return;
+    }
+    onClose();
+  };
 
   const bg = isLight ? 'bg-white' : 'bg-[#131a22]';
   const border = isLight ? 'border-[#e2e8ee]' : 'border-white/5';
@@ -110,30 +149,108 @@ export default function ParticipantProfileDrawer({ participantId, protocols, onC
       >
         {/* Header */}
         <div className={`flex items-center justify-between px-5 py-4 border-b ${border}`}>
-          <div className="flex items-center gap-2.5">
-            <UserCircle2 size={18} className="text-fg-muted" />
-            <div>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <UserCircle2 size={18} className="text-fg-muted flex-shrink-0" />
+            <div className="min-w-0">
               <div className="text-[11px] uppercase tracking-wider font-semibold text-fg-sub">
                 Participant
               </div>
               <div className="font-semibold text-base text-fg-heading">{participantId}</div>
+              {participant && (
+                <button
+                  type="button"
+                  onClick={handleCopyUuid}
+                  title="Copy UUID"
+                  className="inline-flex items-center gap-1 mt-0.5 text-[10px] font-mono text-fg-muted hover:text-fg-sub transition-colors"
+                >
+                  <span className="truncate max-w-[180px]">{participant.uuid}</span>
+                  {copied ? <Check size={10} className="text-emerald-500" /> : <Copy size={10} />}
+                </button>
+              )}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className={`p-1.5 rounded-md transition-colors ${isLight ? 'hover:bg-[#f0f3f6]' : 'hover:bg-white/[0.06]'}`}
-            aria-label="Close"
-          >
-            <X size={16} className="text-fg-muted" />
-          </button>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {participant && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className={`p-1.5 rounded-md transition-colors ${isLight ? 'hover:bg-[#f0f3f6]' : 'hover:bg-white/[0.06]'}`}
+                  aria-label="Edit participant"
+                  title="Edit"
+                >
+                  <Pencil size={14} className="text-fg-sub" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDelete((c) => !c)}
+                  className={`p-1.5 rounded-md transition-colors ${
+                    confirmingDelete
+                      ? isLight ? 'bg-rose-100 text-rose-700' : 'bg-rose-500/15 text-rose-300'
+                      : isLight ? 'hover:bg-[#f0f3f6] text-fg-sub' : 'hover:bg-white/[0.06] text-fg-sub'
+                  }`}
+                  aria-label={confirmingDelete ? 'Cancel delete' : 'Delete participant'}
+                  title={confirmingDelete ? 'Cancel' : 'Delete'}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className={`p-1.5 rounded-md transition-colors ${isLight ? 'hover:bg-[#f0f3f6]' : 'hover:bg-white/[0.06]'}`}
+              aria-label="Close"
+            >
+              <X size={16} className="text-fg-muted" />
+            </button>
+          </div>
         </div>
+
+        {/* Delete confirmation banner — soft 2-click */}
+        {confirmingDelete && participant && (
+          <div
+            className={`px-5 py-3 border-b ${border} ${
+              isLight ? 'bg-rose-50' : 'bg-rose-500/[0.06]'
+            }`}
+          >
+            <p className={`text-xs font-semibold ${isLight ? 'text-rose-800' : 'text-rose-200'}`}>
+              Delete {participant.id}?
+            </p>
+            <p className={`text-[11px] mt-0.5 leading-snug ${isLight ? 'text-rose-700' : 'text-rose-300/85'}`}>
+              This will also delete {participantVisits.length} associated visit{participantVisits.length === 1 ? '' : 's'}. This cannot be undone.
+            </p>
+            {deleteError && (
+              <p className={`text-[11px] mt-1 ${isLight ? 'text-rose-700' : 'text-rose-300'}`}>{deleteError}</p>
+            )}
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deleting}
+                className={`text-[11px] font-semibold px-2.5 py-1 rounded-md text-white transition-colors disabled:opacity-50 ${
+                  isLight ? 'bg-rose-600 hover:bg-rose-700' : 'bg-rose-500 hover:bg-rose-400'
+                }`}
+              >
+                {deleting ? 'Deleting…' : 'Confirm delete'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(false)}
+                disabled={deleting}
+                className={`text-[11px] font-medium px-2.5 py-1 rounded-md ${isLight ? 'text-rose-700 hover:bg-rose-100' : 'text-rose-300 hover:bg-rose-500/10'} disabled:opacity-50`}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto">
           {!participant ? (
             <div className="px-5 py-10 text-center">
-              <p className="text-fg-muted text-sm">Participant not found in mock data.</p>
+              <p className="text-fg-muted text-sm">Participant not found.</p>
             </div>
           ) : (
             <div className="px-5 py-5 space-y-5">
@@ -158,22 +275,33 @@ export default function ParticipantProfileDrawer({ participantId, protocols, onC
                 </div>
               )}
 
-              {/* Enrollment metadata */}
+              {/* Enrollment metadata — '—' placeholders for nulls so the user
+                  knows which fields can still be filled in via Edit. */}
               <div className={`${panelBg} rounded-xl border divide-y ${rowBorder} text-sm`}>
-                <MetaRow label="Coordinator" value={participant.assigned_coordinator} isLight={isLight} />
-                {participant.enrolled_at && (
-                  <MetaRow label="Enrolled" value={formatDate(participant.enrolled_at)} isLight={isLight} />
-                )}
-                {participant.current_study_day !== null && (
-                  <MetaRow label="Study day" value={`Day ${participant.current_study_day}`} isLight={isLight} />
-                )}
-                {participant.next_visit_date && participant.next_visit_name && (
-                  <MetaRow
-                    label="Next visit"
-                    value={`${participant.next_visit_name} · ${formatDate(participant.next_visit_date)}`}
-                    isLight={isLight}
-                  />
-                )}
+                <MetaRow
+                  label="Coordinator"
+                  value={participant.assigned_coordinator || '—'}
+                  isLight={isLight}
+                />
+                <MetaRow
+                  label="Enrolled"
+                  value={participant.enrolled_at ? formatDate(participant.enrolled_at) : '—'}
+                  isLight={isLight}
+                />
+                <MetaRow
+                  label="Study day"
+                  value={participant.current_study_day != null ? `Day ${participant.current_study_day}` : '—'}
+                  isLight={isLight}
+                />
+                <MetaRow
+                  label="Next visit"
+                  value={
+                    participant.next_visit_date && participant.next_visit_name
+                      ? `${participant.next_visit_name} · ${formatDate(participant.next_visit_date)}`
+                      : '—'
+                  }
+                  isLight={isLight}
+                />
               </div>
 
               {/* Notes */}
@@ -220,6 +348,19 @@ export default function ParticipantProfileDrawer({ participantId, protocols, onC
           )}
         </div>
       </div>
+
+      {editing && participant && protocol && (
+        <ParticipantFormDrawer
+          mode="edit"
+          protocolId={participant.protocol_id}
+          protocolCode={protocol.code}
+          initial={participant}
+          onSaved={() => {
+            // Realtime update brings the change back into context.
+          }}
+          onClose={() => setEditing(false)}
+        />
+      )}
     </div>
   );
 }

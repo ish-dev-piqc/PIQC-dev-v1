@@ -366,6 +366,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
 
   const navLinks = [
     { label: 'How It Works', href: '#what-it-does' },
+    { label: 'Pricing', href: '#pricing' },
     { label: 'Contact', href: '#contact' },
   ];
 
@@ -535,6 +536,14 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                 </a>
               ))}
 
+              <button
+                onClick={toggleTheme}
+                className={`ml-1 p-2 rounded-lg transition-all duration-150 ${isLight ? 'text-[#374152]/55 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.06]' : 'text-[#d2d7e0]/55 hover:text-white hover:bg-white/[0.06]'}`}
+                aria-label={isLight ? 'Switch to dark mode' : 'Switch to light mode'}
+              >
+                {isLight ? <Moon size={16} /> : <Sun size={16} />}
+              </button>
+
               {isLoggedIn ? (
                 <button
                   onClick={() => onViewChange('dashboard')}
@@ -630,6 +639,14 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                   {link.label}
                 </a>
               ))}
+              <button
+                onClick={() => { toggleTheme(); setMobileOpen(false); }}
+                className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#374152]/70 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.06]' : 'text-[#d2d7e0]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
+              >
+                {isLight ? <Moon size={14} /> : <Sun size={14} />}
+                Switch to {isLight ? 'Dark' : 'Light'} Mode
+              </button>
+
               {isLoggedIn ? (
                 <button
                   onClick={() => { onViewChange('dashboard'); setMobileOpen(false); }}

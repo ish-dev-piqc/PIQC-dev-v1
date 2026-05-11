@@ -639,7 +639,7 @@ function EntryRow({
 
 function EntryCounts({
   entries,
-  isLight,
+  isLight: _isLight,
 }: {
   entries: MockWorkspaceEntry[];
   isLight: boolean;

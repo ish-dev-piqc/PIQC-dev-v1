@@ -519,25 +519,6 @@ async function fetchStructuralChunks(
   }));
 }
 
-function sampleStructural(chunks: ChunkRow[], targetCount: number): ChunkRow[] {
-  if (chunks.length === 0) return [];
-  if (chunks.length <= targetCount) return chunks;
-
-  const sorted = [...chunks].sort((a, b) => a.chunk_index - b.chunk_index);
-  const picked: ChunkRow[] = [];
-  const step = sorted.length / targetCount;
-  for (let i = 0; i < targetCount; i++) {
-    const idx = Math.min(sorted.length - 1, Math.floor(i * step));
-    picked.push(sorted[idx]);
-  }
-  const seen = new Set<string>();
-  return picked.filter((c) => {
-    if (seen.has(c.id)) return false;
-    seen.add(c.id);
-    return true;
-  });
-}
-
 async function resolveSummaryDocumentId(
   supabaseUrl: string,
   serviceRoleKey: string,

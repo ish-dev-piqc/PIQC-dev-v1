@@ -1175,7 +1175,7 @@ function StatusBadge({
 
 function FieldLabel({
   label,
-  isLight,
+  isLight: _isLight,
   children,
 }: {
   label: string;
@@ -1193,7 +1193,7 @@ function FieldLabel({
 
 function SubSection({
   label,
-  isLight,
+  isLight: _isLight,
   children,
 }: {
   label: string;

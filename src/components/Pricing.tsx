@@ -1,15 +1,20 @@
-import { Check } from 'lucide-react';
+import { useState } from 'react';
+import { Check, Loader2 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useCheckout } from '../hooks/useCheckout';
+import { useSubscription } from '../hooks/useSubscription';
 import { stripeProducts } from '../stripe-config';
 import type { AppView } from '../App';
 
 // =============================================================================
 // Pricing — landing page section.
 //
-// Starter plan wired to stripeProducts[0] ($10/month subscription).
-// Checkout requires auth: unauthenticated users are sent to login.
-// Enterprise card links to the contact form.
+// Three-state CTA:
+//   unauthenticated          → send to login
+//   auth + no active sub     → Stripe checkout
+//   auth + active sub        → send to dashboard
+// On Stripe redirect back the app's auth useEffect auto-sends to dashboard.
 // =============================================================================
 
 const STARTER_FEATURES = [
@@ -36,9 +41,16 @@ interface PricingProps {
 export default function Pricing({ onViewChange }: PricingProps) {
   const { theme } = useTheme();
   const { session } = useAuth();
+  const { createCheckoutSession } = useCheckout();
+  const { subscription, loading: subLoading } = useSubscription();
   const isLight = theme === 'light';
 
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
   const product = stripeProducts[0];
+  const hasActiveSub =
+    subscription?.status === 'active' || subscription?.status === 'trialing';
 
   const bg = isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]';
   const border = isLight ? 'border-[#e2e8ee]' : 'border-white/[0.05]';
@@ -50,9 +62,40 @@ export default function Pricing({ onViewChange }: PricingProps) {
   const bodyColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
 
-  const handleStarterCta = () => {
-    onViewChange(session ? 'dashboard' : 'login');
+  const handleStarterCta = async () => {
+    if (!session) {
+      onViewChange('login');
+      return;
+    }
+    if (hasActiveSub) {
+      onViewChange('dashboard');
+      return;
+    }
+    setCheckoutError(null);
+    setCheckoutLoading(true);
+    try {
+      await createCheckoutSession(
+        product.priceId,
+        window.location.origin,
+        `${window.location.origin}/#pricing`,
+        product.mode,
+      );
+      // createCheckoutSession redirects; if it returns we're on the cancel path
+    } catch (err) {
+      setCheckoutError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+      setCheckoutLoading(false);
+    }
   };
+
+  const ctaLabel = () => {
+    if (checkoutLoading) return 'Redirecting…';
+    if (session && subLoading) return 'Loading…';
+    if (!session) return 'Get started';
+    if (hasActiveSub) return 'Go to dashboard';
+    return 'Subscribe';
+  };
+
+  const ctaDisabled = checkoutLoading || (!!session && subLoading);
 
   return (
     <section id="pricing" className={`py-24 px-4 sm:px-6 lg:px-8 ${bg} border-t ${border}`}>
@@ -94,7 +137,7 @@ export default function Pricing({ onViewChange }: PricingProps) {
                   </span>
                 </div>
                 <div className="flex items-baseline gap-1.5 mt-3">
-                  <span className={`text-4xl font-bold ${isLight ? 'text-white' : 'text-white'}`}>
+                  <span className="text-4xl font-bold text-white">
                     ${product.price}
                   </span>
                   <span className={`text-sm ${isLight ? 'text-white/50' : 'text-[#d2d7e0]/45'}`}>/ month</span>
@@ -116,14 +159,22 @@ export default function Pricing({ onViewChange }: PricingProps) {
               <button
                 type="button"
                 onClick={handleStarterCta}
-                className={`w-full py-3 px-5 text-sm font-semibold rounded-xl transition-all duration-200 ${
+                disabled={ctaDisabled}
+                className={`w-full py-3 px-5 text-sm font-semibold rounded-xl transition-all duration-200 inline-flex items-center justify-center gap-2 ${
+                  ctaDisabled ? 'opacity-60 cursor-not-allowed' : ''
+                } ${
                   isLight
                     ? 'bg-white text-[#1a1f28] hover:bg-[#f0f4f8]'
                     : 'bg-white/[0.12] text-white hover:bg-white/[0.18] border border-white/[0.12]'
                 }`}
               >
-                {session ? 'Go to dashboard' : 'Get started'}
+                {checkoutLoading && <Loader2 size={14} className="animate-spin" />}
+                {ctaLabel()}
               </button>
+
+              {checkoutError && (
+                <p className="mt-3 text-xs text-red-400 text-center">{checkoutError}</p>
+              )}
             </div>
           </div>
 

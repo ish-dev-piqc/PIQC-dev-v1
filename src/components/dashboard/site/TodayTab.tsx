@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   Clock,
@@ -14,16 +14,18 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
+import { useSiteData } from '../../../context/SiteDataContext';
 import { useAuth } from '../../../context/AuthContext';
 import VisitDetailDrawer from './VisitDetailDrawer';
 import HeatIndicator from '../../heatmap/HeatIndicator';
 import { scoreVisit } from '../../../lib/heatmap';
 import { useOverlay } from '../../../hooks/useOverlay';
 import { useSwipeDismiss } from '../../../hooks/useSwipeDismiss';
+import { getProtocolColorsById } from '../../../lib/site/protocolColors';
+import { fetchVisitTemplates, materializeVisits } from '../../../lib/site/siteApi';
+import MockCalendarToggle, { MockCalendarBanner } from './MockCalendarToggle';
+import AnchorDateModal from './AnchorDateModal';
 import {
-  MOCK_VISITS,
-  PROTOCOL_COLORS,
-  PROTOCOL_PARTICIPANTS,
   type CalendarVisit,
   type VisitStatus,
 } from '../../../lib/mockCalendarData';
@@ -194,6 +196,7 @@ type ViewMode = 'week' | 'month';
 export default function TodayTab({ onNavigateToVisits }: { onNavigateToVisits?: () => void } = {}) {
   const { theme } = useTheme();
   const { activeProtocol, protocols } = useProtocol();
+  const { visits: allSiteVisits, participants: allSiteParticipants, refresh } = useSiteData();
   const { user } = useAuth();
   const isLight = theme === 'light';
   const isHome = activeProtocol === null;
@@ -207,15 +210,48 @@ export default function TodayTab({ onNavigateToVisits }: { onNavigateToVisits?: 
   const [openDay, setOpenDay] = useState<Date | null>(null);
   const [filterPanelOpen, setFilterPanelOpen] = useState<boolean>(true);
 
+  // Phase E: detect templates extracted but not yet projected — show a banner
+  // pointing the user at Set anchor / Re-project.
+  const [templateCount, setTemplateCount] = useState(0);
+  const [showAnchorModal, setShowAnchorModal] = useState(false);
+  const [reprojecting, setReprojecting] = useState(false);
+
+  useEffect(() => {
+    if (!activeProtocol) {
+      setTemplateCount(0);
+      return;
+    }
+    let cancelled = false;
+    fetchVisitTemplates(activeProtocol.id).then((r) => {
+      if (cancelled) return;
+      setTemplateCount(r.ok ? r.data.length : 0);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProtocol]);
+
   useEffect(() => {
     saveFilters(filters);
   }, [filters]);
 
   // Scope visits by current protocol (scoped mode drops other protocols).
   const scopedVisits = useMemo(() => {
-    if (isHome) return MOCK_VISITS;
-    return MOCK_VISITS.filter((v) => v.protocolId === activeProtocol.id);
-  }, [isHome, activeProtocol]);
+    if (isHome) return allSiteVisits;
+    return allSiteVisits.filter((v) => v.protocolId === activeProtocol.id);
+  }, [isHome, activeProtocol, allSiteVisits]);
+
+  // Per-protocol participant rosters for the filter panel — derived from live
+  // site_participants instead of the old hardcoded PROTOCOL_PARTICIPANTS map.
+  const participantsByProtocol = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const p of allSiteParticipants) {
+      const arr = map.get(p.protocol_id) ?? [];
+      if (!arr.includes(p.id)) arr.push(p.id);
+      map.set(p.protocol_id, arr);
+    }
+    return map;
+  }, [allSiteParticipants]);
 
   // Apply filters.
   const visibleVisits = useMemo(() => {
@@ -260,13 +296,16 @@ export default function TodayTab({ onNavigateToVisits }: { onNavigateToVisits?: 
     return { start: gridStart, end: addDays(gridStart, 41) };
   }, [view, anchorDate]);
 
-  const isInRange = (v: CalendarVisit) => {
-    const d = parseYmd(v.date);
-    return d >= viewRange.start && d <= viewRange.end;
-  };
+  const isInRange = useCallback(
+    (v: CalendarVisit) => {
+      const d = parseYmd(v.date);
+      return d >= viewRange.start && d <= viewRange.end;
+    },
+    [viewRange],
+  );
 
-  const visibleInRange = useMemo(() => visibleVisits.filter(isInRange), [visibleVisits, viewRange]);
-  const scopedInRange = useMemo(() => scopedVisits.filter(isInRange), [scopedVisits, viewRange]);
+  const visibleInRange = useMemo(() => visibleVisits.filter(isInRange), [visibleVisits, isInRange]);
+  const scopedInRange = useMemo(() => scopedVisits.filter(isInRange), [scopedVisits, isInRange]);
 
   const isEmptyRange = visibleInRange.length === 0;
   const isFilteredEmpty = isEmptyRange && scopedInRange.length > 0;
@@ -329,6 +368,7 @@ export default function TodayTab({ onNavigateToVisits }: { onNavigateToVisits?: 
           items={needsAttention}
           isLight={isLight}
           isHome={isHome}
+          protocols={protocols}
           onItemClick={(v) => setOpenVisit(v)}
         />
       )}
@@ -388,34 +428,101 @@ export default function TodayTab({ onNavigateToVisits }: { onNavigateToVisits?: 
           </div>
         </div>
 
-        <div
-          className={`inline-flex items-center rounded-lg border p-0.5 ${
-            isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5'
-          }`}
-        >
-          {(['week', 'month'] as ViewMode[]).map((v) => {
-            const active = view === v;
-            return (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setView(v)}
-                className={`px-3 h-7 rounded-md text-xs font-medium capitalize transition-colors ${
-                  active
-                    ? isLight
-                      ? 'bg-[#eef2f6] text-[#1a1f28]'
-                      : 'bg-white/[0.06] text-white'
-                    : isLight
-                    ? 'text-[#374152]/65 hover:text-[#1a1f28]'
-                    : 'text-[#d2d7e0]/55 hover:text-white'
-                }`}
-              >
-                {v}
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-2">
+          <MockCalendarToggle />
+          <div
+            className={`inline-flex items-center rounded-lg border p-0.5 ${
+              isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5'
+            }`}
+          >
+            {(['week', 'month'] as ViewMode[]).map((v) => {
+              const active = view === v;
+              return (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setView(v)}
+                  className={`px-3 h-7 rounded-md text-xs font-medium capitalize transition-colors ${
+                    active
+                      ? isLight
+                        ? 'bg-[#eef2f6] text-[#1a1f28]'
+                        : 'bg-white/[0.06] text-white'
+                      : isLight
+                      ? 'text-[#374152]/65 hover:text-[#1a1f28]'
+                      : 'text-[#d2d7e0]/55 hover:text-white'
+                  }`}
+                >
+                  {v}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
+      <MockCalendarBanner />
+
+      {/* Phase E: schedule-extracted-but-not-projected banner */}
+      {!isHome && templateCount > 0 && !activeProtocol.demoAnchorDate && (
+        <div
+          className={`mx-6 mt-3 flex items-start gap-2 border rounded-md px-3 py-2 ${
+            isLight ? 'bg-amber-50 border-amber-200' : 'bg-amber-500/[0.06] border-amber-500/20'
+          }`}
+        >
+          <AlertCircle size={13} className="text-amber-500 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0 text-xs">
+            <p className={isLight ? 'text-amber-800 font-medium' : 'text-amber-300 font-medium'}>
+              {templateCount} visit template{templateCount === 1 ? '' : 's'} extracted from PDF — visits not projected yet
+            </p>
+            <p className={isLight ? 'text-amber-700/85' : 'text-amber-300/75'}>
+              Set the Day 0 calendar date to populate the calendar.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowAnchorModal(true)}
+            className={`flex-shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-md text-white ${
+              isLight ? 'bg-amber-600 hover:bg-amber-700' : 'bg-amber-500 hover:bg-amber-400'
+            }`}
+          >
+            Set anchor
+          </button>
+        </div>
+      )}
+
+      {/* Phase E: anchor set + templates exist — quick re-project shortcut */}
+      {!isHome && templateCount > 0 && activeProtocol.demoAnchorDate && scopedVisits.length === 0 && (
+        <div
+          className={`mx-6 mt-3 flex items-start gap-2 border rounded-md px-3 py-2 ${
+            isLight ? 'bg-[#4a6fa5]/[0.05] border-[#4a6fa5]/20' : 'bg-[#6e8fb5]/[0.06] border-[#6e8fb5]/25'
+          }`}
+        >
+          <CalendarDays size={13} className={`flex-shrink-0 mt-0.5 ${isLight ? 'text-[#4a6fa5]' : 'text-[#6e8fb5]'}`} />
+          <div className="flex-1 min-w-0 text-xs">
+            <p className="text-fg-heading font-medium">
+              Templates and anchor set, but no visits projected yet
+            </p>
+            <p className={`${isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55'}`}>
+              Click re-project to populate visits for every enrolled participant.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={reprojecting}
+            onClick={async () => {
+              setReprojecting(true);
+              const r = await materializeVisits(activeProtocol.id);
+              setReprojecting(false);
+              if (r.ok) refresh();
+            }}
+            className={`flex-shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-md text-white disabled:opacity-50 ${
+              isLight ? 'bg-[#4a6fa5] hover:bg-[#3a5f95]' : 'bg-[#6e8fb5] hover:bg-[#7e9fc5]'
+            }`}
+          >
+            {reprojecting ? 'Projecting…' : 'Re-project'}
+          </button>
+        </div>
+      )}
+
 
       {/* Main calendar row */}
       <div className="flex-1 flex gap-4 px-6 pb-6 min-h-0 overflow-hidden">
@@ -426,6 +533,7 @@ export default function TodayTab({ onNavigateToVisits }: { onNavigateToVisits?: 
           protocols={protocols}
           activeProtocolId={activeProtocol?.id ?? null}
           filters={filters}
+          participantsByProtocol={participantsByProtocol}
           onToggleProtocol={toggleProtocol}
           onToggleParticipant={toggleParticipant}
           open={filterPanelOpen}
@@ -452,6 +560,7 @@ export default function TodayTab({ onNavigateToVisits }: { onNavigateToVisits?: 
               anchorDate={anchorDate}
               today={today}
               visitsByDate={visitsByDate}
+              protocols={protocols}
               onVisitClick={setOpenVisit}
               onDayClick={setOpenDay}
             />
@@ -462,6 +571,7 @@ export default function TodayTab({ onNavigateToVisits }: { onNavigateToVisits?: 
               anchorDate={anchorDate}
               today={today}
               visitsByDate={visitsByDate}
+              protocols={protocols}
               onVisitClick={setOpenVisit}
               onDayClick={setOpenDay}
             />
@@ -477,6 +587,7 @@ export default function TodayTab({ onNavigateToVisits }: { onNavigateToVisits?: 
           day={openDay}
           today={today}
           visits={visitsByDate.get(formatYmd(openDay)) ?? []}
+          protocols={protocols}
           onClose={() => setOpenDay(null)}
           onVisitClick={(v) => {
             setOpenDay(null);
@@ -491,6 +602,16 @@ export default function TodayTab({ onNavigateToVisits }: { onNavigateToVisits?: 
           today={today}
           onClose={() => setOpenVisit(null)}
           onNavigateToVisits={onNavigateToVisits}
+        />
+      )}
+
+      {showAnchorModal && activeProtocol && (
+        <AnchorDateModal
+          protocolId={activeProtocol.id}
+          protocolCode={activeProtocol.code}
+          initialDate={activeProtocol.demoAnchorDate}
+          onSaved={() => refresh()}
+          onClose={() => setShowAnchorModal(false)}
         />
       )}
     </div>
@@ -517,6 +638,7 @@ interface NeedsAttentionBandProps {
   items: CalendarVisit[];
   isLight: boolean;
   isHome: boolean;
+  protocols: { id: string; code: string }[];
   onItemClick: (v: CalendarVisit) => void;
 }
 
@@ -538,7 +660,7 @@ function sortNeedsAttention(items: CalendarVisit[]): CalendarVisit[] {
 
 const INLINE_CAP = 2;
 
-function NeedsAttentionBand({ items, isLight, isHome, onItemClick }: NeedsAttentionBandProps) {
+function NeedsAttentionBand({ items, isLight, isHome, protocols, onItemClick }: NeedsAttentionBandProps) {
   const [popoverMode, setPopoverMode] = useState<'all' | 'overflow' | null>(null);
   const popoverOpen = popoverMode !== null;
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -598,7 +720,7 @@ function NeedsAttentionBand({ items, isLight, isHome, onItemClick }: NeedsAttent
     >
       {statusIcon(v.status, 12)}
       {isHome && (
-        <span className={`${mutedColor} font-medium`}>{protoCode(v.protocolId)}</span>
+        <span className={`${mutedColor} font-medium`}>{protoCode(v.protocolId, protocols)}</span>
       )}
       <span className="font-medium">{v.participantId}</span>
       <span className={mutedColor}>·</span>
@@ -625,7 +747,7 @@ function NeedsAttentionBand({ items, isLight, isHome, onItemClick }: NeedsAttent
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
           {isHome && (
-            <span className={`${mutedColor} text-[11px] font-medium`}>{protoCode(v.protocolId)}</span>
+            <span className={`${mutedColor} text-[11px] font-medium`}>{protoCode(v.protocolId, protocols)}</span>
           )}
           <span className={`text-xs font-semibold ${textColor}`}>{v.participantId}</span>
           <span className={`${mutedColor} text-xs`}>·</span>
@@ -712,14 +834,8 @@ function NeedsAttentionBand({ items, isLight, isHome, onItemClick }: NeedsAttent
   );
 }
 
-function protoCode(id: string): string {
-  // Small helper for rendering; safe fallback on unknown id.
-  const map: Record<string, string> = {
-    'proto-001': 'BRIGHTEN-2',
-    'proto-002': 'CARDIAC-7',
-    'proto-003': 'IMMUNE-14',
-  };
-  return map[id] ?? id;
+function protoCode(id: string, protocols: { id: string; code: string }[]): string {
+  return protocols.find((p) => p.id === id)?.code ?? id;
 }
 
 function relativeClose(iso: string): string {
@@ -744,6 +860,7 @@ interface CalendarFiltersProps {
   protocols: { id: string; code: string }[];
   activeProtocolId: string | null;
   filters: FilterState;
+  participantsByProtocol: Map<string, string[]>;
   onToggleProtocol: (id: string) => void;
   onToggleParticipant: (id: string) => void;
   open: boolean;
@@ -756,6 +873,7 @@ function CalendarFilters({
   protocols,
   activeProtocolId,
   filters,
+  participantsByProtocol,
   onToggleProtocol,
   onToggleParticipant,
   open,
@@ -807,12 +925,11 @@ function CalendarFilters({
 
         <div className="space-y-1">
           {shownProtocols.map((p) => {
-            const colors = PROTOCOL_COLORS[p.id];
-            if (!colors) return null;
+            const colors = getProtocolColorsById(p.id, protocols);
             const dotCls = isLight ? colors.dotLight : colors.dotDark;
             const expanded = expandedProtocols.has(p.id);
             const protoHidden = hiddenProtos.has(p.id);
-            const participants = PROTOCOL_PARTICIPANTS[p.id] ?? [];
+            const participants = participantsByProtocol.get(p.id) ?? [];
 
             return (
               <div key={p.id}>
@@ -907,11 +1024,12 @@ interface ViewProps {
   anchorDate: Date;
   today: Date;
   visitsByDate: Map<string, CalendarVisit[]>;
+  protocols: { id: string; code: string }[];
   onVisitClick: (v: CalendarVisit) => void;
   onDayClick: (d: Date) => void;
 }
 
-function WeekView({ isLight, isHome, anchorDate, today, visitsByDate, onVisitClick, onDayClick }: ViewProps) {
+function WeekView({ isLight, isHome, anchorDate, today, visitsByDate, protocols, onVisitClick, onDayClick }: ViewProps) {
   const start = startOfWeek(anchorDate);
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
 
@@ -969,6 +1087,7 @@ function WeekView({ isLight, isHome, anchorDate, today, visitsByDate, onVisitCli
                       isLight={isLight}
                       isHome={isHome}
                       past={past}
+                      protocols={protocols}
                       onClick={() => onVisitClick(v)}
                     />
                   ))}
@@ -1031,6 +1150,7 @@ function WeekView({ isLight, isHome, anchorDate, today, visitsByDate, onVisitCli
                       isLight={isLight}
                       isHome={isHome}
                       past={past}
+                      protocols={protocols}
                       onClick={() => onVisitClick(v)}
                     />
                   ))}
@@ -1058,13 +1178,14 @@ interface WeekVisitRowProps {
   isLight: boolean;
   isHome: boolean;
   past: boolean;
+  protocols: { id: string; code: string }[];
   onClick: () => void;
 }
 
-function WeekVisitRow({ visit, isLight, isHome, past, onClick }: WeekVisitRowProps) {
-  const colors = PROTOCOL_COLORS[visit.protocolId];
-  const accent = colors ? (isLight ? colors.accentLight : colors.accentDark) : '';
-  const chip = colors ? (isLight ? colors.chipLight : colors.chipDark) : '';
+function WeekVisitRow({ visit, isLight, isHome, past, protocols, onClick }: WeekVisitRowProps) {
+  const colors = getProtocolColorsById(visit.protocolId, protocols);
+  const accent = isLight ? colors.accentLight : colors.accentDark;
+  const chip = isLight ? colors.chipLight : colors.chipDark;
   const rowBg = isLight ? 'bg-white hover:bg-[#f5f7fa]' : 'bg-[#131a22] hover:bg-white/[0.03]';
   const textColor = 'text-fg-heading';
   const mutedColor = 'text-fg-muted';
@@ -1090,7 +1211,7 @@ function WeekVisitRow({ visit, isLight, isHome, past, onClick }: WeekVisitRowPro
           )}
           {isHome && (
             <span className={`inline-block text-[9px] font-semibold px-1 py-[1px] rounded border ${chip}`}>
-              {protoCode(visit.protocolId)}
+              {protoCode(visit.protocolId, protocols)}
             </span>
           )}
         </div>
@@ -1114,7 +1235,7 @@ function WeekVisitRow({ visit, isLight, isHome, past, onClick }: WeekVisitRowPro
 // Month view
 // ────────────────────────────────────────────────────────────────────────────
 
-function MonthView({ isLight, isHome, anchorDate, today, visitsByDate, onVisitClick, onDayClick }: ViewProps) {
+function MonthView({ isLight, isHome, anchorDate, today, visitsByDate, protocols, onVisitClick, onDayClick }: ViewProps) {
   const monthStart = startOfMonth(anchorDate);
   const gridStart = startOfWeek(monthStart);
   const days = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
@@ -1146,7 +1267,7 @@ function MonthView({ isLight, isHome, anchorDate, today, visitsByDate, onVisitCl
           const isToday = isSameDay(d, today);
           const inMonth = isSameMonth(d, monthStart);
           const past = isPast(d, today);
-          const colors = dayVisits[0] ? PROTOCOL_COLORS[dayVisits[0].protocolId] : undefined;
+          const colors = dayVisits[0] ? getProtocolColorsById(dayVisits[0].protocolId, protocols) : undefined;
 
           return (
             <div
@@ -1179,8 +1300,8 @@ function MonthView({ isLight, isHome, anchorDate, today, visitsByDate, onVisitCl
               </button>
               <div className="px-1 pb-1 space-y-0.5 overflow-hidden">
                 {dayVisits.slice(0, 2).map((v) => {
-                  const c = PROTOCOL_COLORS[v.protocolId];
-                  const accent = c ? (isLight ? c.accentLight : c.accentDark) : '';
+                  const c = getProtocolColorsById(v.protocolId, protocols);
+                  const accent = isLight ? c.accentLight : c.accentDark;
                   return (
                     <button
                       key={v.id}
@@ -1237,11 +1358,12 @@ interface DayDetailDrawerProps {
   day: Date;
   today: Date;
   visits: CalendarVisit[];
+  protocols: { id: string; code: string }[];
   onClose: () => void;
   onVisitClick: (v: CalendarVisit) => void;
 }
 
-function DayDetailDrawer({ isLight, isHome, day, today, visits, onClose, onVisitClick }: DayDetailDrawerProps) {
+function DayDetailDrawer({ isLight, isHome, day, today, visits, protocols, onClose, onVisitClick }: DayDetailDrawerProps) {
   const overlayClick = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   useOverlay({ isOpen: true, onClose, containerRef: panelRef });
@@ -1286,9 +1408,9 @@ function DayDetailDrawer({ isLight, isHome, day, today, visits, onClose, onVisit
             </div>
           ) : (
             visits.map((v) => {
-              const c = PROTOCOL_COLORS[v.protocolId];
-              const accent = c ? (isLight ? c.accentLight : c.accentDark) : '';
-              const chip = c ? (isLight ? c.chipLight : c.chipDark) : '';
+              const c = getProtocolColorsById(v.protocolId, protocols);
+              const accent = isLight ? c.accentLight : c.accentDark;
+              const chip = isLight ? c.chipLight : c.chipDark;
               return (
                 <button
                   key={v.id}
@@ -1303,7 +1425,7 @@ function DayDetailDrawer({ isLight, isHome, day, today, visits, onClose, onVisit
                     <span className={`text-xs font-semibold ${headingColor}`}>{formatTime(v.time)}</span>
                     {isHome && (
                       <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${chip}`}>
-                        {protoCode(v.protocolId)}
+                        {protoCode(v.protocolId, protocols)}
                       </span>
                     )}
                     <span className={`text-[10px] ${mutedColor} ml-auto`}>{statusLabel(v.status)}</span>

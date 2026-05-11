@@ -14,8 +14,8 @@ import {
 import { useTheme } from '../../../context/ThemeContext';
 import { useOverlay } from '../../../hooks/useOverlay';
 import { useSwipeDismiss } from '../../../hooks/useSwipeDismiss';
+import { getProtocolColorsById } from '../../../lib/site/protocolColors';
 import {
-  PROTOCOL_COLORS,
   type CalendarVisit,
   type VisitStatus,
 } from '../../../lib/mockCalendarData';
@@ -125,7 +125,7 @@ export default function VisitDetailDrawer({
       visit.status === 'missed' ||
       visit.status === 'deviation');
   const protocol = protocols.find((p) => p.id === visit.protocolId);
-  const colors = PROTOCOL_COLORS[visit.protocolId];
+  const colors = getProtocolColorsById(visit.protocolId, protocols);
   const procedures = visit.procedures ?? [];
   const allChecked = procedures.length > 0 && checked.size === procedures.length;
 
@@ -135,7 +135,7 @@ export default function VisitDetailDrawer({
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
   const sectionHeader = 'text-fg-label';
-  const chip = colors ? (isLight ? colors.chipLight : colors.chipDark) : '';
+  const chip = isLight ? colors.chipLight : colors.chipDark;
   const panelBg = isLight
     ? 'bg-[#f9fafc] border-[#eef2f6]'
     : 'bg-white/[0.02] border-white/[0.04]';
