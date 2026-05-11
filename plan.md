@@ -1,6 +1,6 @@
 # PIQClinical — Build Plan & Status
 
-_Last updated: 2026-05-08 (Phase A + B rebuild in progress — data layer (migrations, types, siteApi, SiteDataContext) shipped; tabs + ingest + drawer pending)_
+_Last updated: 2026-05-08 (post-merge with main — Phase A + B end-to-end on disk; my rebuild work converged with the merged work. Remote deploys pending.)_
 
 This document is the source of truth for "where are we." The codebase is the
 source of truth for "what does it do."
@@ -75,10 +75,10 @@ once that pipeline is wired. The upstream API contract is unresolved (**D-009**)
 | Start visit completion state | "Visit logged as complete" confirmation footer before drawer closes | ✓ Done |
 | Protocol tab | Metadata panel (`ProtocolTab`) — code, sponsor, phase; documents-pending callout | ✓ Done |
 | Landing page — Pricing section | `Pricing.tsx` — Starter ($10/mo) + Enterprise cards; CTA → login or dashboard | ✓ Done |
-| Site Mode Supabase wire-up | `siteApi.ts` + `SiteDataContext`; tabs consume live data | ○ **Not in repo** — Site tabs still read `mockCalendarData` / `mockSiteData` |
-| Calendar autopopulate from PDFs (Phase A) | Ingest extracts SoA → `protocol_visit_templates` → anchor date → `materialize_protocol_visits` → `site_visits` | ○ **Not in repo** — needs to be rebuilt |
-| Calendar cross-doc consistency check (Phase B) | Per-visit `cross_references` JSONB on templates; ingest fan-out across sibling docs; drawer renders "From the protocol documents" section | ○ **Not in repo** — needs to be rebuilt on top of Phase A |
-| Start-visit persistence | Complete-visit button writes `site_visits.status = 'completed'` | ○ Blocked on Site Mode wire-up (no `site_visits` reads/writes yet) |
+| Site Mode Supabase wire-up | `siteApi.ts` + `SiteDataContext`; all tabs consume live data | ✓ Done |
+| Calendar autopopulate from PDFs (Phase A) | Ingest extracts SoA → `protocol_visit_templates` → anchor date → `materialize_protocol_visits` → `site_visits` | ✓ Done — migrations + ingest + AnchorDateModal in repo |
+| Calendar cross-doc consistency check (Phase B) | Per-visit `cross_references` JSONB on templates; ingest extracts intra-doc refs + fans out to sibling docs; drawer renders "From the protocol documents" section | ✓ Done — 2 migrations + ingest Phase B helpers + fan-out + drawer rendering; **remote deploy pending** |
+| Start-visit persistence | Complete-visit button writes `site_visits.status = 'completed'` | ○ Pending — depends on whether the merged `updateVisit` is wired into the drawer; needs verification |
 | Protocol-linked document uploads | KnowledgeBase upload form has "Link to protocol" picker (defaults to active protocol); `ingest` honours explicit `protocol_id` | ✓ Done — edge function redeploy pending |
 | Stripe checkout wiring | Pricing CTA triggers checkout for authenticated users | ○ Not started |
 
