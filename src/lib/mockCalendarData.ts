@@ -26,6 +26,17 @@ export type VisitStatus =
   | 'overdue' // past scheduled date, window still open
   | 'closing_soon'; // today / near-term, window closing in <24h
 
+// One additional mention of a visit found elsewhere in the protocol's
+// documents — populated by the ingest pipeline (Phase B). Optional so
+// existing mock data continues to satisfy the type.
+export interface CalendarVisitCrossReference {
+  source_section: string;       // e.g. "7.4 Safety monitoring"
+  snippet: string;              // verbatim passage that adds context
+  page?: number;                // page number if known
+  document_id?: string;
+  document_title?: string;
+}
+
 export interface CalendarVisit {
   id: string;
   date: string; // yyyy-mm-dd
@@ -39,6 +50,7 @@ export interface CalendarVisit {
   procedures?: string[]; // planned procedures / activities
   priorNote?: string; // brief context from prior visit
   deviationReason?: string; // populated when status = 'deviation'
+  crossReferences?: CalendarVisitCrossReference[]; // Phase B — joined from template
 }
 
 // Participants grouped by protocol — used by the Demo-data toggle path.

@@ -348,6 +348,40 @@ export default function VisitDetailDrawer({
             </div>
           )}
 
+          {/* Cross-references — additional mentions of this visit pulled
+              from the protocol's documents during ingest. Hidden if the
+              pipeline hasn't surfaced any (or if the docs don't mention
+              this visit elsewhere). Grouped visually by source_section. */}
+          {visit.crossReferences && visit.crossReferences.length > 0 && (
+            <div>
+              <div className={`text-[11px] uppercase tracking-wider font-semibold mb-2 ${sectionHeader}`}>
+                From the protocol documents
+              </div>
+              <ul className="space-y-2">
+                {visit.crossReferences.map((ref, i) => (
+                  <li
+                    key={`${ref.source_section}-${i}`}
+                    className={`border rounded-lg p-3 ${panelBg}`}
+                  >
+                    <div className="flex items-baseline justify-between gap-2 flex-wrap mb-1">
+                      <span className={`text-[11px] font-semibold ${headingColor}`}>
+                        {ref.source_section}
+                      </span>
+                      {(ref.document_title || ref.page) && (
+                        <span className={`text-[10px] ${mutedColor}`}>
+                          {ref.document_title ?? ''}
+                          {ref.document_title && ref.page ? ' · ' : ''}
+                          {ref.page ? `p. ${ref.page}` : ''}
+                        </span>
+                      )}
+                    </div>
+                    <p className={`${subColor} text-sm leading-relaxed`}>{ref.snippet}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* Prior visit note */}
           {visit.priorNote && (
             <div>
