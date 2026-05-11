@@ -1,5 +1,5 @@
 -- =============================================================================
--- Phase B (calendar cross-doc consistency check) — migration B1.
+-- Phase B — calendar cross-doc consistency check (migration B1).
 --
 -- Adds a `cross_references` JSONB column to protocol_visit_templates so the
 -- ingest pipeline can attach every additional mention of a visit found
@@ -13,21 +13,18 @@
 --       "page": 27,
 --       "document_id": "uuid-of-source-document"   -- optional; null for
 --                                                    -- intra-document refs
---                                                    -- pulled from the same
---                                                    -- doc that produced the
---                                                    -- SoA row.
+--                                                    -- from the same doc as SoA
 --     },
 --     ...
 --   ]
 --
 -- A null/empty array means "no cross-references found" and the UI hides the
--- section entirely. The frontend renders these grouped by source_section in
--- VisitDetailDrawer; nothing else consumes this column today.
+-- section entirely. Frontend renders these grouped by source_section in
+-- the visit drawer; nothing else consumes this column today.
 --
--- The column is populated by the `ingest` Edge Function — extending the
--- Reducto Extract schema to return cross_references per visit (Phase B2)
--- and by a follow-up cross-document fan-out pass (Phase B3) when a
--- non-SoA document is ingested against a protocol with existing templates.
+-- Populated by the `ingest` Edge Function — extended Reducto Extract schema
+-- (Phase B2, intra-document refs) plus cross-document fan-out (Phase B3)
+-- when a non-SoA document is ingested for a protocol with existing templates.
 --
 -- Default '[]'::jsonb so existing rows don't break the frontend join.
 -- =============================================================================
@@ -38,4 +35,4 @@ ALTER TABLE protocol_visit_templates
 COMMENT ON COLUMN protocol_visit_templates.cross_references IS
   'Aggregated mentions of this visit elsewhere in the protocol documents — '
   'array of { source_section, snippet, page?, document_id? }. Populated by '
-  'the ingest pipeline; rendered in VisitDetailDrawer.';
+  'the ingest pipeline; rendered in the visit drawer.';

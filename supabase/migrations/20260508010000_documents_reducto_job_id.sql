@@ -1,10 +1,10 @@
 -- =============================================================================
 -- Phase B3 (calendar cross-doc consistency check) — persist Reducto job_id.
 --
--- The `ingest` Edge Function uploads a PDF to Reducto and gets a parse job_id
--- back. Today the id only lives in memory for the duration of the ingest
--- call; once the function returns, there's no way to re-Extract against the
--- same parse output later.
+-- The `ingest` Edge Function uploads a PDF to Reducto and gets a parse
+-- job_id back. Today the id only lives in memory for the duration of the
+-- ingest call; once the function returns, there's no way to re-Extract
+-- against the same parse output later.
 --
 -- For Phase B3 we need to call Reducto Extract on *previously-ingested*
 -- documents with a fresh schema (the list of known visits from a newly

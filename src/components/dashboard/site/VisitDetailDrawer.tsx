@@ -369,9 +369,8 @@ export default function VisitDetailDrawer({
 
           {/* Cross-references — additional mentions of this visit pulled
               from the protocol's documents during ingest. Hidden if the
-              ingest pipeline hasn't surfaced any (or if the docs don't
-              mention this visit elsewhere). Grouped by source_section so
-              repeated callouts to the same section collapse visually. */}
+              pipeline has not surfaced any (or the docs do not mention this
+              visit elsewhere). Grouped visually by source_section. */}
           {visit.crossReferences && visit.crossReferences.length > 0 && (
             <div>
               <div className={`text-[11px] uppercase tracking-wider font-semibold mb-2 ${sectionHeader}`}>
@@ -383,7 +382,7 @@ export default function VisitDetailDrawer({
                     key={`${ref.source_section}-${i}`}
                     className={`border rounded-lg p-3 ${panelBg}`}
                   >
-                    <div className={`flex items-baseline justify-between gap-2 flex-wrap mb-1`}>
+                    <div className="flex items-baseline justify-between gap-2 flex-wrap mb-1">
                       <span className={`text-[11px] font-semibold ${headingColor}`}>
                         {ref.source_section}
                       </span>

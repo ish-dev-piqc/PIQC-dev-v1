@@ -1,8 +1,11 @@
 // =============================================================================
 // Site Mode — DB-mirror types shared by siteApi and SiteDataContext.
 //
-// These mirror the schema in supabase/migrations/20260502000000_site_mode_schema.sql
-// (and the documents.protocol_id addition in 20260506000100_).
+// These mirror the schema in:
+//   - supabase/migrations/20260502000000_site_mode_schema.sql
+//   - supabase/migrations/20260506000100_add_protocol_id_to_documents.sql
+//   - supabase/migrations/20260507000000_protocol_visit_templates.sql
+//   - supabase/migrations/20260508000000_visit_template_cross_references.sql
 //
 // The visit type matches the existing CalendarVisit shape (camelCase) so the
 // calendar UI in TodayTab and the Reports table can keep their consumer code.
@@ -46,12 +49,12 @@ export type VisitStatus =
 
 // One additional mention of a visit found elsewhere in the protocol's
 // documents — populated by the ingest pipeline (Phase B) and rendered in
-// VisitDetailDrawer's "From the protocol documents" section.
+// the visit drawer's "From the protocol documents" section.
 export interface VisitCrossReference {
   source_section: string;       // e.g. "7.4 Safety monitoring"
   snippet: string;              // verbatim passage that adds context
   page?: number;                // page number if known
-  document_id?: string;         // null = same doc that produced the SoA row
+  document_id?: string;         // source doc; null = same doc that produced SoA
   document_title?: string;      // populated frontend-side via documents join
 }
 
@@ -99,9 +102,10 @@ export interface SiteTeamMember {
 }
 
 // -----------------------------------------------------------------------------
-// Visit templates (Phase E) — extracted from protocol PDFs by Reducto and
-// stored in protocol_visit_templates. Used to project visits onto the
-// calendar via the materialize_protocol_visits RPC.
+// Visit templates — extracted from protocol PDFs by Reducto and stored in
+// protocol_visit_templates. Used to project visits onto the calendar via
+// the materialize_protocol_visits RPC. cross_references is populated by
+// Phase B (intra-doc + cross-doc fan-out).
 // -----------------------------------------------------------------------------
 
 export interface ProtocolVisitTemplate {

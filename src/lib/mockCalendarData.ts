@@ -28,12 +28,11 @@ export type VisitStatus =
 
 // One additional mention of a visit found elsewhere in the protocol's
 // documents — populated by the ingest pipeline (Phase B) and rendered in
-// VisitDetailDrawer. Optional on CalendarVisit so existing mock data
-// continues to satisfy the type.
+// VisitDetailDrawer. Optional so existing mock data continues to satisfy the type.
 export interface CalendarVisitCrossReference {
-  source_section: string;
-  snippet: string;
-  page?: number;
+  source_section: string; // e.g. "7.4 Safety monitoring"
+  snippet: string; // verbatim passage that adds context
+  page?: number; // page number if known
   document_id?: string;
   document_title?: string;
 }

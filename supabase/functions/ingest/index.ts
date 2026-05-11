@@ -737,7 +737,17 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.json();
-    const { title, source, content, pdf_base64 } = body;
+    const { title, source, content, pdf_base64, protocol_id } = body;
+
+    // Optional caller-provided protocol_id. The auto-tag trigger only fires
+    // when protocol_id IS NULL, so an explicit value here is respected and
+    // skips the extracted_fields.protocol_number lookup. Useful when:
+    //   - the document is being uploaded from a protocol-scoped surface
+    //     (e.g. ProtocolTab "Upload document"), or
+    //   - Reducto won't reliably surface protocol_number (text uploads,
+    //     supplemental docs like IBs without a header).
+    const callerProtocolId =
+      typeof protocol_id === "string" && protocol_id.length > 0 ? protocol_id : null;
 
     let chunks: ChunkData[] = [];
     let extractedFields: Record<string, unknown> | null = null;
@@ -778,10 +788,18 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Insert document — status defaults to 'pending' via column default
+    // Insert document — status defaults to 'pending' via column default.
+    // protocol_id is set explicitly here only when the caller provided one;
+    // otherwise the documents_autotag_protocol_trg trigger fills it from
+    // extracted_fields.protocol_number on the post-parse UPDATE.
     const { data: doc, error: docError } = await supabase
       .from("documents")
-      .insert({ title: title ?? "", source: source ?? "", user_id: userId })
+      .insert({
+        title: title ?? "",
+        source: source ?? "",
+        user_id: userId,
+        ...(callerProtocolId ? { protocol_id: callerProtocolId } : {}),
+      })
       .select("id")
       .single();
 
@@ -874,7 +892,7 @@ Deno.serve(async (req: Request) => {
         // Per-visit cross-reference sanitiser. Reducto sometimes returns
         // stray objects with missing fields; we drop anything without both
         // a source_section and a snippet rather than upsert garbage. The
-        // document_id is stamped in here (not by the LLM) so future cross-
+        // document_id is stamped here (not by the LLM) so future cross-
         // document merges can attribute each entry back to its origin doc.
         const sanitizeCrossRefs = (raw: unknown): Array<{
           source_section: string;

@@ -2,7 +2,9 @@
 // Site Mode — Supabase data layer.
 //
 // Each function returns { ok: true, data } | { ok: false, error } following
-// the auditApi convention.
+// the auditApi convention. Callers consume via SiteDataContext (which fans
+// these out on activeProtocol change and listens for realtime postgres
+// changes) or directly when they only need a one-off operation.
 // =============================================================================
 
 import { supabase } from '../supabase';
@@ -114,7 +116,10 @@ export async function createParticipant(
     if (error) {
       // Postgres unique violation → friendlier message.
       if (error.code === '23505') {
-        return { ok: false, error: `Participant code "${input.participant_code}" already exists on this protocol.` };
+        return {
+          ok: false,
+          error: `Participant code "${input.participant_code}" already exists on this protocol.`,
+        };
       }
       throw error;
     }
@@ -179,16 +184,16 @@ interface VisitRow {
   deviation_reason: string | null;
   template_id: string | null;
   site_participants: { participant_code: string } | { participant_code: string }[] | null;
-  // PostgREST returns the joined relation as an object for one-to-one nested
-  // selects; we always pull a single template row via template_id.
-  protocol_visit_templates: {
-    cross_references: VisitCrossReference[] | null;
-  } | { cross_references: VisitCrossReference[] | null }[] | null;
+  // PostgREST returns the joined relation as object or array; normalise in rowToVisit.
+  protocol_visit_templates:
+    | { cross_references: VisitCrossReference[] | null }
+    | { cross_references: VisitCrossReference[] | null }[]
+    | null;
 }
 
 function rowToVisit(row: VisitRow): SiteVisit {
   // PostgREST returns the joined row as an object for !inner joins and
-  // sometimes as an array for left joins — normalize both shapes.
+  // sometimes as an array for left joins — normalise both shapes.
   const joined = Array.isArray(row.site_participants)
     ? row.site_participants[0]
     : row.site_participants;
@@ -222,7 +227,9 @@ export async function fetchVisitsForProtocol(
   try {
     const { data, error } = await supabase
       .from('site_visits')
-      .select('id, participant_id, protocol_id, date, time_of_day, study_day, visit_name, window_closes, status, procedures, prior_note, deviation_reason, template_id, site_participants!inner(participant_code), protocol_visit_templates(cross_references)')
+      .select(
+        'id, participant_id, protocol_id, date, time_of_day, study_day, visit_name, window_closes, status, procedures, prior_note, deviation_reason, template_id, site_participants!inner(participant_code), protocol_visit_templates(cross_references)',
+      )
       .eq('protocol_id', protocolId)
       .order('date', { ascending: true });
     if (error) throw error;
@@ -240,8 +247,7 @@ export async function fetchVisitsForProtocol(
  * Note: the materialize_protocol_visits RPC wipes template-derived visits on
  * re-projection (e.g. when a participant's enrolled_at changes), which means
  * a "completed" status set here can be lost if the protocol is later
- * re-materialized. That's a separate backend concern — flagging here so the
- * follow-up is obvious.
+ * re-materialized. Tracked as a follow-up.
  */
 export async function updateVisit(
   visitId: string,
@@ -337,7 +343,7 @@ export async function fetchProtocolDocuments(
 }
 
 // -----------------------------------------------------------------------------
-// Visit templates + anchor date + materialize (Phase E)
+// Visit templates + anchor date + materialize (Phase A).
 // -----------------------------------------------------------------------------
 
 export async function fetchVisitTemplates(
