@@ -420,3 +420,94 @@ SCV's own `SUBJECT_COMMAND_CANVAS.md`:
 
 Product / scope → Kiara.
 Build / code → file headers + inline comments (every non-trivial file has a top comment).
+
+---
+
+## Worksheet Compiler — Sprint 1B
+
+> **Status: Implemented — 2026-05-12**
+> Branch: `claude/goofy-buck-a2f6b6`
+> Precondition: Sprint 1A discovery complete (see `mystifying-ishizaka-10235a` worktree for full report)
+
+### Locked Decisions
+
+| # | Question | Decision | Date |
+|---|---|---|---|
+| 2 | Worksheet storage location | `documents.worksheet_bundle JSONB` — separate column on same row as `extracted_fields`. Re-ingest does not overwrite the compiled worksheet. | 2026-05-12 |
+| 3 | Deduplication ownership | Compiler owns dedup. When Source A (SOA table) and Source B (inline sections) both have non-zero values for the same field but disagree, a `DiscrepancyEvent` is generated in `qa_ledger` with both values, the winning value, and context. Coordinator reviews flagged discrepancies. | 2026-05-12 |
+| 4 | Key-trim fix | Added recursive `trimKeys()` to `extractClinicalFields` in `ingest/index.ts`. Applied before returning the Reducto response to prevent silent field lookup failures from trailing-space key names. | 2026-05-12 |
+| 5 | Procedures source | `protocol_visit_templates.procedures TEXT[]` for Sprint 1B. No per-procedure citations. Deferred to Sprint 1C. Noted in `qa_ledger`. | 2026-05-12 |
+| 1 | Corrected schema verification | **PENDING** — dev team must re-run Reducto Extract with the corrected schema (procedures removed, schedule_variant at visit level, array_extract:true) against CLR-18-06 job `3bf5113e` and paste output. Validates the ingest schema fix before running new protocols through ingest. | — |
+
+### What Was Built (Sprint 1B)
+
+| File | What |
+|------|------|
+| `supabase/migrations/20260512000000_add_worksheet_bundle_to_documents.sql` | `ALTER TABLE documents ADD COLUMN IF NOT EXISTS worksheet_bundle JSONB` |
+| `src/lib/featureFlags.ts` | Build-time flags: `FLAGS.WORKSHEET_COMPILER` + `FLAGS.SUBJECT_COMMAND_VIEW` |
+| `src/lib/worksheet/types.ts` | `WorksheetBundle`, `MaybeCited<T>`, `WorksheetCitation`, `VisitEntry`, `ProcedureEntry`, `QaLedger`, `DeduplicationEvent`, `DiscrepancyEvent` |
+| `src/lib/worksheet/worksheetCompiler.ts` | `compileWorksheet(input): WorksheetBundle` — deterministic, pure, no async |
+| `src/lib/worksheet/worksheetCompiler.test.ts` | 20 Vitest test cases covering dedup, discrepancy, fallback, MaybeCited nulls, qa_ledger |
+| `vitest.config.ts` | Test config (node env, `src/**/*.test.ts`) |
+| `supabase/functions/ingest/index.ts` | `trimKeys()` applied to Reducto response; `procedures` removed from SOA schema; `schedule_variant` added at visit level; `array_extract:true`; system prompt updated |
+| `.env.example` | `VITE_FF_WORKSHEET_COMPILER=false` + `VITE_FF_SUBJECT_COMMAND_VIEW=false` |
+
+### Compiler Contract
+
+```typescript
+// Caller fetches data, calls compiler, stores result — no async in the compiler itself
+const bundle = compileWorksheet({
+  protocolVersionId,        // string
+  documentId,               // documents.id
+  documentTitle,            // documents.title
+  extractedFields,          // documents.extracted_fields (Reducto raw)
+  visitTemplates,           // protocol_visit_templates[] for this protocol
+  sourceDocuments,          // SourceDocumentRef[] — documents consulted
+});
+// Store: supabase.from('documents').update({ worksheet_bundle: bundle }).eq('id', documentId)
+```
+
+### Decision Debt Carried Forward
+
+| Decision deferred | Why acceptable | Trigger |
+|---|---|---|
+| Q1 — schema verification output | Types/compiler don't depend on it; affects ingest live-run only | Before ingesting new real protocols post-fix |
+| `criticality_ref` linkage per procedure | `protocol_risk_objects` near-zero coverage; stored as `null` | Sprint 1C |
+| Per-procedure chunk-level citations | `procedures TEXT[]` has no page/section provenance | Sprint 1C |
+| `timing_rules[]` extraction | Complex scheduling rules need dedicated extract pass | Sprint 1C |
+
+### Sprint 1C (Next)
+
+1. Link `procedures[].criticality_ref` to `protocol_risk_objects.endpoint_tier` by procedure text matching
+2. Per-procedure citation via chunk text-match heuristic (`chunks` table search)
+3. Targeted SOA table extraction pass for procedure names (separate Reducto schema)
+4. `timing_rules[]` extraction from inline constraint sections
+
+### Sprint 1D (After 1C)
+
+- `VITE_FF_WORKSHEET_COMPILER=true` gates the UI tab
+- Worksheet tab component reads compiled bundle from `documents.worksheet_bundle`
+- Surfaces `qa_ledger.discrepancy_events` as reviewer-actionable flags
+
+### Dev Team Verification Steps
+
+```bash
+# 1. Install dependencies (includes vitest 2.0.5)
+npm install
+
+# 2. Run worksheet compiler tests — all 20 cases must pass
+npm test
+
+# 3. Type-check
+npm run typecheck
+
+# 4. Deploy new migration to Supabase
+SUPABASE_ACCESS_TOKEN=<token> npx supabase db push --project-ref ygfcjwgsjmathinqkppq
+
+# 5. Redeploy ingest (key-trim + schema fix)
+SUPABASE_ACCESS_TOKEN=<token> npx supabase functions deploy ingest --project-ref ygfcjwgsjmathinqkppq
+
+# 6. Q1 verification (pending): re-run Reducto Extract in Studio with corrected schema
+#    (see mystifying-ishizaka-10235a/plan.md §9) against CLR-18-06 job 3bf5113e.
+#    Confirm schedule_variant appears at visit level and procedures is absent.
+```

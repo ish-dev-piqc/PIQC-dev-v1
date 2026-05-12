@@ -111,10 +111,10 @@ const CLINICAL_EXTRACT_SCHEMA = {
             type: "integer",
             description: "Permissible visit window — days after the scheduled date that are still in window (0 if not specified).",
           },
-          procedures: {
-            type: "array",
-            items: { type: "string" },
-            description: "List of procedures, assessments, or activities performed at this visit",
+          schedule_variant: {
+            type: "string",
+            description:
+              "Name of the schedule variant as it appears in the document (e.g. 'All Subjects', 'PK Substudy Participants', 'Biomarker Substudy'). Use the table section header or the table column header that identifies which subject population this visit applies to. Leave empty string if the document shows a single schedule for all subjects.",
           },
           cross_references: {
             type: "array",
@@ -642,6 +642,19 @@ async function mergeCrossReferencesIntoTemplates(
   return { templatesTouched, entriesInserted };
 }
 
+// Recursively trim trailing/leading spaces from all string keys in a parsed JSON object.
+// Workaround for a Reducto Studio artifact where schema field names include trailing spaces
+// (e.g. "visit_name " instead of "visit_name"). Without this, key lookups silently fail.
+function trimKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(trimKeys);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k.trim(), trimKeys(v)])
+    );
+  }
+  return value;
+}
+
 async function extractClinicalFields(
   jobId: string,
   reductoKey: string,
@@ -662,13 +675,17 @@ async function extractClinicalFields(
           system_prompt:
             "You are extracting structured data from a clinical trial protocol document. " +
             "Extract only information explicitly stated in the document. " +
-            "Use null for any field not found. Do not infer, calculate, or assume values.",
+            "Use null for any field not found. Do not infer, calculate, or assume values. " +
+            "For schedule_of_events, prefer entries from inline visit description sections " +
+            "(e.g. '6.3.x Visit N (Week X, Day Y±Z)') over table rows when both are present, " +
+            "as inline sections carry more reliable window information.",
         },
         settings: {
           citations: {
             enabled: true,
             numerical_confidence: false, // categorical high/low is enough; saves response size
           },
+          array_extract: true, // required for long documents with repeating SOA data
         },
       }),
     });
@@ -680,7 +697,7 @@ async function extractClinicalFields(
     }
 
     const data = await res.json();
-    return (data.result ?? data) as Record<string, unknown>;
+    return trimKeys(data.result ?? data) as Record<string, unknown>;
   }, "extractClinicalFields");
 }
 
