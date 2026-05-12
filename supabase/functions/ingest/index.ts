@@ -105,11 +105,23 @@ const CLINICAL_EXTRACT_SCHEMA = {
           },
           window_minus_days: {
             type: "integer",
-            description: "Permissible visit window — days before the scheduled date that are still in window (0 if not specified).",
+            description:
+              "Permissible visit window — days BEFORE the scheduled date that are still in window. " +
+              "Before returning 0, actively search the protocol for ± notation tied to this visit: " +
+              "look in inline visit-description sections (e.g. '6.3.x Visit N (Week X, Day Y±Z)') and " +
+              "any narrative text alongside the visit, not just the Schedule-of-Assessments table. " +
+              "If you see 'Day 14±3' or 'Day 140 (±7 days)' for this visit, return 3 or 7 respectively. " +
+              "Only return 0 if the protocol explicitly states no window or the visit is genuinely fixed.",
           },
           window_plus_days: {
             type: "integer",
-            description: "Permissible visit window — days after the scheduled date that are still in window (0 if not specified).",
+            description:
+              "Permissible visit window — days AFTER the scheduled date that are still in window. " +
+              "Before returning 0, actively search the protocol for ± notation tied to this visit: " +
+              "look in inline visit-description sections (e.g. '6.3.x Visit N (Week X, Day Y±Z)') and " +
+              "any narrative text alongside the visit, not just the Schedule-of-Assessments table. " +
+              "If you see 'Day 14±3' or 'Day 140 (±7 days)' for this visit, return 3 or 7 respectively. " +
+              "Only return 0 if the protocol explicitly states no window or the visit is genuinely fixed.",
           },
           procedures: {
             type: "array",
@@ -662,7 +674,15 @@ async function extractClinicalFields(
           system_prompt:
             "You are extracting structured data from a clinical trial protocol document. " +
             "Extract only information explicitly stated in the document. " +
-            "Use null for any field not found. Do not infer, calculate, or assume values.",
+            "Use null for any field not found. Do not infer, calculate, or assume values.\n\n" +
+            "When extracting schedule_of_events, prefer the inline visit-description sections " +
+            "(commonly numbered like '6.3.x Visit N (Week X, Day Y±Z)' or similar narrative " +
+            "subsections under 'Study Procedures' / 'Visit Schedule') over the Schedule-of-" +
+            "Assessments (SoA) table. SoA tables typically only list the target day, while the " +
+            "inline visit sections carry the ± window notation (e.g. 'Day 14±3', 'Day 140 (±7 " +
+            "days)'). For each visit, scan that visit's inline section for ± notation before " +
+            "deciding on window_minus_days and window_plus_days. Do NOT default these to 0 " +
+            "unless the protocol explicitly states the visit has no window or is fixed.",
         },
         settings: {
           citations: {
