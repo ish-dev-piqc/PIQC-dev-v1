@@ -43,7 +43,18 @@ Deno.serve(async (req) => {
       return corsResponse({ error: 'Method not allowed' }, 405);
     }
 
-    const { price_id, success_url, cancel_url, mode } = await req.json();
+    const {
+      price_id,
+      success_url,
+      cancel_url,
+      mode,
+      // Optional — when true and the user has an active subscription, we
+      // append this price as a subscription item instead of starting a new
+      // Checkout Session. Used for add-on flows (Additional Protocol /
+      // Additional Seat Pack). No redirect needed; user's existing payment
+      // method is charged prorated.
+      append_to_subscription,
+    } = await req.json();
 
     const error = validateParameters(
       { price_id, success_url, cancel_url, mode },
@@ -175,6 +186,58 @@ Deno.serve(async (req) => {
           }
         }
       }
+    }
+
+    // Add-on append branch — no redirect, charges existing payment method.
+    // Stripe will prorate the charge based on the current billing period.
+    if (append_to_subscription && mode === 'subscription') {
+      // Find the customer's active subscription from Stripe (authoritative).
+      const stripeSubs = await stripe.subscriptions.list({
+        customer: customerId,
+        status: 'active',
+        limit: 1,
+      });
+      const activeSub = stripeSubs.data[0];
+      if (!activeSub) {
+        return corsResponse(
+          {
+            error:
+              'No active subscription. Start a Workspace before adding seats or protocols.',
+          },
+          400,
+        );
+      }
+
+      // If an item with this exact price already exists, bump its quantity
+      // instead of creating a duplicate item. Keeps the customer's invoice
+      // tidy and the entitlement math straightforward.
+      const existingItem = activeSub.items.data.find(
+        (i) => i.price?.id === price_id,
+      );
+      if (existingItem) {
+        await stripe.subscriptionItems.update(existingItem.id, {
+          quantity: (existingItem.quantity ?? 1) + 1,
+          proration_behavior: 'always_invoice',
+        });
+        console.log(
+          `Bumped subscription item ${existingItem.id} to qty ${
+            (existingItem.quantity ?? 1) + 1
+          } on sub ${activeSub.id}`,
+        );
+      } else {
+        await stripe.subscriptionItems.create({
+          subscription: activeSub.id,
+          price: price_id,
+          quantity: 1,
+          proration_behavior: 'always_invoice',
+        });
+        console.log(
+          `Added new subscription item ${price_id} to sub ${activeSub.id}`,
+        );
+      }
+
+      // Frontend should refresh subscription state after this returns.
+      return corsResponse({ appended: true, url: success_url });
     }
 
     // create Checkout Session
