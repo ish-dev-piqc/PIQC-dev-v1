@@ -1043,7 +1043,143 @@ if [[ -n "${DOC_B:-}" && -n "${STUDY_B:-}" ]]; then
 fi
 echo
 
-# --- Cleanup PR-2 setup ---------------------------------------------------
+# ---------------------------------------------------------------------------
+# T30–T36  SOTR PR-5 — draft review actions
+#
+# Validates sotr_create_review_event for all five actions plus auth / cross-
+# study isolation / snapshot capture / version increment behaviour.
+# Reuses ITEM_A + ev rows set up earlier under STUDY_A.
+# ---------------------------------------------------------------------------
+
+echo "════════════════════════════════════════════════════════════════"
+echo "  SOTR — draft review actions (T30–T36)"
+echo "════════════════════════════════════════════════════════════════"
+echo
+
+# --- T30 — accept_for_draft -----------------------------------------------
+if [[ -n "${ITEM_A:-}" && -n "${EV_PRIMARY:-}" ]]; then
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_create_review_event" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_study_id\":\"$STUDY_A\",\"p_worksheet_item_id\":\"$ITEM_A\",\"p_action\":\"accept_for_draft\",\"p_source_evidence_record_ids\":[\"$EV_PRIMARY\"]}")
+  T30_STATUS=$(echo "$RESP" | jq -r '.review_status // empty')
+  T30_VERSION=$(echo "$RESP" | jq -r '.version // empty')
+  T30_EVENT=$(echo "$RESP" | jq -r '.review_event_id // empty')
+  if [[ "$T30_STATUS" == "accepted_for_draft" && "$T30_VERSION" == "1" && -n "$T30_EVENT" ]]; then
+    pass "T30: accept_for_draft → status=accepted_for_draft, version unchanged"
+  else
+    fail "T30: accept_for_draft" "status=$T30_STATUS version=$T30_VERSION event=$T30_EVENT"
+  fi
+fi
+echo
+
+# --- T31 — edit_draft_item updates text + increments version --------------
+if [[ -n "${ITEM_A:-}" && -n "${EV_PRIMARY:-}" ]]; then
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_create_review_event" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_study_id\":\"$STUDY_A\",\"p_worksheet_item_id\":\"$ITEM_A\",\"p_action\":\"edit_draft_item\",\"p_new_item_text\":\"Collect vital signs before dosing.\",\"p_reviewer_note\":\"clarified\",\"p_source_evidence_record_ids\":[\"$EV_PRIMARY\"]}")
+  T31_STATUS=$(echo "$RESP" | jq -r '.review_status // empty')
+  T31_VERSION=$(echo "$RESP" | jq -r '.version // empty')
+  T31_TEXT=$(echo "$RESP" | jq -r '.worksheet_item_text // empty')
+  if [[ "$T31_STATUS" == "edited" && "$T31_VERSION" == "2" && "$T31_TEXT" == "Collect vital signs before dosing." ]]; then
+    pass "T31: edit_draft_item → version 1→2, text updated, status=edited"
+  else
+    fail "T31: edit_draft_item" "status=$T31_STATUS version=$T31_VERSION text=$T31_TEXT"
+  fi
+fi
+echo
+
+# --- T32 — reject_from_draft ---------------------------------------------
+if [[ -n "${ITEM_A:-}" ]]; then
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_create_review_event" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_study_id\":\"$STUDY_A\",\"p_worksheet_item_id\":\"$ITEM_A\",\"p_action\":\"reject_from_draft\",\"p_reviewer_note\":\"source mismatch\"}")
+  T32_STATUS=$(echo "$RESP" | jq -r '.review_status // empty')
+  if [[ "$T32_STATUS" == "rejected_from_draft" ]]; then
+    pass "T32: reject_from_draft → status=rejected_from_draft"
+  else
+    fail "T32: reject_from_draft" "status=$T32_STATUS"
+  fi
+fi
+echo
+
+# --- T33 — flag_item ------------------------------------------------------
+if [[ -n "${ITEM_A:-}" ]]; then
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_create_review_event" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_study_id\":\"$STUDY_A\",\"p_worksheet_item_id\":\"$ITEM_A\",\"p_action\":\"flag_item\",\"p_reviewer_note\":\"timing unclear\"}")
+  T33_STATUS=$(echo "$RESP" | jq -r '.review_status // empty')
+  if [[ "$T33_STATUS" == "flagged" ]]; then
+    pass "T33: flag_item → status=flagged"
+  else
+    fail "T33: flag_item" "status=$T33_STATUS"
+  fi
+fi
+echo
+
+# --- T34 — flag_source does NOT change item status ------------------------
+if [[ -n "${ITEM_A:-}" && -n "${EV_PRIMARY:-}" ]]; then
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_create_review_event" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_study_id\":\"$STUDY_A\",\"p_worksheet_item_id\":\"$ITEM_A\",\"p_action\":\"flag_source\",\"p_reviewer_note\":\"section ref looks wrong\",\"p_source_evidence_record_ids\":[\"$EV_PRIMARY\"]}")
+  T34_STATUS=$(echo "$RESP" | jq -r '.review_status // empty')
+  T34_EVENT=$(echo "$RESP" | jq -r '.review_event_id // empty')
+  # flag_source preserves whatever the previous status was (T33 left it 'flagged')
+  if [[ "$T34_STATUS" == "flagged" && -n "$T34_EVENT" ]]; then
+    pass "T34: flag_source created event without forcing item status change"
+  else
+    fail "T34: flag_source" "status=$T34_STATUS event=$T34_EVENT"
+  fi
+fi
+echo
+
+# --- T35 — review event captured version + protocol_doc + snapshot --------
+if [[ -n "${ITEM_A:-}" ]]; then
+  # Read the most recent event back via REST
+  EVENTS=$(curl -s "$REST/worksheet_review_events?worksheet_item_id=eq.$ITEM_A&order=created_at.desc&limit=1" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT")
+  T35_VERSION=$(echo "$EVENTS" | jq -r '.[0].worksheet_item_version // empty')
+  T35_DOC=$(echo "$EVENTS" | jq -r '.[0].protocol_document_id // empty')
+  T35_SNAP_LEN=$(echo "$EVENTS" | jq '.[0].source_evidence_snapshot | length')
+  T35_SNAP_HAS_QUOTED=$(echo "$EVENTS" | jq -r '[.[0].source_evidence_snapshot[] | has("quoted_text")] | all')
+  if [[ "$T35_VERSION" == "2" && "$T35_DOC" == "$DOC_A" && "$T35_SNAP_LEN" -ge 1 && "$T35_SNAP_HAS_QUOTED" == "true" ]]; then
+    pass "T35: event captures version=2, protocol_document_id, snapshot with quoted_text"
+  else
+    fail "T35: event capture" "version=$T35_VERSION doc=$T35_DOC snap_len=$T35_SNAP_LEN has_quoted=$T35_SNAP_HAS_QUOTED"
+  fi
+fi
+echo
+
+# --- T36 — cross-study source rejected (auth) -----------------------------
+# DOC_B is study B; create a source there, try to reference it from a
+# review on ITEM_A (study A). Should fail with 42501.
+if [[ -n "${DOC_B:-}" && -n "${ITEM_A:-}" ]]; then
+  EV_BAD_RESP=$(curl -s -X POST "$REST/rpc/sotr_upsert_source_evidence" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_document_id\":\"$DOC_B\",\"p_page_number\":1,\"p_quoted_text\":\"foreign\",\"p_support_type\":\"primary\"}")
+  EV_BAD=$(echo "$EV_BAD_RESP" | jq -r '.id // empty')
+
+  if [[ -n "$EV_BAD" ]]; then
+    RESP=$(curl -s -X POST "$REST/rpc/sotr_create_review_event" \
+      -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+      -H "Content-Type: application/json" \
+      -d "{\"p_study_id\":\"$STUDY_A\",\"p_worksheet_item_id\":\"$ITEM_A\",\"p_action\":\"accept_for_draft\",\"p_source_evidence_record_ids\":[\"$EV_BAD\"]}")
+    T36_CODE=$(echo "$RESP" | jq -r '.code // empty')
+    if [[ "$T36_CODE" == "42501" || $(echo "$RESP" | grep -c "not in this study") -ge 1 ]]; then
+      pass "T36: cross-study source evidence rejected"
+    else
+      fail "T36: cross-study source should be rejected" "resp=$RESP"
+    fi
+  fi
+fi
+echo
+
+# --- Cleanup PR-2/PR-4/PR-5 setup -----------------------------------------
 for d in "${DOC_A:-}" "${DOC_B:-}"; do
   if [[ -n "$d" ]]; then
     curl -s -X DELETE "$REST/documents?id=eq.$d" \
@@ -1051,7 +1187,7 @@ for d in "${DOC_A:-}" "${DOC_B:-}"; do
       -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" >/dev/null
   fi
 done
-echo "[cleanup] PR-2/PR-4 SOTR smoke rows deleted (documents + cascade)"
+echo "[cleanup] PR-2/PR-4/PR-5 SOTR smoke rows deleted (documents + cascade)"
 echo
 
 # ---------------------------------------------------------------------------

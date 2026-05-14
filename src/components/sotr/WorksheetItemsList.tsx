@@ -29,10 +29,12 @@ export default function WorksheetItemsList({ studyId }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState<ExtractedItemRecord | null>(null);
+  const [refreshToken, setRefreshToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    // Show the spinner only on first load, not on review-triggered refreshes.
+    if (refreshToken === 0) setLoading(true);
     setError(null);
     listWorksheetItemsForStudy(studyId)
       .then((rows) => {
@@ -48,7 +50,7 @@ export default function WorksheetItemsList({ studyId }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [studyId]);
+  }, [studyId, refreshToken]);
 
   return (
     <div
@@ -97,6 +99,7 @@ export default function WorksheetItemsList({ studyId }: Props) {
           worksheetItemId={active.id}
           itemLabel={formatExtractedValue(active.extracted_value)}
           onClose={() => setActive(null)}
+          onReviewActionCompleted={() => setRefreshToken((n) => n + 1)}
         />
       )}
     </div>

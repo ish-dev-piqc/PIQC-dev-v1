@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight, FileSearch, AlertTriangle, MapPinOff } from 'lucide-react';
 import ConfidenceBadge from './ConfidenceBadge';
+import ReviewStatusBadge from './ReviewStatusBadge';
 import ViewCitedPageButton from './ViewCitedPageButton';
+import ReviewActionBar from './ReviewActionBar';
+import FlagSourceButton from './FlagSourceButton';
 import type {
   WorksheetItemSourceEvidence,
   SourceEvidenceForReview,
   MissingSourceReason,
+  CreateReviewEventResult,
 } from '../../types/sotr';
 
 // =============================================================================
@@ -29,6 +33,11 @@ interface Props {
    * Optional: when absent, the cited-page action is hidden.
    */
   studyId?: string;
+  /**
+   * Fired after any draft review action. Drawer/list use this to re-fetch
+   * so the row's status badge + edited text reflect the latest server state.
+   */
+  onReviewActionCompleted?: (result: CreateReviewEventResult) => void;
 }
 
 const MISSING_SOURCE_LABELS: Record<MissingSourceReason, string> = {
@@ -47,12 +56,21 @@ const SUPPORT_LABELS: Record<SourceEvidenceForReview['support_type'], string> = 
   conflict:  'Conflict',
 };
 
-export default function SourceTruthPanel({ itemLabel, data, studyId }: Props) {
+export default function SourceTruthPanel({
+  itemLabel,
+  data,
+  studyId,
+  onReviewActionCompleted,
+}: Props) {
   const sources = data.sources;
   const [index, setIndex] = useState(0);
 
   const safeIndex = Math.min(index, Math.max(0, sources.length - 1));
   const current = sources[safeIndex];
+
+  // Prefer the live edited text on subsequent renders, falling back to the
+  // user-provided itemLabel (the unedited extracted value) on first paint.
+  const displayItemLabel = data.worksheet_item_text ?? data.current_text ?? itemLabel;
 
   return (
     <div className="space-y-5" data-testid="sotr-panel">
@@ -61,16 +79,28 @@ export default function SourceTruthPanel({ itemLabel, data, studyId }: Props) {
         <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold">
           Worksheet item
         </p>
-        {itemLabel && (
-          <p className="text-fg-heading text-sm font-medium mt-1 break-words">
-            {itemLabel}
+        {displayItemLabel && (
+          <p
+            data-testid="sotr-item-display-text"
+            className="text-fg-heading text-sm font-medium mt-1 break-words"
+          >
+            {displayItemLabel}
           </p>
         )}
         <div className="mt-2 flex items-center gap-2 flex-wrap">
           <ConfidenceBadge state={data.confidence_state} size="md" />
+          <ReviewStatusBadge status={data.review_status} />
           {typeof data.confidence_score === 'number' && (
             <span className="text-fg-muted text-[11px]">
               Score {data.confidence_score.toFixed(2)}
+            </span>
+          )}
+          {typeof data.version === 'number' && data.version > 1 && (
+            <span
+              data-testid="sotr-item-version"
+              className="text-fg-muted text-[10px] uppercase tracking-wider font-semibold"
+            >
+              v{data.version}
             </span>
           )}
         </div>
@@ -105,8 +135,22 @@ export default function SourceTruthPanel({ itemLabel, data, studyId }: Props) {
           )}
 
           {/* Active source */}
-          <SourceCard source={current} studyId={studyId} />
+          <SourceCard
+            source={current}
+            studyId={studyId}
+            worksheetItemId={data.worksheet_item_id}
+            onSourceFlagged={onReviewActionCompleted}
+          />
         </>
+      )}
+
+      {/* Draft review actions — only when we have studyId (i.e. drawer flow). */}
+      {studyId && (
+        <ReviewActionBar
+          studyId={studyId}
+          data={data}
+          onCompleted={(r) => onReviewActionCompleted?.(r)}
+        />
       )}
     </div>
   );
@@ -162,7 +206,17 @@ function SourceNavigator({ count, index, onPrev, onNext }: NavProps) {
 // SourceCard — citation metadata + quoted source text + missing-coords hint
 // -----------------------------------------------------------------------------
 
-function SourceCard({ source, studyId }: { source: SourceEvidenceForReview; studyId?: string }) {
+function SourceCard({
+  source,
+  studyId,
+  worksheetItemId,
+  onSourceFlagged,
+}: {
+  source: SourceEvidenceForReview;
+  studyId?: string;
+  worksheetItemId?: string;
+  onSourceFlagged?: (result: CreateReviewEventResult) => void;
+}) {
   const headerParts = [
     source.protocol_version || 'Protocol document',
     source.section_number ? `Section ${source.section_number}` : null,
@@ -214,10 +268,20 @@ function SourceCard({ source, studyId }: { source: SourceEvidenceForReview; stud
         )}
 
         {studyId && (
-          <ViewCitedPageButton
-            studyId={studyId}
-            documentId={source.protocol_document_id}
-          />
+          <div className="flex items-center gap-3 flex-wrap">
+            <ViewCitedPageButton
+              studyId={studyId}
+              documentId={source.protocol_document_id}
+            />
+            {worksheetItemId && (
+              <FlagSourceButton
+                studyId={studyId}
+                worksheetItemId={worksheetItemId}
+                sourceId={source.id}
+                onFlagged={onSourceFlagged}
+              />
+            )}
+          </div>
         )}
       </div>
     </article>
