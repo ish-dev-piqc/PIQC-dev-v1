@@ -227,8 +227,8 @@ export default function ProtocolTab() {
           )}
         </div>
 
-        {/* Parsed protocol items — Source Truth Reviewer (PR-3) */}
-        <WorksheetItemsList studyId={activeProtocol.id} />
+        {/* Parsed protocol items — Source Truth Reviewer (PR-3, PR-6 export) */}
+        <WorksheetItemsList studyId={activeProtocol.id} studyCode={activeProtocol.code} />
 
         {/* Documents */}
         <div className={`${cardBg} border rounded-xl overflow-hidden`}>

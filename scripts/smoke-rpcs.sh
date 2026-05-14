@@ -1179,7 +1179,88 @@ if [[ -n "${DOC_B:-}" && -n "${ITEM_A:-}" ]]; then
 fi
 echo
 
-# --- Cleanup PR-2/PR-4/PR-5 setup -----------------------------------------
+# ---------------------------------------------------------------------------
+# T37–T40  SOTR PR-6 — draft confidence export RPC
+#
+# Validates sotr_get_draft_confidence_packet. Reuses ITEM_A + sources +
+# review events created in PR-5 smoke tests. After PR-5 ran, ITEM_A has:
+#   - status='flagged' (T33), version=2 (T31 edit)
+#   - 3 linked source rows (primary, secondary, context)
+#   - several review events including a flag_source on EV_PRIMARY
+# ---------------------------------------------------------------------------
+
+echo "════════════════════════════════════════════════════════════════"
+echo "  SOTR — draft confidence export (T37–T40)"
+echo "════════════════════════════════════════════════════════════════"
+echo
+
+# --- T37 — authorized fetch returns rows for the study --------------------
+if [[ -n "${STUDY_A:-}" ]]; then
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_get_draft_confidence_packet" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_study_id\":\"$STUDY_A\"}")
+  T37_STUDY=$(echo "$RESP" | jq -r '.study_id // empty')
+  T37_ROWS=$(echo "$RESP" | jq '.rows | length')
+  T37_HAS_GENERATED=$(echo "$RESP" | jq -r '.generated_at // empty | length > 0')
+  if [[ "$T37_STUDY" == "$STUDY_A" && "$T37_ROWS" -ge 3 && "$T37_HAS_GENERATED" == "true" ]]; then
+    pass "T37: packet returned with $T37_ROWS rows + generated_at"
+  else
+    fail "T37: packet fetch" "study=$T37_STUDY rows=$T37_ROWS generated_at?=$T37_HAS_GENERATED"
+  fi
+fi
+echo
+
+# --- T38 — packet captures the edited text + review_status + flags --------
+if [[ -n "${STUDY_A:-}" ]]; then
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_get_draft_confidence_packet" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_study_id\":\"$STUDY_A\"}")
+
+  # PR-5 T31 edited ITEM_A to "Collect vital signs before dosing."
+  HAS_EDITED=$(echo "$RESP" | jq -r '[.rows[] | select(.worksheet_item_text == "Collect vital signs before dosing.")] | length > 0')
+  HAS_FLAGGED_ITEM=$(echo "$RESP" | jq -r '[.rows[] | select(.is_item_flagged == true)] | length > 0')
+  # PR-5 T34 flagged EV_PRIMARY; that source row should report is_source_flagged
+  HAS_FLAGGED_SRC=$(echo "$RESP" | jq -r '[.rows[] | select(.is_source_flagged == true)] | length > 0')
+
+  if [[ "$HAS_EDITED" == "true" && "$HAS_FLAGGED_ITEM" == "true" && "$HAS_FLAGGED_SRC" == "true" ]]; then
+    pass "T38: packet reflects edit + item flag + source flag"
+  else
+    fail "T38: packet content" "edited=$HAS_EDITED item_flag=$HAS_FLAGGED_ITEM src_flag=$HAS_FLAGGED_SRC"
+  fi
+fi
+echo
+
+# --- T39 — packet does NOT expose any storage URLs ------------------------
+if [[ -n "${STUDY_A:-}" ]]; then
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_get_draft_confidence_packet" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_study_id\":\"$STUDY_A\"}")
+  if echo "$RESP" | grep -qE '"(storage_url|file_url|signed_url|public_url)"' \
+     || echo "$RESP" | grep -qE 'https?://[^"]*\.(pdf|supabase\.co/storage)'; then
+    fail "T39: packet contains storage URL" "resp=$(echo "$RESP" | head -c 300)"
+  else
+    pass "T39: packet contains no raw storage URLs"
+  fi
+fi
+echo
+
+# --- T40 — unauthorized study (random UUID) returns 42501 -----------------
+RESP=$(curl -s -X POST "$REST/rpc/sotr_get_draft_confidence_packet" \
+  -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+  -H "Content-Type: application/json" \
+  -d "{\"p_study_id\":\"00000000-0000-0000-0000-000000000000\"}")
+T40_CODE=$(echo "$RESP" | jq -r '.code // empty')
+if [[ "$T40_CODE" == "42501" || $(echo "$RESP" | grep -c "access denied") -ge 1 ]]; then
+  pass "T40: unauthorized study fetch rejected"
+else
+  fail "T40: unauthorized study should be rejected" "resp=$RESP"
+fi
+echo
+
+# --- Cleanup PR-2/PR-4/PR-5/PR-6 setup ------------------------------------
 for d in "${DOC_A:-}" "${DOC_B:-}"; do
   if [[ -n "$d" ]]; then
     curl -s -X DELETE "$REST/documents?id=eq.$d" \
