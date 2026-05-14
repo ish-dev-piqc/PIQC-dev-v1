@@ -184,6 +184,7 @@ interface VisitRow {
   deviation_reason: string | null;
   template_id: string | null;
   site_participants: { participant_code: string } | { participant_code: string }[] | null;
+  // PostgREST returns the joined relation as object or array; normalise in rowToVisit.
   protocol_visit_templates:
     | { cross_references: VisitCrossReference[] | null }
     | { cross_references: VisitCrossReference[] | null }[]
@@ -240,8 +241,8 @@ export async function fetchVisitsForProtocol(
 
 /**
  * Patch a single field on a site_visit. Used by the Start-visit completion
- * flow; returns the updated row so the caller can swap it in optimistically
- * before the realtime subscription catches up.
+ * flow in VisitDetailDrawer; returns the updated row so the caller can swap
+ * it in optimistically before the realtime subscription catches up.
  *
  * Note: the materialize_protocol_visits RPC wipes template-derived visits on
  * re-projection (e.g. when a participant's enrolled_at changes), which means

@@ -119,23 +119,6 @@ export default function VisitDetailDrawer({
   const [persisting, setPersisting] = useState(false);
   const [persistError, setPersistError] = useState<string | null>(null);
 
-  // Marks the visit completed in Supabase. On failure we surface an inline
-  // error and keep the checklist in startMode so the coordinator can retry
-  // without losing what they've checked off. SiteDataContext's realtime
-  // subscription picks up the new status row a beat later.
-  const completeVisit = async () => {
-    if (persisting) return;
-    setPersisting(true);
-    setPersistError(null);
-    const result = await updateVisit(visit.id, { status: 'completed' });
-    setPersisting(false);
-    if (!result.ok) {
-      setPersistError(result.error);
-      return;
-    }
-    setVisitComplete(true);
-  };
-
   const day = parseYmd(visit.date);
   const past = isPast(day, today);
   const isToday = isSameDay(day, today);
@@ -185,6 +168,22 @@ export default function VisitDetailDrawer({
       else next.add(i);
       return next;
     });
+  };
+
+  // Persist completion to site_visits.status. If the update fails (e.g.
+  // offline) we surface the error and keep the drawer in checklist mode so
+  // the coordinator can retry — no silent local-only success.
+  const completeVisit = async () => {
+    if (persisting) return;
+    setPersisting(true);
+    setPersistError(null);
+    const result = await updateVisit(visit.id, { status: 'completed' });
+    setPersisting(false);
+    if (!result.ok) {
+      setPersistError(result.error);
+      return;
+    }
+    setVisitComplete(true);
   };
 
   return (
@@ -370,8 +369,8 @@ export default function VisitDetailDrawer({
 
           {/* Cross-references — additional mentions of this visit pulled
               from the protocol's documents during ingest. Hidden if the
-              pipeline hasn't surfaced any (or if the docs don't mention
-              this visit elsewhere). Grouped visually by source_section. */}
+              pipeline has not surfaced any (or the docs do not mention this
+              visit elsewhere). Grouped visually by source_section. */}
           {visit.crossReferences && visit.crossReferences.length > 0 && (
             <div>
               <div className={`text-[11px] uppercase tracking-wider font-semibold mb-2 ${sectionHeader}`}>

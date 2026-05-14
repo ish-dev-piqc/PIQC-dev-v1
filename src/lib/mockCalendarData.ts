@@ -27,12 +27,12 @@ export type VisitStatus =
   | 'closing_soon'; // today / near-term, window closing in <24h
 
 // One additional mention of a visit found elsewhere in the protocol's
-// documents — populated by the ingest pipeline (Phase B). Optional so
-// existing mock data continues to satisfy the type.
+// documents — populated by the ingest pipeline (Phase B) and rendered in
+// VisitDetailDrawer. Optional so existing mock data continues to satisfy the type.
 export interface CalendarVisitCrossReference {
-  source_section: string;       // e.g. "7.4 Safety monitoring"
-  snippet: string;              // verbatim passage that adds context
-  page?: number;                // page number if known
+  source_section: string; // e.g. "7.4 Safety monitoring"
+  snippet: string; // verbatim passage that adds context
+  page?: number; // page number if known
   document_id?: string;
   document_title?: string;
 }

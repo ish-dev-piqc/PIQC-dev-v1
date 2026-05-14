@@ -1,5 +1,5 @@
 -- =============================================================================
--- Phase B — calendar cross-doc consistency check.
+-- Phase B — calendar cross-doc consistency check (migration B1).
 --
 -- Adds a `cross_references` JSONB column to protocol_visit_templates so the
 -- ingest pipeline can attach every additional mention of a visit found
@@ -11,7 +11,9 @@
 --       "source_section": "7.4 Safety monitoring",
 --       "snippet": "On Day 1, vital signs must be recorded prior to dosing.",
 --       "page": 27,
---       "document_id": "uuid-of-source-document"
+--       "document_id": "uuid-of-source-document"   -- optional; null for
+--                                                    -- intra-document refs
+--                                                    -- from the same doc as SoA
 --     },
 --     ...
 --   ]
@@ -20,9 +22,11 @@
 -- section entirely. Frontend renders these grouped by source_section in
 -- the visit drawer; nothing else consumes this column today.
 --
--- Populated by the `ingest` Edge Function — both via the extended Reducto
--- Extract schema (intra-document references) and via a cross-document
--- fan-out pass that scans sibling documents tagged to the same protocol.
+-- Populated by the `ingest` Edge Function — extended Reducto Extract schema
+-- (Phase B2, intra-document refs) plus cross-document fan-out (Phase B3)
+-- when a non-SoA document is ingested for a protocol with existing templates.
+--
+-- Default '[]'::jsonb so existing rows don't break the frontend join.
 -- =============================================================================
 
 ALTER TABLE protocol_visit_templates

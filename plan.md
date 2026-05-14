@@ -297,6 +297,10 @@ rv1_code/                                   Legacy reference build — read-only
 - **PR notifications / multi-user collaboration** — single-user surfaces for now.
 - **Mobile native apps** — web-only.
 - **External API for protocols / audits** — `D-009` decides the shape first.
+- **Protocol tab — full document content** — metadata panel is live; deeper document viewing remains gated on D-009 / pipeline decisions.
+- **Participant profile — dedicated full page** — drawer exists; no separate route or expanded profile surface yet.
+- **Stripe** — verify end-to-end with live/test keys; landing CTAs should match the current `Pricing.tsx` / subscription wiring on branch.
+- **Re-materialize caveat** — `materialize_protocol_visits` can drop template-derived rows on re-projection; a visit marked `completed` in `site_visits` could be lost if the protocol is re-materialized later (tracked follow-up).
 
 ---
 
@@ -346,8 +350,46 @@ SUPABASE_ACCESS_TOKEN=<token> npx supabase functions deploy ingest --project-ref
 bash scripts/smoke-rpcs.sh --cloud   # T1–T12 pass
 ```
 
-Local `k1` is 2 commits ahead of `origin/k1` (two merge-from-main commits) —
-`git push origin k1` syncs the GitHub side.
+---
+
+## Next up
+
+In priority order:
+
+**Immediate — deploy all pending migrations + redeploy edge function:**
+1. Push pending migrations to remote Supabase (includes Stage 7–8 schema + Site Mode schema + Phase B columns):
+   - `20260501000000` + `20260501010000` — Stage 7–8 report draft schema + RPCs
+   - `20260502000000` — Site Mode schema (`site_participants`, `site_visits`, `site_team_members`)
+   - `20260508000000` — `protocol_visit_templates.cross_references` JSONB column
+   - `20260508010000` — `documents.reducto_job_id` text column
+   ```
+   SUPABASE_ACCESS_TOKEN=<token> npx supabase db push --project-ref ygfcjwgsjmathinqkppq
+   ```
+2. Redeploy the `ingest` Edge Function (Phase B2 + B3 — extended Reducto schema, cross-doc fan-out):
+   ```
+   SUPABASE_ACCESS_TOKEN=<token> npx supabase functions deploy ingest --project-ref ygfcjwgsjmathinqkppq
+   ```
+3. Run `bash scripts/smoke-rpcs.sh --cloud` — T11 + T12 cover Stage 7–8 RPCs.
+4. Smoke-test Phase B end-to-end: upload a protocol PDF → check `protocol_visit_templates.cross_references` populated; upload a second doc (IB/lab manual) with same protocol number → confirm its entries get merged onto the existing templates.
+
+**Deferred:**
+- Heatmap real-data refinement — swap heuristics once enough audits exist.
+
+After resolving merge commits locally, sync GitHub with `git push origin <branch>` (for example `git push origin k1`).
+
+---
+
+## Claude model guidance
+
+| Task | Model |
+|------|-------|
+| ProtocolContext wire-up | Sonnet — `protocols` table already exists; straightforward SELECT |
+| Site Mode schema design | **Opus** — new schema with RLS, foreign keys, scope decisions |
+| Site Mode API + UI wire-up (once schema set) | Sonnet |
+| Bug fixes in a single file | Sonnet |
+| Schema migrations (new tables, indexes) | **Opus** |
+| Stripe integration | **Opus** |
+| Landing page / marketing UI | Sonnet |
 
 ---
 

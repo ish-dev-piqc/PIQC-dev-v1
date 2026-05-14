@@ -105,11 +105,23 @@ const CLINICAL_EXTRACT_SCHEMA = {
           },
           window_minus_days: {
             type: "integer",
-            description: "Permissible visit window — days before the scheduled date that are still in window (0 if not specified).",
+            description:
+              "Permissible visit window — days BEFORE the scheduled date that are still in window. " +
+              "Before returning 0, actively search the protocol for ± notation tied to this visit: " +
+              "look in inline visit-description sections (e.g. '6.3.x Visit N (Week X, Day Y±Z)') and " +
+              "any narrative text alongside the visit, not just the Schedule-of-Assessments table. " +
+              "If you see 'Day 14±3' or 'Day 140 (±7 days)' for this visit, return 3 or 7 respectively. " +
+              "Only return 0 if the protocol explicitly states no window or the visit is genuinely fixed.",
           },
           window_plus_days: {
             type: "integer",
-            description: "Permissible visit window — days after the scheduled date that are still in window (0 if not specified).",
+            description:
+              "Permissible visit window — days AFTER the scheduled date that are still in window. " +
+              "Before returning 0, actively search the protocol for ± notation tied to this visit: " +
+              "look in inline visit-description sections (e.g. '6.3.x Visit N (Week X, Day Y±Z)') and " +
+              "any narrative text alongside the visit, not just the Schedule-of-Assessments table. " +
+              "If you see 'Day 14±3' or 'Day 140 (±7 days)' for this visit, return 3 or 7 respectively. " +
+              "Only return 0 if the protocol explicitly states no window or the visit is genuinely fixed.",
           },
           procedures: {
             type: "array",
@@ -546,6 +558,9 @@ async function extractCrossReferencesForVisits(
 // removed and the new ones inserted (idempotent). Entries from OTHER
 // documents are preserved. The partition key is `document_id` stamped on
 // every cross-reference at write time.
+//
+// supabase: a service-role client (RLS bypass) since we may merge across
+// documents the caller doesn't directly own.
 // -----------------------------------------------------------------------------
 
 interface MergeTarget {
@@ -554,6 +569,7 @@ interface MergeTarget {
   hits: CrossRefHit[];
 }
 
+// Group hits by (visit_name, study_day). Returns a Map keyed by `${name}|${day}`.
 function groupHitsByVisit(hits: CrossRefHit[]): Map<string, CrossRefHit[]> {
   const out = new Map<string, CrossRefHit[]>();
   for (const h of hits) {
@@ -658,7 +674,15 @@ async function extractClinicalFields(
           system_prompt:
             "You are extracting structured data from a clinical trial protocol document. " +
             "Extract only information explicitly stated in the document. " +
-            "Use null for any field not found. Do not infer, calculate, or assume values.",
+            "Use null for any field not found. Do not infer, calculate, or assume values.\n\n" +
+            "When extracting schedule_of_events, prefer the inline visit-description sections " +
+            "(commonly numbered like '6.3.x Visit N (Week X, Day Y±Z)' or similar narrative " +
+            "subsections under 'Study Procedures' / 'Visit Schedule') over the Schedule-of-" +
+            "Assessments (SoA) table. SoA tables typically only list the target day, while the " +
+            "inline visit sections carry the ± window notation (e.g. 'Day 14±3', 'Day 140 (±7 " +
+            "days)'). For each visit, scan that visit's inline section for ± notation before " +
+            "deciding on window_minus_days and window_plus_days. Do NOT default these to 0 " +
+            "unless the protocol explicitly states the visit has no window or is fixed.",
         },
         settings: {
           citations: {
