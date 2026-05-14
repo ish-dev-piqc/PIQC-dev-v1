@@ -119,6 +119,40 @@ async function handleEvent(event: Stripe.Event) {
           return;
         }
         console.info(`Successfully processed one-time payment for session: ${checkout_session_id}`);
+
+        // -----------------------------------------------------------------
+        // Pilot expiry — for the Protocol Clarity Pilot ($25 one-time / 30
+        // days), set pilot_expires_at on the customer row so the frontend
+        // can display "Pilot — N days left" and gate the upgrade prompt.
+        //
+        // We detect the pilot via Stripe Price metadata.kind = 'pilot'.
+        // pilot_days is read from the same metadata (fallback 30).
+        // -----------------------------------------------------------------
+        try {
+          const session = await stripe.checkout.sessions.retrieve(checkout_session_id, {
+            expand: ['line_items.data.price'],
+          });
+          const item = session.line_items?.data?.[0];
+          const price = item?.price;
+          const meta = (price?.metadata ?? {}) as Record<string, string | undefined>;
+          if (meta.kind === 'pilot') {
+            const pilotDays = Number(meta.pilot_days ?? '30');
+            const expiresAt = new Date(
+              Date.now() + (Number.isFinite(pilotDays) ? pilotDays : 30) * 24 * 60 * 60 * 1000,
+            ).toISOString();
+            const { error: pilotErr } = await supabase
+              .from('stripe_customers')
+              .update({ pilot_expires_at: expiresAt })
+              .eq('customer_id', customerId);
+            if (pilotErr) {
+              console.error('Error setting pilot_expires_at:', pilotErr);
+            } else {
+              console.info(`Set pilot_expires_at=${expiresAt} for customer ${customerId}`);
+            }
+          }
+        } catch (e) {
+          console.error('Pilot expiry post-processing failed:', e);
+        }
       } catch (error) {
         console.error('Error processing one-time payment:', error);
       }
@@ -159,15 +193,43 @@ async function syncCustomerFromStripe(customerId: string) {
     // assumes that a customer can only have a single subscription
     const subscription = subscriptions.data[0];
 
+    // -----------------------------------------------------------------
+    // Identify the base plan item vs add-on items by Price metadata.kind.
+    // Base items: 'workspace_monthly' | 'workspace_annual'
+    // Add-on items: 'addon_protocol' | 'addon_seats'
+    //
+    // For add-ons, the quantity on each subscription item represents how
+    // many packs / protocols the customer has bought. We sum quantities
+    // across items of the same kind so the denormalised counts reflect
+    // the user's true entitlement.
+    // -----------------------------------------------------------------
+    let basePriceId = subscription.items.data[0].price.id;
+    let addonProtocols = 0;
+    let addonSeatPacks = 0;
+    for (const item of subscription.items.data) {
+      const kind = (item.price.metadata as Record<string, string | undefined>)?.kind;
+      const qty = item.quantity ?? 1;
+      if (kind === 'addon_protocol') {
+        addonProtocols += qty;
+      } else if (kind === 'addon_seats') {
+        addonSeatPacks += qty;
+      } else if (kind === 'workspace_monthly' || kind === 'workspace_annual') {
+        // Prefer the explicit base item if metadata is present.
+        basePriceId = item.price.id;
+      }
+    }
+
     // store subscription state
     const { error: subError } = await supabase.from('stripe_subscriptions').upsert(
       {
         customer_id: customerId,
         subscription_id: subscription.id,
-        price_id: subscription.items.data[0].price.id,
+        price_id: basePriceId,
         current_period_start: subscription.current_period_start,
         current_period_end: subscription.current_period_end,
         cancel_at_period_end: subscription.cancel_at_period_end,
+        addon_seat_packs: addonSeatPacks,
+        addon_protocols: addonProtocols,
         ...(subscription.default_payment_method && typeof subscription.default_payment_method !== 'string'
           ? {
               payment_method_brand: subscription.default_payment_method.card?.brand ?? null,
