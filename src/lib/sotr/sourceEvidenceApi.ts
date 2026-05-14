@@ -6,6 +6,9 @@
 // =============================================================================
 
 import { supabase } from '../supabase';
+import {
+  MAX_WORKSHEET_ITEM_BATCH_SIZE,
+} from '../../types/sotr';
 import type {
   SourceEvidenceRecord,
   ExtractedItemRecord,
@@ -14,6 +17,8 @@ import type {
   NewSourceEvidence,
   NewExtractedItem,
   AdapterOutput,
+  WorksheetItemSourceEvidence,
+  WorksheetItemsSourceEvidenceBatch,
 } from '../../types/sotr';
 
 export async function upsertSourceEvidence(
@@ -80,6 +85,84 @@ export async function getItemWithEvidence(
   if (error) throw error;
   return data as ItemWithEvidence;
 }
+
+// ---------------------------------------------------------------------------
+// Review-screen API (PR-2).
+//
+// Thin wrappers around sotr_get_worksheet_item_evidence and the batch RPC.
+// Both functions log only counts + IDs — never the response body, since
+// sources[].source_text is sensitive protocol material.
+// ---------------------------------------------------------------------------
+
+export class WorksheetItemBatchTooLargeError extends Error {
+  constructor(public readonly requested: number) {
+    super(
+      `Worksheet item batch size exceeds maximum (${MAX_WORKSHEET_ITEM_BATCH_SIZE}); requested ${requested}`,
+    );
+    this.name = 'WorksheetItemBatchTooLargeError';
+  }
+}
+
+/**
+ * Fetches one worksheet item plus its full source-evidence list, study-scoped.
+ *
+ * Errors propagate from the RPC: 'Not authenticated', 'Worksheet item not
+ * found in study or access denied'. Missing evidence is NOT an error — the
+ * response carries an empty sources[] array and a missing_source_reason.
+ */
+export async function fetchWorksheetItemSourceEvidence(
+  studyId: string,
+  worksheetItemId: string,
+): Promise<WorksheetItemSourceEvidence> {
+  const { data, error } = await supabase.rpc('sotr_get_worksheet_item_evidence', {
+    p_study_id:          studyId,
+    p_worksheet_item_id: worksheetItemId,
+  });
+  if (error) throw error;
+  const result = data as WorksheetItemSourceEvidence;
+
+  // Safe log: counts only — never the response body. source_text is sensitive.
+  console.info('[sotr] worksheet item evidence fetched', {
+    studyId,
+    worksheetItemId,
+    sourceCount:      result.sources.length,
+    confidenceState:  result.confidence_state,
+  });
+
+  return result;
+}
+
+/**
+ * Fetches source evidence for many worksheet items in one round trip.
+ *
+ * Validates the batch size client-side before hitting the RPC. Items the
+ * caller cannot access (wrong owner, wrong study, missing) are silently
+ * dropped from the response — diff returned vs requested IDs to detect them.
+ */
+export async function fetchWorksheetItemsSourceEvidenceBatch(
+  studyId: string,
+  worksheetItemIds: string[],
+): Promise<WorksheetItemsSourceEvidenceBatch> {
+  if (worksheetItemIds.length > MAX_WORKSHEET_ITEM_BATCH_SIZE) {
+    throw new WorksheetItemBatchTooLargeError(worksheetItemIds.length);
+  }
+
+  const { data, error } = await supabase.rpc('sotr_get_worksheet_items_evidence_batch', {
+    p_study_id:           studyId,
+    p_worksheet_item_ids: worksheetItemIds,
+  });
+  if (error) throw error;
+  const result = data as WorksheetItemsSourceEvidenceBatch;
+
+  console.info('[sotr] worksheet items evidence batch fetched', {
+    studyId,
+    requestedCount: worksheetItemIds.length,
+    returnedCount:  result.items.length,
+  });
+
+  return result;
+}
+
 
 /**
  * Persists the full output of mapReductoExtractToSotr: writes evidence rows,
