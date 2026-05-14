@@ -831,6 +831,49 @@ Deno.serve(async (req: Request) => {
     if (docError) throw docError;
     docId = doc.id;
 
+    // -----------------------------------------------------------------
+    // SOTR PR-4: persist the PDF in the protocol-pdfs bucket so the
+    // Source Truth Panel can render the cited page later. Path
+    // convention: "{user_id}/{document_id}.pdf" — RLS on storage.objects
+    // checks the leading folder against auth.uid().
+    //
+    // Best-effort: a storage failure should not abort the whole ingest
+    // (chunks + extracted_fields are still useful for RAG and worksheet
+    // items). storage_path stays NULL on failure; the UI handles that.
+    // -----------------------------------------------------------------
+    let storagePath: string | null = null;
+    if (pdf_base64) {
+      try {
+        const pathToWrite = `${userId}/${docId}.pdf`;
+        // Reuse the already-decoded pdfBytes from the parse step above.
+        const binaryStr = atob(pdf_base64);
+        const bytesForUpload = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) {
+          bytesForUpload[i] = binaryStr.charCodeAt(i);
+        }
+        const { error: uploadError } = await supabase.storage
+          .from("protocol-pdfs")
+          .upload(pathToWrite, bytesForUpload, {
+            contentType: "application/pdf",
+            upsert: true,
+          });
+        if (uploadError) {
+          console.error("[ingest] pdf_storage_upload_failed", {
+            document_id: docId,
+            // Log only the error message; never the path or URL.
+            error: uploadError.message,
+          });
+        } else {
+          storagePath = pathToWrite;
+        }
+      } catch (e) {
+        console.error("[ingest] pdf_storage_upload_threw", {
+          document_id: docId,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+
     const batchSize = 20;
     let inserted = 0;
 
@@ -863,6 +906,7 @@ Deno.serve(async (req: Request) => {
       .update({
         status: "ready",
         ...(extractedFields ? { extracted_fields: extractedFields } : {}),
+        ...(storagePath ? { storage_path: storagePath } : {}),
         ...(reductoJobId ? { reducto_job_id: reductoJobId } : {}),
       })
       .eq("id", docId);

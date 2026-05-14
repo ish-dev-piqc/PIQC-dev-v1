@@ -972,6 +972,77 @@ if [[ -n "${ITEM_A:-}" ]]; then
 fi
 echo
 
+# ---------------------------------------------------------------------------
+# T27–T29  SOTR PR-4 — protocol PDF storage RPC
+#
+# Validates sotr_get_protocol_pdf_storage_path. We don't actually upload a
+# PDF to the bucket here (that's the ingest function's job in production);
+# we only test the RPC's ownership + study + storage_path validation logic
+# by setting documents.storage_path directly via service role.
+# ---------------------------------------------------------------------------
+
+echo "════════════════════════════════════════════════════════════════"
+echo "  SOTR — protocol PDF storage RPC (T27–T29)"
+echo "════════════════════════════════════════════════════════════════"
+echo
+
+# Set a fake storage_path on DOC_A (study A) so T27 has something to return.
+if [[ -n "${DOC_A:-}" ]]; then
+  curl -s -X PATCH "$REST/documents?id=eq.$DOC_A" \
+    -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+    -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+    -H "Content-Type: application/json" \
+    -d "{\"storage_path\":\"$AUDITOR_ID/$DOC_A.pdf\"}" >/dev/null
+fi
+
+# --- T27 — authorized fetch returns the storage path ----------------------
+if [[ -n "${DOC_A:-}" && -n "${STUDY_A:-}" ]]; then
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_get_protocol_pdf_storage_path" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_study_id\":\"$STUDY_A\",\"p_document_id\":\"$DOC_A\"}")
+  # RPC returns a bare string, so the response body is a JSON-quoted string.
+  T27_PATH=$(echo "$RESP" | jq -r '. // empty')
+  EXPECTED="$AUDITOR_ID/$DOC_A.pdf"
+  if [[ "$T27_PATH" == "$EXPECTED" ]]; then
+    pass "T27: get_protocol_pdf_storage_path → $T27_PATH"
+  else
+    fail "T27: storage path mismatch" "got=$T27_PATH expected=$EXPECTED"
+  fi
+fi
+echo
+
+# --- T28 — wrong study returns 42501 (no existence-of-id leak) ------------
+if [[ -n "${DOC_A:-}" && -n "${STUDY_B:-}" ]]; then
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_get_protocol_pdf_storage_path" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_study_id\":\"$STUDY_B\",\"p_document_id\":\"$DOC_A\"}")
+  T28_CODE=$(echo "$RESP" | jq -r '.code // empty')
+  if [[ "$T28_CODE" == "42501" || $(echo "$RESP" | grep -c "access denied") -ge 1 ]]; then
+    pass "T28: wrong-study fetch rejected"
+  else
+    fail "T28: wrong-study fetch should be rejected" "resp=$RESP"
+  fi
+fi
+echo
+
+# --- T29 — doc owned but no PDF retained returns 02000 --------------------
+if [[ -n "${DOC_B:-}" && -n "${STUDY_B:-}" ]]; then
+  # DOC_B has no storage_path (default NULL since we only patched DOC_A)
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_get_protocol_pdf_storage_path" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_study_id\":\"$STUDY_B\",\"p_document_id\":\"$DOC_B\"}")
+  T29_CODE=$(echo "$RESP" | jq -r '.code // empty')
+  if [[ "$T29_CODE" == "02000" || $(echo "$RESP" | grep -c "No PDF retained") -ge 1 ]]; then
+    pass "T29: doc-without-PDF returns no-PDF-retained code"
+  else
+    fail "T29: doc-without-PDF should return 02000" "resp=$RESP"
+  fi
+fi
+echo
+
 # --- Cleanup PR-2 setup ---------------------------------------------------
 for d in "${DOC_A:-}" "${DOC_B:-}"; do
   if [[ -n "$d" ]]; then
@@ -980,7 +1051,7 @@ for d in "${DOC_A:-}" "${DOC_B:-}"; do
       -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" >/dev/null
   fi
 done
-echo "[cleanup] PR-2 SOTR review smoke rows deleted (documents + cascade)"
+echo "[cleanup] PR-2/PR-4 SOTR smoke rows deleted (documents + cascade)"
 echo
 
 # ---------------------------------------------------------------------------

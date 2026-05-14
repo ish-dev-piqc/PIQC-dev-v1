@@ -76,7 +76,11 @@ export default function SourceTruthDrawer({
             <SourceTruthError onRetry={evidence.retry} />
           )}
           {evidence.status === 'success' && (
-            <SourceTruthPanel itemLabel={itemLabel} data={evidence.data} />
+            <SourceTruthPanel
+              itemLabel={itemLabel}
+              data={evidence.data}
+              studyId={studyId}
+            />
           )}
         </div>
       </div>
