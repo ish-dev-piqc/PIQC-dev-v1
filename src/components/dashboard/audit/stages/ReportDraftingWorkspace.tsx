@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Sparkles,
   FileText,
+  History as HistoryIcon,
 } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useAudit } from '../../../../context/AuditContext';
@@ -22,6 +23,7 @@ import {
 } from '../../../../lib/audit/reportApi';
 import type { MockWorkspaceEntry } from '../../../../lib/audit/mockWorkspaceEntries';
 import type { ProvisionalClassification } from '../../../../types/audit';
+import HistoryDrawer from '../HistoryDrawer';
 
 // =============================================================================
 // ReportDraftingWorkspace — REPORT_DRAFTING (Stage 7) center pane.
@@ -52,6 +54,7 @@ export default function ReportDraftingWorkspace() {
   const [editing, setEditing] = useState<'summary' | 'conclusions' | null>(null);
   const [draftSummary, setDraftSummary] = useState('');
   const [draftConclusions, setDraftConclusions] = useState('');
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
     setEditing(null);
@@ -509,7 +512,17 @@ export default function ReportDraftingWorkspace() {
               </p>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setHistoryOpen(true)}
+              className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+              title="View change history"
+              aria-label="Open change history for the audit report"
+            >
+              <HistoryIcon size={12} />
+              History
+            </button>
             {!approved && !alreadyAdvanced && (
               <button
                 type="button"
@@ -533,6 +546,16 @@ export default function ReportDraftingWorkspace() {
           </div>
         </div>
       </div>
+
+      {historyOpen && report && (
+        <HistoryDrawer
+          objectType="REPORT_DRAFT_OBJECT"
+          objectId={report.id}
+          title="Audit report"
+          subTitle="Report drafting · change history"
+          onClose={() => setHistoryOpen(false)}
+        />
+      )}
     </div>
   );
 }
