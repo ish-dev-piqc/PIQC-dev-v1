@@ -1,6 +1,6 @@
 # PIQClinical — Build Plan & Status
 
-_Last updated: 2026-05-11 (full repo audit). Phase B (cross-refs + ingest fan-out) is on disk; remote deploy pending for the two Phase B migrations + `ingest` redeploy where applicable._
+_Last updated: 2026-05-11 (founder-launch Stripe model wired — six-product catalog, pilot one-time payment, addon append-to-subscription, pilot expiry tracking, entitlement primitives)_
 
 This document is the source of truth for "where are we." The codebase is the
 source of truth for "what does it do." If the two disagree, the codebase wins
@@ -47,7 +47,7 @@ also live in the header.
 |-------|------|--------|
 | Auth & sessions | Email/password + magic-link + ForgotPassword + ProfileCompletion + `AuthContext`; auth hardening migration | ✓ Done |
 | Theme + Mode + Protocol/Audit pickers | `ThemeContext` (light default), `ModeContext`, `ProtocolContext` (real Supabase + realtime), `AuditContext` (real Supabase), header pickers | ✓ Done |
-| Landing page | `Hero`, `ValueProps`, `Pricing` (Starter $10/mo + Enterprise), `Contact`, `Footer`, `Chatbot` (streaming floating widget) | ✓ Done |
+| Landing page | `Hero`, `ValueProps`, `Pricing` (Pilot / Workspace / Annual + Add-ons + SMO), `Contact`, `Footer`, `Chatbot` (streaming floating widget) | ✓ Done |
 | Knowledge base (RAG ingest) | `pgvector` + hybrid search RPC + chunk metadata + status; `KnowledgeBase.tsx` upload UI with PDF (Reducto) and text modes; protocol-link picker (defaults to active protocol) | ✓ Done |
 | Dashboard chat (Ask) | `dashboard-chat` edge function (931 lines) — protocol-scoped RAG with hybrid search + chat history | ✓ Done |
 | **Site Mode foundation** | Auth + tab architecture (`Overview`, `Participants`, `Visits`, `Protocol`, `Team`, `Ask`, `Reports`) + `ProtocolRequiredGate` | ✓ Done |
@@ -69,8 +69,10 @@ also live in the header.
 | Reducto Extract — clinical fields | Schema covers `protocol_title`, `protocol_number`, `protocol_version`, `sponsor_name`, `compound_name`, `therapeutic_area`, `study_phase`, `amendment` flags, `schedule_of_events` (with `cross_references` per visit) | ✓ Done |
 | Auto-tag documents → protocols | `documents.protocol_id` FK + `documents_autotag_protocol_trg` trigger reads `extracted_fields.protocol_number`, normalises via `normalize_protocol_number()`, looks up against `protocols.study_number_normalized` unique index | ✓ Done |
 | Magic-link auth + profile completion | `20260504000000_auth_hardening.sql`; `ProfileCompletion.tsx`; login crash fix import (Home icon) | ✓ Done |
-| Stripe — frontend | `Pricing.tsx` three-state CTA (unauth→login, auth+no-sub→checkout, auth+sub→dashboard); `useCheckout`, `useSubscription`, `usePortal`; `Dashboard.tsx` manage-billing affordance | ✓ Done |
-| Stripe — backend | `stripe-checkout` (227 lines), `stripe-portal` (69 lines), `stripe-webhook` (192 lines) edge functions; `stripe_customers` + `stripe_subscriptions` + `stripe_orders` tables; `stripe_user_subscriptions` + `stripe_user_orders` views (security_invoker) | ✓ Done — **needs verification with live/test Stripe keys** |
+| Stripe — frontend | Founder-launch model: 6-product catalog in `stripe-config.ts` (`PlanKind`, copy, grants); `Pricing.tsx` 3 primary + add-ons + SMO tile; `useCheckout` with `appendToSubscription` flag; `useSubscription` surfaces `kind`, `billingMode`, `pilotExpiresAt`, included + addon counts, totals; `usePortal`; `Dashboard.tsx` manage-billing affordance | ✓ Done — **test priceIds wired; swap for live priceIds before launch** |
+| Stripe — backend | `stripe-checkout` edge function handles `mode: 'payment'` for Pilot and append-to-subscription for add-ons (creates new `subscriptionItems` or bumps quantity on existing); `stripe-webhook` sets `pilot_expires_at` on `stripe_customers` from Price metadata and recomputes `addon_seat_packs`/`addon_protocols` per subscription update; `stripe-portal` unchanged; tables + views extended via migration `20260511000000_stripe_pilot_and_addon_counts.sql` | ✓ Done — **needs `db push` + `functions deploy stripe-checkout stripe-webhook` + test/live key verification** |
+| Entitlement primitives | `src/lib/entitlements.ts` — pure `canInviteUser`, `canAddProtocol`, `pilotStatus`, `pilotDaysRemaining`; `EntitlementGate` component for wrapping gated actions; `PilotCountdownBanner` for Dashboard pilot UX | ✓ Primitives in place; invite-team-member and create-protocol surfaces don't exist yet — gates ready to drop in when they ship |
+| Server-side pilot enforcement (decision B) | Pilot expiry check on protected RPCs after early launch | ○ Deferred — frontend gate only for now per founder-launch decision |
 | Smoke test (Audit Mode) | `scripts/smoke-rpcs.sh` — 12-case bash suite covering stage-advancement + per-stage RPCs (T1–T12) | ✓ Done |
 | **— Outstanding —** | | |
 | JS/TS unit tests | `scripts/smoke-rpcs.sh` covers SQL only. The `feature/scv-foundation-guardrails` branch adds Vitest + `dateUtils` tests, but isn't merged | ○ Not in main |
@@ -121,6 +123,7 @@ also live in the header.
 | `20260507000000_protocol_visit_templates.sql` | Phase A — autopopulate |
 | `20260508000000_visit_template_cross_references.sql` | Phase B — cross-doc refs |
 | `20260508010000_documents_reducto_job_id.sql` | Phase B — fan-out support |
+| `20260511000000_stripe_pilot_and_addon_counts.sql` | Stripe — pilot_expires_at + addon item counts + view extension |
 
 ---
 
@@ -131,9 +134,9 @@ also live in the header.
 | `chat` | 315 | Lightweight chat helper |
 | `dashboard-chat` | 931 | Protocol-scoped RAG chat — hybrid search + chunk citations |
 | `ingest` | 1,135 | Reducto Parse + Extract pipeline; SoA extraction; `protocol_visit_templates` upsert; Phase B cross-ref helpers + fan-out; persists `reducto_job_id`; honours caller `protocol_id` |
-| `stripe-checkout` | 227 | Creates Stripe checkout session |
+| `stripe-checkout` | ~260 | Creates Stripe checkout session; branches to `subscriptionItems.create` (or bumps quantity) for add-on appends when `append_to_subscription: true` |
 | `stripe-portal` | 69 | Creates Stripe billing portal session |
-| `stripe-webhook` | 192 | Syncs Stripe subscription/order events to Postgres |
+| `stripe-webhook` | ~250 | Syncs Stripe subscription/order events; sets `pilot_expires_at` for Pilot one-time payments; recomputes `addon_seat_packs` / `addon_protocols` on every subscription update |
 
 ---
 
@@ -188,6 +191,9 @@ src/
     Contact.tsx, Footer.tsx, Chatbot.tsx    Landing
     auth/
       Login.tsx, ForgotPassword.tsx, ProfileCompletion.tsx
+    billing/
+      EntitlementGate.tsx                   Drop around a gated action to render blocker + upgrade CTA
+      PilotCountdownBanner.tsx              "N days left on your pilot" banner with upgrade CTA
     heatmap/
       HeatIndicator.tsx                     Bar + chip variants
     dashboard/
@@ -234,6 +240,7 @@ src/
   lib/
     supabase.ts
     heatmap.ts                              Scoring + tone tokens
+    entitlements.ts                         canInviteUser / canAddProtocol / pilotStatus pure helpers
     mockCalendarData.ts                     Demo-mode visit fixtures + CalendarVisit type
     mockSiteData.ts                         Demo participants + team
     site/
