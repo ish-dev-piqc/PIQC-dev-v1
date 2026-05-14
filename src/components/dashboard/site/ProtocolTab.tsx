@@ -6,6 +6,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import { fetchVisitTemplates, materializeVisits } from '../../../lib/site/siteApi';
 import type { ProtocolVisitTemplate } from '../../../lib/site/types';
 import AnchorDateModal from './AnchorDateModal';
+import WorksheetItemsList from '../../sotr/WorksheetItemsList';
 
 // =============================================================================
 // ProtocolTab — Protocol metadata + documents tagged to this protocol.
@@ -225,6 +226,9 @@ export default function ProtocolTab() {
             </div>
           )}
         </div>
+
+        {/* Parsed protocol items — Source Truth Reviewer (PR-3) */}
+        <WorksheetItemsList studyId={activeProtocol.id} />
 
         {/* Documents */}
         <div className={`${cardBg} border rounded-xl overflow-hidden`}>

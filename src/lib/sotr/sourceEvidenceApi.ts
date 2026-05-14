@@ -139,6 +139,36 @@ export async function fetchWorksheetItemSourceEvidence(
  * caller cannot access (wrong owner, wrong study, missing) are silently
  * dropped from the response — diff returned vs requested IDs to detect them.
  */
+/**
+ * Lists worksheet items for a study, scoped through the caller's documents
+ * (RLS enforces user_id; we filter to the caller's docs that match the
+ * requested protocol_id).
+ *
+ * Direct supabase query rather than an RPC: RLS already covers
+ * authorization, and the worksheet review screen's first paint just needs
+ * to enumerate items. If we add aggregations or evidence counts later,
+ * promote this to a dedicated RPC.
+ */
+export async function listWorksheetItemsForStudy(
+  studyId: string,
+): Promise<ExtractedItemRecord[]> {
+  const { data, error } = await supabase
+    .from('protocol_extracted_items')
+    .select('*, documents!inner(id, protocol_id, user_id)')
+    .eq('documents.protocol_id', studyId)
+    .order('field_type', { ascending: true })
+    .order('field_path', { ascending: true });
+  if (error) throw error;
+  // Strip the joined documents row — callers only need the item fields.
+  return (data ?? []).map((row) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { documents: _docs, ...item } = row as ExtractedItemRecord & {
+      documents?: unknown;
+    };
+    return item as ExtractedItemRecord;
+  });
+}
+
 export async function fetchWorksheetItemsSourceEvidenceBatch(
   studyId: string,
   worksheetItemIds: string[],
