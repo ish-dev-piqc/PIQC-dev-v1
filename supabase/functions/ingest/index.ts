@@ -1,5 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { mapReductoExtractToSotr } from "../_shared/sourceEvidenceAdapter.ts";
+import type { ReductoExtractResponse } from "../_shared/sotrTypes.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -927,6 +929,57 @@ Deno.serve(async (req: Request) => {
       inserted += batch.length;
     }
 
+    // ---------------------------------------------------------------------
+    // SOTR persistence — runs BEFORE the documents.status='ready' flip so
+    // that "ready" reliably means "user can open the SOTR drawer and find
+    // data there." If this step fails (after retries), the document stays
+    // out of 'ready' and the whole ingest fails — user sees a clear
+    // upload-failed signal rather than an empty drawer.
+    //
+    // Idempotent on re-ingest: the RPC deletes prior evidence rows for the
+    // document_id before re-inserting. Item rows upsert by field_path.
+    // ---------------------------------------------------------------------
+    let sotrItemsUpserted = 0;
+    let sotrEvidenceInserted = 0;
+    let sotrLinksInserted = 0;
+    if (extractedFields) {
+      const adapterOutput = mapReductoExtractToSotr(
+        docId,
+        extractedFields as ReductoExtractResponse,
+        reductoJobId,
+      );
+
+      const sotrResult = await withRetry(async () => {
+        const { data, error } = await supabase.rpc("sotr_ingest_adapter_output", {
+          p_document_id:       docId,
+          p_items:             adapterOutput.items,
+          p_evidence:          adapterOutput.evidence,
+          p_links:             adapterOutput.links,
+          p_extraction_run_id: reductoJobId,
+        });
+        if (error) {
+          // Non-retryable: bad data shape, auth/permission, RPC missing.
+          // Retryable: transient network, deadlock, statement timeout.
+          const code = (error as { code?: string }).code ?? "";
+          const isPermanent = code.startsWith("42") || code === "23503";
+          if (isPermanent) throw new NonRetryableError(`sotr_ingest_rpc_${code}: ${error.message}`);
+          throw new Error(`sotr_ingest_rpc_${code || "transient"}: ${error.message}`);
+        }
+        return data as Record<string, unknown>;
+      }, "sotrIngestAdapterOutput");
+
+      sotrItemsUpserted    = Number(sotrResult["items_upserted"]    ?? 0);
+      sotrEvidenceInserted = Number(sotrResult["evidence_inserted"] ?? 0);
+      sotrLinksInserted    = Number(sotrResult["links_inserted"]    ?? 0);
+
+      console.log("[ingest] sotr_persist_succeeded", {
+        document_id:       docId,
+        items_upserted:    sotrItemsUpserted,
+        evidence_inserted: sotrEvidenceInserted,
+        links_inserted:    sotrLinksInserted,
+      });
+    }
+
     const { error: updateError } = await supabase
       .from("documents")
       .update({
@@ -1212,6 +1265,9 @@ Deno.serve(async (req: Request) => {
         templates_materialized: templateMaterialized,
         cross_ref_docs_scanned: fanoutDocsScanned,
         cross_ref_entries_merged: fanoutEntriesMerged,
+        sotr_items_upserted: sotrItemsUpserted,
+        sotr_evidence_inserted: sotrEvidenceInserted,
+        sotr_links_inserted: sotrLinksInserted,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
