@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mapReductoExtractToSotr } from '../sourceEvidenceAdapter';
+import { mapReductoExtractToSotr, dedupeVisitArray } from '../sourceEvidenceAdapter';
 import type { ReductoExtractResponse } from '../../../types/sotr';
 
 const DOC_ID  = 'doc-test-00000000-0000-0000-0000-000000000001';
@@ -254,5 +254,236 @@ describe('mapReductoExtractToSotr', () => {
 
     expect(evidence).toHaveLength(1);
     expect(evidence[0].support_type).toBe('primary');
+  });
+
+  // -------------------------------------------------------------------------
+  // T8 — Visit deduplication: Source B (inline section) wins over Source A
+  //      (SOA table) but Source A's citation is preserved as evidence.
+  // -------------------------------------------------------------------------
+  describe('schedule_of_events deduplication', () => {
+    it('collapses two sources of the same visit into one item with both citations', () => {
+      const input: ReductoExtractResponse = {
+        schedule_of_events: [
+          // Source B — inline visit section, has window data
+          { visit_name: 'Visit 2', study_day: 14, window_minus_days: 3, window_plus_days: 3 },
+          // Source A — SOA table row, window=0
+          { visit_name: 'Visit 2', study_day: 14, window_minus_days: 0, window_plus_days: 0,
+            schedule_variant: 'All Subjects' },
+        ],
+        _reducto_citations: {
+          schedule_of_events: [
+            { text: '6.3.2 Visit 2 (Week 2, Day 14±3)', pages: [22], confidence: 'high' },
+            { text: 'SOA: Visit 2 / Day 14',            pages: [98], confidence: 'medium' },
+          ],
+        },
+      };
+
+      const { items, evidence, links } = mapReductoExtractToSotr(DOC_ID, input);
+
+      expect(items).toHaveLength(1);
+      expect(items[0].field_path).toBe('schedule_of_events[0]'); // inline-section index
+      expect(items[0].field_type).toBe('visit');
+
+      // Two evidence rows: primary (inline) + secondary (SOA), both linked
+      expect(evidence).toHaveLength(2);
+      expect(evidence[0].support_type).toBe('primary');
+      expect(evidence[0].page_number).toBe(22);
+      expect(evidence[1].support_type).toBe('secondary');
+      expect(evidence[1].page_number).toBe(98);
+
+      expect(links).toHaveLength(2);
+      expect(links[0].is_primary_source).toBe(true);
+      expect(links[1].is_primary_source).toBe(false);
+    });
+
+    it('flags conflict when both sources have non-zero values that disagree', () => {
+      const input: ReductoExtractResponse = {
+        schedule_of_events: [
+          // Source B says Day 14, ±3
+          { visit_name: 'Visit 2', study_day: 14, window_minus_days: 3, window_plus_days: 3 },
+          // Source A says Day 15 — non-zero but different
+          { visit_name: 'Visit 2', study_day: 15, window_minus_days: 0, window_plus_days: 0 },
+        ],
+        _reducto_citations: {
+          schedule_of_events: [
+            { text: 'Visit 2 (Day 14)',  pages: [22], confidence: 'high' },
+            { text: 'SOA: V2 / Day 15',  pages: [98], confidence: 'medium' },
+          ],
+        },
+      };
+
+      const { evidence } = mapReductoExtractToSotr(DOC_ID, input);
+
+      expect(evidence).toHaveLength(2);
+      expect(evidence[0].support_type).toBe('primary');
+      expect(evidence[1].support_type).toBe('conflict');
+    });
+
+    it('does not flag conflict when Source A has window=0 — that is the normal case', () => {
+      // window=0 on the loser is the symptom we are working around, not a
+      // genuine disagreement. It should be 'secondary', not 'conflict'.
+      const input: ReductoExtractResponse = {
+        schedule_of_events: [
+          { visit_name: 'Visit 3', study_day: 42, window_minus_days: 7, window_plus_days: 7 },
+          { visit_name: 'Visit 3', study_day: 42, window_minus_days: 0, window_plus_days: 0 },
+        ],
+        _reducto_citations: {
+          schedule_of_events: [
+            { text: '6.3.3 Visit 3 (Week 6, Day 42±7)', pages: [25], confidence: 'high' },
+            { text: 'SOA: Visit 3 / Day 42',            pages: [99], confidence: 'medium' },
+          ],
+        },
+      };
+
+      const { evidence } = mapReductoExtractToSotr(DOC_ID, input);
+
+      expect(evidence[1].support_type).toBe('secondary');
+    });
+
+    it('preserves unique visits (no dedup) when each visit_name appears once', () => {
+      const input: ReductoExtractResponse = {
+        schedule_of_events: [
+          { visit_name: 'Screening', study_day: -14, window_minus_days: 0, window_plus_days: 0 },
+          { visit_name: 'Visit 1',   study_day: 1,   window_minus_days: 0, window_plus_days: 0 },
+          { visit_name: 'Visit 2',   study_day: 14,  window_minus_days: 3, window_plus_days: 3 },
+        ],
+        _reducto_citations: {
+          schedule_of_events: [
+            { text: 'Screening visit', pages: [10], confidence: 'high' },
+            { text: 'Visit 1 (Day 1)', pages: [11], confidence: 'high' },
+            { text: 'Visit 2 (Day 14±3)', pages: [12], confidence: 'high' },
+          ],
+        },
+      };
+
+      const { items, evidence } = mapReductoExtractToSotr(DOC_ID, input);
+
+      expect(items).toHaveLength(3);
+      expect(evidence).toHaveLength(3);
+      evidence.forEach(e => expect(e.support_type).toBe('primary'));
+    });
+
+    it('handles 3+ duplicate sources of the same visit', () => {
+      const input: ReductoExtractResponse = {
+        schedule_of_events: [
+          { visit_name: 'Visit 2', study_day: 14, window_minus_days: 3, window_plus_days: 3 },
+          { visit_name: 'Visit 2', study_day: 14, window_minus_days: 0, window_plus_days: 0 },
+          { visit_name: 'Visit 2', study_day: 14, window_minus_days: 0, window_plus_days: 0 },
+        ],
+        _reducto_citations: {
+          schedule_of_events: [
+            { text: 'Inline 6.3.2', pages: [22], confidence: 'high' },
+            { text: 'SOA primary',   pages: [98], confidence: 'medium' },
+            { text: 'SOA secondary', pages: [99], confidence: 'medium' },
+          ],
+        },
+      };
+
+      const { items, evidence } = mapReductoExtractToSotr(DOC_ID, input);
+
+      expect(items).toHaveLength(1);
+      expect(evidence).toHaveLength(3);
+      expect(evidence[0].support_type).toBe('primary');
+      expect(evidence[1].support_type).toBe('secondary');
+      expect(evidence[2].support_type).toBe('secondary');
+    });
+
+    it('falls back to first entry when no source has window>0 — no signal to pick winner', () => {
+      const input: ReductoExtractResponse = {
+        schedule_of_events: [
+          { visit_name: 'Visit 2', study_day: 14, window_minus_days: 0, window_plus_days: 0 },
+          { visit_name: 'Visit 2', study_day: 14, window_minus_days: 0, window_plus_days: 0 },
+        ],
+        _reducto_citations: {
+          schedule_of_events: [
+            { text: 'first SOA mention',  pages: [98], confidence: 'medium' },
+            { text: 'second SOA mention', pages: [99], confidence: 'medium' },
+          ],
+        },
+      };
+
+      const { items, evidence } = mapReductoExtractToSotr(DOC_ID, input);
+
+      expect(items).toHaveLength(1);
+      expect(items[0].field_path).toBe('schedule_of_events[0]');
+      expect(evidence[1].support_type).toBe('secondary'); // not conflict — values agree
+    });
+
+    it('normalizes visit_name (case, whitespace) when grouping duplicates', () => {
+      const input: ReductoExtractResponse = {
+        schedule_of_events: [
+          { visit_name: 'Visit 2', study_day: 14, window_minus_days: 3, window_plus_days: 3 },
+          { visit_name: '  visit 2  ', study_day: 14, window_minus_days: 0, window_plus_days: 0 },
+        ],
+        _reducto_citations: {
+          schedule_of_events: [
+            { text: 'Inline',  pages: [22], confidence: 'high' },
+            { text: 'SOA row', pages: [98], confidence: 'medium' },
+          ],
+        },
+      };
+
+      const { items } = mapReductoExtractToSotr(DOC_ID, input);
+      expect(items).toHaveLength(1);
+    });
+
+    it('treats visits without a visit_name as singletons (no false merge)', () => {
+      const input: ReductoExtractResponse = {
+        schedule_of_events: [
+          { study_day: 1 },
+          { study_day: 14 },
+          { study_day: 28 },
+        ],
+        _reducto_citations: {},
+      };
+
+      const { items } = mapReductoExtractToSotr(DOC_ID, input);
+      expect(items).toHaveLength(3);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // T9 — dedupeVisitArray unit tests (pure function, direct invocation)
+  // -------------------------------------------------------------------------
+  describe('dedupeVisitArray (direct unit tests)', () => {
+    it('returns all indices when the array has no duplicates', () => {
+      const result = dedupeVisitArray([
+        { visit_name: 'A' },
+        { visit_name: 'B' },
+        { visit_name: 'C' },
+      ]);
+      expect(result.winningIndices).toEqual([0, 1, 2]);
+      expect(result.extraEvidenceFor.size).toBe(0);
+    });
+
+    it('keeps winning indices in original order', () => {
+      const result = dedupeVisitArray([
+        // Source A first (window=0)
+        { visit_name: 'V2', window_minus_days: 0, window_plus_days: 0 },
+        // Source B second (window>0) — should win
+        { visit_name: 'V2', window_minus_days: 3, window_plus_days: 3 },
+        { visit_name: 'V3', window_minus_days: 0, window_plus_days: 0 },
+      ]);
+      expect(result.winningIndices).toEqual([1, 2]);
+      expect(result.extraEvidenceFor.get(1)?.[0].sourceIndex).toBe(0);
+      expect(result.extraEvidenceFor.get(1)?.[0].supportType).toBe('secondary');
+    });
+
+    it('returns empty result for empty input', () => {
+      const result = dedupeVisitArray([]);
+      expect(result.winningIndices).toEqual([]);
+      expect(result.extraEvidenceFor.size).toBe(0);
+    });
+
+    it('ignores non-object entries gracefully', () => {
+      const result = dedupeVisitArray([
+        { visit_name: 'V1', window_minus_days: 3, window_plus_days: 3 },
+        null,
+        'not-an-object',
+        42,
+      ]);
+      // All four still get "winning" indices because they don't group with each other
+      expect(result.winningIndices.length).toBeGreaterThan(0);
+    });
   });
 });

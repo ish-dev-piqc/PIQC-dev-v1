@@ -128,6 +128,11 @@ const CLINICAL_EXTRACT_SCHEMA = {
             items: { type: "string" },
             description: "List of procedures, assessments, or activities performed at this visit",
           },
+          schedule_variant: {
+            type: "string",
+            description:
+              "Name of the schedule variant as it appears in the document (e.g. 'All Subjects', 'PK Substudy Participants', 'Biomarker Substudy'). Use the table section header or column header identifying which subject population this visit applies to. Empty string if the document presents a single schedule for all subjects. Used by the SOTR dedup step to disambiguate visits when the same visit_name appears under multiple sub-populations.",
+          },
           cross_references: {
             type: "array",
             description:
@@ -689,6 +694,9 @@ async function extractClinicalFields(
             enabled: true,
             numerical_confidence: false, // categorical high/low is enough; saves response size
           },
+          // schedule_of_events can run 30-50 entries in long protocols; without
+          // this flag Reducto silently truncates arrays past ~10 elements.
+          array_extract: true,
         },
       }),
     });
@@ -700,13 +708,31 @@ async function extractClinicalFields(
     }
 
     const data = await res.json();
-    const result = (data.result ?? data) as Record<string, unknown>;
+    // Reducto Studio occasionally returns object keys with trailing spaces
+    // (e.g. "visit_name " or "schedule_of_events "). Strip them recursively
+    // before downstream code reads the fields; without this the SOTR adapter
+    // and visit dedup step would silently miss the affected fields.
+    const result = trimKeys((data.result ?? data)) as Record<string, unknown>;
     // Preserve Reducto citations alongside extracted values so the SOTR adapter
     // can create source evidence records. Keyed as _reducto_citations to avoid
     // collision with any CLINICAL_EXTRACT_SCHEMA field names.
-    const citations = (data.citations ?? (data.result as Record<string, unknown> | null | undefined)?.citations) ?? null;
+    const rawCitations = (data.citations ?? (data.result as Record<string, unknown> | null | undefined)?.citations) ?? null;
+    const citations = rawCitations !== null ? trimKeys(rawCitations) : null;
     return citations ? { ...result, _reducto_citations: citations } : result;
   }, "extractClinicalFields");
+}
+
+// Recursively trim trailing/leading whitespace from object keys. Reducto Studio
+// returns trailing-space keys for some schemas; without this the downstream
+// adapter (which keys lookups by exact field name) silently misses fields.
+function trimKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(trimKeys);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k.trim(), trimKeys(v)]),
+    );
+  }
+  return value;
 }
 
 Deno.serve(async (req: Request) => {
