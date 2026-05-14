@@ -598,6 +598,136 @@ fi
 echo
 
 # ---------------------------------------------------------------------------
+# T13–T17  Source of Truth Reviewer (SOTR) — smoke tests
+#
+# Requires: 20260508000000_sotr_schema.sql + 20260508010000_sotr_rpcs.sql
+# deployed. Uses the auditor's user JWT and documents owned by that user.
+# We create and then clean up a temporary document row for isolation.
+# ---------------------------------------------------------------------------
+
+echo "════════════════════════════════════════════════════════════════"
+echo "  SOTR — source evidence RPCs (T13–T17)"
+echo "════════════════════════════════════════════════════════════════"
+echo
+
+# Create a temporary document owned by the auditor so RLS passes.
+SOTR_DOC_RESP=$(curl -s -X POST "$REST/documents" \
+  -H "apikey: $SUPABASE_ANON_KEY" \
+  -H "Authorization: Bearer $USER_JWT" \
+  -H "Content-Type: application/json" \
+  -H "Prefer: return=representation" \
+  -d "{\"title\":\"Smoke test protocol — SOTR\",\"source\":\"smoke\",\"user_id\":\"$AUDITOR_ID\"}")
+SOTR_DOC_ID=$(echo "$SOTR_DOC_RESP" | jq -r '.[0].id // empty')
+if [[ -z "$SOTR_DOC_ID" ]]; then
+  fail "T13-setup: create smoke document for SOTR tests" "resp=$SOTR_DOC_RESP"
+  SOTR_DOC_ID=""
+fi
+
+# T13 — sotr_upsert_source_evidence creates a row
+if [[ -n "$SOTR_DOC_ID" ]]; then
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_upsert_source_evidence" \
+    -H "apikey: $SUPABASE_ANON_KEY" \
+    -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_document_id\":\"$SOTR_DOC_ID\",\"p_page_number\":5,\"p_section_title\":\"Study Objectives\",\"p_support_type\":\"primary\",\"p_extraction_run_id\":\"smoke-job-001\"}")
+  SOTR_EV_ID=$(echo "$RESP" | jq -r '.id // empty')
+  if [[ -n "$SOTR_EV_ID" && "$SOTR_EV_ID" != "null" ]]; then
+    pass "T13: sotr_upsert_source_evidence → id=$SOTR_EV_ID"
+  else
+    fail "T13: sotr_upsert_source_evidence" "resp=$RESP"
+    SOTR_EV_ID=""
+  fi
+fi
+echo
+
+# T14 — sotr_upsert_extracted_item creates a worksheet item
+if [[ -n "$SOTR_DOC_ID" ]]; then
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_upsert_extracted_item" \
+    -H "apikey: $SUPABASE_ANON_KEY" \
+    -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_document_id\":\"$SOTR_DOC_ID\",\"p_field_path\":\"primary_endpoints[0]\",\"p_field_type\":\"endpoint\",\"p_extracted_value\":\"\\\"Change in PANSS score\\\"\",\"p_confidence_state\":\"high\"}")
+  SOTR_ITEM_ID=$(echo "$RESP" | jq -r '.id // empty')
+  if [[ -n "$SOTR_ITEM_ID" && "$SOTR_ITEM_ID" != "null" ]]; then
+    pass "T14: sotr_upsert_extracted_item → id=$SOTR_ITEM_ID"
+  else
+    fail "T14: sotr_upsert_extracted_item" "resp=$RESP"
+    SOTR_ITEM_ID=""
+  fi
+fi
+echo
+
+# T15 — sotr_link_item_evidence links item ↔ evidence
+if [[ -n "${SOTR_ITEM_ID:-}" && -n "${SOTR_EV_ID:-}" ]]; then
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_link_item_evidence" \
+    -H "apikey: $SUPABASE_ANON_KEY" \
+    -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_extracted_item_id\":\"$SOTR_ITEM_ID\",\"p_source_evidence_id\":\"$SOTR_EV_ID\",\"p_is_primary_source\":true}")
+  SOTR_LINK_ID=$(echo "$RESP" | jq -r '.id // empty')
+  if [[ -n "$SOTR_LINK_ID" && "$SOTR_LINK_ID" != "null" ]]; then
+    pass "T15: sotr_link_item_evidence → id=$SOTR_LINK_ID"
+  else
+    fail "T15: sotr_link_item_evidence" "resp=$RESP"
+  fi
+fi
+echo
+
+# T16 — sotr_get_item_evidence returns item + evidence array
+if [[ -n "${SOTR_ITEM_ID:-}" ]]; then
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_get_item_evidence" \
+    -H "apikey: $SUPABASE_ANON_KEY" \
+    -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_extracted_item_id\":\"$SOTR_ITEM_ID\"}")
+  SOTR_EV_COUNT=$(echo "$RESP" | jq '.evidence | length')
+  SOTR_ITEM_PATH=$(echo "$RESP" | jq -r '.item.field_path // empty')
+  if [[ "$SOTR_ITEM_PATH" == "primary_endpoints[0]" && "$SOTR_EV_COUNT" -ge 1 ]]; then
+    pass "T16: sotr_get_item_evidence → field_path=$SOTR_ITEM_PATH evidence_count=$SOTR_EV_COUNT"
+  else
+    fail "T16: sotr_get_item_evidence" "field_path=$SOTR_ITEM_PATH evidence_count=$SOTR_EV_COUNT resp=$RESP"
+  fi
+fi
+echo
+
+# T17 — needs_review item (no evidence linked) returns empty evidence array
+if [[ -n "$SOTR_DOC_ID" ]]; then
+  RESP=$(curl -s -X POST "$REST/rpc/sotr_upsert_extracted_item" \
+    -H "apikey: $SUPABASE_ANON_KEY" \
+    -H "Authorization: Bearer $USER_JWT" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_document_id\":\"$SOTR_DOC_ID\",\"p_field_path\":\"sponsor_name\",\"p_field_type\":\"metadata\",\"p_extracted_value\":\"\\\"Acme Pharma\\\"\",\"p_confidence_state\":\"needs_review\",\"p_missing_source_reason\":\"parser_output_missing_citation\"}")
+  SOTR_NR_ID=$(echo "$RESP" | jq -r '.id // empty')
+  if [[ -n "$SOTR_NR_ID" && "$SOTR_NR_ID" != "null" ]]; then
+    NR_RESP=$(curl -s -X POST "$REST/rpc/sotr_get_item_evidence" \
+      -H "apikey: $SUPABASE_ANON_KEY" \
+      -H "Authorization: Bearer $USER_JWT" \
+      -H "Content-Type: application/json" \
+      -d "{\"p_extracted_item_id\":\"$SOTR_NR_ID\"}")
+    NR_EV_COUNT=$(echo "$NR_RESP" | jq '.evidence | length')
+    NR_STATE=$(echo "$NR_RESP" | jq -r '.item.confidence_state // empty')
+    NR_REASON=$(echo "$NR_RESP" | jq -r '.item.missing_source_reason // empty')
+    if [[ "$NR_STATE" == "needs_review" && "$NR_EV_COUNT" -eq 0 && "$NR_REASON" == "parser_output_missing_citation" ]]; then
+      pass "T17: needs_review item has empty evidence + correct reason"
+    else
+      fail "T17: needs_review item" "state=$NR_STATE ev_count=$NR_EV_COUNT reason=$NR_REASON"
+    fi
+  else
+    fail "T17-setup: create needs_review item" "resp=$RESP"
+  fi
+fi
+echo
+
+# Cleanup SOTR rows
+if [[ -n "${SOTR_DOC_ID:-}" ]]; then
+  curl -s -X DELETE "$REST/documents?id=eq.$SOTR_DOC_ID" \
+    -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+    -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" >/dev/null
+  echo "[cleanup] SOTR smoke rows deleted (document + cascade)"
+  echo
+fi
+
+# ---------------------------------------------------------------------------
 # Cleanup — delete all smoke-test deltas + the rows we created
 # ---------------------------------------------------------------------------
 

@@ -700,7 +700,12 @@ async function extractClinicalFields(
     }
 
     const data = await res.json();
-    return (data.result ?? data) as Record<string, unknown>;
+    const result = (data.result ?? data) as Record<string, unknown>;
+    // Preserve Reducto citations alongside extracted values so the SOTR adapter
+    // can create source evidence records. Keyed as _reducto_citations to avoid
+    // collision with any CLINICAL_EXTRACT_SCHEMA field names.
+    const citations = (data.citations ?? (data.result as Record<string, unknown> | null | undefined)?.citations) ?? null;
+    return citations ? { ...result, _reducto_citations: citations } : result;
   }, "extractClinicalFields");
 }
 
