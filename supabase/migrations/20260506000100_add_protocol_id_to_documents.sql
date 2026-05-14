@@ -5,11 +5,11 @@
 -- scoping via selectedDocIds). FK is nullable so documents not tied to any
 -- protocol still work in the global knowledge base.
 --
--- Auto-tag trigger: when extracted_fields.protocol_number is present (Reducto
--- ingest path) and protocol_id is not already set, look up a matching
--- protocol via the normalized study_number index. Works for any future
--- ingest path — manual SQL, admin UI, batch import — without code changes
--- in the edge function.
+-- Auto-tag trigger: when extracted_fields.protocol_number is present
+-- (Reducto ingest path) and protocol_id is not already set, look up a
+-- matching protocol via the normalized study_number index. Works for any
+-- future ingest path — manual SQL, admin UI, batch import — without code
+-- changes in the edge function.
 -- =============================================================================
 
 ALTER TABLE documents

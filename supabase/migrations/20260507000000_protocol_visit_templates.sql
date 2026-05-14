@@ -1,31 +1,16 @@
 -- =============================================================================
--- Phase E — Protocol visit templates + anchor-date materialization.
+-- Phase A — calendar autopopulates from parsed protocol PDFs.
 --
--- Reducto extracts a schedule-of-events array from each uploaded protocol PDF.
--- Each entry becomes a row in protocol_visit_templates (visit_name, study_day,
--- window, procedures). The anchor date — the calendar date corresponding to
--- the protocol's Day 0 — is stored on the protocol itself.
---
--- The materialize_protocol_visits RPC projects (participant, template) pairs
--- onto site_visits using:
---   effective_anchor = participant.enrolled_at OR protocol.demo_anchor_date
---   visit.date       = effective_anchor + template.study_day
---
--- site_visits gain template_id and is_seed columns so the RPC can wipe its
--- own auto-materialized rows (and the original demo seed) on re-run while
--- preserving any manually-created visits (template_id IS NULL AND NOT is_seed).
+-- The Reducto-driven `ingest` Edge Function extracts a Schedule of
+-- Assessments per protocol PDF and upserts the visits here, indexed by
+-- (protocol_id, visit_name, study_day). We don't write calendar dates at
+-- this layer — the user provides a `demo_anchor_date` per protocol, and the
+-- materialize_protocol_visits RPC projects (participant, template) pairs
+-- onto real `site_visits` rows by adding `study_day` to each participant's
+-- effective anchor (their enrolled_at, or the protocol-level anchor as a
+-- fallback).
 -- =============================================================================
 
-
--- ---------------------------------------------------------------------------
--- protocols.demo_anchor_date — single global anchor per protocol.
--- ---------------------------------------------------------------------------
-ALTER TABLE protocols ADD COLUMN demo_anchor_date DATE;
-
-
--- ---------------------------------------------------------------------------
--- protocol_visit_templates — one row per planned visit per protocol.
--- ---------------------------------------------------------------------------
 CREATE TABLE protocol_visit_templates (
   id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   protocol_id         UUID        NOT NULL REFERENCES protocols(id) ON DELETE CASCADE,
@@ -47,13 +32,20 @@ CREATE TRIGGER touch_protocol_visit_templates_updated_at
   BEFORE UPDATE ON protocol_visit_templates
   FOR EACH ROW EXECUTE FUNCTION audit_mode_touch_updated_at();
 
-ALTER TABLE protocol_visit_templates ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "protocol_visit_templates_authenticated"
-  ON protocol_visit_templates FOR ALL TO authenticated USING (TRUE) WITH CHECK (TRUE);
+
+-- ---------------------------------------------------------------------------
+-- protocols.demo_anchor_date — the calendar date for protocol Day 0. Used as
+-- a fallback when a participant has no enrolled_at yet, so the calendar can
+-- show visits before site enrolment is finalised (demo / preview path).
+-- ---------------------------------------------------------------------------
+ALTER TABLE protocols
+  ADD COLUMN demo_anchor_date DATE;
 
 
 -- ---------------------------------------------------------------------------
--- site_visits — track origin of each row.
+-- site_visits — columns added so materialize can attribute rows back to
+-- the template they came from and so the original demo seed rows can be
+-- swept on first projection.
 -- ---------------------------------------------------------------------------
 ALTER TABLE site_visits
   ADD COLUMN template_id UUID REFERENCES protocol_visit_templates(id) ON DELETE SET NULL,
@@ -61,8 +53,8 @@ ALTER TABLE site_visits
 
 CREATE INDEX site_visits_template_idx ON site_visits(template_id);
 
--- Mark all visits inserted by the existing demo seed migration as seed rows
--- so the materialize RPC can sweep them out on first projection.
+-- Pre-Phase-A seed rows (the original demo data) have no template_id; mark
+-- them so the materialize RPC can sweep them out on first projection.
 UPDATE site_visits SET is_seed = TRUE WHERE template_id IS NULL;
 
 
