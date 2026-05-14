@@ -6,6 +6,7 @@ import {
   Lock,
   AlertTriangle,
   FileText,
+  History as HistoryIcon,
 } from 'lucide-react';
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx';
 import { useTheme } from '../../../../context/ThemeContext';
@@ -24,6 +25,7 @@ import type { AuditWithContext } from '../../../../context/AuditContext';
 import type { MockReportDraft } from '../../../../lib/audit/mockReport';
 import type { MockWorkspaceEntry } from '../../../../lib/audit/mockWorkspaceEntries';
 import type { MockRiskSummary } from '../../../../lib/audit/mockRiskSummary';
+import HistoryDrawer from '../HistoryDrawer';
 
 // =============================================================================
 // FinalReviewExportWorkspace — FINAL_REVIEW_EXPORT (Stage 8) center pane.
@@ -46,6 +48,7 @@ export default function FinalReviewExportWorkspace() {
   const isLight = theme === 'light';
 
   const [confirmingSignoff, setConfirmingSignoff] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
     if (!activeAudit?.id) return;
@@ -219,9 +222,22 @@ export default function FinalReviewExportWorkspace() {
           <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
             Pre-export checklist
           </p>
-          <p className={`${subColor} text-xs`}>
-            {passedCount} of {gates.length} gates passed
-          </p>
+          <div className="flex items-center gap-3">
+            <p className={`${subColor} text-xs`}>
+              {passedCount} of {gates.length} gates passed
+            </p>
+            <button
+              type="button"
+              onClick={() => setHistoryOpen(true)}
+              disabled={!report}
+              className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary} disabled:opacity-50 disabled:cursor-not-allowed`}
+              title="View change history"
+              aria-label="Open change history for the audit report"
+            >
+              <HistoryIcon size={12} />
+              History
+            </button>
+          </div>
         </div>
         <ul className="space-y-2">
           {gates.map((g, i) => (
@@ -370,6 +386,16 @@ export default function FinalReviewExportWorkspace() {
           )}
         </div>
       </div>
+
+      {historyOpen && report && (
+        <HistoryDrawer
+          objectType="REPORT_DRAFT_OBJECT"
+          objectId={report.id}
+          title="Audit report"
+          subTitle="Final review · change history"
+          onClose={() => setHistoryOpen(false)}
+        />
+      )}
     </div>
   );
 }
