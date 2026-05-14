@@ -29,87 +29,31 @@ import {
   type CalendarVisit,
   type VisitStatus,
 } from '../../../lib/mockCalendarData';
+import {
+  formatYmd,
+  parseYmd,
+  startOfDay,
+  startOfWeek,
+  startOfMonth,
+  addDays,
+  addMonths,
+  isSameDay,
+  isSameMonth,
+  isPast,
+  formatFullDate,
+  formatMonth,
+  formatWeekRange,
+} from '../../../lib/site/dateUtils';
 
 // ────────────────────────────────────────────────────────────────────────────
-// Date utilities
+// TodayTab-only helpers — date utilities live in src/lib/site/dateUtils.ts
 // ────────────────────────────────────────────────────────────────────────────
-
-function formatYmd(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function parseYmd(s: string): Date {
-  const [y, m, d] = s.split('-').map(Number);
-  return new Date(y, m - 1, d);
-}
-
-function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-function startOfWeek(d: Date): Date {
-  // Week starts on Sunday.
-  const copy = startOfDay(d);
-  copy.setDate(copy.getDate() - copy.getDay());
-  return copy;
-}
-
-function startOfMonth(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
-}
-
-function addDays(d: Date, days: number): Date {
-  const copy = new Date(d);
-  copy.setDate(copy.getDate() + days);
-  return copy;
-}
-
-function addMonths(d: Date, months: number): Date {
-  const copy = new Date(d);
-  copy.setMonth(copy.getMonth() + months);
-  return copy;
-}
-
-function isSameDay(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-
-function isSameMonth(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
-}
-
-function isPast(d: Date, today: Date): boolean {
-  return startOfDay(d).getTime() < startOfDay(today).getTime();
-}
 
 function greeting(): string {
   const hour = new Date().getHours();
   if (hour < 12) return 'Good morning';
   if (hour < 17) return 'Good afternoon';
   return 'Good evening';
-}
-
-function formatFullDate(d: Date): string {
-  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-}
-
-function formatWeekRange(start: Date): string {
-  const end = addDays(start, 6);
-  const sameMonth = start.getMonth() === end.getMonth();
-  const sameYear = start.getFullYear() === end.getFullYear();
-  const startStr = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const endStr = sameMonth
-    ? end.toLocaleDateString('en-US', { day: 'numeric' })
-    : end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const yearStr = sameYear ? start.getFullYear() : `${start.getFullYear()} – ${end.getFullYear()}`;
-  return `${startStr} – ${endStr}, ${yearStr}`;
-}
-
-function formatMonth(d: Date): string {
-  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
 function formatTime(t?: string): string {

@@ -22,39 +22,22 @@ import {
 import type { Protocol } from '../../../context/ProtocolContext';
 import ParticipantProfileDrawer from './ParticipantProfileDrawer';
 import { updateVisit } from '../../../lib/site/siteApi';
+import {
+  parseYmd,
+  startOfDay,
+  isSameDay,
+  isPast,
+  formatFullDate,
+} from '../../../lib/site/dateUtils';
 
 // =============================================================================
 // VisitDetailDrawer — slide-in right panel for a single CalendarVisit.
 //
 // Used in TodayTab (calendar) and ReportsTab (deviation / missed visit rows).
 // "Start visit" mode transforms the procedure list into a live checklist.
+//
+// Date helpers live in src/lib/site/dateUtils.ts (shared with TodayTab).
 // =============================================================================
-
-// Private date helpers (mirrored from TodayTab — small enough to duplicate)
-function parseYmd(s: string): Date {
-  const [y, m, d] = s.split('-').map(Number);
-  return new Date(y, m - 1, d);
-}
-function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-function isSameDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-function isPast(d: Date, today: Date): boolean {
-  return startOfDay(d).getTime() < startOfDay(today).getTime();
-}
-function formatFullDate(d: Date): string {
-  return d.toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  });
-}
 
 function statusIcon(status: VisitStatus, size = 13) {
   switch (status) {
