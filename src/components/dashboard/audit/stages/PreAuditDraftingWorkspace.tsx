@@ -10,6 +10,7 @@ import {
   FileText,
   CalendarDays,
   ListChecks,
+  History as HistoryIcon,
 } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useAudit } from '../../../../context/AuditContext';
@@ -31,7 +32,8 @@ import {
   upsertChecklist,
   approveChecklist,
 } from '../../../../lib/audit/preAuditApi';
-import type { DeliverableApprovalStatus } from '../../../../types/audit';
+import type { DeliverableApprovalStatus, TrackedObjectType } from '../../../../types/audit';
+import HistoryDrawer from '../HistoryDrawer';
 
 // =============================================================================
 // PreAuditDraftingWorkspace — PRE_AUDIT_DRAFTING stage center pane.
@@ -515,6 +517,7 @@ function ConfirmationLetterTab({ deliverable, isLight, onChange }: ConfirmationL
   return (
     <DeliverableShell
       kind="Confirmation letter"
+      objectType="CONFIRMATION_LETTER_OBJECT"
       description="Sent to the vendor confirming dates, attendees, and scope. Sponsor branding is added externally on export."
       deliverable={deliverable}
       isLight={isLight}
@@ -660,6 +663,7 @@ function AgendaTab({ deliverable, isLight, onChange }: AgendaTabProps) {
   return (
     <DeliverableShell
       kind="Agenda"
+      objectType="AGENDA_OBJECT"
       description="Day-by-day audit plan. Each row is one slot — time, topic, owner, optional notes."
       deliverable={deliverable}
       isLight={isLight}
@@ -875,6 +879,7 @@ function ChecklistTab({ deliverable, isLight, onChange }: ChecklistTabProps) {
   return (
     <DeliverableShell
       kind="Checklist"
+      objectType="CHECKLIST_OBJECT"
       description="The auditor's working checklist for the audit day. Each item: a prompt, optional SOP/section reference, and whether evidence is expected on the spot."
       deliverable={deliverable}
       isLight={isLight}
@@ -993,8 +998,9 @@ function ChecklistTab({ deliverable, isLight, onChange }: ChecklistTabProps) {
 
 interface DeliverableShellProps {
   kind: string;
+  objectType: TrackedObjectType;
   description: string;
-  deliverable: { approval_status: DeliverableApprovalStatus; approved_at: string | null; approved_by_name: string | null } | null;
+  deliverable: { id: string; approval_status: DeliverableApprovalStatus; approved_at: string | null; approved_by_name: string | null } | null;
   isLight: boolean;
   editing: boolean;
   onBeginEdit: () => void;
@@ -1007,6 +1013,7 @@ interface DeliverableShellProps {
 
 function DeliverableShell({
   kind,
+  objectType,
   description,
   deliverable,
   isLight,
@@ -1018,6 +1025,7 @@ function DeliverableShell({
   canSave,
   children,
 }: DeliverableShellProps) {
+  const [historyOpen, setHistoryOpen] = useState(false);
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
   const sectionHeader = 'text-fg-label';
@@ -1055,25 +1063,39 @@ function DeliverableShell({
             </p>
           )}
         </div>
-        {!editing && deliverable && (
+        {deliverable && (
           <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
-              onClick={onBeginEdit}
+              onClick={() => setHistoryOpen(true)}
               className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+              title="View change history"
+              aria-label={`Open change history for the ${kind.toLowerCase()}`}
             >
-              <Pencil size={12} />
-              {approved ? 'Revise' : 'Edit'}
+              <HistoryIcon size={12} />
+              History
             </button>
-            {!approved && (
-              <button
-                type="button"
-                onClick={onApprove}
-                className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-md transition-colors ${buttonApprove}`}
-              >
-                <CheckCircle2 size={12} />
-                Approve
-              </button>
+            {!editing && (
+              <>
+                <button
+                  type="button"
+                  onClick={onBeginEdit}
+                  className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+                >
+                  <Pencil size={12} />
+                  {approved ? 'Revise' : 'Edit'}
+                </button>
+                {!approved && (
+                  <button
+                    type="button"
+                    onClick={onApprove}
+                    className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-md transition-colors ${buttonApprove}`}
+                  >
+                    <CheckCircle2 size={12} />
+                    Approve
+                  </button>
+                )}
+              </>
             )}
           </div>
         )}
@@ -1117,6 +1139,16 @@ function DeliverableShell({
             </button>
           )}
         </div>
+      )}
+
+      {historyOpen && deliverable && (
+        <HistoryDrawer
+          objectType={objectType}
+          objectId={deliverable.id}
+          title={kind}
+          subTitle="Pre-audit drafting · change history"
+          onClose={() => setHistoryOpen(false)}
+        />
       )}
     </div>
   );
