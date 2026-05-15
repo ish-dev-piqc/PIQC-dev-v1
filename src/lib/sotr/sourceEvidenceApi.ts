@@ -169,6 +169,47 @@ export async function listWorksheetItemsForStudy(
   });
 }
 
+/**
+ * Counts worksheet items for a study, split by "awaiting review" vs total.
+ *
+ * "Awaiting review" = review_status === 'draft' (the initial state on
+ * extraction) OR review_status IS NULL (legacy rows pre-PR-5). All four
+ * post-action statuses (accepted_for_draft, edited, rejected_from_draft,
+ * flagged) count as reviewed — the auditor has weighed in either way.
+ *
+ * Used by Audit Mode (F-2) to surface the review queue size on the
+ * "Protocol source" button + inside the drawer header without forcing the
+ * auditor to open the drawer first. Same RLS gates as listWorksheetItemsForStudy.
+ */
+export interface WorksheetReviewCount {
+  total: number;
+  awaitingReview: number;
+}
+
+export async function countWorksheetItemsForStudy(
+  studyId: string,
+): Promise<WorksheetReviewCount> {
+  const totalP = supabase
+    .from('protocol_extracted_items')
+    .select('id, documents!inner(protocol_id)', { count: 'exact', head: true })
+    .eq('documents.protocol_id', studyId);
+
+  const awaitingP = supabase
+    .from('protocol_extracted_items')
+    .select('id, documents!inner(protocol_id)', { count: 'exact', head: true })
+    .eq('documents.protocol_id', studyId)
+    .or('review_status.eq.draft,review_status.is.null');
+
+  const [totalRes, awaitingRes] = await Promise.all([totalP, awaitingP]);
+  if (totalRes.error) throw totalRes.error;
+  if (awaitingRes.error) throw awaitingRes.error;
+
+  return {
+    total: totalRes.count ?? 0,
+    awaitingReview: awaitingRes.count ?? 0,
+  };
+}
+
 export async function fetchWorksheetItemsSourceEvidenceBatch(
   studyId: string,
   worksheetItemIds: string[],

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { ListChecks } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ListChecks, CheckCircle2 } from 'lucide-react';
 import { listWorksheetItemsForStudy } from '../../lib/sotr/sourceEvidenceApi';
 import type { ExtractedItemRecord } from '../../types/sotr';
 import WorksheetItemRow from './WorksheetItemRow';
@@ -57,6 +57,18 @@ export default function WorksheetItemsList({ studyId, studyCode, onPick }: Props
     };
   }, [studyId, refreshToken]);
 
+  // F-2: "awaiting review" = draft state (initial) or null (legacy rows).
+  // Matches the server-side filter in countWorksheetItemsForStudy so the
+  // shell badge and this inline count never disagree.
+  const awaitingCount = useMemo(
+    () =>
+      items.filter(
+        (i) => !i.review_status || i.review_status === 'draft',
+      ).length,
+    [items],
+  );
+  const allReviewed = items.length > 0 && awaitingCount === 0;
+
   return (
     <div
       data-testid="sotr-worksheet-items-list"
@@ -68,6 +80,25 @@ export default function WorksheetItemsList({ studyId, studyCode, onPick }: Props
           <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold">
             Parsed protocol items
           </p>
+          {/* Inline awaiting-review chip. Mirrors the shell badge so the
+              auditor sees the same number after opening the drawer. */}
+          {awaitingCount > 0 && (
+            <span
+              data-testid="sotr-worksheet-items-awaiting-count"
+              className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/[0.08] dark:text-amber-300"
+            >
+              {awaitingCount} awaiting review
+            </span>
+          )}
+          {allReviewed && (
+            <span
+              data-testid="sotr-worksheet-items-all-reviewed"
+              className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/[0.08] dark:text-emerald-300"
+            >
+              <CheckCircle2 size={10} />
+              All reviewed
+            </span>
+          )}
         </div>
         <DownloadDraftPacketButton studyId={studyId} studyCode={studyCode} />
       </div>
