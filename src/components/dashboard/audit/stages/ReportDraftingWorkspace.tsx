@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Pencil,
   CheckCircle2,
@@ -20,10 +20,12 @@ import {
   fetchReportDraft,
   upsertReportDraft,
   approveReportDraft,
+  prefillReportDraft,
 } from '../../../../lib/audit/reportApi';
 import type { MockWorkspaceEntry } from '../../../../lib/audit/mockWorkspaceEntries';
 import type { ProvisionalClassification } from '../../../../types/audit';
 import HistoryDrawer from '../HistoryDrawer';
+import PrefillAgentNote from '../PrefillAgentNote';
 
 // =============================================================================
 // ReportDraftingWorkspace — REPORT_DRAFTING (Stage 7) center pane.
@@ -56,6 +58,12 @@ export default function ReportDraftingWorkspace() {
   const [draftConclusions, setDraftConclusions] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
 
+  // Tracks audits whose prefill RPC has already been attempted in this session
+  // so opening Stage 7 / re-rendering doesn't fire the RPC repeatedly. The
+  // server's 23505 idempotency is the durable guard; this is network-noise
+  // optimisation. Mirrors PR #58's pattern in PreAuditDraftingWorkspace.
+  const attemptedPrefillRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     setEditing(null);
   }, [activeAudit?.id]);
@@ -63,9 +71,25 @@ export default function ReportDraftingWorkspace() {
   useEffect(() => {
     if (!activeAudit?.id) return;
     const id = activeAudit.id;
-    fetchReportDraft(id).then((draft) => {
-      setReports((prev) => ({ ...prev, [id]: draft }));
-    });
+
+    const load = async () => {
+      const initial = await fetchReportDraft(id);
+
+      // Silent agentic bootstrap: if no report exists AND we haven't already
+      // attempted prefill for this audit this session, fire the prefill RPC.
+      // The RPC server-side-gates on approved Stage 4 risk summary and skips
+      // silently if pre-conditions aren't met.
+      if (!initial && !attemptedPrefillRef.current.has(id)) {
+        attemptedPrefillRef.current.add(id);
+        await prefillReportDraft(id);
+        const refreshed = await fetchReportDraft(id);
+        setReports((prev) => ({ ...prev, [id]: refreshed }));
+      } else {
+        setReports((prev) => ({ ...prev, [id]: initial }));
+      }
+    };
+
+    load();
   }, [activeAudit?.id, setReports]);
 
   // Derive non-hook values (safe with null activeAudit since we read by key)
@@ -215,9 +239,28 @@ export default function ReportDraftingWorkspace() {
             Auto-compiled from upstream artefacts. Edit the executive summary and conclusions;
             the rest reflects what you captured in earlier stages. One approval gates Stage 8.
           </p>
+          {report.prefilled_at && (
+            <p
+              data-testid="report-prefill-chip"
+              className={`${mutedColor} text-[11px] mt-1 inline-flex items-center gap-1`}
+              title="Drafted from approved Stage 4 risk summary + Stage 6 workspace entries"
+            >
+              <Sparkles size={10} className={isLight ? 'text-[#4a6fa5]' : 'text-[#6e8fb5]'} />
+              Started from: risk summary focus areas + audit observations
+            </p>
+          )}
         </div>
         <StatusBadge approved={approved} isLight={isLight} />
       </div>
+
+      {/* Agentic moment — one-time note. Dismissable; persists per (stage, audit)
+          in localStorage. Mirrors the Stage 5 banner pattern from PR #58. */}
+      {report.prefilled_at && (
+        <PrefillAgentNote
+          storageKey={`piq-stage7-prefill-note-dismissed:${auditId}`}
+          message="The executive summary and conclusions were drafted from your approved risk summary and audit observations. Review and edit each before approving."
+        />
+      )}
 
       {/* Unclassified warning */}
       {unclassifiedCount > 0 && (

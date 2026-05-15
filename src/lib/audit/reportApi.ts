@@ -23,6 +23,10 @@ interface ReportDraftRow {
   final_signed_off_by: string | null;
   final_signed_off_at: string | null;
   exported_at: string | null;
+  // Prefill provenance (Option E). Optional for backward compat with pre-PR
+  // rows; present when the report was agent-bootstrapped.
+  source_risk_summary_id?: string | null;
+  prefilled_at?: string | null;
 }
 
 async function resolveUserName(userId: string | null): Promise<string | null> {
@@ -51,6 +55,8 @@ async function flattenRow(row: ReportDraftRow): Promise<MockReportDraft> {
     final_signed_off_at: row.final_signed_off_at,
     final_signed_off_by_name: finalSignedOffByName,
     exported_at: row.exported_at,
+    source_risk_summary_id: row.source_risk_summary_id ?? null,
+    prefilled_at: row.prefilled_at ?? null,
   };
 }
 
@@ -126,6 +132,30 @@ export async function finalSignOffReport(
   });
   if (error) {
     console.error('[reportApi] finalSignOffReport error:', error);
+    return null;
+  }
+  if (!data) return null;
+  return flattenRow(data as ReportDraftRow);
+}
+
+// ============================================================================
+// Prefill (agent bootstrap) — one-shot on first Stage 7 open
+//
+// Bootstraps executive_summary + conclusions from approved Stage 4 risk
+// summary + Stage 6 workspace entry counts. Mirrors PR #58's Stage 5 prefill
+// pattern. The RPC raises 23505 if the report draft already exists; the
+// wrapper swallows that as a no-op. Other errors are logged but don't block —
+// the auditor just sees an empty draft and authors it manually.
+// ============================================================================
+
+export async function prefillReportDraft(auditId: string): Promise<MockReportDraft | null> {
+  const { data, error } = await supabase.rpc('audit_mode_prefill_report_draft', {
+    p_audit_id: auditId,
+  });
+  if (error) {
+    if (error.code !== '23505') {
+      console.error('[reportApi] prefillReportDraft error:', error);
+    }
     return null;
   }
   if (!data) return null;

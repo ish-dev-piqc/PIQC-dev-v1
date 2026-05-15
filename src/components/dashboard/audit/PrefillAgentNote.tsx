@@ -1,16 +1,21 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Sparkles, X } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 
 // =============================================================================
-// PrefillAgentNote — one-time agentic banner shown at the top of Stage 5
-// after the auditor's deliverables were pre-filled from approved Stage 3 + 4.
+// PrefillAgentNote — one-time agentic banner shown at the top of any stage
+// where deliverables were pre-filled from approved upstream context.
+//
+// Reusable across stages: each caller passes a stage-scoped `storageKey` for
+// per-(stage, audit) dismissal, plus the message text appropriate to that
+// stage. Stage 5 (PR #58) and Stage 7 (Option E) are the two callers today.
 //
 // Visibility:
-//   - Shown when any of the three deliverables carries a prefilled_at timestamp
-//     AND the auditor hasn't dismissed the note for this audit yet
-//   - Dismissal is persisted per-audit in localStorage so the note stays
-//     dismissed across reloads but reappears for a different audit
+//   - Renders when the host decides a deliverable carries a prefilled_at
+//     timestamp AND the auditor hasn't dismissed the note for this
+//     (stage, audit) yet
+//   - Dismissal is persisted in localStorage so the note stays dismissed
+//     across reloads but reappears for a different audit / different stage
 //
 // Tone:
 //   - Calm, structured, declarative — names what happened in one short read
@@ -18,16 +23,19 @@ import { useTheme } from '../../../context/ThemeContext';
 //   - The next-action signal is in the message, not a CTA button
 // =============================================================================
 
-const STORAGE_KEY_PREFIX = 'piq-stage5-prefill-note-dismissed:';
-
 interface Props {
-  auditId: string;
+  /** localStorage key for dismissal state. Caller is responsible for making
+   *  this unique per (stage, audit) so banners don't collide. */
+  storageKey: string;
+  /** The banner message body. Caller controls wording per stage. */
+  message: React.ReactNode;
+  /** Optional headline. Defaults to "Drafts started." */
+  headline?: string;
 }
 
-export default function PrefillAgentNote({ auditId }: Props) {
+export default function PrefillAgentNote({ storageKey, message, headline }: Props) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
-  const storageKey = `${STORAGE_KEY_PREFIX}${auditId}`;
 
   const [dismissed, setDismissed] = useState<boolean>(() => {
     try {
@@ -36,6 +44,17 @@ export default function PrefillAgentNote({ auditId }: Props) {
       return false;
     }
   });
+
+  // Re-sync the dismissed state when the storageKey changes. The initializer
+  // above only runs on mount; without this, switching audits / stages keeps
+  // the previous (stage, audit)'s dismissal state and shows a stale banner.
+  useEffect(() => {
+    try {
+      setDismissed(localStorage.getItem(storageKey) === '1');
+    } catch {
+      setDismissed(false);
+    }
+  }, [storageKey]);
 
   if (dismissed) return null;
 
@@ -63,9 +82,8 @@ export default function PrefillAgentNote({ auditId }: Props) {
         aria-hidden
       />
       <p className="text-sm leading-relaxed flex-1 min-w-0">
-        <span className="font-semibold">Drafts started.</span>{' '}
-        These deliverables were pre-filled from your approved questionnaire and
-        risk summary. Review and approve each before continuing.
+        <span className="font-semibold">{headline ?? 'Drafts started.'}</span>{' '}
+        {message}
       </p>
       <button
         type="button"
