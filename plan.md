@@ -35,7 +35,7 @@ also live in the header.
 - **Embeddings + RAG**: pgvector + OpenAI `text-embedding-3-small`; hybrid search via Postgres function
 - **Export**: Markdown (Blob), Word `.docx` via `docx` v9.6.1, CSV (Blob)
 - **Icons / styling**: lucide-react 0.344.0, pure Tailwind utilities, brand blue `#4a6fa5`
-- **Tests**: `scripts/smoke-rpcs.sh` (12-test bash suite for Audit Mode RPCs); no JS/TS unit-test framework wired in repo today (the `feature/scv-foundation-guardrails` branch adds Vitest but hasn't been merged)
+- **Tests**: Vitest 2.0 + `@testing-library/react` (entered `main` with SOTR PR-1) covering SOTR lib + components (16 test files); `scripts/smoke-rpcs.sh` 12-test bash suite for Audit Mode RPCs (T1–T12) + SOTR DB integration (T13–T40). Audit Mode JS/TS unit tests not yet written.
 - **CI/CD**: `.github/workflows/deploy.yml` builds + deploys to GitHub Pages
 - **Hosting**: GitHub Pages frontend + Supabase cloud project `ygfcjwgsjmathinqkppq`
 
@@ -75,7 +75,7 @@ also live in the header.
 | Server-side pilot enforcement (decision B) | Pilot expiry check on protected RPCs after early launch | ○ Deferred — frontend gate only for now per founder-launch decision |
 | Smoke test (Audit Mode) | `scripts/smoke-rpcs.sh` — 12-case bash suite covering stage-advancement + per-stage RPCs (T1–T12) | ✓ Done |
 | **— Outstanding —** | | |
-| JS/TS unit tests | `scripts/smoke-rpcs.sh` covers SQL only. The `feature/scv-foundation-guardrails` branch adds Vitest + `dateUtils` tests, but isn't merged | ○ Not in main |
+| JS/TS unit tests | Vitest is on `main` (entered with SOTR PR-1); 16 SOTR test files exist. Audit Mode unit tests not yet written; date-utility tests still sit on `feature/scv-foundation-guardrails` | ◐ Partial — SOTR covered, Audit Mode pending |
 | Heatmap real-data refinement | Today's scoring is heuristic; swap to aggregated cross-audit signals once enough audits exist | ○ Deferred |
 | Subject Command View | A future product surface on `feature/scv-foundation-guardrails` (see SCV branch section below); not on `k1` | ○ Branch only |
 | Remote deploys | All Phase A + B migrations + ingest function changes are on disk and on `k1`; cloud Supabase needs `db push` + `functions deploy ingest` | ○ Deploy pending |
@@ -302,7 +302,7 @@ rv1_code/                                   Legacy reference build — read-only
 ## Test coverage
 
 - **`scripts/smoke-rpcs.sh`** — 12 cases (T1–T12) covering stage advancement + per-stage RPCs. Run with `SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=... SUPABASE_ACCESS_TOKEN=... bash scripts/smoke-rpcs.sh --cloud`.
-- **No frontend unit tests on `main`/`k1`.** Vitest infrastructure + 33 date-utility test cases sit on `feature/scv-foundation-guardrails` but are not merged.
+- **Frontend unit tests via Vitest 2.0** (entered `main` with SOTR PR-1). 16 test files in `src/lib/sotr/__tests__/` and `src/components/sotr/__tests__/`. Run with `npm run test`. Audit Mode unit tests not yet written. The 33 date-utility test cases on `feature/scv-foundation-guardrails` are not merged (separate branch).
 - **No Phase B smoke test yet.** End-to-end Phase B verification (upload protocol PDF → SoA + cross-refs → upload supplementary doc → fan-out merge → drawer renders refs) is manual today.
 
 ---
