@@ -91,27 +91,29 @@ const PERMISSION_DENIED = { code: '42501', message: 'permission denied' };
 
 describe.each([
   {
-    name:        'prefillConfirmationLetter',
-    fn:          prefillConfirmationLetter,
-    rpcName:     'audit_mode_prefill_confirmation_letter',
-    makeRow:     makeLetterRow,
-    logPrefix:   '[preAuditApi] prefillConfirmationLetter error:',
+    name:    'prefillConfirmationLetter',
+    fn:      prefillConfirmationLetter,
+    rpcName: 'audit_mode_prefill_confirmation_letter',
+    makeRow: makeLetterRow,
+    // Used in the non-23505 test to verify the RIGHT wrapper logged, not a
+    // generic catch-all somewhere else in the module.
+    logTag:  'prefillConfirmationLetter',
   },
   {
-    name:        'prefillAgenda',
-    fn:          prefillAgenda,
-    rpcName:     'audit_mode_prefill_agenda',
-    makeRow:     makeAgendaRow,
-    logPrefix:   '[preAuditApi] prefillAgenda error:',
+    name:    'prefillAgenda',
+    fn:      prefillAgenda,
+    rpcName: 'audit_mode_prefill_agenda',
+    makeRow: makeAgendaRow,
+    logTag:  'prefillAgenda',
   },
   {
-    name:        'prefillChecklist',
-    fn:          prefillChecklist,
-    rpcName:     'audit_mode_prefill_checklist',
-    makeRow:     makeChecklistRow,
-    logPrefix:   '[preAuditApi] prefillChecklist error:',
+    name:    'prefillChecklist',
+    fn:      prefillChecklist,
+    rpcName: 'audit_mode_prefill_checklist',
+    makeRow: makeChecklistRow,
+    logTag:  'prefillChecklist',
   },
-])('$name — 23505 swallow contract', ({ name: _name, fn, rpcName, makeRow, logPrefix: _logPrefix }) => {
+])('$name — 23505 swallow contract', ({ fn, rpcName, makeRow, logTag }) => {
   let errorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
@@ -150,27 +152,49 @@ describe.each([
     const result = await fn('audit-1');
 
     expect(result).toBeNull();
-    expect(errorSpy).toHaveBeenCalled();
-    // Sanity-check the prefix so we know the RIGHT wrapper logged it
-    // (not a generic catch-all somewhere else in the module).
-    const [firstArg] = errorSpy.mock.calls[0];
-    expect(String(firstArg)).toContain('preAuditApi');
+    // Asserts both modules ("preAuditApi") and the specific wrapper
+    // (logTag) — locks down that the RIGHT wrapper logged, not a
+    // generic catch-all somewhere else in the file.
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining(`[preAuditApi] ${logTag}`),
+      expect.anything(),
+    );
   });
 });
 
 describe('prefillStage5Deliverables — best-effort Promise.all', () => {
   let errorSpy: ReturnType<typeof vi.spyOn>;
 
+  // Route each call by RPC name rather than by call order. The wrapper
+  // uses Promise.all over [letter, agenda, checklist], which means the
+  // mock queue happens to match by index today — but if anyone ever
+  // reorders that array, the order-based mock would silently route the
+  // wrong rows to the wrong wrappers. Routing by RPC name removes that
+  // coupling: the test passes only if each wrapper actually fired its
+  // own RPC, regardless of which order they ran in.
+  function mockRpcByName(
+    routes: Record<string, { data: unknown; error: unknown }>,
+  ) {
+    mockRpc.mockImplementation((rpcName: string) => {
+      const route = routes[rpcName];
+      if (!route) {
+        return Promise.reject(new Error(`Unexpected RPC: ${rpcName}`));
+      }
+      return Promise.resolve(route);
+    });
+  }
+
   beforeEach(() => {
     mockRpc.mockReset();
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
-  it('fires all three RPCs in parallel and returns the merged shape on full success', async () => {
-    mockRpc
-      .mockResolvedValueOnce({ data: makeLetterRow(),    error: null })
-      .mockResolvedValueOnce({ data: makeAgendaRow(),    error: null })
-      .mockResolvedValueOnce({ data: makeChecklistRow(), error: null });
+  it('fires all three RPCs and returns the merged shape on full success', async () => {
+    mockRpcByName({
+      audit_mode_prefill_confirmation_letter: { data: makeLetterRow(),    error: null },
+      audit_mode_prefill_agenda:              { data: makeAgendaRow(),    error: null },
+      audit_mode_prefill_checklist:           { data: makeChecklistRow(), error: null },
+    });
 
     const result = await prefillStage5Deliverables('audit-1');
 
@@ -184,10 +208,11 @@ describe('prefillStage5Deliverables — best-effort Promise.all', () => {
     // Layer-1 contract: one deliverable failing for any reason does NOT
     // prevent the other two from being prefilled. This is what makes the
     // combined wrapper "best-effort" rather than transactional.
-    mockRpc
-      .mockResolvedValueOnce({ data: null,              error: UNIQUE_VIOLATION  }) // letter exists
-      .mockResolvedValueOnce({ data: makeAgendaRow(),   error: null              }) // agenda fresh
-      .mockResolvedValueOnce({ data: null,              error: PERMISSION_DENIED }); // checklist denied
+    mockRpcByName({
+      audit_mode_prefill_confirmation_letter: { data: null,            error: UNIQUE_VIOLATION  }, // letter exists
+      audit_mode_prefill_agenda:              { data: makeAgendaRow(), error: null              }, // agenda fresh
+      audit_mode_prefill_checklist:           { data: null,            error: PERMISSION_DENIED }, // checklist denied
+    });
 
     const result = await prefillStage5Deliverables('audit-1');
 
@@ -195,18 +220,24 @@ describe('prefillStage5Deliverables — best-effort Promise.all', () => {
     expect(result.agenda).not.toBeNull();
     expect(result.checklist).toBeNull();
 
-    // 23505 silent, permission_denied logged once. Net: exactly one log.
+    // 23505 silent, permission_denied logged once — and we lock down
+    // that the SPECIFIC wrapper (checklist) is the one that logged.
     expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[preAuditApi] prefillChecklist'),
+      expect.anything(),
+    );
   });
 
   it('all-23505 (re-entry on already-prefilled audit) is fully silent', async () => {
     // The idempotency invariant in its purest form: an auditor re-opens
     // Stage 5 on an audit with all three deliverables already prefilled.
     // Wrapper fires all 3 RPCs, all return 23505, no logs, all nulls.
-    mockRpc
-      .mockResolvedValueOnce({ data: null, error: UNIQUE_VIOLATION })
-      .mockResolvedValueOnce({ data: null, error: UNIQUE_VIOLATION })
-      .mockResolvedValueOnce({ data: null, error: UNIQUE_VIOLATION });
+    mockRpcByName({
+      audit_mode_prefill_confirmation_letter: { data: null, error: UNIQUE_VIOLATION },
+      audit_mode_prefill_agenda:              { data: null, error: UNIQUE_VIOLATION },
+      audit_mode_prefill_checklist:           { data: null, error: UNIQUE_VIOLATION },
+    });
 
     const result = await prefillStage5Deliverables('audit-1');
 

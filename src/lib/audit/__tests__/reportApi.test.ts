@@ -80,9 +80,12 @@ describe('prefillReportDraft — 23505 swallow contract', () => {
     const result = await prefillReportDraft('audit-1');
 
     expect(result).toBeNull();
-    expect(errorSpy).toHaveBeenCalled();
-    const [firstArg] = errorSpy.mock.calls[0];
-    expect(String(firstArg)).toContain('reportApi');
+    // Asserts both module and specific wrapper — locks down that the RIGHT
+    // wrapper logged, not a catch-all elsewhere in the module.
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[reportApi] prefillReportDraft'),
+      expect.anything(),
+    );
   });
 
   it('returns null when RPC succeeds with null data (no upstream context)', async () => {
