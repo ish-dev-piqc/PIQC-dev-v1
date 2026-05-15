@@ -30,6 +30,9 @@ export interface TaggedSection {
   operational_domain_tag: string;    // controlled vocab value
   tagging_mode: TaggingMode;
   version_change_type: VersionChangeType;
+  /** Optional FK to the SOTR protocol_extracted_item this risk traces back to.
+   *  NULL = manually tagged without a parsed-source link (legacy or unlinked). */
+  source_extracted_item_id: string | null;
 }
 
 export const MOCK_PROTOCOL_RISKS: Record<string, TaggedSection[]> = {
@@ -47,6 +50,7 @@ export const MOCK_PROTOCOL_RISKS: Record<string, TaggedSection[]> = {
       operational_domain_tag: 'biostats',
       tagging_mode: 'MANUAL',
       version_change_type: 'ADDED',
+      source_extracted_item_id: null,
     },
     {
       id: 'pr-001-02',
@@ -59,6 +63,7 @@ export const MOCK_PROTOCOL_RISKS: Record<string, TaggedSection[]> = {
       operational_domain_tag: 'IVRS',
       tagging_mode: 'MANUAL',
       version_change_type: 'ADDED',
+      source_extracted_item_id: null,
     },
     {
       id: 'pr-001-03',
@@ -71,6 +76,7 @@ export const MOCK_PROTOCOL_RISKS: Record<string, TaggedSection[]> = {
       operational_domain_tag: 'EDC',
       tagging_mode: 'MANUAL',
       version_change_type: 'ADDED',
+      source_extracted_item_id: null,
     },
     {
       id: 'pr-001-04',
@@ -83,6 +89,7 @@ export const MOCK_PROTOCOL_RISKS: Record<string, TaggedSection[]> = {
       operational_domain_tag: 'pharmacovigilance',
       tagging_mode: 'MANUAL',
       version_change_type: 'ADDED',
+      source_extracted_item_id: null,
     },
     {
       id: 'pr-001-05',
@@ -95,6 +102,7 @@ export const MOCK_PROTOCOL_RISKS: Record<string, TaggedSection[]> = {
       operational_domain_tag: 'eTMF',
       tagging_mode: 'MANUAL',
       version_change_type: 'ADDED',
+      source_extracted_item_id: null,
     },
   ],
 
@@ -112,6 +120,7 @@ export const MOCK_PROTOCOL_RISKS: Record<string, TaggedSection[]> = {
       operational_domain_tag: 'central_lab',
       tagging_mode: 'MANUAL',
       version_change_type: 'ADDED',
+      source_extracted_item_id: null,
     },
     {
       id: 'pr-002-02',
@@ -124,6 +133,7 @@ export const MOCK_PROTOCOL_RISKS: Record<string, TaggedSection[]> = {
       operational_domain_tag: 'ECG',
       tagging_mode: 'MANUAL',
       version_change_type: 'ADDED',
+      source_extracted_item_id: null,
     },
   ],
 
@@ -140,6 +150,7 @@ export const MOCK_PROTOCOL_RISKS: Record<string, TaggedSection[]> = {
       operational_domain_tag: 'ePRO',
       tagging_mode: 'MANUAL',
       version_change_type: 'ADDED',
+      source_extracted_item_id: null,
     },
     {
       id: 'pr-003-02',
@@ -152,6 +163,7 @@ export const MOCK_PROTOCOL_RISKS: Record<string, TaggedSection[]> = {
       operational_domain_tag: 'ePRO',
       tagging_mode: 'MANUAL',
       version_change_type: 'ADDED',
+      source_extracted_item_id: null,
     },
     {
       id: 'pr-003-03',
@@ -164,6 +176,7 @@ export const MOCK_PROTOCOL_RISKS: Record<string, TaggedSection[]> = {
       operational_domain_tag: 'ePRO',
       tagging_mode: 'MANUAL',
       version_change_type: 'ADDED',
+      source_extracted_item_id: null,
     },
   ],
 };

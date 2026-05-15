@@ -36,6 +36,7 @@ interface ProtocolRiskRow {
   operational_domain_tag: string;
   tagging_mode: TaggingMode;
   version_change_type: VersionChangeType;
+  source_extracted_item_id: string | null;
   tagged_by: string;
   tagged_at: string;
   created_at: string;
@@ -54,6 +55,7 @@ function flattenRisk(row: ProtocolRiskRow): TaggedSection {
     operational_domain_tag: row.operational_domain_tag,
     tagging_mode: row.tagging_mode,
     version_change_type: row.version_change_type,
+    source_extracted_item_id: row.source_extracted_item_id,
   };
 }
 
@@ -106,6 +108,8 @@ export interface CreateProtocolRiskInput {
   operationalDomainTag: string;
   versionChangeType?: VersionChangeType;
   reason?: string;
+  /** Optional SOTR protocol_extracted_item this risk traces back to. */
+  sourceExtractedItemId?: string | null;
 }
 
 export async function createProtocolRisk(
@@ -123,6 +127,7 @@ export async function createProtocolRisk(
     p_operational_domain_tag: input.operationalDomainTag,
     p_version_change_type: input.versionChangeType ?? 'ADDED',
     p_reason: input.reason ?? null,
+    p_source_extracted_item_id: input.sourceExtractedItemId ?? null,
   });
 
   if (error) {
@@ -141,6 +146,12 @@ export interface UpdateProtocolRiskInput {
   operationalDomainTag?: string;
   versionChangeType?: VersionChangeType;
   reason?: string;
+  /** Set to a UUID to attach/replace the SOTR source link. Leave undefined
+   *  to keep the existing link. Use clearSourceExtractedItemId to detach. */
+  sourceExtractedItemId?: string;
+  /** Set TRUE to explicitly clear the SOTR source link. Overrides
+   *  sourceExtractedItemId when both are provided. */
+  clearSourceExtractedItemId?: boolean;
 }
 
 export async function updateProtocolRisk(
@@ -156,6 +167,8 @@ export async function updateProtocolRisk(
     p_operational_domain_tag: input.operationalDomainTag ?? null,
     p_version_change_type: input.versionChangeType ?? null,
     p_reason: input.reason ?? null,
+    p_source_extracted_item_id: input.sourceExtractedItemId ?? null,
+    p_clear_source_extracted_item_id: input.clearSourceExtractedItemId ?? null,
   });
 
   if (error) {
