@@ -105,43 +105,43 @@ export default function AuditRequiredGate() {
             scheduling all happen in one step.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setNewAuditOpen(true)}
-          className={`flex-shrink-0 inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${
-            isLight
-              ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
-              : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]'
-          }`}
-        >
-          <Plus size={14} />
-          Start a new audit
-        </button>
-      </div>
-
-        {/* Stat chips */}
-        {total > 0 && (
-          <div className="flex items-center gap-2 flex-wrap text-xs">
-            <span className={`px-2.5 py-1 rounded-lg border font-medium ${isLight ? 'bg-white border-[#e2e8ee] text-[#374152]/70' : 'bg-[#131a22] border-white/10 text-[#d2d7e0]/60'}`}>
-              {total} total
-            </span>
-            {inProgress > 0 && (
-              <span className={`px-2.5 py-1 rounded-lg border font-medium ${isLight ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/25 text-[#4a6fa5]' : 'bg-[#6e8fb5]/15 border-[#6e8fb5]/30 text-[#6e8fb5]'}`}>
-                {inProgress} in progress
+        <div className="flex items-center gap-3 flex-wrap flex-shrink-0">
+          {/* Stat chips */}
+          {total > 0 && (
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              <span className={`px-2.5 py-1 rounded-lg border font-medium ${isLight ? 'bg-white border-[#e2e8ee] text-[#374152]/70' : 'bg-[#131a22] border-white/10 text-[#d2d7e0]/60'}`}>
+                {total} total
               </span>
-            )}
-            {inReview > 0 && (
-              <span className={`px-2.5 py-1 rounded-lg border font-medium ${isLight ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-amber-500/15 border-amber-500/30 text-amber-300'}`}>
-                {inReview} in review
-              </span>
-            )}
-            {closed > 0 && (
-              <span className={`px-2.5 py-1 rounded-lg border font-medium ${isLight ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'}`}>
-                {closed} closed
-              </span>
-            )}
-          </div>
-        )}
+              {inProgress > 0 && (
+                <span className={`px-2.5 py-1 rounded-lg border font-medium ${isLight ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/25 text-[#4a6fa5]' : 'bg-[#6e8fb5]/15 border-[#6e8fb5]/30 text-[#6e8fb5]'}`}>
+                  {inProgress} in progress
+                </span>
+              )}
+              {inReview > 0 && (
+                <span className={`px-2.5 py-1 rounded-lg border font-medium ${isLight ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-amber-500/15 border-amber-500/30 text-amber-300'}`}>
+                  {inReview} in review
+                </span>
+              )}
+              {closed > 0 && (
+                <span className={`px-2.5 py-1 rounded-lg border font-medium ${isLight ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'}`}>
+                  {closed} closed
+                </span>
+              )}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setNewAuditOpen(true)}
+            className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${
+              isLight
+                ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
+                : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]'
+            }`}
+          >
+            <Plus size={14} />
+            Start a new audit
+          </button>
+        </div>
       </div>
 
       {/* Worklist */}
