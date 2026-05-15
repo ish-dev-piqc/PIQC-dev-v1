@@ -13,8 +13,11 @@
 -- Stubs preserved for open decisions:
 --   [PIQC]       — D-009 (PIQC API contract) — piqc_protocol_id + raw_piqc_payload
 --   [D-005]      — Trust posture scoring model (qualitative enums for now)
---   [D-004 STUB] — checkpoint_ref is plain text until SOP parsing lands
 --   [D-007]      — Evidence attachment model (basic file + metadata for now)
+--
+-- Note on checkpoint_ref: this is a permanent auditor-freetext field for citing
+-- the vendor's own SOP/section number observed on-site (e.g. "SOP-VAL-001 §2.3").
+-- SOPs are not ingested or parsed by PIQC — only protocol PDFs are parsed (SOTR).
 --
 -- Auth integration: actor identity uses Supabase auth.users(id) directly.
 -- A small public.user_profiles table holds name + role.
@@ -497,7 +500,7 @@ CREATE TABLE audit_workspace_entry_objects (
   protocol_risk_id            UUID                       REFERENCES protocol_risk_objects(id),
   vendor_service_mapping_id   UUID                       REFERENCES vendor_service_mapping_objects(id),
   questionnaire_response_id   UUID                       REFERENCES questionnaire_response_objects(id),
-  checkpoint_ref              TEXT,                      -- [D-004 STUB] plain text until SOP parsing
+  checkpoint_ref              TEXT,                      -- auditor freetext: cite vendor SOP/section observed on-site (SOPs are not parsed)
   vendor_domain               TEXT                       NOT NULL,
   observation_text            TEXT                       NOT NULL,
   provisional_impact          provisional_impact         NOT NULL DEFAULT 'NONE',

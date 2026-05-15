@@ -23,7 +23,7 @@ export interface MockWorkspaceEntry {
   protocol_risk_id: string | null;       // optional link to a ProtocolRiskObject
   vendor_service_mapping_id: string | null;
   questionnaire_response_id: string | null;
-  checkpoint_ref: string | null;          // [D-004 STUB] plain text
+  checkpoint_ref: string | null;          // auditor freetext: vendor SOP/section cite (SOPs are not parsed)
   vendor_domain: string;                  // free-text e.g. "Validation", "Device hygiene"
   observation_text: string;
   provisional_impact: ProvisionalImpact;
@@ -50,7 +50,7 @@ export const MOCK_WORKSPACE_ENTRIES: Record<string, MockWorkspaceEntry[]> = {
       protocol_risk_id: 'pr-003-01', // PRO assessment schedule
       vendor_service_mapping_id: 'sm-003-01',
       questionnaire_response_id: null,
-      checkpoint_ref: '[D-004 STUB] SOP-VAL-001 §2.3',
+      checkpoint_ref: 'SOP-VAL-001 §2.3',
       vendor_domain: 'Platform validation',
       observation_text:
         'Validation master plan signed and current; revision history shows quarterly review cadence consistent with the SOP. No issues observed.',
@@ -69,7 +69,7 @@ export const MOCK_WORKSPACE_ENTRIES: Record<string, MockWorkspaceEntry[]> = {
       protocol_risk_id: 'pr-003-02', // Disease activity score derivation
       vendor_service_mapping_id: 'sm-003-02',
       questionnaire_response_id: null,
-      checkpoint_ref: '[D-004 STUB] SOP-VAL-001 §4.1',
+      checkpoint_ref: 'SOP-VAL-001 §4.1',
       vendor_domain: 'Scoring engine change control',
       observation_text:
         "Last three production releases of the scoring engine include UAT sign-off and IQ/OQ documentation. One release in February shows IQ run before validation environment refresh — vendor acknowledged the sequence error and confirmed it didn't affect production data integrity.",
@@ -88,7 +88,7 @@ export const MOCK_WORKSPACE_ENTRIES: Record<string, MockWorkspaceEntry[]> = {
       protocol_risk_id: null,
       vendor_service_mapping_id: null,
       questionnaire_response_id: null,
-      checkpoint_ref: '[D-004 STUB] SOP-OPS-014',
+      checkpoint_ref: 'SOP-OPS-014',
       vendor_domain: 'Outage handling',
       observation_text:
         'Outage handling SOP reviewed during walkthrough. Step ownership is documented but the notification matrix relies on a single individual — no documented backup contact. Vendor agreed to update the SOP within 30 days and confirm backup ownership.',

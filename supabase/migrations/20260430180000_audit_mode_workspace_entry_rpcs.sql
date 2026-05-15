@@ -15,7 +15,8 @@
 --   not update if the upstream protocol_risk_object is later edited. The
 --   amendment ingestion path (Phase 2) is what flips risk_context_outdated.
 --
--- D-004: checkpoint_ref is plain text in Phase 1.
+-- checkpoint_ref is permanent auditor freetext (cite a vendor SOP/section seen on-site).
+-- PIQC does not ingest or parse SOPs; only protocol PDFs are parsed via SOTR.
 --
 -- All mutations write deltas under tracked_object_type = AUDIT_WORKSPACE_ENTRY_OBJECT.
 -- =============================================================================

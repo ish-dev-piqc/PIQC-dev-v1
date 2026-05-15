@@ -426,7 +426,6 @@ Captured in `docs/sotr/follow-ups.md` (full detail with options + trade-offs):
 
 | ID | Question | Impact |
 |----|----------|--------|
-| D-004 | When does SOP parsing land? | `checkpoint_ref` is plain text for now |
 | D-005 | Trust posture scoring model | Trust assessment enums |
 | D-007 | Evidence attachment versioning | Single-version + metadata for now |
 | D-009 | PIQC → Vendor PIQC API contract | Protocol payload format; blocks Protocol tab |
