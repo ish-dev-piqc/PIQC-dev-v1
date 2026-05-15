@@ -297,7 +297,7 @@ export interface AuditWorkspaceEntryObject {
   protocol_risk_id: string | null;
   vendor_service_mapping_id: string | null;
   questionnaire_response_id: string | null;
-  checkpoint_ref: string | null;                // [D-004 STUB] plain text
+  checkpoint_ref: string | null;                // auditor freetext: vendor SOP/section cite (SOPs are not parsed)
   vendor_domain: string;
   observation_text: string;
   provisional_impact: ProvisionalImpact;

@@ -532,7 +532,7 @@ function EntryForm({ form, onChange, protocolRisks, isLight }: EntryFormProps) {
           className={`w-full rounded-md border px-3 py-2 text-sm ${inputBg} ${inputBorder} ${headingColor} focus:outline-none transition-colors`}
         />
         <p className={`text-[11px] mt-1 ${mutedColor}`}>
-          Plain text in Phase 1; replaced by structured checkpoint refs once SOP parsing lands.
+          Freetext — cite the vendor SOP or section you observed on-site (PIQC does not parse SOPs).
         </p>
       </div>
     </div>

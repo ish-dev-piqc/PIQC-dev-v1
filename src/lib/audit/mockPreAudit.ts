@@ -62,7 +62,7 @@ export interface MockAgenda {
 export interface MockChecklistItem {
   id: string;
   prompt: string;
-  checkpoint_ref: string | null;   // [D-004 STUB] plain text until SOP parsing
+  checkpoint_ref: string | null;   // auditor freetext: vendor SOP/section cite (SOPs are not parsed)
   evidence_expected: boolean;
 }
 
@@ -182,19 +182,19 @@ export const MOCK_PRE_AUDIT: Record<string, MockPreAuditBundle> = {
           {
             id: 'ci-003-1',
             prompt: 'Verify platform validation master plan is current and signed.',
-            checkpoint_ref: '[D-004 STUB] SOP-VAL-001 §2.3',
+            checkpoint_ref: 'SOP-VAL-001 §2.3',
             evidence_expected: true,
           },
           {
             id: 'ci-003-2',
             prompt: 'Confirm scoring algorithm change-control records for last 12 months.',
-            checkpoint_ref: '[D-004 STUB] SOP-VAL-001 §4.1',
+            checkpoint_ref: 'SOP-VAL-001 §4.1',
             evidence_expected: true,
           },
           {
             id: 'ci-003-3',
             prompt: 'Review audit trail samples for representative patient device sessions.',
-            checkpoint_ref: '[D-004 STUB] SOP-21CFR-002',
+            checkpoint_ref: 'SOP-21CFR-002',
             evidence_expected: true,
           },
           {
@@ -206,7 +206,7 @@ export const MOCK_PRE_AUDIT: Record<string, MockPreAuditBundle> = {
           {
             id: 'ci-003-5',
             prompt: 'Walk through outage handling SOP — confirm step ownership and notifications.',
-            checkpoint_ref: '[D-004 STUB] SOP-OPS-014',
+            checkpoint_ref: 'SOP-OPS-014',
             evidence_expected: false,
           },
         ],

@@ -348,11 +348,11 @@ BEGIN
   INSERT INTO checklist_objects (id, audit_id, content, approval_status, approved_by, approved_at) VALUES
     (ch_003, a3,
      jsonb_build_object('items', jsonb_build_array(
-       jsonb_build_object('id','ci-003-1','prompt','Verify platform validation master plan is current and signed.',                  'checkpoint_ref','[D-004 STUB] SOP-VAL-001 §2.3','evidence_expected', TRUE),
-       jsonb_build_object('id','ci-003-2','prompt','Confirm scoring algorithm change-control records for last 12 months.',          'checkpoint_ref','[D-004 STUB] SOP-VAL-001 §4.1','evidence_expected', TRUE),
-       jsonb_build_object('id','ci-003-3','prompt','Review audit trail samples for representative patient device sessions.',         'checkpoint_ref','[D-004 STUB] SOP-21CFR-002', 'evidence_expected', TRUE),
+       jsonb_build_object('id','ci-003-1','prompt','Verify platform validation master plan is current and signed.',                  'checkpoint_ref','SOP-VAL-001 §2.3','evidence_expected', TRUE),
+       jsonb_build_object('id','ci-003-2','prompt','Confirm scoring algorithm change-control records for last 12 months.',          'checkpoint_ref','SOP-VAL-001 §4.1','evidence_expected', TRUE),
+       jsonb_build_object('id','ci-003-3','prompt','Review audit trail samples for representative patient device sessions.',         'checkpoint_ref','SOP-21CFR-002', 'evidence_expected', TRUE),
        jsonb_build_object('id','ci-003-4','prompt','Inspect device-hygiene cleaning logs from the most recent two months.',         'checkpoint_ref', NULL,                          'evidence_expected', TRUE),
-       jsonb_build_object('id','ci-003-5','prompt','Walk through outage handling SOP — confirm step ownership and notifications.',  'checkpoint_ref','[D-004 STUB] SOP-OPS-014',     'evidence_expected', FALSE)
+       jsonb_build_object('id','ci-003-5','prompt','Walk through outage handling SOP — confirm step ownership and notifications.',  'checkpoint_ref','SOP-OPS-014',     'evidence_expected', FALSE)
      )),
      'DRAFT', NULL, NULL);
 
@@ -366,19 +366,19 @@ BEGIN
      created_by)
   VALUES
     (we_003_1, a3, pr_003_01, sm_003_01, NULL,
-     '[D-004 STUB] SOP-VAL-001 §2.3', 'Platform validation',
+     'SOP-VAL-001 §2.3', 'Platform validation',
      'Validation master plan signed and current; revision history shows quarterly review cadence consistent with the SOP. No issues observed.',
      'NONE', 'NOT_YET_CLASSIFIED',
      TRUE, 'PRIMARY', 'DATA_INTEGRITY', TRUE,
      auditor_id),
     (we_003_2, a3, pr_003_02, sm_003_02, NULL,
-     '[D-004 STUB] SOP-VAL-001 §4.1', 'Scoring engine change control',
+     'SOP-VAL-001 §4.1', 'Scoring engine change control',
      E'Last three production releases of the scoring engine include UAT sign-off and IQ/OQ documentation. One release in February shows IQ run before validation environment refresh — vendor acknowledged the sequence error and confirmed it didn''t affect production data integrity.',
      'MINOR', 'OBSERVATION',
      TRUE, 'PRIMARY', 'DATA_INTEGRITY', FALSE,
      auditor_id),
     (we_003_3, a3, NULL, NULL, NULL,
-     '[D-004 STUB] SOP-OPS-014', 'Outage handling',
+     'SOP-OPS-014', 'Outage handling',
      'Outage handling SOP reviewed during walkthrough. Step ownership is documented but the notification matrix relies on a single individual — no documented backup contact. Vendor agreed to update the SOP within 30 days and confirm backup ownership.',
      'MAJOR', 'FINDING',
      FALSE, NULL, NULL, NULL,
