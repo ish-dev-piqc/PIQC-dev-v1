@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { FileSearch, Link2, X as XIcon } from 'lucide-react';
 import { useTheme } from '../../../../../context/ThemeContext';
 import {
   ENDPOINT_TIER_LABELS,
@@ -11,6 +12,10 @@ import type {
   EndpointTier,
   ImpactSurface,
 } from '../../../../../types/audit';
+import type { ExtractedItemRecord } from '../../../../../types/sotr';
+import SourceTruthListDrawer from '../../../../sotr/SourceTruthListDrawer';
+import SourceTruthDrawer from '../../../../sotr/SourceTruthDrawer';
+import { formatExtractedValue } from '../../../../sotr/WorksheetItemRow';
 
 // =============================================================================
 // RiskTaggingForm
@@ -37,6 +42,8 @@ export interface RiskTagFormValues {
   time_sensitivity: boolean;
   vendor_dependency_flags: string[];
   operational_domain_tag: string;
+  /** SOTR protocol_extracted_item this risk traces back to (optional). */
+  source_extracted_item_id: string | null;
 }
 
 interface RiskTaggingFormProps {
@@ -45,6 +52,12 @@ interface RiskTaggingFormProps {
   onSubmit: (values: RiskTagFormValues) => void;
   onCancel: () => void;
   submitting?: boolean;
+  /** Protocol UUID — feeds the SOTR drawer (studyId in SOTR's API).
+   *  When null/missing, the source-link picker is hidden. */
+  protocolId?: string | null;
+  /** Optional human-friendly protocol code (e.g. "BRIGHTEN-2") for the
+   *  SOTR drawer's export filename. */
+  protocolCode?: string | null;
 }
 
 const TIERS: EndpointTier[] = ['PRIMARY', 'SECONDARY', 'SAFETY', 'SUPPORTIVE'];
@@ -56,6 +69,8 @@ export default function RiskTaggingForm({
   onSubmit,
   onCancel,
   submitting = false,
+  protocolId,
+  protocolCode,
 }: RiskTaggingFormProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
@@ -78,6 +93,16 @@ export default function RiskTaggingForm({
   const [domain, setDomain] = useState<string>(
     initialValues?.operational_domain_tag ?? '',
   );
+  // Source-link state. The id is what gets persisted; the label is a fresh
+  // snapshot from the picker drawer so the inline chip can render meaningfully
+  // without a second fetch. On edit-load we only have the id, so the chip
+  // renders "Linked source" + a View button until the auditor reopens it.
+  const [sourceItemId, setSourceItemId] = useState<string | null>(
+    initialValues?.source_extracted_item_id ?? null,
+  );
+  const [sourceLabel, setSourceLabel] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [viewSourceOpen, setViewSourceOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Reset when initialValues changes (switching from add to edit a different row)
@@ -89,6 +114,8 @@ export default function RiskTaggingForm({
     setTimeSensitive(initialValues?.time_sensitivity ?? false);
     setFlags(initialValues?.vendor_dependency_flags ?? []);
     setDomain(initialValues?.operational_domain_tag ?? '');
+    setSourceItemId(initialValues?.source_extracted_item_id ?? null);
+    setSourceLabel(null);
     setError(null);
   }, [initialValues]);
 
@@ -118,7 +145,21 @@ export default function RiskTaggingForm({
       time_sensitivity: timeSensitive,
       vendor_dependency_flags: flags,
       operational_domain_tag: domain,
+      source_extracted_item_id: sourceItemId,
     });
+  };
+
+  const handlePickSource = (item: ExtractedItemRecord) => {
+    setSourceItemId(item.id);
+    // Snapshot the display label for the chip — drops to "Linked source" if the
+    // value is unrenderable, which is fine; the View button is the real verifier.
+    setSourceLabel(item.current_text ?? formatExtractedValue(item.extracted_value));
+    setPickerOpen(false);
+  };
+
+  const handleClearSource = () => {
+    setSourceItemId(null);
+    setSourceLabel(null);
   };
 
   const toggleFlag = (value: string) => {
@@ -321,6 +362,82 @@ export default function RiskTaggingForm({
           </p>
         )}
       </div>
+
+      {/* Protocol source link (optional). Hidden when no protocol is on the
+          active audit — the picker would have nothing to read from. */}
+      {protocolId && (
+        <div>
+          <label className={`block text-sm font-medium mb-1 ${labelColor}`}>
+            Protocol source <span className={`${mutedColor} font-normal`}>(optional)</span>
+          </label>
+          <p className={`text-[11px] mb-2 ${subColor}`}>
+            Trace this risk back to the parsed protocol item it came from. The auditor
+            can inspect a candidate item before attaching.
+          </p>
+          {sourceItemId ? (
+            <div
+              className={`flex items-center gap-2 flex-wrap rounded-md border px-3 py-2 ${inputBg} ${
+                isLight ? 'border-[#cbd2db]' : 'border-white/15'
+              }`}
+            >
+              <Link2 size={12} className={mutedColor} />
+              <span className={`${headingColor} text-sm flex-1 min-w-0 truncate`}>
+                {sourceLabel ?? 'Linked source'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setViewSourceOpen(true)}
+                className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-md transition-colors ${buttonSecondary}`}
+              >
+                <FileSearch size={11} />
+                View
+              </button>
+              <button
+                type="button"
+                onClick={handleClearSource}
+                aria-label="Remove protocol source link"
+                className={`inline-flex items-center justify-center w-6 h-6 rounded-md transition-colors ${buttonSecondary}`}
+              >
+                <XIcon size={12} />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              className={`w-full text-left rounded-md border border-dashed px-3 py-2.5 text-sm transition-colors flex items-center gap-2 ${
+                isLight
+                  ? 'border-[#cbd2db] hover:border-[#4a6fa5]/40 hover:bg-[#f5f7fa] text-[#374152]/75'
+                  : 'border-white/15 hover:border-[#6e8fb5]/40 hover:bg-white/[0.03] text-[#d2d7e0]/70'
+              }`}
+            >
+              <FileSearch size={13} className={mutedColor} />
+              Choose a protocol source item…
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Picker drawer — opens in pick-mode (Attach button on each row). */}
+      {pickerOpen && protocolId && (
+        <SourceTruthListDrawer
+          studyId={protocolId}
+          studyCode={protocolCode ?? null}
+          onClose={() => setPickerOpen(false)}
+          onPick={handlePickSource}
+        />
+      )}
+
+      {/* View drawer — opens the per-item SOTR drawer for the currently linked
+          source. Stacks at z-50 over the form. */}
+      {viewSourceOpen && sourceItemId && protocolId && (
+        <SourceTruthDrawer
+          studyId={protocolId}
+          worksheetItemId={sourceItemId}
+          itemLabel={sourceLabel ?? 'Linked source'}
+          onClose={() => setViewSourceOpen(false)}
+        />
+      )}
 
       {/* Error */}
       {error && (

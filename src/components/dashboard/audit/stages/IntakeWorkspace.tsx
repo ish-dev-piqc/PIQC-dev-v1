@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, Clock, Trash2, History as HistoryIcon } from 'lucide-react';
+import { Plus, Pencil, Clock, Trash2, History as HistoryIcon, Link2 } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useAudit } from '../../../../context/AuditContext';
 import { useAuditData } from '../../../../context/AuditDataContext';
@@ -95,6 +95,7 @@ export default function IntakeWorkspace() {
       vendorDependencyFlags: values.vendor_dependency_flags,
       operationalDomainTag: values.operational_domain_tag,
       versionChangeType: 'ADDED',
+      sourceExtractedItemId: values.source_extracted_item_id,
     });
     if (created) {
       setSectionsByAudit((prev) => ({
@@ -109,6 +110,22 @@ export default function IntakeWorkspace() {
   const handleEdit = async (values: RiskTagFormValues) => {
     if (!editTarget) return;
     setLoading(true);
+    // Source-link mutation under three-way semantics:
+    //   - was set, now cleared  → clearSourceExtractedItemId = true
+    //   - was set/null, now set → sourceExtractedItemId = new value
+    //   - unchanged             → send neither
+    const sourceBefore = editTarget.source_extracted_item_id ?? null;
+    const sourceAfter = values.source_extracted_item_id;
+    const sourceUpdate: {
+      sourceExtractedItemId?: string;
+      clearSourceExtractedItemId?: boolean;
+    } = {};
+    if (sourceAfter === null && sourceBefore !== null) {
+      sourceUpdate.clearSourceExtractedItemId = true;
+    } else if (sourceAfter !== null && sourceAfter !== sourceBefore) {
+      sourceUpdate.sourceExtractedItemId = sourceAfter;
+    }
+
     const updated = await updateProtocolRisk(editTarget.id, {
       endpointTier: values.endpoint_tier,
       impactSurface: values.impact_surface,
@@ -116,6 +133,7 @@ export default function IntakeWorkspace() {
       vendorDependencyFlags: values.vendor_dependency_flags,
       operationalDomainTag: values.operational_domain_tag,
       versionChangeType: editTarget.version_change_type === 'ADDED' ? 'ADDED' : 'MODIFIED',
+      ...sourceUpdate,
     });
     if (updated) {
       setSectionsByAudit((prev) => ({
@@ -213,11 +231,14 @@ export default function IntakeWorkspace() {
                     time_sensitivity: editTarget.time_sensitivity,
                     vendor_dependency_flags: editTarget.vendor_dependency_flags,
                     operational_domain_tag: editTarget.operational_domain_tag,
+                    source_extracted_item_id: editTarget.source_extracted_item_id,
                   }
                 : undefined
             }
             onSubmit={mode === 'add' ? handleAdd : handleEdit}
             onCancel={cancel}
+            protocolId={activeAudit.protocol_id}
+            protocolCode={activeAudit.protocol_code}
           />
         </div>
       )}
@@ -341,6 +362,7 @@ function SectionRow({
             <SurfaceChip surface={section.impact_surface} isLight={isLight} />
             <DomainChip label={domainLabel} isLight={isLight} />
             {section.time_sensitivity && <TimeSensitiveChip isLight={isLight} />}
+            {section.source_extracted_item_id && <SourceLinkedChip isLight={isLight} />}
             {section.vendor_dependency_flags.length > 0 && (
               <span className={`text-[11px] ${mutedColor}`}>
                 · {section.vendor_dependency_flags.length} dependency
@@ -470,6 +492,24 @@ function TimeSensitiveChip({ isLight }: ChipProps) {
     >
       <Clock size={10} />
       Time-sensitive
+    </span>
+  );
+}
+
+// Indicates the risk traces back to a parsed protocol source item. Inspecting
+// which item is one click away via the edit form's "View" button.
+function SourceLinkedChip({ isLight }: ChipProps) {
+  return (
+    <span
+      title="Linked to a parsed protocol source item"
+      className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border ${
+        isLight
+          ? 'bg-[#eef2f6] border-[#cbd2db] text-[#4a6fa5]'
+          : 'bg-white/[0.06] border-white/10 text-[#6e8fb5]'
+      }`}
+    >
+      <Link2 size={10} />
+      Source linked
     </span>
   );
 }

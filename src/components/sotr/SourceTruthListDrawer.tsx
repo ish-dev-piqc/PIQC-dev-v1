@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { useOverlay } from '../../hooks/useOverlay';
 import { useSwipeDismiss } from '../../hooks/useSwipeDismiss';
 import WorksheetItemsList from './WorksheetItemsList';
+import type { ExtractedItemRecord } from '../../types/sotr';
 
 // =============================================================================
 // SourceTruthListDrawer — right-edge slide-over hosting WorksheetItemsList.
@@ -19,6 +20,11 @@ import WorksheetItemsList from './WorksheetItemsList';
 // Audit Mode uses this from AuditWorkspaceShell to give the auditor cross-stage
 // access to "what did the parser see, and where in the PDF did it come from?"
 // without leaving the active stage workspace.
+//
+// Pick mode (B1): when `onPick` is provided, each row renders an "Attach"
+// button alongside the existing "View Source" affordance. Row click still
+// opens the per-item drawer — inspect-before-pick stays native. The Attach
+// button calls onPick(item) and the host typically closes the drawer.
 // =============================================================================
 
 interface Props {
@@ -26,12 +32,15 @@ interface Props {
   /** Optional human-friendly study code used in the export filename. */
   studyCode?: string | null;
   onClose: () => void;
+  /** When provided, rows render an "Attach" affordance for picker workflows. */
+  onPick?: (item: ExtractedItemRecord) => void;
 }
 
 export default function SourceTruthListDrawer({
   studyId,
   studyCode,
   onClose,
+  onPick,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
   useOverlay({ isOpen: true, onClose, containerRef: panelRef });
@@ -45,7 +54,7 @@ export default function SourceTruthListDrawer({
       className="fixed inset-0 z-40 flex justify-end"
       role="dialog"
       aria-modal="true"
-      aria-label="Protocol source items"
+      aria-label={onPick ? 'Pick a protocol source item' : 'Protocol source items'}
     >
       {/* Backdrop */}
       <div
@@ -63,7 +72,9 @@ export default function SourceTruthListDrawer({
         className="relative w-full max-w-xl h-full bg-[#f5f7fa] dark:bg-[#0d1118] shadow-xl border-l border-[#e2e8ee] dark:border-white/5 overflow-y-auto"
       >
         <div className="sticky top-0 z-10 bg-[#f5f7fa]/95 dark:bg-[#0d1118]/95 backdrop-blur px-5 py-3.5 border-b border-[#e2e8ee] dark:border-white/5 flex items-center justify-between gap-3">
-          <h2 className="text-fg-heading text-sm font-semibold">Protocol source items</h2>
+          <h2 className="text-fg-heading text-sm font-semibold">
+            {onPick ? 'Pick a protocol source item' : 'Protocol source items'}
+          </h2>
           <button
             type="button"
             onClick={onClose}
@@ -75,7 +86,7 @@ export default function SourceTruthListDrawer({
         </div>
 
         <div className="px-5 py-5">
-          <WorksheetItemsList studyId={studyId} studyCode={studyCode} />
+          <WorksheetItemsList studyId={studyId} studyCode={studyCode} onPick={onPick} />
         </div>
       </div>
     </div>

@@ -15,6 +15,8 @@ interface Props {
   studyId: string;
   /** Optional human-friendly study code used in the export filename. */
   studyCode?: string | null;
+  /** When provided, each row renders an "Attach" affordance for picker workflows. */
+  onPick?: (item: ExtractedItemRecord) => void;
 }
 
 const FIELD_TYPE_LABELS: Record<string, string> = {
@@ -27,7 +29,7 @@ const FIELD_TYPE_LABELS: Record<string, string> = {
   other:               'Other',
 };
 
-export default function WorksheetItemsList({ studyId, studyCode }: Props) {
+export default function WorksheetItemsList({ studyId, studyCode, onPick }: Props) {
   const [items, setItems] = useState<ExtractedItemRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +98,7 @@ export default function WorksheetItemsList({ studyId, studyCode }: Props) {
       )}
 
       {!loading && !error && items.length > 0 && (
-        <Grouped items={items} onViewSource={setActive} />
+        <Grouped items={items} onViewSource={setActive} onPick={onPick} />
       )}
 
       {active && (
@@ -115,9 +117,10 @@ export default function WorksheetItemsList({ studyId, studyCode }: Props) {
 interface GroupedProps {
   items: ExtractedItemRecord[];
   onViewSource: (item: ExtractedItemRecord) => void;
+  onPick?: (item: ExtractedItemRecord) => void;
 }
 
-function Grouped({ items, onViewSource }: GroupedProps) {
+function Grouped({ items, onViewSource, onPick }: GroupedProps) {
   const groups = new Map<string, ExtractedItemRecord[]>();
   for (const item of items) {
     const key = item.field_type;
@@ -143,6 +146,7 @@ function Grouped({ items, onViewSource }: GroupedProps) {
                 key={row.id}
                 item={row}
                 onViewSource={onViewSource}
+                onPick={onPick}
               />
             ))}
           </div>
