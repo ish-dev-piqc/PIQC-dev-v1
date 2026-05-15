@@ -30,6 +30,11 @@ export interface MockConfirmationLetter {
   approval_status: DeliverableApprovalStatus;
   approved_by_name: string | null;
   approved_at: string | null;
+  // Prefill provenance — set when the deliverable was agent-bootstrapped from
+  // approved Stage 3 + Stage 4 context.
+  source_risk_summary_id?: string | null;
+  source_questionnaire_instance_id?: string | null;
+  prefilled_at?: string | null;
 }
 
 // -----------------------------------------------------------------------------
@@ -54,6 +59,10 @@ export interface MockAgenda {
   approval_status: DeliverableApprovalStatus;
   approved_by_name: string | null;
   approved_at: string | null;
+  // Prefill provenance — set when the deliverable was agent-bootstrapped from
+  // the approved Stage 4 risk summary.
+  source_risk_summary_id?: string | null;
+  prefilled_at?: string | null;
 }
 
 // -----------------------------------------------------------------------------
@@ -77,6 +86,10 @@ export interface MockChecklist {
   approval_status: DeliverableApprovalStatus;
   approved_by_name: string | null;
   approved_at: string | null;
+  // Prefill provenance — set when the deliverable was agent-bootstrapped from
+  // the approved Stage 3 questionnaire.
+  source_questionnaire_instance_id?: string | null;
+  prefilled_at?: string | null;
 }
 
 // -----------------------------------------------------------------------------
