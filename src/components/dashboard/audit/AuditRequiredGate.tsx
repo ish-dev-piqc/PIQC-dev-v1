@@ -1,4 +1,5 @@
-import { ClipboardList, ChevronRight, Calendar, Building2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ClipboardList, ChevronRight, Calendar, Building2, Plus } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useAudit, type AuditWithContext } from '../../../context/AuditContext';
 import {
@@ -8,6 +9,7 @@ import {
 } from '../../../lib/audit/labels';
 import { AUDIT_STAGES } from '../../../types/audit';
 import type { AuditStatus } from '../../../types/audit';
+import NewAuditDrawer from './onboarding/NewAuditDrawer';
 
 // =============================================================================
 // AuditRequiredGate — audit worklist shown when no audit is selected.
@@ -31,6 +33,20 @@ export default function AuditRequiredGate() {
   const { theme } = useTheme();
   const { audits, loading, setActiveAudit } = useAudit();
   const isLight = theme === 'light';
+  const [newAuditOpen, setNewAuditOpen] = useState(false);
+  // After the drawer fires onCreated, the AuditContext's refresh may not have
+  // settled into this component's `audits` snapshot yet. Park the id and let
+  // the effect below activate the audit as soon as it appears in the list.
+  const [pendingNewAuditId, setPendingNewAuditId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!pendingNewAuditId) return;
+    const next = audits.find((a) => a.id === pendingNewAuditId);
+    if (next) {
+      setActiveAudit(next);
+      setPendingNewAuditId(null);
+    }
+  }, [pendingNewAuditId, audits, setActiveAudit]);
 
   const headingColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
@@ -80,11 +96,28 @@ export default function AuditRequiredGate() {
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h2 className={`${headingColor} text-xl font-semibold`}>Audit worklist</h2>
+          <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
+            PIQC Clinical · Audit
+          </p>
+          <h2 className={`${headingColor} text-xl font-semibold mt-1`}>Your audits</h2>
           <p className={`${subColor} text-sm mt-1`}>
-            Select an audit to open its workspace, or use the picker in the header.
+            Open an existing audit, or start a new one — protocol upload, vendor, and
+            scheduling all happen in one step.
           </p>
         </div>
+        <button
+          type="button"
+          onClick={() => setNewAuditOpen(true)}
+          className={`flex-shrink-0 inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${
+            isLight
+              ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
+              : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]'
+          }`}
+        >
+          <Plus size={14} />
+          Start a new audit
+        </button>
+      </div>
 
         {/* Stat chips */}
         {total > 0 && (
@@ -118,9 +151,21 @@ export default function AuditRequiredGate() {
             <ClipboardList size={20} />
           </div>
           <h3 className={`${headingColor} font-semibold text-base mb-1`}>No audits yet</h3>
-          <p className={`${subColor} text-sm max-w-xs mx-auto`}>
-            Audits are created in your Supabase workspace and appear here once assigned to you.
+          <p className={`${subColor} text-sm max-w-xs mx-auto mb-4`}>
+            Start your first audit — upload the protocol, pick the vendor, and you're in.
           </p>
+          <button
+            type="button"
+            onClick={() => setNewAuditOpen(true)}
+            className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${
+              isLight
+                ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
+                : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]'
+            }`}
+          >
+            <Plus size={14} />
+            Start a new audit
+          </button>
         </div>
       ) : (
         <div className={`${cardBg} border rounded-xl overflow-hidden`}>
@@ -200,6 +245,19 @@ export default function AuditRequiredGate() {
             })}
           </div>
         </div>
+      )}
+
+      {/* New-audit drawer — on creation, the AuditContext is refreshed by the
+          drawer; we activate the freshly-created audit so the auditor lands
+          inside it at Stage 1. */}
+      {newAuditOpen && (
+        <NewAuditDrawer
+          onClose={() => setNewAuditOpen(false)}
+          onCreated={(newAuditId) => {
+            setPendingNewAuditId(newAuditId);
+            setNewAuditOpen(false);
+          }}
+        />
       )}
     </div>
   );
