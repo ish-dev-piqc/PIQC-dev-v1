@@ -170,12 +170,27 @@ export async function listWorksheetItemsForStudy(
 }
 
 /**
- * Counts worksheet items for a study, split by "awaiting review" vs total.
+ * "Awaiting review" predicate — single source of truth for what counts as
+ * an unreviewed worksheet item.
  *
- * "Awaiting review" = review_status === 'draft' (the initial state on
- * extraction) OR review_status IS NULL (legacy rows pre-PR-5). All four
- * post-action statuses (accepted_for_draft, edited, rejected_from_draft,
- * flagged) count as reviewed — the auditor has weighed in either way.
+ *   review_status === 'draft'  → initial state on extraction (PR-5 default)
+ *   review_status === null     → legacy rows pre-PR-5
+ *   any other value             → reviewed (accepted / edited / rejected / flagged)
+ *
+ * MUST stay aligned with the server-side OR clause in
+ * countWorksheetItemsForStudy below. Client-side filters in WorksheetItemsList
+ * (and any future caller) should import this rather than re-spelling the
+ * predicate inline — drift here means the inline chip and the shell badge
+ * silently disagree.
+ */
+export function isAwaitingReview(item: {
+  review_status?: ExtractedItemRecord['review_status'] | null;
+}): boolean {
+  return !item.review_status || item.review_status === 'draft';
+}
+
+/**
+ * Counts worksheet items for a study, split by "awaiting review" vs total.
  *
  * Used by Audit Mode (F-2) to surface the review queue size on the
  * "Protocol source" button + inside the drawer header without forcing the

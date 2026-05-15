@@ -44,9 +44,13 @@ export function useWorksheetReviewCount(
         if (cancelled) return;
         setState({ data: count, loading: false });
       })
-      .catch(() => {
+      .catch((err) => {
         if (cancelled) return;
-        // Swallow — see header comment. Hiding the badge is the safe default.
+        // Hide the badge (safe default per header comment) but preserve a
+        // debug trail. Without this, a network failure or expired session
+        // looks identical to a cross-user RLS denial — un-debuggable in the
+        // field. Matches the console.info pattern in sourceEvidenceApi.ts.
+        console.warn('[sotr] review-count fetch failed', err);
         setState({ data: null, loading: false });
       });
     return () => {

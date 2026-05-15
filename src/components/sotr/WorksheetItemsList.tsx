@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ListChecks, CheckCircle2 } from 'lucide-react';
-import { listWorksheetItemsForStudy } from '../../lib/sotr/sourceEvidenceApi';
+import { isAwaitingReview, listWorksheetItemsForStudy } from '../../lib/sotr/sourceEvidenceApi';
 import type { ExtractedItemRecord } from '../../types/sotr';
 import WorksheetItemRow from './WorksheetItemRow';
 import SourceTruthDrawer from './SourceTruthDrawer';
@@ -57,14 +57,10 @@ export default function WorksheetItemsList({ studyId, studyCode, onPick }: Props
     };
   }, [studyId, refreshToken]);
 
-  // F-2: "awaiting review" = draft state (initial) or null (legacy rows).
-  // Matches the server-side filter in countWorksheetItemsForStudy so the
-  // shell badge and this inline count never disagree.
+  // F-2: shared predicate with countWorksheetItemsForStudy — single source
+  // of truth so the shell badge and this inline count never disagree.
   const awaitingCount = useMemo(
-    () =>
-      items.filter(
-        (i) => !i.review_status || i.review_status === 'draft',
-      ).length,
+    () => items.filter(isAwaitingReview).length,
     [items],
   );
   const allReviewed = items.length > 0 && awaitingCount === 0;
