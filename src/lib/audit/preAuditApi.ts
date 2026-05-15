@@ -27,6 +27,11 @@ interface DeliverableRow<TContent> {
   approval_status: DeliverableApprovalStatus;
   approved_by: string | null;
   approved_at: string | null;
+  // Prefill provenance — present after the deliverable was agent-bootstrapped.
+  // See 20260515020000_audit_mode_stage5_prefill.sql.
+  source_risk_summary_id?: string | null;
+  source_questionnaire_instance_id?: string | null;
+  prefilled_at?: string | null;
 }
 
 async function resolveApprovedByName(approvedBy: string | null): Promise<string | null> {
@@ -49,6 +54,9 @@ async function flattenConfirmationLetter(
     approval_status: row.approval_status,
     approved_at: row.approved_at,
     approved_by_name: await resolveApprovedByName(row.approved_by),
+    source_risk_summary_id: row.source_risk_summary_id ?? null,
+    source_questionnaire_instance_id: row.source_questionnaire_instance_id ?? null,
+    prefilled_at: row.prefilled_at ?? null,
   };
 }
 
@@ -62,6 +70,8 @@ async function flattenAgenda(
     approval_status: row.approval_status,
     approved_at: row.approved_at,
     approved_by_name: await resolveApprovedByName(row.approved_by),
+    source_risk_summary_id: row.source_risk_summary_id ?? null,
+    prefilled_at: row.prefilled_at ?? null,
   };
 }
 
@@ -75,6 +85,8 @@ async function flattenChecklist(
     approval_status: row.approval_status,
     approved_at: row.approved_at,
     approved_by_name: await resolveApprovedByName(row.approved_by),
+    source_questionnaire_instance_id: row.source_questionnaire_instance_id ?? null,
+    prefilled_at: row.prefilled_at ?? null,
   };
 }
 
@@ -218,4 +230,78 @@ export async function approveChecklist(
     return null;
   }
   return flattenChecklist(data as DeliverableRow<MockChecklistContent>);
+}
+
+// ============================================================================
+// Prefill (agent bootstrap) — one-shot on first Stage 5 open
+//
+// Each RPC inserts a fresh deliverable row built from approved Stage 3 /
+// Stage 4 context. They raise 23505 if a row already exists; the caller
+// treats that as a no-op (idempotent on absence). Errors other than 23505
+// are logged but do not block the user — the deliverable simply stays empty
+// and the auditor edits manually.
+// ============================================================================
+
+export async function prefillConfirmationLetter(
+  auditId: string,
+): Promise<MockConfirmationLetter | null> {
+  const { data, error } = await supabase.rpc('audit_mode_prefill_confirmation_letter', {
+    p_audit_id: auditId,
+  });
+  if (error) {
+    if (error.code !== '23505') {
+      console.error('[preAuditApi] prefillConfirmationLetter error:', error);
+    }
+    return null;
+  }
+  return flattenConfirmationLetter(data as DeliverableRow<MockConfirmationLetterContent>);
+}
+
+export async function prefillAgenda(auditId: string): Promise<MockAgenda | null> {
+  const { data, error } = await supabase.rpc('audit_mode_prefill_agenda', {
+    p_audit_id: auditId,
+  });
+  if (error) {
+    if (error.code !== '23505') {
+      console.error('[preAuditApi] prefillAgenda error:', error);
+    }
+    return null;
+  }
+  return flattenAgenda(data as DeliverableRow<MockAgendaContent>);
+}
+
+export async function prefillChecklist(auditId: string): Promise<MockChecklist | null> {
+  const { data, error } = await supabase.rpc('audit_mode_prefill_checklist', {
+    p_audit_id: auditId,
+  });
+  if (error) {
+    if (error.code !== '23505') {
+      console.error('[preAuditApi] prefillChecklist error:', error);
+    }
+    return null;
+  }
+  return flattenChecklist(data as DeliverableRow<MockChecklistContent>);
+}
+
+/**
+ * Best-effort bootstrap of all three Stage 5 deliverables in parallel.
+ *
+ * - Skips deliverables that already exist (the RPC raises 23505; the wrapper
+ *   swallows it and returns null).
+ * - Skips silently when source pre-conditions aren't met (e.g. risk summary
+ *   not yet APPROVED). Auditor sees empty deliverables and edits manually.
+ * - Returns the freshly-prefilled deliverables only — caller merges these
+ *   into the bundle and refetches the full bundle to pick up unchanged rows.
+ */
+export async function prefillStage5Deliverables(auditId: string): Promise<{
+  confirmation_letter: MockConfirmationLetter | null;
+  agenda: MockAgenda | null;
+  checklist: MockChecklist | null;
+}> {
+  const [letter, agenda, checklist] = await Promise.all([
+    prefillConfirmationLetter(auditId),
+    prefillAgenda(auditId),
+    prefillChecklist(auditId),
+  ]);
+  return { confirmation_letter: letter, agenda, checklist };
 }

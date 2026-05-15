@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   CheckCircle2,
   Pencil,
@@ -31,9 +31,11 @@ import {
   approveAgenda,
   upsertChecklist,
   approveChecklist,
+  prefillStage5Deliverables,
 } from '../../../../lib/audit/preAuditApi';
 import type { DeliverableApprovalStatus, TrackedObjectType } from '../../../../types/audit';
 import HistoryDrawer from '../HistoryDrawer';
+import PrefillAgentNote from '../PrefillAgentNote';
 
 // =============================================================================
 // PreAuditDraftingWorkspace — PRE_AUDIT_DRAFTING stage center pane.
@@ -87,16 +89,39 @@ export default function PreAuditDraftingWorkspace() {
   const { preAuditBundles: bundles, setPreAuditBundles: setBundles } = useAuditData();
   const [activeTab, setActiveTab] = useState<TabKey>('confirmation_letter');
 
+  // Tracks audits whose prefill RPCs have already been attempted in this
+  // session, so opening Stage 5 / switching tabs / re-rendering doesn't fire
+  // the RPCs repeatedly. Server-side has 23505 guards too — this is purely a
+  // network-noise optimisation.
+  const attemptedPrefillRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     setActiveTab('confirmation_letter');
   }, [activeAudit?.id]);
 
   useEffect(() => {
     if (!activeAudit) return;
+    const auditIdLocal = activeAudit.id;
+
     const load = async () => {
       try {
-        const next = await fetchPreAuditDeliverables(activeAudit.id);
-        setBundles((prev) => ({ ...prev, [activeAudit.id]: next }));
+        const initial = await fetchPreAuditDeliverables(auditIdLocal);
+
+        // Silent agentic bootstrap: if all three deliverables are missing AND
+        // we haven't attempted prefill yet for this audit this session, fire
+        // the prefill RPCs in parallel. They server-side-gate on approved
+        // Stage 3 + 4 sources and skip silently when not met.
+        const allMissing =
+          !initial.confirmation_letter && !initial.agenda && !initial.checklist;
+
+        if (allMissing && !attemptedPrefillRef.current.has(auditIdLocal)) {
+          attemptedPrefillRef.current.add(auditIdLocal);
+          await prefillStage5Deliverables(auditIdLocal);
+          const refreshed = await fetchPreAuditDeliverables(auditIdLocal);
+          setBundles((prev) => ({ ...prev, [auditIdLocal]: refreshed }));
+        } else {
+          setBundles((prev) => ({ ...prev, [auditIdLocal]: initial }));
+        }
       } catch (err) {
         console.error('[PreAuditDraftingWorkspace] Load error:', err);
       }
@@ -296,6 +321,12 @@ export default function PreAuditDraftingWorkspace() {
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
+  // Any deliverable that was agent-bootstrapped surfaces the one-time note.
+  const anyPrefilled =
+    !!bundle.confirmation_letter?.prefilled_at ||
+    !!bundle.agenda?.prefilled_at ||
+    !!bundle.checklist?.prefilled_at;
+
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       {/* Header */}
@@ -311,6 +342,10 @@ export default function PreAuditDraftingWorkspace() {
           Editing an Approved deliverable reverts it to Draft.
         </p>
       </div>
+
+      {/* Agentic moment — one-time note. Dismissable; persists per-audit in
+          localStorage. The next-action signal lives inside the note text. */}
+      {anyPrefilled && <PrefillAgentNote auditId={auditId} />}
 
       {/* Tab rail with per-tab approval indicator */}
       <div className={`border-b ${tabRail}`}>
@@ -527,6 +562,14 @@ function ConfirmationLetterTab({ deliverable, isLight, onChange }: ConfirmationL
       onCancel={cancel}
       onApprove={approve}
       canSave={!!body.trim()}
+      prefilledSources={
+        deliverable?.prefilled_at
+          ? [
+              ...(deliverable.source_risk_summary_id ? ['risk summary focus areas'] : []),
+              ...(deliverable.source_questionnaire_instance_id ? ['vendor contact'] : []),
+            ]
+          : undefined
+      }
     >
       {!editing && deliverable ? (
         <div className="space-y-4">
@@ -672,6 +715,11 @@ function AgendaTab({ deliverable, isLight, onChange }: AgendaTabProps) {
       onSave={save}
       onCancel={cancel}
       onApprove={approve}
+      prefilledSources={
+        deliverable?.prefilled_at && deliverable.source_risk_summary_id
+          ? ['risk summary focus areas']
+          : undefined
+      }
       canSave={items.length > 0 && items.every((it) => it.time.trim() && it.topic.trim())}
     >
       {!editing && deliverable && deliverable.content.items.length > 0 ? (
@@ -888,6 +936,11 @@ function ChecklistTab({ deliverable, isLight, onChange }: ChecklistTabProps) {
       onSave={save}
       onCancel={cancel}
       onApprove={approve}
+      prefilledSources={
+        deliverable?.prefilled_at && deliverable.source_questionnaire_instance_id
+          ? ['questionnaire evidence requests']
+          : undefined
+      }
       canSave={items.length > 0 && items.every((it) => it.prompt.trim())}
     >
       {!editing && deliverable && deliverable.content.items.length > 0 ? (
@@ -1008,6 +1061,11 @@ interface DeliverableShellProps {
   onCancel: () => void;
   onApprove: () => void;
   canSave: boolean;
+  /** Human-readable provenance for this deliverable's pre-fill, e.g.
+   *  ["risk summary focus areas", "vendor contact"]. When non-empty,
+   *  renders a small Sparkles + "Started from: …" line below the
+   *  description so the auditor can see where the content originated. */
+  prefilledSources?: string[];
   children: React.ReactNode;
 }
 
@@ -1023,6 +1081,7 @@ function DeliverableShell({
   onCancel,
   onApprove,
   canSave,
+  prefilledSources,
   children,
 }: DeliverableShellProps) {
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -1056,6 +1115,16 @@ function DeliverableShell({
             />
           </div>
           <p className={`${subColor} text-xs mt-1 leading-relaxed`}>{description}</p>
+          {prefilledSources && prefilledSources.length > 0 && (
+            <p
+              data-testid="deliverable-prefill-chip"
+              className={`${mutedColor} text-[11px] mt-1 inline-flex items-center gap-1`}
+              title="Drafted from approved Stage 3 + Stage 4 context"
+            >
+              <Sparkles size={10} className={isLight ? 'text-[#4a6fa5]' : 'text-[#6e8fb5]'} />
+              Started from: {prefilledSources.join(' + ')}
+            </p>
+          )}
           {approved && deliverable?.approved_at && (
             <p className={`${mutedColor} text-[11px] mt-1`}>
               Approved {formatTimestamp(deliverable.approved_at)}
