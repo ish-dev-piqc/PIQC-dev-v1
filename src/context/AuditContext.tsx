@@ -29,6 +29,7 @@ export interface AuditWithContext {
   protocol_code: string;       // study number / short label
   protocol_title: string;
   clinical_trial_phase: ClinicalTrialPhase;
+  protocol_id: string;         // protocols.id UUID — passed to SOTR as studyId
   protocol_version_id: string; // needed by Stage 1 (Intake) to scope risk-tag mutations
 }
 
@@ -66,6 +67,7 @@ interface AuditRow {
   status: AuditStatus;
   current_stage: AuditStage;
   scheduled_date: string | null;
+  protocol_id: string;
   protocol_version_id: string;
   vendors: { name: string } | null;
   protocols: { study_number: string | null; title: string } | null;
@@ -84,6 +86,7 @@ function flatten(row: AuditRow): AuditWithContext {
     protocol_code: row.protocols?.study_number ?? '',
     protocol_title: row.protocols?.title ?? '',
     clinical_trial_phase: row.protocol_versions?.clinical_trial_phase ?? 'NOT_APPLICABLE',
+    protocol_id: row.protocol_id,
     protocol_version_id: row.protocol_version_id,
   };
 }
@@ -108,7 +111,7 @@ export function AuditProvider({ children }: { children: React.ReactNode }) {
       .from('audits')
       .select(`
         id, audit_name, audit_type, status, current_stage, scheduled_date,
-        protocol_version_id,
+        protocol_id, protocol_version_id,
         vendors!inner ( name ),
         protocols!inner ( study_number, title ),
         protocol_versions!inner ( clinical_trial_phase )
