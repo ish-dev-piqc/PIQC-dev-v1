@@ -3,10 +3,11 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useAudit } from '../../../context/AuditContext';
 import type { AuditStage } from '../../../types/audit';
 import { STAGE_LABELS, AUDIT_TYPE_LABELS, AUDIT_STATUS_LABELS } from '../../../lib/audit/labels';
-import { ChevronDown, Sparkles } from 'lucide-react';
+import { ChevronDown, Sparkles, FileSearch } from 'lucide-react';
 import StageNav from './StageNav';
 import AuditRequiredGate from './AuditRequiredGate';
 import RiskSummaryPanel from './RiskSummaryPanel';
+import SourceTruthListDrawer from '../../sotr/SourceTruthListDrawer';
 import { AUDIT_STAGES } from '../../../types/audit';
 import IntakeWorkspace from './stages/IntakeWorkspace';
 import VendorEnrichmentWorkspace from './stages/VendorEnrichmentWorkspace';
@@ -57,6 +58,14 @@ export default function AuditWorkspaceShell() {
   );
   // Mobile/tablet drawer for the risk summary panel (visible below xl).
   const [summaryDrawerOpen, setSummaryDrawerOpen] = useState(false);
+  // Cross-stage Protocol-source slide-over (SOTR). Available on every stage
+  // because source verification can be needed during any audit decision.
+  const [protocolSourceOpen, setProtocolSourceOpen] = useState(false);
+
+  // Close the protocol-source drawer if the active audit changes mid-session.
+  useEffect(() => {
+    setProtocolSourceOpen(false);
+  }, [activeAudit?.id]);
 
   // Snap the viewed stage to the audit's current_stage when the active audit
   // (or its workflow position) changes. We intentionally depend on the
@@ -128,6 +137,32 @@ export default function AuditWorkspaceShell() {
                 onSelectStage={setViewedStage}
                 isLight={isLight}
               />
+              {/* Protocol source button — visible on every viewport.
+                  The auditor needs source-of-truth verification across all
+                  stages, not just where the right rail collapses.
+                  The `disabled` branch is defensive — audits.protocol_id is
+                  NOT NULL per schema (20260427120000_audit_mode_phase_1_schema),
+                  so this state is unreachable today. Kept as cheap insurance
+                  against future partial-fetch or data-migration failure modes;
+                  do not refactor away without revisiting the schema constraint. */}
+              <button
+                type="button"
+                onClick={() => setProtocolSourceOpen(true)}
+                disabled={!activeAudit.protocol_id}
+                title={
+                  activeAudit.protocol_id
+                    ? 'View what the parser extracted from the protocol PDF'
+                    : 'No protocol associated with this audit'
+                }
+                className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                  isLight
+                    ? 'bg-white border-[#dce4ed] text-[#374152] hover:bg-[#f5f7fa]'
+                    : 'bg-[#131a22] border-white/[0.08] text-[#d2d7e0] hover:bg-white/[0.04]'
+                }`}
+              >
+                <FileSearch size={12} />
+                Protocol source
+              </button>
               {/* Risk summary button — visible below xl where the right rail is hidden */}
               <button
                 type="button"
@@ -163,6 +198,16 @@ export default function AuditWorkspaceShell() {
           auditId={activeAudit.id}
           variant="drawer"
           onClose={() => setSummaryDrawerOpen(false)}
+        />
+      )}
+
+      {/* Cross-stage Protocol-source drawer — SOTR worksheet items for the
+          audit's underlying protocol. Same drawer surface from every stage. */}
+      {protocolSourceOpen && activeAudit.protocol_id && (
+        <SourceTruthListDrawer
+          studyId={activeAudit.protocol_id}
+          studyCode={activeAudit.protocol_code || null}
+          onClose={() => setProtocolSourceOpen(false)}
         />
       )}
     </div>
