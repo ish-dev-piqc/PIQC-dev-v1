@@ -343,9 +343,14 @@ export default function PreAuditDraftingWorkspace() {
         </p>
       </div>
 
-      {/* Agentic moment — one-time note. Dismissable; persists per-audit in
-          localStorage. The next-action signal lives inside the note text. */}
-      {anyPrefilled && <PrefillAgentNote auditId={auditId} />}
+      {/* Agentic moment — one-time note. Dismissable; persists per (stage, audit)
+          in localStorage. The next-action signal lives inside the note text. */}
+      {anyPrefilled && (
+        <PrefillAgentNote
+          storageKey={`piq-stage5-prefill-note-dismissed:${auditId}`}
+          message="These deliverables were pre-filled from your approved questionnaire and risk summary. Review and approve each before continuing."
+        />
+      )}
 
       {/* Tab rail with per-tab approval indicator */}
       <div className={`border-b ${tabRail}`}>

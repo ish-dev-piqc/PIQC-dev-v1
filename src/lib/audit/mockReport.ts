@@ -23,6 +23,10 @@ export interface MockReportDraft {
   final_signed_off_at: string | null;
   final_signed_off_by_name: string | null;
   exported_at: string | null;
+  // Prefill provenance — set when the report was agent-bootstrapped from
+  // approved Stage 4 risk summary + Stage 6 workspace entries.
+  source_risk_summary_id?: string | null;
+  prefilled_at?: string | null;
 }
 
 export const MOCK_REPORTS: Record<string, MockReportDraft | null> = {
