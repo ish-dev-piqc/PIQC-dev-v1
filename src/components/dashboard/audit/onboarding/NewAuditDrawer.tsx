@@ -82,6 +82,12 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
   const [pdfStudyNumber, setPdfStudyNumber] = useState('');
   const [pdfPhase, setPdfPhase] = useState<ClinicalTrialPhase>('NOT_APPLICABLE');
 
+  // Document id from a previously-successful upload. Tracked so a failure on
+  // a later submission step (protocol creation, audit creation) doesn't cause
+  // a duplicate upload on retry. Cleared when the auditor picks a new file.
+  // See follow-up to PR #59 / #60.
+  const [uploadedDocumentId, setUploadedDocumentId] = useState<string | null>(null);
+
   // Submission
   const [submitting, setSubmitting] = useState(false);
   const [progressStep, setProgressStep] = useState<string>('');
@@ -148,12 +154,21 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
       if (protocolMode === 'upload') {
         if (!pdfFile) throw new Error('Pick a PDF to upload.');
 
-        setProgressStep('Uploading and parsing protocol PDF…');
-        const upload = await uploadProtocolPdf(pdfFile, pdfTitle || pdfFile.name);
+        // Skip re-upload on retry — if a previous submit got past step 1 but
+        // failed later, the documents row already exists. Re-uploading would
+        // create an orphan. The cached id is invalidated when the auditor
+        // picks a new file (see the file input onChange above).
+        let documentId = uploadedDocumentId;
+        if (!documentId) {
+          setProgressStep('Uploading and parsing protocol PDF…');
+          const upload = await uploadProtocolPdf(pdfFile, pdfTitle || pdfFile.name);
+          documentId = upload.document_id;
+          setUploadedDocumentId(documentId);
+        }
 
         setProgressStep('Indexing protocol…');
         const version = await createProtocolFromDocument({
-          documentId: upload.document_id,
+          documentId,
           title: pdfTitle.trim(),
           sponsor: pdfSponsor.trim(),
           studyNumber: pdfStudyNumber.trim() || undefined,
@@ -424,6 +439,9 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
                     onChange={(e) => {
                       const f = e.target.files?.[0] ?? null;
                       setPdfFile(f);
+                      // A new file means a new upload — discard any cached
+                      // document id from a previous attempt so submit re-uploads.
+                      setUploadedDocumentId(null);
                       if (f && !pdfTitle) {
                         setPdfTitle(f.name.replace(/\.pdf$/i, ''));
                       }
@@ -477,6 +495,20 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
                   The PDF is parsed by the PIQC engine so it becomes a structured protocol
                   you can audit against.
                 </p>
+                {/* Surfaces when a previous submit got past upload but failed
+                    on a later step. The cached document id will be reused on
+                    retry — no duplicate upload. Cleared when a new file is picked. */}
+                {uploadedDocumentId && pdfFile && (
+                  <p
+                    data-testid="upload-cached-indicator"
+                    className={`text-[11px] inline-flex items-center gap-1 ${
+                      isLight ? 'text-[#4a6fa5]' : 'text-[#6e8fb5]'
+                    }`}
+                  >
+                    <CheckCircle2 size={11} />
+                    PDF uploaded — retry will resume from the next step.
+                  </p>
+                )}
               </div>
             )}
           </div>
