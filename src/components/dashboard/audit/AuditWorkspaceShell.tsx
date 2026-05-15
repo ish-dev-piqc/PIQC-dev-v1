@@ -3,11 +3,12 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useAudit } from '../../../context/AuditContext';
 import type { AuditStage } from '../../../types/audit';
 import { STAGE_LABELS, AUDIT_TYPE_LABELS, AUDIT_STATUS_LABELS } from '../../../lib/audit/labels';
-import { ChevronDown, Sparkles, FileSearch } from 'lucide-react';
+import { ChevronDown, Sparkles, FileSearch, Plus } from 'lucide-react';
 import StageNav from './StageNav';
 import AuditRequiredGate from './AuditRequiredGate';
 import RiskSummaryPanel from './RiskSummaryPanel';
 import SourceTruthListDrawer from '../../sotr/SourceTruthListDrawer';
+import NewAuditDrawer from './onboarding/NewAuditDrawer';
 import { AUDIT_STAGES } from '../../../types/audit';
 import IntakeWorkspace from './stages/IntakeWorkspace';
 import VendorEnrichmentWorkspace from './stages/VendorEnrichmentWorkspace';
@@ -49,7 +50,7 @@ const STAGE_COMPONENTS: Record<AuditStage, React.ComponentType> = {
 
 export default function AuditWorkspaceShell() {
   const { theme } = useTheme();
-  const { activeAudit } = useAudit();
+  const { activeAudit, audits, setActiveAudit } = useAudit();
   const isLight = theme === 'light';
 
   // Reset viewedStage to the audit's current stage whenever the active audit changes.
@@ -61,6 +62,19 @@ export default function AuditWorkspaceShell() {
   // Cross-stage Protocol-source slide-over (SOTR). Available on every stage
   // because source verification can be needed during any audit decision.
   const [protocolSourceOpen, setProtocolSourceOpen] = useState(false);
+  // New-audit drawer — reachable from the header on any stage so returning
+  // auditors can start a new audit without leaving the workspace.
+  const [newAuditOpen, setNewAuditOpen] = useState(false);
+  const [pendingNewAuditId, setPendingNewAuditId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!pendingNewAuditId) return;
+    const next = audits.find((a) => a.id === pendingNewAuditId);
+    if (next) {
+      setActiveAudit(next);
+      setPendingNewAuditId(null);
+    }
+  }, [pendingNewAuditId, audits, setActiveAudit]);
 
   // Close the protocol-source drawer if the active audit changes mid-session.
   useEffect(() => {
@@ -147,6 +161,19 @@ export default function AuditWorkspaceShell() {
                   do not refactor away without revisiting the schema constraint. */}
               <button
                 type="button"
+                onClick={() => setNewAuditOpen(true)}
+                title="Start a new audit"
+                className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors ${
+                  isLight
+                    ? 'bg-white border-[#dce4ed] text-[#374152] hover:bg-[#f5f7fa]'
+                    : 'bg-[#131a22] border-white/[0.08] text-[#d2d7e0] hover:bg-white/[0.04]'
+                }`}
+              >
+                <Plus size={12} />
+                New audit
+              </button>
+              <button
+                type="button"
                 onClick={() => setProtocolSourceOpen(true)}
                 disabled={!activeAudit.protocol_id}
                 title={
@@ -208,6 +235,19 @@ export default function AuditWorkspaceShell() {
           studyId={activeAudit.protocol_id}
           studyCode={activeAudit.protocol_code || null}
           onClose={() => setProtocolSourceOpen(false)}
+        />
+      )}
+
+      {/* New-audit drawer — reachable from the header on every stage so a
+          returning auditor can start a fresh audit without backing out of the
+          active one. */}
+      {newAuditOpen && (
+        <NewAuditDrawer
+          onClose={() => setNewAuditOpen(false)}
+          onCreated={(newAuditId) => {
+            setPendingNewAuditId(newAuditId);
+            setNewAuditOpen(false);
+          }}
         />
       )}
     </div>
