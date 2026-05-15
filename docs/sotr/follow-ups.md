@@ -118,23 +118,24 @@ the export; the read-side UI is a strict UX add, not a correctness gap.
 
 ---
 
-### F-006 · Optimistic concurrency on edit_draft_item
+### F-006 · Optimistic concurrency on edit_draft_item · **Closed**
 
-**Status:** `sotr_create_review_event` locks the row `FOR UPDATE` so
-concurrent edits don't race the version bump, but the client doesn't
-send a `worksheet_item_version` to assert against. If two users open the
-same item in two tabs, the second edit silently overwrites the first
-(both events recorded, only the second `current_text` survives).
+**Closed 2026-05-14 (product decision).** PIQC Audit Mode is sold as a
+single-auditor product — there are no concurrent-use scenarios planned.
+The racing-edit window cannot meaningfully open. `worksheet_review_events`
+already preserves a full per-action audit trail if any future scenario
+exposes the race.
 
-**What's needed:**
-- Add an optional `p_expected_version` parameter to the RPC. If passed
-  and != current, raise `40001` (serialization failure) so the client
-  can re-fetch + retry.
-- Update the TS wrapper to pass the version it currently has.
+**Original status (kept for context):** `sotr_create_review_event` locks
+the row `FOR UPDATE` so concurrent edits don't race the version bump,
+but the client doesn't send a `worksheet_item_version` to assert against.
+If two users were to open the same item in two tabs, the second edit
+would silently overwrite the first (both events recorded, only the
+second `current_text` surviving).
 
-**Why deferred:** the prompt explicitly said "do not overbuild complex
-validation." Accept the racing edit; the review event log preserves
-both attempts.
+**Trigger to revisit:** if PIQC's pricing model ever supports multiple
+auditors on a single audit, or if Site Mode adds team-collaboration on
+the same study's worksheet items.
 
 ---
 
@@ -210,3 +211,11 @@ contributor doesn't add them by accident.
 - Amendment diffing
 - Analytics dashboards on review metrics
 - Writing back annotations to the source PDF
+- **Multi-auditor / co-auditor access models** (product decision
+  2026-05-14): each PIQC audit has one auditor. The "lead auditor"
+  title is a user-managed label, not a multi-user concept. PDF storage
+  RLS (`auth.uid()::text = (storage.foldername(name))[1]`) and
+  RPC ownership (`documents.user_id = auth.uid()`) correctly enforce
+  single-user access.
+- **Concurrent editing** of the same worksheet item by multiple
+  users (same product decision 2026-05-14) — see F-006 above.

@@ -149,6 +149,36 @@ explicitly assert sensitive bodies never appear.
 
 ---
 
+## Terminology — study vs. protocol
+
+SOTR's public API uses `studyId` (TypeScript) / `p_study_id` (SQL). The
+underlying table is `protocols` and the join column is
+`documents.protocol_id`. **These are the same UUID**, surfaced under
+different names by mode:
+
+| Mode | Term used | Why |
+|---|---|---|
+| Site Mode | `study` / `studyId` | Sites mask sponsor identity behind a study ID. The auditor-facing label is a study, not the protocol number, to protect sponsor information. |
+| Audit Mode | `protocol` / `protocolId` | Auditors track and reference the protocol number directly. There is no sponsor-masking step. |
+
+**SOTR was built first in Site Mode**, so its public API settled on
+`studyId`. When SOTR is wired into Audit Mode (see F-003 in
+[follow-ups.md](follow-ups.md)), the audit shell translates at the call
+site — pass `protocol.id` into SOTR's `studyId` parameter — without
+propagating "study" terminology into Audit Mode's UI or types.
+
+**Do not rename SOTR's `studyId` API.** Two reasons:
+1. It would require touching every RPC, every TypeScript wrapper, every
+   test, and every component prop in `src/lib/sotr/` + `src/components/sotr/`.
+2. The Site-Mode-facing label *is* "study" — renaming to `protocolId`
+   would push sponsor-identity terminology back into Site Mode where it
+   doesn't belong.
+
+The naming asymmetry is a feature, not a bug. Document it here so future
+contributors recognize the equivalence at a glance.
+
+---
+
 ## Naming policy
 
 Code, comments, UI labels, RPC enum values, and exported file content all
