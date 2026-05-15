@@ -169,6 +169,62 @@ export async function listWorksheetItemsForStudy(
   });
 }
 
+/**
+ * "Awaiting review" predicate — single source of truth for what counts as
+ * an unreviewed worksheet item.
+ *
+ *   review_status === 'draft'  → initial state on extraction (PR-5 default)
+ *   review_status === null     → legacy rows pre-PR-5
+ *   any other value             → reviewed (accepted / edited / rejected / flagged)
+ *
+ * MUST stay aligned with the server-side OR clause in
+ * countWorksheetItemsForStudy below. Client-side filters in WorksheetItemsList
+ * (and any future caller) should import this rather than re-spelling the
+ * predicate inline — drift here means the inline chip and the shell badge
+ * silently disagree.
+ */
+export function isAwaitingReview(item: {
+  review_status?: ExtractedItemRecord['review_status'] | null;
+}): boolean {
+  return !item.review_status || item.review_status === 'draft';
+}
+
+/**
+ * Counts worksheet items for a study, split by "awaiting review" vs total.
+ *
+ * Used by Audit Mode (F-2) to surface the review queue size on the
+ * "Protocol source" button + inside the drawer header without forcing the
+ * auditor to open the drawer first. Same RLS gates as listWorksheetItemsForStudy.
+ */
+export interface WorksheetReviewCount {
+  total: number;
+  awaitingReview: number;
+}
+
+export async function countWorksheetItemsForStudy(
+  studyId: string,
+): Promise<WorksheetReviewCount> {
+  const totalP = supabase
+    .from('protocol_extracted_items')
+    .select('id, documents!inner(protocol_id)', { count: 'exact', head: true })
+    .eq('documents.protocol_id', studyId);
+
+  const awaitingP = supabase
+    .from('protocol_extracted_items')
+    .select('id, documents!inner(protocol_id)', { count: 'exact', head: true })
+    .eq('documents.protocol_id', studyId)
+    .or('review_status.eq.draft,review_status.is.null');
+
+  const [totalRes, awaitingRes] = await Promise.all([totalP, awaitingP]);
+  if (totalRes.error) throw totalRes.error;
+  if (awaitingRes.error) throw awaitingRes.error;
+
+  return {
+    total: totalRes.count ?? 0,
+    awaitingReview: awaitingRes.count ?? 0,
+  };
+}
+
 export async function fetchWorksheetItemsSourceEvidenceBatch(
   studyId: string,
   worksheetItemIds: string[],

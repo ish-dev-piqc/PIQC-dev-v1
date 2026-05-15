@@ -9,6 +9,7 @@ import AuditRequiredGate from './AuditRequiredGate';
 import RiskSummaryPanel from './RiskSummaryPanel';
 import SourceTruthListDrawer from '../../sotr/SourceTruthListDrawer';
 import NewAuditDrawer from './onboarding/NewAuditDrawer';
+import { useWorksheetReviewCount } from '../../../hooks/useWorksheetReviewCount';
 import { AUDIT_STAGES } from '../../../types/audit';
 import IntakeWorkspace from './stages/IntakeWorkspace';
 import VendorEnrichmentWorkspace from './stages/VendorEnrichmentWorkspace';
@@ -66,6 +67,14 @@ export default function AuditWorkspaceShell() {
   // auditors can start a new audit without leaving the workspace.
   const [newAuditOpen, setNewAuditOpen] = useState(false);
   const [pendingNewAuditId, setPendingNewAuditId] = useState<string | null>(null);
+  // F-2: bump on drawer close so the badge picks up newly reviewed items
+  // without forcing a remount. Increment-only token; identity matters, value
+  // doesn't.
+  const [reviewCountToken, setReviewCountToken] = useState(0);
+  const reviewCount = useWorksheetReviewCount(
+    activeAudit?.protocol_id ?? null,
+    reviewCountToken,
+  );
 
   useEffect(() => {
     if (!pendingNewAuditId) return;
@@ -178,9 +187,14 @@ export default function AuditWorkspaceShell() {
                 disabled={!activeAudit.protocol_id}
                 title={
                   activeAudit.protocol_id
-                    ? 'View what the parser extracted from the protocol PDF'
+                    ? reviewCount.data && reviewCount.data.awaitingReview > 0
+                      ? `${reviewCount.data.awaitingReview} parsed item${
+                          reviewCount.data.awaitingReview === 1 ? '' : 's'
+                        } awaiting your review`
+                      : 'View what the parser extracted from the protocol PDF'
                     : 'No protocol associated with this audit'
                 }
+                data-testid="audit-protocol-source-button"
                 className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                   isLight
                     ? 'bg-white border-[#dce4ed] text-[#374152] hover:bg-[#f5f7fa]'
@@ -189,6 +203,23 @@ export default function AuditWorkspaceShell() {
               >
                 <FileSearch size={12} />
                 Protocol source
+                {/* Review-queue badge — only shown when there's something to do.
+                    Amber, not blue: amber reads as "action needed" in the
+                    design system. Calm, not alarming; the auditor decides
+                    when to click in. */}
+                {reviewCount.data && reviewCount.data.awaitingReview > 0 && (
+                  <span
+                    data-testid="audit-protocol-source-review-badge"
+                    className={`ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-semibold leading-none border ${
+                      isLight
+                        ? 'bg-amber-50 border-amber-200 text-amber-700'
+                        : 'bg-amber-500/[0.08] border-amber-500/30 text-amber-300'
+                    }`}
+                    aria-label={`${reviewCount.data.awaitingReview} awaiting review`}
+                  >
+                    {reviewCount.data.awaitingReview}
+                  </span>
+                )}
               </button>
               {/* Risk summary button — visible below xl where the right rail is hidden */}
               <button
@@ -234,7 +265,12 @@ export default function AuditWorkspaceShell() {
         <SourceTruthListDrawer
           studyId={activeAudit.protocol_id}
           studyCode={activeAudit.protocol_code || null}
-          onClose={() => setProtocolSourceOpen(false)}
+          onClose={() => {
+            setProtocolSourceOpen(false);
+            // Refresh the shell badge in case the auditor reviewed items
+            // during this drawer session.
+            setReviewCountToken((n) => n + 1);
+          }}
         />
       )}
 
