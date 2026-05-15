@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Sparkles, X } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 
@@ -44,6 +44,17 @@ export default function PrefillAgentNote({ storageKey, message, headline }: Prop
       return false;
     }
   });
+
+  // Re-sync the dismissed state when the storageKey changes. The initializer
+  // above only runs on mount; without this, switching audits / stages keeps
+  // the previous (stage, audit)'s dismissal state and shows a stale banner.
+  useEffect(() => {
+    try {
+      setDismissed(localStorage.getItem(storageKey) === '1');
+    } catch {
+      setDismissed(false);
+    }
+  }, [storageKey]);
 
   if (dismissed) return null;
 
