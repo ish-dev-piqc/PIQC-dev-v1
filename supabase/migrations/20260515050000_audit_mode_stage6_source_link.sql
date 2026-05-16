@@ -99,22 +99,27 @@ BEGIN
     RAISE EXCEPTION 'observation_text must not be empty' USING ERRCODE = '23514';
   END IF;
 
-  -- Resolve the audit's protocol_version_id for the cross-protocol gate.
-  -- Required even when p_source_extracted_item_id is NULL because the
-  -- existing helper short-circuits to TRUE on NULL extracted_item, but we
-  -- still need to fail fast if the audit itself is missing/inaccessible.
-  SELECT protocol_version_id INTO v_protocol_version_id
-    FROM audits
-   WHERE id = p_audit_id;
+  -- Cross-protocol gate — only runs when a source link is actually being
+  -- attached. Matches the update RPC's IS DISTINCT FROM short-circuit
+  -- pattern; saves a protocol-version lookup on the common "create entry
+  -- without source link" path. NB: this means we no longer validate the
+  -- audit row's existence as a side effect of the gate — but the INSERT
+  -- below would FK-fail on a bogus p_audit_id anyway, so behaviour is
+  -- preserved (just with a different error code).
+  IF p_source_extracted_item_id IS NOT NULL THEN
+    SELECT protocol_version_id INTO v_protocol_version_id
+      FROM audits
+     WHERE id = p_audit_id;
 
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Audit % not found', p_audit_id USING ERRCODE = 'P0002';
-  END IF;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Audit % not found', p_audit_id USING ERRCODE = 'P0002';
+    END IF;
 
-  IF NOT audit_mode_extracted_item_matches_protocol(
-           p_source_extracted_item_id, v_protocol_version_id) THEN
-    RAISE EXCEPTION 'Source extracted item does not belong to this audit''s protocol'
-      USING ERRCODE = '23514';
+    IF NOT audit_mode_extracted_item_matches_protocol(
+             p_source_extracted_item_id, v_protocol_version_id) THEN
+      RAISE EXCEPTION 'Source extracted item does not belong to this audit''s protocol'
+        USING ERRCODE = '23514';
+    END IF;
   END IF;
 
   -- Optional risk-attr inheritance snapshot
