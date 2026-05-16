@@ -8,6 +8,7 @@ import {
   FileText,
   History as HistoryIcon,
   Loader2,
+  X as XIcon,
 } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useAudit } from '../../../../context/AuditContext';
@@ -60,12 +61,21 @@ export default function ReportDraftingWorkspace() {
   const [draftSummary, setDraftSummary] = useState('');
   const [draftConclusions, setDraftConclusions] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
-  // LLM refinement state for the executive summary.
-  //   llmLoading: spinner on the Refine button + disables it
-  //   llmError:   inline error surfaced near the textarea so the auditor
-  //               knows the existing text was preserved
-  const [llmLoading, setLlmLoading] = useState(false);
-  const [llmError, setLlmError] = useState<string | null>(null);
+  // Auto-fire LLM refinement state. The agent runs on first Stage 7 open
+  // for any audit whose draft is still 'templated' — no button, no decision
+  // surface. Auditor lands on a drafted report; they review and approve.
+  //   llmRefining: background spinner on the source chip while in flight
+  //   llmFallback: dismissable inline note when LLM failed and we kept the
+  //                templated text intact (silent-with-signal degradation)
+  const [llmRefining, setLlmRefining] = useState(false);
+  const [llmFallback, setLlmFallback] = useState<string | null>(null);
+
+  // Tracks audits whose LLM-refinement attempt has fired in this session,
+  // so a re-render or navigation back to Stage 7 doesn't re-prompt OpenAI.
+  // The server-side trail (executive_summary_source column transitioning to
+  // 'llm') is the durable guard; this is the network-noise / cost optimisation.
+  // Mirrors attemptedPrefillRef's idempotency idiom from PRs #58 + #62.
+  const attemptedLlmRef = useRef<Set<string>>(new Set());
 
   // Tracks audits whose prefill RPC has already been attempted in this session
   // so opening Stage 7 / re-rendering doesn't fire the RPC repeatedly. The
@@ -83,6 +93,7 @@ export default function ReportDraftingWorkspace() {
 
     const load = async () => {
       const initial = await fetchReportDraft(id);
+      let draft = initial;
 
       // Silent agentic bootstrap: if no report exists AND we haven't already
       // attempted prefill for this audit this session, fire the prefill RPC.
@@ -91,10 +102,56 @@ export default function ReportDraftingWorkspace() {
       if (!initial && !attemptedPrefillRef.current.has(id)) {
         attemptedPrefillRef.current.add(id);
         await prefillReportDraft(id);
-        const refreshed = await fetchReportDraft(id);
-        setReports((prev) => ({ ...prev, [id]: refreshed }));
-      } else {
-        setReports((prev) => ({ ...prev, [id]: initial }));
+        draft = await fetchReportDraft(id);
+      }
+      setReports((prev) => ({ ...prev, [id]: draft }));
+
+      // North-star upgrade-in-place: if the draft is still templated AND
+      // hasn't been approved yet AND we haven't tried LLM in this session,
+      // fire the audit-summary edge function to refine the exec summary.
+      // The auditor sees the templated text first (calm), then it gets
+      // replaced by the LLM narrative when the call resolves (~3-8s).
+      //
+      // Guards:
+      //   - Skip if approved — auditor signed off on templated; don't
+      //     silently undo that by demoting the report back to DRAFT.
+      //   - Skip if source already 'llm' or 'auditor_edited' — no second-
+      //     guessing prior state in this session.
+      //   - In-session ref + server-side source column = double idempotency.
+      //
+      // Failure mode: templated text stays in place; surface a dismissable
+      // inline note so the auditor sees gracefully degraded behaviour and
+      // the dev team has a debug signal (console.warn).
+      if (
+        draft &&
+        draft.executive_summary_source === 'templated' &&
+        draft.approval_status === 'DRAFT' &&
+        !attemptedLlmRef.current.has(id)
+      ) {
+        attemptedLlmRef.current.add(id);
+        setLlmRefining(true);
+        try {
+          const narrative = await requestLlmExecutiveSummary(id);
+          const refined = await upsertReportDraft(
+            id,
+            narrative,
+            draft.conclusions,
+            'Executive summary refined by LLM',
+            'llm',
+          );
+          if (refined) {
+            setReports((prev) => ({ ...prev, [id]: refined }));
+          }
+        } catch (err) {
+          const message =
+            err instanceof LlmExecutiveSummaryError
+              ? err.message
+              : 'AI refinement is temporarily unavailable. Using the templated draft — you can edit it directly.';
+          console.warn('[ReportDraftingWorkspace] LLM refinement failed', err);
+          setLlmFallback(message);
+        } finally {
+          setLlmRefining(false);
+        }
       }
     };
 
@@ -150,7 +207,6 @@ export default function ReportDraftingWorkspace() {
     if (!report) return;
     setDraftSummary(report.executive_summary);
     setDraftConclusions(report.conclusions);
-    setLlmError(null);
     setEditing(which);
   };
 
@@ -181,46 +237,6 @@ export default function ReportDraftingWorkspace() {
     if (updated) {
       setReports((prev) => ({ ...prev, [auditId]: updated }));
       setEditing(null);
-      setLlmError(null);
-    }
-  };
-
-  // LLM "Refine with AI" handler. Calls the audit-summary edge function,
-  // drops the returned narrative into the editor (open it if it's closed),
-  // and flags the source so the next save records the provenance.
-  // Failure preserves existing text; surfaces an inline error.
-  const refineWithLlm = async () => {
-    if (!report || !auditId || llmLoading) return;
-    setLlmLoading(true);
-    setLlmError(null);
-    try {
-      const narrative = await requestLlmExecutiveSummary(auditId);
-      // Pre-fill the editor with the LLM draft and open it for review.
-      // We do NOT auto-persist — the auditor still owns the apply step.
-      setDraftSummary(narrative);
-      setDraftConclusions(report.conclusions);
-      setEditing('summary');
-      // Persist 'llm' source immediately so the trail captures the LLM
-      // call even if the auditor backs out of the edit. The text in storage
-      // is the narrative; if they cancel, they can revert via History.
-      const persisted = await upsertReportDraft(
-        auditId,
-        narrative,
-        report.conclusions,
-        'Executive summary refined by LLM',
-        'llm',
-      );
-      if (persisted) {
-        setReports((prev) => ({ ...prev, [auditId]: persisted }));
-      }
-    } catch (err) {
-      const message =
-        err instanceof LlmExecutiveSummaryError
-          ? err.message
-          : 'Could not generate an AI draft. Your existing summary is unchanged.';
-      setLlmError(message);
-    } finally {
-      setLlmLoading(false);
     }
   };
 
@@ -325,8 +341,11 @@ export default function ReportDraftingWorkspace() {
       </div>
 
       {/* Agentic moment — one-time note. Dismissable; persists per (stage, audit)
-          in localStorage. Mirrors the Stage 5 banner pattern from PR #58. */}
-      {report.prefilled_at && (
+          in localStorage. Mirrors the Stage 5 banner pattern from PR #58.
+          Hidden when source === 'llm' — the per-section LLM banner below
+          carries the agentic narration in that state and stacking both
+          would add cognitive load instead of collapsing it. */}
+      {report.prefilled_at && report.executive_summary_source !== 'llm' && (
         <PrefillAgentNote
           storageKey={`piq-stage7-prefill-note-dismissed:${auditId}`}
           message="The executive summary and conclusions were drafted from your approved risk summary and audit observations. Review and edit each before approving."
@@ -353,15 +372,79 @@ export default function ReportDraftingWorkspace() {
         </div>
       )}
 
-      {/* Executive summary — editable */}
+      {/* Executive summary — editable. Agent has already drafted by the
+          time the auditor lands here (auto-fire on first open if templated).
+          Auditor reads, edits if needed, approves. No "generate" buttons. */}
       <Section title="Executive summary" sectionHeader={sectionHeader}>
-        {/* Source chip — small, declarative, sits above the content so the
-            auditor knows at a glance whether they're looking at the templated
-            scaffold, an LLM draft, or their own edit. */}
-        <ExecSummarySourceChip
-          source={report.executive_summary_source ?? 'templated'}
-          isLight={isLight}
-        />
+        {/* Source chip + in-flight indicator. While the LLM is refining the
+            templated draft in the background, the chip is paired with a small
+            "Refining with AI…" spinner so the auditor knows what's happening
+            and doesn't start editing text that's about to be replaced. */}
+        <div className="flex items-center gap-2 flex-wrap mb-2">
+          <ExecSummarySourceChip
+            source={report.executive_summary_source ?? 'templated'}
+            isLight={isLight}
+          />
+          {llmRefining && (
+            <span
+              data-testid="exec-summary-llm-refining"
+              className={`inline-flex items-center gap-1 text-[10px] font-medium ${
+                isLight ? 'text-[#4a6fa5]' : 'text-[#6e8fb5]'
+              }`}
+            >
+              <Loader2 size={9} className="animate-spin" />
+              Refining with AI…
+            </span>
+          )}
+        </div>
+
+        {/* Calm narration when the LLM successfully refined the draft.
+            Uses the established PrefillAgentNote pattern (PRs #58 + #62)
+            so the agentic moment reads consistently across stages. One-time
+            dismissable per (audit, llm). */}
+        {report.executive_summary_source === 'llm' && (
+          <div className="mb-3">
+            <PrefillAgentNote
+              storageKey={`piq-stage7-llm-banner-dismissed:${auditId}`}
+              headline="Drafted with AI."
+              message={
+                <>
+                  Refined from your approved Stage 4 risk summary and Stage 6
+                  observations. Review and edit before approving.
+                </>
+              }
+            />
+          </div>
+        )}
+
+        {/* Silent-with-signal fallback note when the LLM call failed and the
+            templated text is what's showing. Dismissable so it doesn't nag
+            after the auditor acknowledges it. Not an error — a calm
+            "we tried, here's what happened" signal. */}
+        {llmFallback && report.executive_summary_source === 'templated' && (
+          <div
+            data-testid="exec-summary-llm-fallback"
+            className={`flex items-start gap-2 px-3 py-2 mb-3 rounded-md border ${
+              isLight
+                ? 'bg-amber-50/60 border-amber-200/80 text-amber-700'
+                : 'bg-amber-500/[0.06] border-amber-500/20 text-amber-300'
+            }`}
+          >
+            <AlertTriangle size={12} className="flex-shrink-0 mt-0.5" />
+            <p className="text-[11px] leading-relaxed flex-1">{llmFallback}</p>
+            <button
+              type="button"
+              onClick={() => setLlmFallback(null)}
+              aria-label="Dismiss"
+              className={`inline-flex items-center justify-center w-5 h-5 rounded ${
+                isLight ? 'text-amber-700/60 hover:bg-white/60' : 'text-amber-300/60 hover:bg-white/[0.06]'
+              }`}
+            >
+              <XIcon size={11} />
+            </button>
+          </div>
+        )}
+
         {editing === 'summary' ? (
           <div className={`${cardBg} border rounded-md p-4 space-y-3`}>
             <textarea
@@ -384,14 +467,6 @@ export default function ReportDraftingWorkspace() {
                 </p>
               </div>
             )}
-            {llmError && (
-              <p
-                role="alert"
-                className={`text-[11px] ${isLight ? 'text-rose-600' : 'text-rose-400'}`}
-              >
-                {llmError}
-              </p>
-            )}
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
@@ -408,17 +483,6 @@ export default function ReportDraftingWorkspace() {
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                onClick={refineWithLlm}
-                disabled={llmLoading}
-                data-testid="exec-summary-refine-with-ai"
-                title="Generate an AI-drafted executive summary from your approved Stage 4 + Stage 6 context"
-                className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 ${buttonSecondary}`}
-              >
-                {llmLoading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                {llmLoading ? 'Refining…' : 'Refine with AI'}
-              </button>
             </div>
           </div>
         ) : (
@@ -426,35 +490,14 @@ export default function ReportDraftingWorkspace() {
             <p className={`${headingColor} text-sm whitespace-pre-wrap leading-relaxed`}>
               {report.executive_summary}
             </p>
-            {llmError && (
-              <p
-                role="alert"
-                className={`mt-3 text-[11px] ${isLight ? 'text-rose-600' : 'text-rose-400'}`}
-              >
-                {llmError}
-              </p>
-            )}
-            <div className="mt-3 flex items-center gap-2 flex-wrap">
-              <button
-                type="button"
-                onClick={() => beginEdit('summary')}
-                className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
-              >
-                <Pencil size={12} />
-                {approved ? 'Revise' : 'Edit'}
-              </button>
-              <button
-                type="button"
-                onClick={refineWithLlm}
-                disabled={llmLoading}
-                data-testid="exec-summary-refine-with-ai"
-                title="Generate an AI-drafted executive summary from your approved Stage 4 + Stage 6 context"
-                className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors disabled:opacity-50 ${buttonSecondary}`}
-              >
-                {llmLoading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                {llmLoading ? 'Refining…' : 'Refine with AI'}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => beginEdit('summary')}
+              className={`mt-3 inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+            >
+              <Pencil size={12} />
+              {approved ? 'Revise' : 'Edit'}
+            </button>
           </div>
         )}
       </Section>
