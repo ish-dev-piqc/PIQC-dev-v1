@@ -6,6 +6,8 @@ import {
   History as HistoryIcon,
   ArrowRight,
   Link2,
+  FileSearch,
+  X as XIcon,
 } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useAudit } from '../../../../context/AuditContext';
@@ -27,7 +29,11 @@ import type {
   ProvisionalClassification,
   ProvisionalImpact,
 } from '../../../../types/audit';
+import type { ExtractedItemRecord } from '../../../../types/sotr';
 import HistoryDrawer from '../HistoryDrawer';
+import SourceTruthListDrawer from '../../../sotr/SourceTruthListDrawer';
+import SourceTruthDrawer from '../../../sotr/SourceTruthDrawer';
+import { formatExtractedValue } from '../../../sotr/WorksheetItemRow';
 
 // =============================================================================
 // AuditConductWorkspace — AUDIT_CONDUCT stage center pane.
@@ -57,6 +63,11 @@ interface EntryFormState {
   provisional_classification: ProvisionalClassification;
   checkpoint_ref: string;
   protocol_risk_id: string;
+  // B2: optional SOTR protocol_extracted_item link. Label is in-session-only —
+  // the row doesn't persist a label; on edit-mode hydrate the id and fall back
+  // to a generic "Linked source" display (matches Stage 1 precedent).
+  source_extracted_item_id: string | null;
+  source_extracted_item_label: string | null;
 }
 
 const EMPTY_FORM: EntryFormState = {
@@ -66,6 +77,8 @@ const EMPTY_FORM: EntryFormState = {
   provisional_classification: 'NOT_YET_CLASSIFIED',
   checkpoint_ref: '',
   protocol_risk_id: '',
+  source_extracted_item_id: null,
+  source_extracted_item_label: null,
 };
 
 type FormMode = 'list' | 'add' | 'edit';
@@ -85,6 +98,10 @@ export default function AuditConductWorkspace() {
   const [form, setForm] = useState<EntryFormState>(EMPTY_FORM);
   const [historyTarget, setHistoryTarget] = useState<{ objectId: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  // B2 picker state — drawers render at workspace level (z-40/z-50) so they
+  // stack correctly over the inline form. Form just emits pick/clear events.
+  const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
+  const [viewSourceOpen, setViewSourceOpen] = useState(false);
 
   // Reset edit state on audit switch.
   useEffect(() => {
@@ -136,6 +153,8 @@ export default function AuditConductWorkspace() {
       provisional_classification: entry.provisional_classification,
       checkpoint_ref: entry.checkpoint_ref ?? '',
       protocol_risk_id: entry.protocol_risk_id ?? '',
+      source_extracted_item_id: entry.source_extracted_item_id,
+      source_extracted_item_label: null, // not stored on the row; falls back to "Linked source"
     });
     setMode('edit');
   };
@@ -144,6 +163,26 @@ export default function AuditConductWorkspace() {
     setMode('list');
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setSourcePickerOpen(false);
+    setViewSourceOpen(false);
+  };
+
+  // B2 — picker callbacks. Drawers live at parent scope (see Decision in
+  // EntryForm header comment) and emit results back via these handlers.
+  const handlePickSource = (item: ExtractedItemRecord) => {
+    setForm((prev) => ({
+      ...prev,
+      source_extracted_item_id: item.id,
+      source_extracted_item_label: formatExtractedValue(item.extracted_value),
+    }));
+    setSourcePickerOpen(false);
+  };
+  const handleClearSource = () => {
+    setForm((prev) => ({
+      ...prev,
+      source_extracted_item_id: null,
+      source_extracted_item_label: null,
+    }));
   };
 
   // saveEntry: persists via RPC, then merges the canonical row back into the
@@ -165,6 +204,7 @@ export default function AuditConductWorkspace() {
         provisionalClassification: form.provisional_classification,
         checkpointRef: checkpointInput || null,
         protocolRiskId: form.protocol_risk_id || null,
+        sourceExtractedItemId: form.source_extracted_item_id,
       });
       if (created) {
         setEntriesByAudit((prev) => ({
@@ -175,8 +215,22 @@ export default function AuditConductWorkspace() {
       }
     } else if (mode === 'edit' && editingId) {
       const previous = (entriesByAudit[auditId] ?? []).find((e) => e.id === editingId);
-      // Build an UpdateWorkspaceEntryInput that only sends fields the user
-      // actually changed. The RPC ignores nulls, so undefined-vs-null matters.
+      // Three-way semantics on source_extracted_item_id (mirror of Stage 1):
+      //   - was linked, now null     → clear
+      //   - is set (changed or same) → set (server is idempotent for same id)
+      //   - both null                → unchanged
+      const wasLinked = !!previous?.source_extracted_item_id;
+      const nowLinked = !!form.source_extracted_item_id;
+      const sourceUpdate: {
+        sourceExtractedItemId?: string;
+        clearSourceExtractedItemId?: boolean;
+      } = {};
+      if (!nowLinked && wasLinked) {
+        sourceUpdate.clearSourceExtractedItemId = true;
+      } else if (nowLinked) {
+        sourceUpdate.sourceExtractedItemId = form.source_extracted_item_id!;
+      }
+
       const updated = await updateWorkspaceEntry(editingId, {
         vendorDomain: form.vendor_domain.trim(),
         observationText: form.observation_text.trim(),
@@ -184,6 +238,7 @@ export default function AuditConductWorkspace() {
         provisionalClassification: form.provisional_classification,
         checkpointRef: checkpointInput || null,
         clearCheckpointRef: !checkpointInput && !!previous?.checkpoint_ref,
+        ...sourceUpdate,
       });
       if (updated) {
         setEntriesByAudit((prev) => ({
@@ -265,6 +320,10 @@ export default function AuditConductWorkspace() {
             onChange={setForm}
             protocolRisks={auditProtocolRisks}
             isLight={isLight}
+            hasProtocol={!!activeAudit.protocol_id}
+            onOpenSourcePicker={() => setSourcePickerOpen(true)}
+            onOpenViewSource={() => setViewSourceOpen(true)}
+            onClearSource={handleClearSource}
           />
           <div className={`flex items-center gap-2 pt-4 mt-4 border-t ${isLight ? 'border-[#e2e8ee]' : 'border-white/5'}`}>
             <button
@@ -341,6 +400,29 @@ export default function AuditConductWorkspace() {
         />
       )}
 
+      {/* B2 — protocol source picker. Opens in pick-mode (Attach button on
+          each parsed item). Hidden when the audit has no protocol_id (the
+          picker would have nothing to read from). z-40 list / z-50 per-item
+          mirrors the Stage 1 picker stacking. */}
+      {sourcePickerOpen && activeAudit.protocol_id && (
+        <SourceTruthListDrawer
+          studyId={activeAudit.protocol_id}
+          studyCode={activeAudit.protocol_code ?? null}
+          onClose={() => setSourcePickerOpen(false)}
+          onPick={handlePickSource}
+        />
+      )}
+
+      {/* View-only drawer for the currently linked source item. */}
+      {viewSourceOpen && form.source_extracted_item_id && activeAudit.protocol_id && (
+        <SourceTruthDrawer
+          studyId={activeAudit.protocol_id}
+          worksheetItemId={form.source_extracted_item_id}
+          itemLabel={form.source_extracted_item_label ?? 'Linked source'}
+          onClose={() => setViewSourceOpen(false)}
+        />
+      )}
+
       {/* Stage transition */}
       <div className={`${cardBg} border rounded-xl p-5`}>
         <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -389,9 +471,24 @@ interface EntryFormProps {
   onChange: (next: EntryFormState) => void;
   protocolRisks: TaggedSection[];
   isLight: boolean;
+  /** Whether the audit has a protocol — if not, the source-link picker is
+   *  hidden (the picker would have nothing to read from). */
+  hasProtocol: boolean;
+  onOpenSourcePicker: () => void;
+  onOpenViewSource: () => void;
+  onClearSource: () => void;
 }
 
-function EntryForm({ form, onChange, protocolRisks, isLight }: EntryFormProps) {
+function EntryForm({
+  form,
+  onChange,
+  protocolRisks,
+  isLight,
+  hasProtocol,
+  onOpenSourcePicker,
+  onOpenViewSource,
+  onClearSource,
+}: EntryFormProps) {
   const labelColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
@@ -465,6 +562,70 @@ function EntryForm({ form, onChange, protocolRisks, isLight }: EntryFormProps) {
           className={`w-full rounded-md border px-3 py-2 text-sm ${inputBg} ${inputBorder} ${headingColor} focus:outline-none transition-colors`}
         />
       </div>
+
+      {/* Protocol source link (optional) — Stage 6 is capture-time, not
+          decision-time, so the picker is visually subordinate: compact chip
+          when linked, quiet dashed affordance when unlinked. No explanatory
+          copy — keeps the form tempo fast. Eye should be able to skip past
+          this without effort. */}
+      {hasProtocol && (
+        <div>
+          {form.source_extracted_item_id ? (
+            <div
+              data-testid="conduct-source-link-chip"
+              className={`flex items-center gap-2 flex-wrap rounded-md border px-2.5 py-1.5 ${
+                isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/10'
+              }`}
+            >
+              <Link2 size={11} className={mutedColor} />
+              <span className={`${subColor} text-[11px] flex-1 min-w-0 truncate`}>
+                Linked source ·{' '}
+                <span className={headingColor}>
+                  {form.source_extracted_item_label ?? 'protocol item'}
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={onOpenViewSource}
+                className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded transition-colors ${
+                  isLight
+                    ? 'text-[#374152]/75 hover:bg-[#f5f7fa]'
+                    : 'text-[#d2d7e0]/70 hover:bg-white/[0.04]'
+                }`}
+              >
+                <FileSearch size={10} />
+                View
+              </button>
+              <button
+                type="button"
+                onClick={onClearSource}
+                aria-label="Remove protocol source link"
+                className={`inline-flex items-center justify-center w-5 h-5 rounded transition-colors ${
+                  isLight
+                    ? 'text-[#374152]/55 hover:bg-[#f5f7fa]'
+                    : 'text-[#d2d7e0]/55 hover:bg-white/[0.04]'
+                }`}
+              >
+                <XIcon size={10} />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              data-testid="conduct-source-link-picker-button"
+              onClick={onOpenSourcePicker}
+              className={`inline-flex items-center gap-1.5 text-[11px] rounded-md border border-dashed px-2.5 py-1 transition-colors ${
+                isLight
+                  ? 'border-[#cbd2db] hover:border-[#4a6fa5]/40 hover:bg-[#f5f7fa] text-[#374152]/70'
+                  : 'border-white/15 hover:border-[#6e8fb5]/40 hover:bg-white/[0.03] text-[#d2d7e0]/60'
+              }`}
+            >
+              <FileSearch size={11} />
+              Link to protocol source…
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div>

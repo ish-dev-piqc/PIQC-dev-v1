@@ -43,6 +43,8 @@ interface WorkspaceEntryRow {
   risk_context_outdated: boolean;
   risk_context_confirmed_at: string | null;
   risk_context_confirmed_by: string | null;
+  /** B2: optional SOTR protocol_extracted_item this finding traces back to. */
+  source_extracted_item_id: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -73,6 +75,7 @@ async function flattenEntry(row: WorkspaceEntryRow): Promise<MockWorkspaceEntry>
     inherited_impact_surface: row.inherited_impact_surface,
     inherited_time_sensitivity: row.inherited_time_sensitivity,
     risk_context_outdated: row.risk_context_outdated,
+    source_extracted_item_id: row.source_extracted_item_id,
     created_by_name: await resolveCreatorName(row.created_by),
     created_at: row.created_at,
   };
@@ -111,6 +114,8 @@ export interface CreateWorkspaceEntryInput {
   vendorServiceMappingId?: string | null;
   questionnaireResponseId?: string | null;
   reason?: string;
+  /** Optional SOTR protocol_extracted_item this finding traces back to. */
+  sourceExtractedItemId?: string | null;
 }
 
 export async function createWorkspaceEntry(
@@ -128,6 +133,7 @@ export async function createWorkspaceEntry(
     p_vendor_service_mapping_id: input.vendorServiceMappingId ?? null,
     p_questionnaire_response_id: input.questionnaireResponseId ?? null,
     p_reason: input.reason ?? null,
+    p_source_extracted_item_id: input.sourceExtractedItemId ?? null,
   });
 
   if (error) {
@@ -146,6 +152,12 @@ export interface UpdateWorkspaceEntryInput {
   checkpointRef?: string | null; // pass null + clearCheckpointRef:true to clear; pass undefined to leave alone
   clearCheckpointRef?: boolean;
   reason?: string;
+  /** Set to a UUID to attach/replace the SOTR source link. Leave undefined
+   *  to keep the existing link. Use clearSourceExtractedItemId to detach. */
+  sourceExtractedItemId?: string;
+  /** Set TRUE to explicitly clear the SOTR source link. Server-side resolver
+   *  applies this BEFORE sourceExtractedItemId if both are provided. */
+  clearSourceExtractedItemId?: boolean;
 }
 
 export async function updateWorkspaceEntry(
@@ -161,6 +173,8 @@ export async function updateWorkspaceEntry(
     p_checkpoint_ref: input.checkpointRef ?? null,
     p_clear_checkpoint_ref: input.clearCheckpointRef ?? false,
     p_reason: input.reason ?? null,
+    p_source_extracted_item_id: input.sourceExtractedItemId ?? null,
+    p_clear_source_extracted_item_id: input.clearSourceExtractedItemId ?? null,
   });
 
   if (error) {

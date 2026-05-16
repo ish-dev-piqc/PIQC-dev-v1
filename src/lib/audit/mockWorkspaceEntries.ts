@@ -34,6 +34,9 @@ export interface MockWorkspaceEntry {
   inherited_time_sensitivity: boolean | null;
   // System-written when the linked ProtocolRiskObject changes via amendment
   risk_context_outdated: boolean;
+  // B2: optional SOTR protocol_extracted_item this finding traces back to.
+  // Same trust-act as Stage 1's source link — auditor-attested provenance.
+  source_extracted_item_id: string | null;
   created_by_name: string;
   created_at: string;
 }
@@ -60,6 +63,7 @@ export const MOCK_WORKSPACE_ENTRIES: Record<string, MockWorkspaceEntry[]> = {
       inherited_impact_surface: 'DATA_INTEGRITY',
       inherited_time_sensitivity: true,
       risk_context_outdated: false,
+      source_extracted_item_id: null,
       created_by_name: 'Kiara Patel',
       created_at: '2026-04-27T09:42:00Z',
     },
@@ -79,6 +83,7 @@ export const MOCK_WORKSPACE_ENTRIES: Record<string, MockWorkspaceEntry[]> = {
       inherited_impact_surface: 'DATA_INTEGRITY',
       inherited_time_sensitivity: false,
       risk_context_outdated: false,
+      source_extracted_item_id: null,
       created_by_name: 'Kiara Patel',
       created_at: '2026-04-27T11:15:00Z',
     },
@@ -98,6 +103,7 @@ export const MOCK_WORKSPACE_ENTRIES: Record<string, MockWorkspaceEntry[]> = {
       inherited_impact_surface: null,
       inherited_time_sensitivity: null,
       risk_context_outdated: false,
+      source_extracted_item_id: null,
       created_by_name: 'Kiara Patel',
       created_at: '2026-04-27T14:22:00Z',
     },
