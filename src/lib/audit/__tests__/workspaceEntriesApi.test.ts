@@ -24,6 +24,12 @@
 //     assertions (no untyped mock.calls indexing)
 //   - Per-test error-log spy where it matters; otherwise describe-level
 //     with explicit call-count assertions
+//
+// This is the THIRD test file with this shape (intakeApi, preAuditApi,
+// workspaceEntriesApi). Convention: three is parity that proves the pattern;
+// four is missing abstraction. If a 4th wrapper takes the same source-link
+// shape, extract __testHelpers__/threeWaySourceLink.ts at that point — not
+// before. Premature extraction would over-shape the abstraction.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createWorkspaceEntry, updateWorkspaceEntry } from '../workspaceEntriesApi';
@@ -83,10 +89,19 @@ describe('createWorkspaceEntry — sourceExtractedItemId forwarding', () => {
     mockRpc.mockReset();
   });
 
-  it('forwards a UUID when sourceExtractedItemId is set', async () => {
-    mockRpc.mockResolvedValueOnce({ data: makeEntryRow(), error: null });
+  it('forwards a UUID when sourceExtractedItemId is set, and round-trips it through flattenEntry', async () => {
+    // Mock the row to echo the source id back — verifies BOTH:
+    //   1. wrapper forwards the UUID to the RPC (the obvious assertion)
+    //   2. flattenEntry preserves source_extracted_item_id on the
+    //      row → MockWorkspaceEntry mapping (the non-obvious one — if
+    //      flattenEntry ever drops this field, every other test would
+    //      still pass because they only check the RPC call args)
+    mockRpc.mockResolvedValueOnce({
+      data: makeEntryRow({ source_extracted_item_id: 'extracted-abc' }),
+      error: null,
+    });
 
-    await createWorkspaceEntry('audit-1', {
+    const result = await createWorkspaceEntry('audit-1', {
       ...BASE_CREATE_INPUT,
       sourceExtractedItemId: 'extracted-abc',
     });
@@ -98,6 +113,8 @@ describe('createWorkspaceEntry — sourceExtractedItemId forwarding', () => {
         p_source_extracted_item_id: 'extracted-abc',
       }),
     );
+    // Row → client mapping contract.
+    expect(result?.source_extracted_item_id).toBe('extracted-abc');
   });
 
   it('forwards null when sourceExtractedItemId is explicitly null', async () => {
