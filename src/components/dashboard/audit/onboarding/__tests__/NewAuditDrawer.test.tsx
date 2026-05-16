@@ -102,9 +102,9 @@ async function fillRequiredFieldsForUploadFlow(user: ReturnType<typeof userEvent
     'Test audit',
   );
 
-  // Wait for the bootstrap effect (listVendors + listAuditorProtocolLibrary)
-  // to populate the dropdown — checking that the actual seeded vendor
-  // option has rendered, not just that the API was called.
+  // Bootstrap wait — findByRole retries until the seeded vendor option
+  // renders, which means listVendors resolved AND setVendors ran AND the
+  // select re-rendered. Caller does not need a separate waitFor.
   await screen.findByRole('option', { name: /Vendor One/i });
 
   // Vendor — the <Field>'s <label> isn't associated to the <select> via
@@ -165,7 +165,10 @@ describe('NewAuditDrawer — orphan-document retry (PR #61)', () => {
 
   it('caches uploaded document id; retry after step-2 failure does NOT re-upload', async () => {
     // First submit: upload succeeds, createProtocolFromDocument fails.
-    mockUploadPdf.mockResolvedValue({ document_id: 'doc-1' });
+    // mockResolvedValueOnce (not mockResolvedValue) so an unexpected second
+    // upload would resolve to undefined rather than a fake doc-id — gives a
+    // clearer failure if the invariant ever regresses.
+    mockUploadPdf.mockResolvedValueOnce({ document_id: 'doc-1' });
     mockCreateProtocol.mockRejectedValueOnce(new Error('promote failed'));
 
     const onClose = vi.fn();
@@ -173,10 +176,13 @@ describe('NewAuditDrawer — orphan-document retry (PR #61)', () => {
     const user = userEvent.setup();
     render(<NewAuditDrawer onClose={onClose} onCreated={onCreated} />);
 
-    // Wait for bootstrap to populate vendors.
-    await waitFor(() => expect(mockListVendors).toHaveBeenCalled());
-
     await fillRequiredFieldsForUploadFlow(user);
+
+    // Pre-state: cached indicator must NOT be visible before any submit.
+    // Locks the "indicator only appears after a successful upload" half of
+    // the invariant — without this, a regression that always shows the
+    // indicator would pass the post-state assertion below.
+    expect(screen.queryByTestId('upload-cached-indicator')).not.toBeInTheDocument();
 
     // First submit — should call upload, then fail on createProtocolFromDocument.
     await user.click(screen.getByRole('button', { name: /create audit/i }));
@@ -205,7 +211,11 @@ describe('NewAuditDrawer — orphan-document retry (PR #61)', () => {
       expect(mockCreateAudit).toHaveBeenCalledTimes(1);
     });
 
-    // THE INVARIANT: upload was NOT called a second time.
+    // THE INVARIANT: uploadProtocolPdf was NOT called a second time across
+    // the retry. This is the orphan-document protection from PR #61 —
+    // anything else (call count = 2, document_id mismatch on second call)
+    // means the cache layer regressed and we're burning Reducto credits +
+    // leaking documents rows on every retry.
     expect(mockUploadPdf).toHaveBeenCalledTimes(1);
     // createProtocolFromDocument fired again as the actual retry point.
     expect(mockCreateProtocol).toHaveBeenCalledTimes(2);
@@ -222,7 +232,6 @@ describe('NewAuditDrawer — orphan-document retry (PR #61)', () => {
 
     const user = userEvent.setup();
     render(<NewAuditDrawer onClose={vi.fn()} onCreated={vi.fn()} />);
-    await waitFor(() => expect(mockListVendors).toHaveBeenCalled());
 
     await fillRequiredFieldsForUploadFlow(user);
     await user.click(screen.getByRole('button', { name: /create audit/i }));
@@ -270,7 +279,6 @@ describe('NewAuditDrawer — orphan-document retry (PR #61)', () => {
     const onCreated = vi.fn();
     const user = userEvent.setup();
     render(<NewAuditDrawer onClose={vi.fn()} onCreated={onCreated} />);
-    await waitFor(() => expect(mockListVendors).toHaveBeenCalled());
 
     await fillRequiredFieldsForUploadFlow(user);
     await user.click(screen.getByRole('button', { name: /create audit/i }));
@@ -281,5 +289,10 @@ describe('NewAuditDrawer — orphan-document retry (PR #61)', () => {
     expect(mockCreateProtocol).toHaveBeenCalledTimes(1);
     expect(mockCreateAudit).toHaveBeenCalledTimes(1);
     expect(mockRefreshAudits).toHaveBeenCalledTimes(1);
+    // Defensive: a clean happy-path run must not emit ANY console.error.
+    // If a future refactor introduces a swallowed error or stray log, this
+    // catches it. errorSpy is suppressed-but-spied, not unmocked — call
+    // counts still register.
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 });
