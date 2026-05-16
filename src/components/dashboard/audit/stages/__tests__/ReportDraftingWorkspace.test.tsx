@@ -659,3 +659,115 @@ describe('ReportDraftingWorkspace — Conclusions LLM auto-fire guards', () => {
     }
   });
 });
+
+// =============================================================================
+// PR #80 — PIQC write-back landing note.
+//
+// When AuditWorkspaceShell completes a successful onAssistantWriteback, it
+// hands the matching workspace a transient `landingNotice` prop. Stage 7
+// renders a PIQC-voiced dismissible note above the receiving section.
+// These tests lock the four contracts that matter:
+//
+//   1. No landingNotice → no note rendered (default state unchanged)
+//   2. landingNotice for executive_summary → note above exec section only
+//   3. landingNotice for conclusions → note above conclusions section only
+//   4. Dismiss click invokes onDismissLandingNotice (shell clears state)
+//
+// The shell's own state lifecycle (clear-on-audit-switch, clear-on-stage-
+// navigation, set-on-writeback-success) is covered by manual QA. Same
+// precedent as PR #76's onSignalAction and PR #79's onAssistantWriteback
+// — shell-side wiring is integration territory; per-component contract
+// is what these tests lock.
+// =============================================================================
+
+describe('ReportDraftingWorkspace — PIQC write-back landing note (PR #80)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupContext(makeReportDraft({
+      // Both sources non-templated so neither auto-fire branch triggers
+      // during the test render. Keeps the landing-note assertions clean
+      // and free of LLM-side noise.
+      executive_summary_source: 'auditor_edited',
+      conclusions_source:       'auditor_edited',
+    }));
+    mockFetch.mockResolvedValue(makeReportDraft({
+      executive_summary_source: 'auditor_edited',
+      conclusions_source:       'auditor_edited',
+    }));
+  });
+
+  it('renders no note when landingNotice is null/undefined (default)', () => {
+    render(<ReportDraftingWorkspace />);
+    expect(screen.queryByTestId('piqc-landing-note-executive_summary'))
+      .not.toBeInTheDocument();
+    expect(screen.queryByTestId('piqc-landing-note-conclusions'))
+      .not.toBeInTheDocument();
+  });
+
+  it('renders the exec-summary note above the exec section, not the conclusions section', () => {
+    render(
+      <ReportDraftingWorkspace
+        landingNotice={{ field: 'executive_summary', at: Date.now() }}
+        onDismissLandingNotice={vi.fn()}
+      />,
+    );
+    const note = screen.getByTestId('piqc-landing-note-executive_summary');
+    expect(note).toBeInTheDocument();
+    expect(screen.queryByTestId('piqc-landing-note-conclusions'))
+      .not.toBeInTheDocument();
+    // Voice check — first-person partner consistent with chat panel's
+    // empty-state primer + confirm copy. Locks against drift back to
+    // third-person system voice.
+    expect(note).toHaveTextContent(/Just dropped this into your exec summary/i);
+    // A11y — role="status" makes the note's appearance announceable to
+    // screen-reader users (implies aria-live="polite"). Without this,
+    // SR users would land on Stage 7 with new textarea text but no
+    // signal that PIQC just put it there. Locked so a future styling
+    // pass doesn't silently strip the role.
+    expect(note).toHaveAttribute('role', 'status');
+  });
+
+  it('renders the conclusions note above the conclusions section, not the exec section', () => {
+    render(
+      <ReportDraftingWorkspace
+        landingNotice={{ field: 'conclusions', at: Date.now() }}
+        onDismissLandingNotice={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('piqc-landing-note-conclusions'))
+      .toBeInTheDocument();
+    expect(screen.queryByTestId('piqc-landing-note-executive_summary'))
+      .not.toBeInTheDocument();
+    expect(screen.getByTestId('piqc-landing-note-conclusions'))
+      .toHaveTextContent(/Just dropped this into your conclusions/i);
+  });
+
+  it('invokes onDismissLandingNotice when the dismiss button is clicked', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const onDismiss = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ReportDraftingWorkspace
+        landingNotice={{ field: 'executive_summary', at: Date.now() }}
+        onDismissLandingNotice={onDismiss}
+      />,
+    );
+
+    await user.click(screen.getByTestId('piqc-landing-note-dismiss-executive_summary'));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the note WITHOUT a dismiss button when onDismissLandingNotice is omitted', () => {
+    // Defensive shape — a future caller that wants to render the note
+    // without enabling dismiss (e.g., readonly viewing of past state)
+    // should not hit a render error.
+    render(
+      <ReportDraftingWorkspace
+        landingNotice={{ field: 'conclusions', at: Date.now() }}
+      />,
+    );
+    expect(screen.getByTestId('piqc-landing-note-conclusions')).toBeInTheDocument();
+    expect(screen.queryByTestId('piqc-landing-note-dismiss-conclusions'))
+      .not.toBeInTheDocument();
+  });
+});
