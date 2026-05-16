@@ -184,7 +184,13 @@ export default function AuditChatPanel({
               <span className="text-[#4a6fa5] dark:text-[#6e8fb5] flex-shrink-0">
                 <PiqcMark size={14} />
               </span>
-              <h2 className="text-fg-heading text-sm font-semibold truncate">
+              <h2
+                className="text-fg-heading text-sm font-semibold truncate"
+                /* Pronunciation cue lives in the hover layer — "PIQC" in
+                   writing is unrecoverable as "pixie" without it. Quiet and
+                   professional; never appears as visible body copy. */
+                title="PIQC (pronounced 'pixie')"
+              >
                 PIQC
               </h2>
               <span
@@ -194,6 +200,11 @@ export default function AuditChatPanel({
                 AI · advisory
               </span>
             </div>
+            {/* The `as AuditStage` cast is informational: viewedStage
+                originates from the shell's AuditStage state and is round-
+                tripped through the edge function's VALID_VIEWED_STAGES
+                allow-list. The short-circuit `&& STAGE_LABELS[...]` is
+                the runtime safety net — unknown values render nothing. */}
             {viewedStage && STAGE_LABELS[viewedStage as AuditStage] && (
               <p
                 data-testid="audit-chat-stage-focus"

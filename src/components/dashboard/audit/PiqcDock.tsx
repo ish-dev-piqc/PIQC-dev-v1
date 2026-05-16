@@ -55,7 +55,10 @@ export default function PiqcDock({ onOpen, hidden }: Props) {
       onClick={onOpen}
       data-testid="piqc-dock"
       aria-label="Ask PIQC — open the audit assistant"
-      title="Ask PIQC — open the audit assistant"
+      /* Pronunciation cue lives in the hover layer. PIQC is unrecoverable
+         as "pixie" in writing without it, and the dock is the auditor's
+         first encounter with the name. */
+      title="Ask PIQC (pronounced 'pixie') — open the audit assistant"
       className={[
         // Position: bottom-right, comfortable inset from edges. z-30 so the
         // z-40 chat panel always wins when it opens; z-50 SOTR per-item

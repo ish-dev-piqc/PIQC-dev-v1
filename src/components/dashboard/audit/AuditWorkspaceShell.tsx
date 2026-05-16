@@ -264,8 +264,13 @@ export default function AuditWorkspaceShell() {
         </div>
 
         {/* Stage workspace content — dispatched by viewedStage. Phase B fills
-            in each stage component individually without touching the shell. */}
-        <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
+            in each stage component individually without touching the shell.
+            Bottom padding (pb-20 ≈ 80px) reserves clearance for the PiqcDock
+            at bottom-right so a stage workspace's final row(s) don't sit
+            underneath the dock. Without this, dense stages (AuditConduct
+            classification grid, ReportDrafting two-column editor) would
+            force the auditor to scroll past the dock to read content. */}
+        <div className="flex-1 overflow-y-auto pb-20" style={{ minHeight: 0 }}>
           {(() => {
             const Workspace = STAGE_COMPONENTS[viewedStage];
             return <Workspace />;
