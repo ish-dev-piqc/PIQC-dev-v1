@@ -41,6 +41,7 @@ function setup(
   initial: AuditChatMessage[] = [],
   viewedStage?: string,
   signals?: import('../../../../hooks/usePiqcSignals').PiqcSignal[],
+  onSignalAction?: (kind: import('../../../../hooks/usePiqcSignals').PiqcSignalKind) => void,
 ) {
   const onMessagesChange = vi.fn();
   const onClose = vi.fn();
@@ -56,6 +57,7 @@ function setup(
       onClose={onClose}
       viewedStage={viewedStage}
       signals={signals}
+      onSignalAction={onSignalAction}
     />
   );
   const utils = render(<Wrapper />);
@@ -237,17 +239,72 @@ describe('AuditChatPanel — ambient signals in empty state', () => {
     expect(screen.queryByTestId('audit-chat-signals')).not.toBeInTheDocument();
   });
 
-  it('renders "PIQC noticed:" with one line per signal', () => {
+  it('renders "Worth a look:" with one line per signal (first-person partner voice)', () => {
     setup([], undefined, [
       { kind: 'sotr_awaiting_review',    count: 3, label: '3 parsed protocol items awaiting your review' },
       { kind: 'questionnaire_flagged',   count: 1, label: '1 questionnaire response you flagged as inconsistent' },
     ]);
     const block = screen.getByTestId('audit-chat-signals');
-    expect(block).toHaveTextContent(/PIQC noticed:/i);
+    // "Worth a look:" — first-person partner voice, consistent with the
+    // empty-state primer's "Hi — I've been reading along" register.
+    // Locking the copy so a future drift back to third-person ("PIQC
+    // noticed:") would fail this test loudly.
+    expect(block).toHaveTextContent(/Worth a look:/i);
+    expect(block).not.toHaveTextContent(/PIQC noticed:/i);
     expect(screen.getByTestId('audit-chat-signal-sotr_awaiting_review'))
       .toHaveTextContent('3 parsed protocol items awaiting your review');
     expect(screen.getByTestId('audit-chat-signal-questionnaire_flagged'))
       .toHaveTextContent('1 questionnaire response you flagged as inconsistent');
+  });
+
+  it('renders a "Take me there →" affordance per signal when onSignalAction is wired', () => {
+    setup(
+      [],
+      undefined,
+      [
+        { kind: 'sotr_awaiting_review',  count: 2, label: '2 items awaiting your review' },
+        { kind: 'questionnaire_flagged', count: 1, label: '1 flagged response' },
+      ],
+      vi.fn(),
+    );
+    expect(screen.getByTestId('audit-chat-signal-action-sotr_awaiting_review'))
+      .toBeInTheDocument();
+    expect(screen.getByTestId('audit-chat-signal-action-questionnaire_flagged'))
+      .toBeInTheDocument();
+  });
+
+  it('omits the action affordance when onSignalAction is not provided', () => {
+    setup([], undefined, [
+      { kind: 'sotr_awaiting_review', count: 2, label: '2 items awaiting your review' },
+    ]);
+    // Static text still renders; the shortcut just doesn't. Defensive default
+    // for any future caller that wants to render signals without enabling
+    // navigation.
+    expect(screen.getByTestId('audit-chat-signal-sotr_awaiting_review'))
+      .toBeInTheDocument();
+    expect(screen.queryByTestId('audit-chat-signal-action-sotr_awaiting_review'))
+      .not.toBeInTheDocument();
+  });
+
+  it('calls onSignalAction with the clicked signal kind', async () => {
+    const onSignalAction = vi.fn();
+    const user = userEvent.setup();
+    setup(
+      [],
+      undefined,
+      [
+        { kind: 'sotr_awaiting_review',  count: 2, label: '2 items awaiting your review' },
+        { kind: 'questionnaire_flagged', count: 1, label: '1 flagged response' },
+      ],
+      onSignalAction,
+    );
+
+    await user.click(screen.getByTestId('audit-chat-signal-action-questionnaire_flagged'));
+    expect(onSignalAction).toHaveBeenCalledWith('questionnaire_flagged');
+
+    await user.click(screen.getByTestId('audit-chat-signal-action-sotr_awaiting_review'));
+    expect(onSignalAction).toHaveBeenCalledWith('sotr_awaiting_review');
+    expect(onSignalAction).toHaveBeenCalledTimes(2);
   });
 
   it('hides the signals block once the thread is non-empty (PIQC stops haranguing mid-conversation)', () => {

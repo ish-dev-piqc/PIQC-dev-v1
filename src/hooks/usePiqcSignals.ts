@@ -57,6 +57,18 @@ export function usePiqcSignals(
     // Parallel fetches — both are RLS-gated and either may RLS-deny without
     // affecting the other. Promise.allSettled so one failure doesn't void
     // the other signal.
+    //
+    // Asymmetric error contracts (intentional, named here so a future reader
+    // doesn't try to "fix" the asymmetry):
+    //   - countWorksheetItemsForStudy THROWS on failure — the rejected
+    //     handler below logs + drops the SOTR signal.
+    //   - countQuestionnaireFlaggedResponses SWALLOWS + returns 0 — its
+    //     own silent-degrade contract (see signalsApi.ts header). It will
+    //     always appear as `fulfilled` here; the `count > 0` guard does
+    //     the work of deciding whether to surface a signal.
+    // The asymmetry exists because the SOTR helper predates PIQC and is
+    // shared with other surfaces; the questionnaire helper was written
+    // for this hook with the dock's no-throw doctrine baked in.
     const sotrP = protocolId
       ? countWorksheetItemsForStudy(protocolId)
       : Promise.resolve({ total: 0, awaitingReview: 0 });

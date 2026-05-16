@@ -344,6 +344,24 @@ export default function AuditWorkspaceShell() {
           /* signals — surface in the empty state so opening the panel
              from a dot-on-dock answers "what did you notice?" immediately. */
           signals={piqcSignals.signals}
+          /* onSignalAction — closes the panel + routes the auditor to the
+             matching surface. Removes 4 manual steps (close panel → find
+             header button → open drawer → review) into one click. This is
+             the move from "smart notification" to "smart partner."
+             Routing today:
+               - sotr_awaiting_review  → open the Protocol-source drawer
+               - questionnaire_flagged → navigate viewedStage to
+                                         QUESTIONNAIRE_REVIEW
+             A future signal kind needs a new branch here; if the routing
+             grows past ~4 cases, hoist into a stage-resolver helper. */
+          onSignalAction={(kind) => {
+            setChatOpen(false);
+            if (kind === 'sotr_awaiting_review') {
+              setProtocolSourceOpen(true);
+            } else if (kind === 'questionnaire_flagged') {
+              setViewedStage('QUESTIONNAIRE_REVIEW');
+            }
+          }}
         />
       )}
 
