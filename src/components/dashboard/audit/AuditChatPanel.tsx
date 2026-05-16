@@ -45,6 +45,10 @@ interface Props {
   /** Replace the parent-owned thread for this audit. Parent persists keyed by audit id. */
   onMessagesChange: (next: AuditChatMessage[]) => void;
   onClose: () => void;
+  /** The stage the auditor is currently looking at. Forwarded to the edge
+   *  function so PIQC can bias its replies. Optional; server validates and
+   *  falls back to no stage bias when omitted. */
+  viewedStage?: string;
 }
 
 export default function AuditChatPanel({
@@ -52,6 +56,7 @@ export default function AuditChatPanel({
   messages,
   onMessagesChange,
   onClose,
+  viewedStage,
 }: Props) {
   const panelRef     = useRef<HTMLDivElement>(null);
   const scrollerRef  = useRef<HTMLDivElement>(null);
@@ -109,7 +114,7 @@ export default function AuditChatPanel({
     setPending(true);
 
     try {
-      const reply = await requestAuditChat(auditId, sendable);
+      const reply = await requestAuditChat(auditId, sendable, viewedStage);
       const withReply = [...localNext, { role: 'assistant' as const, content: reply }];
       const trimmedReply = withReply.length > MAX_LOCAL_HISTORY
         ? withReply.slice(-MAX_LOCAL_HISTORY)
@@ -199,10 +204,17 @@ export default function AuditChatPanel({
                 Ask anything about this audit.
               </p>
               <p>
-                The assistant can see your approved risk summary, workspace
-                entries, and any report draft you've started. It can help you
-                spot gaps, restate findings in different words, or sanity-check
-                your reasoning before you commit a change.
+                The assistant reads along with you. It can recall from:
+              </p>
+              <ul className="list-disc pl-5 space-y-0.5 text-xs">
+                <li>the approved vendor questionnaire</li>
+                <li>protocol items you've reviewed in the parsed source list</li>
+                <li>your approved risk summary and any workspace findings</li>
+                <li>any report draft you've started</li>
+              </ul>
+              <p>
+                Use it to spot gaps, restate findings in different words, or
+                sanity-check your reasoning before you commit a change.
               </p>
               <p className="text-xs text-fg-muted">
                 It's advisory only — you stay the decision-maker. Nothing here

@@ -66,10 +66,31 @@ describe('requestAuditChat — happy path', () => {
     expect(headers.Authorization).toBe('Bearer user-jwt');
     expect(headers['Content-Type']).toBe('application/json');
     const body = JSON.parse((captured.init.body as string) ?? '{}');
+    // No viewed_stage key when caller didn't pass one — preserves wire-level
+    // back-compat with PR #73 clients.
     expect(body).toEqual({
       audit_id: 'audit-1',
       messages: [{ role: 'user', content: 'Did I miss anything in Stage 6?' }],
     });
+    expect('viewed_stage' in body).toBe(false);
+  });
+
+  it('includes viewed_stage in the body when the caller provides it', async () => {
+    mockGetSession.mockResolvedValueOnce({ data: { session: { access_token: 't' } } });
+    const captured: { init: RequestInit } = { init: {} };
+    stubFetch(({ init }) => {
+      captured.init = init;
+      return new Response(JSON.stringify({ reply: 'ok' }), { status: 200 });
+    });
+
+    await requestAuditChat(
+      'audit-1',
+      [{ role: 'user', content: 'q' }],
+      'AUDIT_CONDUCT',
+    );
+
+    const body = JSON.parse((captured.init.body as string) ?? '{}');
+    expect(body.viewed_stage).toBe('AUDIT_CONDUCT');
   });
 
   it('falls back to anon key when no session is present', async () => {
