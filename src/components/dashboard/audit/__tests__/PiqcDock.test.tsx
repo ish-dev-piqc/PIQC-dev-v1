@@ -49,3 +49,29 @@ describe('PiqcDock — summon affordance', () => {
     expect(screen.getByTestId('piqc-dock-mark')).toBeInTheDocument();
   });
 });
+
+describe('PiqcDock — ambient signal dot', () => {
+  it('hides the dot by default (no signals = no nudge)', () => {
+    render(<PiqcDock onOpen={() => {}} hidden={false} />);
+    expect(screen.queryByTestId('piqc-dock-signal-dot')).not.toBeInTheDocument();
+  });
+
+  it('hides the dot when hasSignals=false', () => {
+    render(<PiqcDock onOpen={() => {}} hidden={false} hasSignals={false} />);
+    expect(screen.queryByTestId('piqc-dock-signal-dot')).not.toBeInTheDocument();
+  });
+
+  it('renders the dot when hasSignals=true', () => {
+    render(<PiqcDock onOpen={() => {}} hidden={false} hasSignals={true} />);
+    expect(screen.getByTestId('piqc-dock-signal-dot')).toBeInTheDocument();
+  });
+
+  it('updates the aria-label when signals are present (a11y parity with the dot)', () => {
+    render(<PiqcDock onOpen={() => {}} hidden={false} hasSignals={true} />);
+    // The dot is decorative (aria-hidden) so screen-reader users need the
+    // signal information surfaced via the button's accessible name.
+    expect(
+      screen.getByLabelText(/PIQC has noticed something worth a look/i),
+    ).toBeInTheDocument();
+  });
+});

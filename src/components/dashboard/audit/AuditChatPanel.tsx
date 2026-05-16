@@ -9,6 +9,7 @@ import {
 } from '../../../lib/audit/chatApi';
 import { STAGE_LABELS } from '../../../lib/audit/labels';
 import type { AuditStage } from '../../../types/audit';
+import type { PiqcSignal, PiqcSignalKind } from '../../../hooks/usePiqcSignals';
 import PiqcMark from './PiqcMark';
 
 // =============================================================================
@@ -52,6 +53,19 @@ interface Props {
    *  function so PIQC can bias its replies. Optional; server validates and
    *  falls back to no stage bias when omitted. */
   viewedStage?: string;
+  /** Ambient signals PIQC has noticed about this audit. Rendered in the
+   *  empty state when present; never shown alongside thread turns (PIQC
+   *  doesn't keep haranguing the auditor mid-conversation). Empty array
+   *  treated the same as undefined. */
+  signals?: PiqcSignal[];
+  /** Callback invoked when the auditor clicks a signal's "Take me there"
+   *  shortcut. The shell wires this to navigate to the right surface
+   *  (open the SOTR drawer, navigate to the questionnaire stage, etc.).
+   *  Optional — when omitted, signal rows render as static text without
+   *  the shortcut affordance. Keeping it optional preserves backward
+   *  compat for any future caller that wants to render signals without
+   *  enabling navigation. */
+  onSignalAction?: (kind: PiqcSignalKind) => void;
 }
 
 export default function AuditChatPanel({
@@ -60,6 +74,8 @@ export default function AuditChatPanel({
   onMessagesChange,
   onClose,
   viewedStage,
+  signals,
+  onSignalAction,
 }: Props) {
   const panelRef     = useRef<HTMLDivElement>(null);
   const scrollerRef  = useRef<HTMLDivElement>(null);
@@ -234,6 +250,53 @@ export default function AuditChatPanel({
               <p className="text-fg-heading font-medium">
                 Hi — I've been reading along.
               </p>
+
+              {/* Ambient signals — when PIQC has noticed something specific,
+                  it leads with that before the generic primer. The auditor
+                  came here because the dock's dot caught their eye; landing
+                  on the signal answers "what did you notice?" within one
+                  read. Amber accent mirrors the dot — same color = same
+                  affordance, no new vocabulary.
+                  Voice: first-person partner ("Worth a look:") rather than
+                  third-person system ("PIQC noticed:") — keeps the empty
+                  state's tonal register consistent ("Hi — I've been reading
+                  along" / "I can recall from…" / "I'm advisory only").
+                  Each signal renders with a "Take me there →" shortcut when
+                  onSignalAction is wired, so the auditor goes from
+                  awareness → action in one click instead of five. */}
+              {signals && signals.length > 0 && (
+                <div
+                  data-testid="audit-chat-signals"
+                  className="rounded-md border border-amber-300/60 dark:border-amber-500/30 bg-amber-50/70 dark:bg-amber-500/[0.06] px-3 py-2.5"
+                >
+                  <p className="text-xs font-semibold text-amber-800 dark:text-amber-200 mb-1.5">
+                    Worth a look:
+                  </p>
+                  <ul className="space-y-1.5 text-xs text-amber-900/90 dark:text-amber-100/90">
+                    {signals.map((s) => (
+                      <li
+                        key={s.kind}
+                        data-testid={`audit-chat-signal-${s.kind}`}
+                        className="flex items-start gap-2"
+                      >
+                        <span className="flex-1 min-w-0">{s.label}</span>
+                        {onSignalAction && (
+                          <button
+                            type="button"
+                            onClick={() => onSignalAction(s.kind)}
+                            data-testid={`audit-chat-signal-action-${s.kind}`}
+                            className="flex-shrink-0 text-[11px] font-medium text-amber-800 dark:text-amber-200 hover:text-amber-900 dark:hover:text-amber-100 underline underline-offset-2 decoration-amber-400/50 hover:decoration-amber-500"
+                            aria-label={`Take me to ${s.label}`}
+                          >
+                            Take me there →
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <p>
                 Ask me anything about this audit. I can recall from:
               </p>

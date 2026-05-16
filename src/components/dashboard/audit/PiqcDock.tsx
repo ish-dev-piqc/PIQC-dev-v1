@@ -42,9 +42,14 @@ interface Props {
    *  its place. Kept as a prop (rather than read from a context) so this
    *  component stays trivially testable. */
   hidden: boolean;
+  /** When true, render a subtle amber dot on the dock mark to signal that
+   *  PIQC has noticed something the auditor may want to look at. The dot
+   *  carries NO count — count + detail live inside the panel. The dock
+   *  signals presence-of-attention, not magnitude-of-attention. */
+  hasSignals?: boolean;
 }
 
-export default function PiqcDock({ onOpen, hidden }: Props) {
+export default function PiqcDock({ onOpen, hidden, hasSignals = false }: Props) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
   if (hidden) return null;
@@ -54,11 +59,20 @@ export default function PiqcDock({ onOpen, hidden }: Props) {
       type="button"
       onClick={onOpen}
       data-testid="piqc-dock"
-      aria-label="Ask PIQC — open the audit assistant"
+      aria-label={
+        hasSignals
+          ? 'Ask PIQC — open the audit assistant. PIQC has noticed something worth a look.'
+          : 'Ask PIQC — open the audit assistant'
+      }
       /* Pronunciation cue lives in the hover layer. PIQC is unrecoverable
          as "pixie" in writing without it, and the dock is the auditor's
-         first encounter with the name. */
-      title="Ask PIQC (pronounced 'pixie') — open the audit assistant"
+         first encounter with the name. Title also mirrors the signal state
+         so the hover-only "what's the dot" answer is right there. */
+      title={
+        hasSignals
+          ? "Ask PIQC (pronounced 'pixie') — PIQC noticed something worth a look"
+          : "Ask PIQC (pronounced 'pixie') — open the audit assistant"
+      }
       className={[
         // Position: bottom-right, comfortable inset from edges. z-30 so the
         // z-40 chat panel always wins when it opens; z-50 SOTR per-item
@@ -80,13 +94,30 @@ export default function PiqcDock({ onOpen, hidden }: Props) {
     >
       <span
         data-testid="piqc-dock-mark"
-        className={`inline-flex items-center justify-center w-7 h-7 rounded-full ${
+        className={`relative inline-flex items-center justify-center w-7 h-7 rounded-full ${
           isLight
             ? 'bg-[#4a6fa5]/10 text-[#4a6fa5]'
             : 'bg-[#4a6fa5]/15 text-[#6e8fb5]'
         }`}
       >
         <PiqcMark size={14} />
+        {/* Signal dot — small amber pip at top-right of the mark badge.
+            Amber = "attention without alarm" (mirrors the Protocol-source
+            review-queue badge convention in AuditWorkspaceShell). The dot
+            carries NO count; details + counts live inside the panel. The
+            ring + soft glow help the dot read at small sizes without
+            shouting. */}
+        {hasSignals && (
+          <span
+            data-testid="piqc-dock-signal-dot"
+            aria-hidden
+            className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ${
+              isLight
+                ? 'bg-amber-500 ring-white'
+                : 'bg-amber-400 ring-[#131a22]'
+            }`}
+          />
+        )}
       </span>
       <span>Ask PIQC</span>
     </button>
