@@ -32,6 +32,10 @@ export interface MockReportDraft {
   // modified the text. Optional only for backward compat; server defaults to
   // 'templated' so every freshly-fetched row should always have a value.
   executive_summary_source?: 'templated' | 'llm' | 'auditor_edited';
+  // Conclusions provenance — same shape, independent lifecycle from exec
+  // summary. Auditor can accept the LLM exec summary while rewriting the
+  // conclusions, or vice versa; each field tracks its own trail.
+  conclusions_source?: 'templated' | 'llm' | 'auditor_edited';
 }
 
 export const MOCK_REPORTS: Record<string, MockReportDraft | null> = {

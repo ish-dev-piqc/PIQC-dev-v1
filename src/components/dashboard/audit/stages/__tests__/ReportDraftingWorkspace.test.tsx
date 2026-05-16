@@ -113,6 +113,7 @@ vi.mock('../../../../../lib/audit/reportApi', () => ({
   upsertReportDraft: vi.fn(),
   approveReportDraft: vi.fn(),
   requestLlmExecutiveSummary: vi.fn(),
+  requestLlmConclusions: vi.fn(),
   LlmExecutiveSummaryError: MockLlmError,
 }));
 
@@ -122,12 +123,14 @@ import {
   prefillReportDraft,
   upsertReportDraft,
   requestLlmExecutiveSummary,
+  requestLlmConclusions,
 } from '../../../../../lib/audit/reportApi';
 
 const mockFetch = fetchReportDraft as ReturnType<typeof vi.fn>;
 const mockPrefill = prefillReportDraft as ReturnType<typeof vi.fn>;
 const mockUpsert = upsertReportDraft as ReturnType<typeof vi.fn>;
 const mockRequestLlm = requestLlmExecutiveSummary as ReturnType<typeof vi.fn>;
+const mockRequestLlmConclusions = requestLlmConclusions as ReturnType<typeof vi.fn>;
 
 // -----------------------------------------------------------------------------
 // Fixtures
@@ -148,6 +151,11 @@ function makeReportDraft(overrides: Partial<MockReportDraft> = {}): MockReportDr
     source_risk_summary_id: 'rs-1',
     prefilled_at: '2026-05-16T00:00:00Z',
     executive_summary_source: 'templated',
+    // Default the conclusions provenance to 'auditor_edited' so the conclusions
+    // auto-fire branch is OFF by default. Exec-summary-focused tests stay
+    // single-branch and assert cleanly. Conclusions tests explicitly override
+    // to 'templated' to exercise their branch.
+    conclusions_source: 'auditor_edited',
     ...overrides,
   };
 }
@@ -165,6 +173,10 @@ describe('ReportDraftingWorkspace — LLM auto-fire guards (PR #69)', () => {
   it('FIRES + PERSISTS: templated draft + DRAFT status → LLM runs, result upserted with source="llm" AND propagates back to context', async () => {
     const templated = makeReportDraft({ executive_summary_source: 'templated' });
     setupContext(templated);
+    // First call: initial load. Second call: pre-write refetch from inside
+    // the exec-summary auto-fire branch (added with conclusions LLM to avoid
+    // clobbering a concurrent conclusions write). Both return the same
+    // templated row since conclusions LLM is off (auditor_edited default).
     mockFetch.mockResolvedValue(templated);
     mockRequestLlm.mockResolvedValueOnce('AI-refined narrative.');
     // Upsert returns the refined row so the propagation path through
@@ -185,7 +197,8 @@ describe('ReportDraftingWorkspace — LLM auto-fire guards (PR #69)', () => {
     });
 
     // The narrative must be persisted with the 'llm' provenance marker so the
-    // audit trail records the LLM transition.
+    // audit trail records the LLM transition. The conclusionsSource (6th arg)
+    // is undefined — exec-summary write should not touch conclusions provenance.
     expect(mockUpsert).toHaveBeenCalledWith(
       'audit-1',
       'AI-refined narrative.',
@@ -284,7 +297,7 @@ describe('ReportDraftingWorkspace — LLM auto-fire guards (PR #69)', () => {
     expect(mockUpsert).not.toHaveBeenCalled();
     // Dev-team debug signal preserved even though the UX degraded gracefully.
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[ReportDraftingWorkspace] LLM refinement failed'),
+      expect.stringContaining('[ReportDraftingWorkspace] LLM exec-summary refinement failed'),
       expect.anything(),
     );
 
@@ -433,5 +446,216 @@ describe('ReportDraftingWorkspace — agentic-UX assertions', () => {
     });
 
     warnSpy.mockRestore();
+  });
+});
+
+// =============================================================================
+// Conclusions LLM auto-fire guards (this PR — mirrors exec-summary guards)
+//
+// The conclusions LLM refinement is a second auto-fire branch in the same
+// useEffect. Same four-guard shape as exec summary (PR #69):
+//
+//   1. draft exists
+//   2. draft.conclusions_source === 'templated'
+//   3. draft.approval_status === 'DRAFT'
+//   4. !attemptedLlmConclusionsRef.current.has(auditId)
+//
+// Independent failure modes from the exec-summary branch — a regression in
+// conclusions guards wouldn't be caught by exec-summary tests because the
+// underlying `?? null` / `=== 'templated'` decisions are duplicated in
+// parallel branches.
+//
+// Hits the same "GUARD on approved" invariant — GxP-bad if approved reports
+// silently demote back to DRAFT because a background conclusions refinement
+// fired.
+// =============================================================================
+
+describe('ReportDraftingWorkspace — Conclusions LLM auto-fire guards', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPrefill.mockResolvedValue(null);
+    // Default conclusions LLM mock to never-resolve so a stray fire in an
+    // exec-summary-focused test doesn't leak into assertions here.
+    mockRequestLlmConclusions.mockImplementation(() => new Promise(() => {}));
+  });
+
+  it('FIRES + PERSISTS: conclusions_source="templated" + DRAFT → LLM runs, upserted with conclusionsSource="llm"', async () => {
+    // Exec summary is 'auditor_edited' so its branch is OFF — only the
+    // conclusions branch should fire. This isolates the conclusions assertion.
+    const templatedConclusions = makeReportDraft({
+      executive_summary_source: 'auditor_edited',
+      conclusions_source: 'templated',
+    });
+    setupContext(templatedConclusions);
+    mockFetch.mockResolvedValue(templatedConclusions);
+    mockRequestLlmConclusions.mockReset();
+    mockRequestLlmConclusions.mockResolvedValueOnce('AI-refined conclusions.');
+    const refinedDraft = makeReportDraft({
+      conclusions: 'AI-refined conclusions.',
+      conclusions_source: 'llm',
+    });
+    mockUpsert.mockResolvedValueOnce(refinedDraft);
+
+    render(<ReportDraftingWorkspace />);
+
+    await waitFor(() => {
+      expect(mockRequestLlmConclusions).toHaveBeenCalledTimes(1);
+      expect(mockRequestLlmConclusions).toHaveBeenCalledWith('audit-1');
+    });
+
+    // Upsert call shape: executiveSummarySource passes undefined (5th arg)
+    // so the server preserves the previous exec-summary provenance;
+    // conclusionsSource is 'llm' (6th arg) so the conclusions trail flips.
+    // The asymmetry — only writing the field this branch owns — is the
+    // contract that lets the two parallel branches not clobber each other.
+    expect(mockUpsert).toHaveBeenCalledWith(
+      'audit-1',
+      templatedConclusions.executive_summary,
+      'AI-refined conclusions.',
+      'Conclusions refined by LLM',
+      undefined,
+      'llm',
+    );
+
+    await waitFor(() => {
+      expect(mockSetReports).toHaveBeenCalled();
+    });
+  });
+
+  it('GUARD: conclusions_source="llm" → conclusions LLM does NOT re-fire', async () => {
+    const refined = makeReportDraft({
+      executive_summary_source: 'auditor_edited',
+      conclusions_source: 'llm',
+      conclusions: 'Existing AI-drafted conclusions.',
+    });
+    setupContext(refined);
+    mockFetch.mockResolvedValue(refined);
+
+    render(<ReportDraftingWorkspace />);
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(mockRequestLlmConclusions).not.toHaveBeenCalled();
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it('GUARD: conclusions_source="auditor_edited" → conclusions LLM does NOT re-fire', async () => {
+    const edited = makeReportDraft({
+      executive_summary_source: 'auditor_edited',
+      conclusions_source: 'auditor_edited',
+    });
+    setupContext(edited);
+    mockFetch.mockResolvedValue(edited);
+
+    render(<ReportDraftingWorkspace />);
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(mockRequestLlmConclusions).not.toHaveBeenCalled();
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it('GUARD: approval_status="APPROVED" → conclusions LLM does NOT fire (skip-on-approved)', async () => {
+    // Same GxP invariant as exec summary: approved reports must never silently
+    // demote back to DRAFT because of a background refinement.
+    const approved = makeReportDraft({
+      executive_summary_source: 'auditor_edited',
+      conclusions_source: 'templated',
+      approval_status: 'APPROVED',
+      approved_at: '2026-05-16T01:00:00Z',
+    });
+    setupContext(approved);
+    mockFetch.mockResolvedValue(approved);
+
+    render(<ReportDraftingWorkspace />);
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(mockRequestLlmConclusions).not.toHaveBeenCalled();
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it('FALLBACK: conclusions LLM throws → templated stays, console.warn fires, fallback note renders', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const templatedConclusions = makeReportDraft({
+      executive_summary_source: 'auditor_edited',
+      conclusions_source: 'templated',
+    });
+    setupContext(templatedConclusions);
+    mockFetch.mockResolvedValue(templatedConclusions);
+    mockRequestLlmConclusions.mockReset();
+    mockRequestLlmConclusions.mockRejectedValueOnce(new MockLlmError('Service unavailable', 502));
+
+    render(<ReportDraftingWorkspace />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('conclusions-llm-fallback')).toBeInTheDocument();
+    });
+
+    expect(mockRequestLlmConclusions).toHaveBeenCalledOnce();
+    expect(mockUpsert).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[ReportDraftingWorkspace] LLM conclusions refinement failed'),
+      expect.anything(),
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  it('UI: conclusions source chip swaps to "Drafting with AI…" during refinement', async () => {
+    let resolveLlm: (value: string) => void = () => {};
+    const llmPromise = new Promise<string>((resolve) => {
+      resolveLlm = resolve;
+    });
+    const templatedConclusions = makeReportDraft({
+      executive_summary_source: 'auditor_edited',
+      conclusions_source: 'templated',
+    });
+    setupContext(templatedConclusions);
+    mockFetch.mockResolvedValue(templatedConclusions);
+    mockRequestLlmConclusions.mockReset();
+    mockRequestLlmConclusions.mockReturnValueOnce(llmPromise);
+
+    try {
+      render(<ReportDraftingWorkspace />);
+
+      await waitFor(() => {
+        const chip = screen.getByTestId('conclusions-source-chip');
+        expect(chip).toHaveAttribute('data-source', 'refining');
+        expect(chip).toHaveTextContent(/drafting with ai/i);
+      });
+    } finally {
+      resolveLlm('AI-refined conclusions.');
+    }
+  });
+
+  it('UI: conclusions Edit button disabled during refinement', async () => {
+    let resolveLlm: (value: string) => void = () => {};
+    const llmPromise = new Promise<string>((resolve) => {
+      resolveLlm = resolve;
+    });
+    const templatedConclusions = makeReportDraft({
+      executive_summary_source: 'auditor_edited',
+      conclusions_source: 'templated',
+    });
+    setupContext(templatedConclusions);
+    mockFetch.mockResolvedValue(templatedConclusions);
+    mockRequestLlmConclusions.mockReset();
+    mockRequestLlmConclusions.mockReturnValueOnce(llmPromise);
+
+    try {
+      render(<ReportDraftingWorkspace />);
+
+      await waitFor(() => {
+        const editButton = screen.getByTestId('conclusions-edit-button');
+        expect(editButton).toBeDisabled();
+        expect(editButton).toHaveAttribute(
+          'title',
+          expect.stringContaining('Wait for the agent'),
+        );
+      });
+    } finally {
+      resolveLlm('AI-refined conclusions.');
+    }
   });
 });

@@ -27,10 +27,13 @@ interface ReportDraftRow {
   // rows; present when the report was agent-bootstrapped.
   source_risk_summary_id?: string | null;
   prefilled_at?: string | null;
-  // Exec-summary provenance (this PR). 'templated' | 'llm' | 'auditor_edited'.
+  // Exec-summary provenance (PR #69). 'templated' | 'llm' | 'auditor_edited'.
   // NOT NULL on the server (DEFAULT 'templated' for backfill); optional here
   // only to allow rows fetched before the migration applied to deserialize.
   executive_summary_source?: 'templated' | 'llm' | 'auditor_edited';
+  // Conclusions provenance (this PR). Same shape and lifecycle as exec-summary
+  // source; the two fields evolve independently as the auditor edits each.
+  conclusions_source?: 'templated' | 'llm' | 'auditor_edited';
 }
 
 async function resolveUserName(userId: string | null): Promise<string | null> {
@@ -62,6 +65,7 @@ async function flattenRow(row: ReportDraftRow): Promise<MockReportDraft> {
     source_risk_summary_id: row.source_risk_summary_id ?? null,
     prefilled_at: row.prefilled_at ?? null,
     executive_summary_source: row.executive_summary_source ?? 'templated',
+    conclusions_source: row.conclusions_source ?? 'templated',
   };
 }
 
@@ -96,6 +100,9 @@ export async function upsertReportDraft(
    *  on the row. Omitted → server preserves the existing value (so saving an
    *  edit to `conclusions` only doesn't reset the exec-summary trail). */
   executiveSummarySource?: 'templated' | 'llm' | 'auditor_edited',
+  /** Optional. Symmetric with executiveSummarySource — server preserves the
+   *  existing conclusions provenance when omitted. */
+  conclusionsSource?: 'templated' | 'llm' | 'auditor_edited',
 ): Promise<MockReportDraft | null> {
   const { data, error } = await supabase.rpc('audit_mode_upsert_report_draft', {
     p_audit_id: auditId,
@@ -103,6 +110,7 @@ export async function upsertReportDraft(
     p_conclusions: conclusions,
     p_reason: reason ?? null,
     p_executive_summary_source: executiveSummarySource ?? null,
+    p_conclusions_source: conclusionsSource ?? null,
   });
   if (error) {
     console.error('[reportApi] upsertReportDraft error:', error);
@@ -136,8 +144,13 @@ export class LlmExecutiveSummaryError extends Error {
   }
 }
 
-export async function requestLlmExecutiveSummary(
+// Shared callsite for both Stage 7 LLM sections (exec summary + conclusions).
+// The edge function branches on `section` server-side; client-side both flows
+// share auth, error-shape, and fetch ergonomics. Keeping one helper avoids
+// drift between the two narrative pathways.
+async function requestLlmSection(
   auditId: string,
+  section: 'executive_summary' | 'conclusions',
 ): Promise<string> {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
@@ -151,7 +164,7 @@ export async function requestLlmExecutiveSummary(
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ audit_id: auditId }),
+    body: JSON.stringify({ audit_id: auditId, section }),
   });
 
   const data = (await res.json().catch(() => ({}))) as {
@@ -169,6 +182,14 @@ export async function requestLlmExecutiveSummary(
     throw new LlmExecutiveSummaryError('LLM service returned empty narrative', 502);
   }
   return data.narrative;
+}
+
+export async function requestLlmExecutiveSummary(auditId: string): Promise<string> {
+  return requestLlmSection(auditId, 'executive_summary');
+}
+
+export async function requestLlmConclusions(auditId: string): Promise<string> {
+  return requestLlmSection(auditId, 'conclusions');
 }
 
 export async function approveReportDraft(
