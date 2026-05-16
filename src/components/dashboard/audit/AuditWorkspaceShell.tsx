@@ -3,12 +3,14 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useAudit } from '../../../context/AuditContext';
 import type { AuditStage } from '../../../types/audit';
 import { STAGE_LABELS, AUDIT_TYPE_LABELS, AUDIT_STATUS_LABELS } from '../../../lib/audit/labels';
-import { ChevronDown, Sparkles, FileSearch, Plus } from 'lucide-react';
+import { ChevronDown, Sparkles, FileSearch, Plus, MessageSquare } from 'lucide-react';
 import StageNav from './StageNav';
 import AuditRequiredGate from './AuditRequiredGate';
 import RiskSummaryPanel from './RiskSummaryPanel';
 import SourceTruthListDrawer from '../../sotr/SourceTruthListDrawer';
 import NewAuditDrawer from './onboarding/NewAuditDrawer';
+import AuditChatPanel from './AuditChatPanel';
+import type { AuditChatMessage } from '../../../lib/audit/chatApi';
 import { useWorksheetReviewCount } from '../../../hooks/useWorksheetReviewCount';
 import { AUDIT_STAGES } from '../../../types/audit';
 import IntakeWorkspace from './stages/IntakeWorkspace';
@@ -67,6 +69,12 @@ export default function AuditWorkspaceShell() {
   // auditors can start a new audit without leaving the workspace.
   const [newAuditOpen, setNewAuditOpen] = useState(false);
   const [pendingNewAuditId, setPendingNewAuditId] = useState<string | null>(null);
+  // F-3: Audit-mode chat panel. Open/close is UI state; the thread itself
+  // is owned by the shell so it survives drawer close while the same audit
+  // stays active. Keyed per audit id — switching audits clears the prior
+  // thread (see useEffect on activeAudit?.id below) to prevent context bleed.
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatThreads, setChatThreads] = useState<Record<string, AuditChatMessage[]>>({});
   // F-2: bump on drawer close so the badge picks up newly reviewed items
   // without forcing a remount. Increment-only token; identity matters, value
   // doesn't.
@@ -86,8 +94,19 @@ export default function AuditWorkspaceShell() {
   }, [pendingNewAuditId, audits, setActiveAudit]);
 
   // Close the protocol-source drawer if the active audit changes mid-session.
+  // Same boundary for the chat panel — and clear the per-audit thread for
+  // any audit that is NOT currently active, so an auditor doesn't accumulate
+  // stale threads in memory across a long session of switching audits. We
+  // intentionally keep the active audit's thread (if any) untouched so a
+  // mid-switch re-render doesn't drop work.
   useEffect(() => {
     setProtocolSourceOpen(false);
+    setChatOpen(false);
+    setChatThreads((prev) => {
+      if (!activeAudit) return {};
+      const keep = prev[activeAudit.id];
+      return keep ? { [activeAudit.id]: keep } : {};
+    });
   }, [activeAudit?.id]);
 
   // Snap the viewed stage to the audit's current_stage when the active audit
@@ -221,6 +240,24 @@ export default function AuditWorkspaceShell() {
                   </span>
                 )}
               </button>
+              {/* Audit-assistant chat — opens a right-edge slide-over with a
+                  thread scoped to this audit (F-3). Ephemeral by design;
+                  advisory only. Available from every stage because the
+                  auditor's questions don't respect stage boundaries. */}
+              <button
+                type="button"
+                onClick={() => setChatOpen(true)}
+                title="Open the audit assistant — ask freeform questions about this audit"
+                data-testid="audit-chat-open-button"
+                className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors ${
+                  isLight
+                    ? 'bg-white border-[#dce4ed] text-[#374152] hover:bg-[#f5f7fa]'
+                    : 'bg-[#131a22] border-white/[0.08] text-[#d2d7e0] hover:bg-white/[0.04]'
+                }`}
+              >
+                <MessageSquare size={12} />
+                Ask
+              </button>
               {/* Risk summary button — visible below xl where the right rail is hidden */}
               <button
                 type="button"
@@ -271,6 +308,20 @@ export default function AuditWorkspaceShell() {
             // during this drawer session.
             setReviewCountToken((n) => n + 1);
           }}
+        />
+      )}
+
+      {/* Audit-assistant chat panel (F-3). Mount only while open so the
+          backdrop + focus traps aren't in the DOM during normal stage work.
+          Thread state is owned by the shell, keyed per audit id. */}
+      {chatOpen && (
+        <AuditChatPanel
+          auditId={activeAudit.id}
+          messages={chatThreads[activeAudit.id] ?? []}
+          onMessagesChange={(next) =>
+            setChatThreads((prev) => ({ ...prev, [activeAudit.id]: next }))
+          }
+          onClose={() => setChatOpen(false)}
         />
       )}
 
