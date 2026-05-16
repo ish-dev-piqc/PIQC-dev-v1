@@ -61,8 +61,10 @@ vi.mock('../../../../../context/AuditContext', () => ({
   }),
 }));
 
-// Reports map is read at render time. We seed it in beforeEach so the
-// rendered draft matches what fetchReportDraft returns on load.
+// Reports map is read at render time. We seed it via setupContext() in each
+// test so the rendered draft matches what fetchReportDraft returns on load.
+// The let-binding is captured by the vi.mock factory; setupContext mutates
+// the let so the factory's next call sees the new value.
 let mockReportsMap: Record<string, MockReportDraft | null> = {};
 const mockSetReports = vi.fn();
 vi.mock('../../../../../context/AuditDataContext', () => ({
@@ -79,6 +81,22 @@ vi.mock('../../../../../context/AuditDataContext', () => ({
     setReports: mockSetReports,
   }),
 }));
+
+/**
+ * Forces explicit per-test seeding of the mocked context state. Without this
+ * helper, a test that forgets to set mockReportsMap inherits the previous
+ * test's state (beforeEach reassigns to {} but the failure mode is implicit).
+ * Pass the draft you want both fetchReportDraft and useAuditData.reports to
+ * return; pass null for "no draft on the audit."
+ */
+function setupContext(draft: MockReportDraft | null) {
+  mockReportsMap = draft ? { 'audit-1': draft } : { 'audit-1': null };
+  mockActiveAudit = {
+    id: 'audit-1',
+    current_stage: 'REPORT_DRAFTING',
+    status: 'IN_PROGRESS',
+  };
+}
 
 class MockLlmError extends Error {
   status: number;
@@ -141,21 +159,23 @@ function makeReportDraft(overrides: Partial<MockReportDraft> = {}): MockReportDr
 describe('ReportDraftingWorkspace — LLM auto-fire guards (PR #69)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReportsMap = {};
-    mockActiveAudit = {
-      id: 'audit-1',
-      current_stage: 'REPORT_DRAFTING',
-      status: 'IN_PROGRESS',
-    };
     mockPrefill.mockResolvedValue(null);
-    mockUpsert.mockResolvedValue(null);
   });
 
-  it('FIRES + PERSISTS: templated draft + DRAFT status → LLM runs, result upserted with source="llm"', async () => {
+  it('FIRES + PERSISTS: templated draft + DRAFT status → LLM runs, result upserted with source="llm" AND propagates back to context', async () => {
     const templated = makeReportDraft({ executive_summary_source: 'templated' });
+    setupContext(templated);
     mockFetch.mockResolvedValue(templated);
-    mockReportsMap = { 'audit-1': templated };
     mockRequestLlm.mockResolvedValueOnce('AI-refined narrative.');
+    // Upsert returns the refined row so the propagation path through
+    // setReports is exercised. If the production code's
+    // `if (refined) setReports(...)` ever flips to swallow the result,
+    // the mockSetReports assertion below catches it.
+    const refinedDraft = makeReportDraft({
+      executive_summary: 'AI-refined narrative.',
+      executive_summary_source: 'llm',
+    });
+    mockUpsert.mockResolvedValueOnce(refinedDraft);
 
     render(<ReportDraftingWorkspace />);
 
@@ -173,6 +193,14 @@ describe('ReportDraftingWorkspace — LLM auto-fire guards (PR #69)', () => {
       'Executive summary refined by LLM',
       'llm',
     );
+
+    // Propagation path: the refined row must reach the context store so the
+    // UI flips its source chip from "Templated draft" to "AI-drafted". This
+    // catches the regression class "upsert returns undefined silently and
+    // the UI never sees the refinement."
+    await waitFor(() => {
+      expect(mockSetReports).toHaveBeenCalled();
+    });
   });
 
   it('GUARD: source="llm" → LLM does NOT re-fire (already refined)', async () => {
@@ -182,16 +210,15 @@ describe('ReportDraftingWorkspace — LLM auto-fire guards (PR #69)', () => {
       executive_summary_source: 'llm',
       executive_summary: 'Existing AI-drafted narrative.',
     });
+    setupContext(refined);
     mockFetch.mockResolvedValue(refined);
-    mockReportsMap = { 'audit-1': refined };
 
     render(<ReportDraftingWorkspace />);
 
     // Give the effect time to chain through fetchReportDraft.
     await waitFor(() => expect(mockFetch).toHaveBeenCalled());
-    // Then assert no LLM call ever fired. Small delay lets a buggy
-    // implementation surface — without this, the assertion races against
-    // any pending microtask that might still call.
+    // Then assert no LLM call ever fired. The microtask flush lets a buggy
+    // implementation's pending decision branch fire and fail loudly.
     await Promise.resolve(); // flush one microtask tick so the LLM-decision branch has run
     expect(mockRequestLlm).not.toHaveBeenCalled();
     expect(mockUpsert).not.toHaveBeenCalled();
@@ -202,8 +229,8 @@ describe('ReportDraftingWorkspace — LLM auto-fire guards (PR #69)', () => {
       executive_summary_source: 'auditor_edited',
       executive_summary: 'Auditor-written narrative.',
     });
+    setupContext(edited);
     mockFetch.mockResolvedValue(edited);
-    mockReportsMap = { 'audit-1': edited };
 
     render(<ReportDraftingWorkspace />);
 
@@ -222,8 +249,8 @@ describe('ReportDraftingWorkspace — LLM auto-fire guards (PR #69)', () => {
       approval_status: 'APPROVED',
       approved_at: '2026-05-16T01:00:00Z',
     });
+    setupContext(approved);
     mockFetch.mockResolvedValue(approved);
-    mockReportsMap = { 'audit-1': approved };
 
     render(<ReportDraftingWorkspace />);
 
@@ -240,8 +267,8 @@ describe('ReportDraftingWorkspace — LLM auto-fire guards (PR #69)', () => {
     //   - the dismissable fallback note appears in the DOM (auditor signal)
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const templated = makeReportDraft({ executive_summary_source: 'templated' });
+    setupContext(templated);
     mockFetch.mockResolvedValue(templated);
-    mockReportsMap = { 'audit-1': templated };
     mockRequestLlm.mockRejectedValueOnce(new MockLlmError('Service unavailable', 502));
 
     render(<ReportDraftingWorkspace />);
