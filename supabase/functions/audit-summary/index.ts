@@ -220,12 +220,22 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: "audit_id is required" }),
       { status: 400, headers: jsonHeaders });
   }
-  // Section discriminator. Defaults to 'executive_summary' so existing clients
-  // (PR #69) keep working unchanged. New 'conclusions' callsite added in this
-  // PR. The two sections share context-fetch and OpenAI plumbing — only the
-  // system prompt + max_tokens differ.
-  const section: "executive_summary" | "conclusions" =
-    body.section === "conclusions" ? "conclusions" : "executive_summary";
+  // Section discriminator. Defaults to 'executive_summary' (back-compat with
+  // PR #69 clients that don't send the param). Any *explicit* value other
+  // than the two known sections is a programming bug — fail loudly with a
+  // 400 rather than silently routing to exec-summary, which would write
+  // conclusions text with exec-summary copy.
+  let section: "executive_summary" | "conclusions" = "executive_summary";
+  if (body.section !== undefined) {
+    if (body.section === "executive_summary" || body.section === "conclusions") {
+      section = body.section;
+    } else {
+      return new Response(
+        JSON.stringify({ error: `Unknown section: ${String(body.section)}` }),
+        { status: 400, headers: jsonHeaders },
+      );
+    }
+  }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");

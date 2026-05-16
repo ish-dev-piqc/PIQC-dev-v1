@@ -150,22 +150,24 @@ export default function ReportDraftingWorkspace() {
       ) {
         attemptedLlmRef.current.add(id);
         setLlmRefining(true);
-        const draftSnapshot = draft;
         llmTasks.push(
           (async () => {
             try {
               const narrative = await requestLlmExecutiveSummary(id);
               // Refetch right before write to pick up any conclusions LLM
-              // refinement that raced ahead. Without this, if conclusions
-              // resolves first and writes 'llm', this write would clobber
-              // it with the stale templated conclusions text from the
-              // pre-LLM snapshot.
+              // refinement that raced ahead. If the refetch FAILS (returns
+              // null — RLS denial, network blip), bail rather than fall back
+              // to the stale templated snapshot — that fallback could clobber
+              // a conclusions LLM write that already landed. Templated text
+              // stays in place; the silent-with-signal fallback note shows.
               const current = await fetchReportDraft(id);
-              const conclusionsText = current?.conclusions ?? draftSnapshot.conclusions;
+              if (!current) {
+                throw new Error('Pre-write refetch returned null; refusing to write to avoid stale clobber');
+              }
               const refined = await upsertReportDraft(
                 id,
                 narrative,
-                conclusionsText,
+                current.conclusions,
                 'Executive summary refined by LLM',
                 'llm',
               );
@@ -194,20 +196,23 @@ export default function ReportDraftingWorkspace() {
       ) {
         attemptedLlmConclusionsRef.current.add(id);
         setLlmConclusionsRefining(true);
-        const draftSnapshot = draft;
         llmTasks.push(
           (async () => {
             try {
               const narrative = await requestLlmConclusions(id);
-              // Refetch right before write to avoid clobbering the exec-summary
-              // refinement that may have raced ahead. The RPC is the
-              // serialization point; reading the current row gives us its
-              // freshly-written executive_summary text.
+              // Same refetch-or-bail contract as the exec-summary branch:
+              // if the refetch fails we must NOT fall back to the stale
+              // snapshot, because a successful exec-summary LLM write may
+              // have already landed and the snapshot still holds templated
+              // text. Better to leave the templated conclusions in place and
+              // surface the fallback note than silently demote exec back.
               const current = await fetchReportDraft(id);
-              const execText = current?.executive_summary ?? draftSnapshot.executive_summary;
+              if (!current) {
+                throw new Error('Pre-write refetch returned null; refusing to write to avoid stale clobber');
+              }
               const refined = await upsertReportDraft(
                 id,
-                execText,
+                current.executive_summary,
                 narrative,
                 'Conclusions refined by LLM',
                 undefined,
@@ -435,15 +440,31 @@ export default function ReportDraftingWorkspace() {
         <StatusBadge approved={approved} isLight={isLight} />
       </div>
 
-      {/* Agentic moment — one-time note. Dismissable; persists per (stage, audit)
-          in localStorage. Mirrors the Stage 5 banner pattern from PR #58.
-          Hidden when source === 'llm' — the per-section LLM banner below
-          carries the agentic narration in that state and stacking both
-          would add cognitive load instead of collapsing it. */}
-      {report.prefilled_at && report.executive_summary_source !== 'llm' && (
+      {/* Templated-prefill banner. Hidden once EITHER section flips to 'llm' —
+          the page-level "Drafted with AI" banner below carries the stronger
+          agentic narration. Stacking templated + LLM banners adds cognitive
+          load instead of collapsing it (doctrine_agentic_ux_patterns.md). */}
+      {report.prefilled_at &&
+        report.executive_summary_source !== 'llm' &&
+        report.conclusions_source !== 'llm' && (
+          <PrefillAgentNote
+            storageKey={`piq-stage7-prefill-note-dismissed:${auditId}`}
+            message="The executive summary and conclusions were drafted from your approved risk summary and audit observations. Review and edit each before approving."
+          />
+        )}
+
+      {/* Page-level LLM banner. ONE statement covering both sections when
+          either (or both) is AI-drafted. Replaces what used to be two per-
+          section banners stacking with near-identical "Drafted with AI"
+          headlines — north-star regression. Per-section *chips* still tell
+          the auditor which sections are AI-drafted vs templated vs edited;
+          this banner narrates *that* the agent did work, not *which* one. */}
+      {(report.executive_summary_source === 'llm' ||
+        report.conclusions_source === 'llm') && (
         <PrefillAgentNote
-          storageKey={`piq-stage7-prefill-note-dismissed:${auditId}`}
-          message="The executive summary and conclusions were drafted from your approved risk summary and audit observations. Review and edit each before approving."
+          storageKey={`piq-stage7-llm-banner-dismissed:${auditId}`}
+          headline="Drafted with AI."
+          message="Refined from your approved Stage 4 risk summary and Stage 6 findings. Review and edit each section before approving."
         />
       )}
 
@@ -486,24 +507,10 @@ export default function ReportDraftingWorkspace() {
           />
         </div>
 
-        {/* Calm narration when the LLM successfully refined the draft.
-            Uses the established PrefillAgentNote pattern (PRs #58 + #62)
-            so the agentic moment reads consistently across stages. One-time
-            dismissable per (audit, llm). */}
-        {report.executive_summary_source === 'llm' && (
-          <div className="mb-3">
-            <PrefillAgentNote
-              storageKey={`piq-stage7-llm-banner-dismissed:${auditId}`}
-              headline="Drafted with AI."
-              message={
-                <>
-                  Refined from your approved Stage 4 risk summary and Stage 6
-                  observations. Review and edit before approving.
-                </>
-              }
-            />
-          </div>
-        )}
+        {/* The "Drafted with AI" narration moved up to the page-level banner
+            above the unclassified warning (one statement covers both sections).
+            Per-section chip below still tells the auditor this section is
+            AI-drafted vs templated vs edited. */}
 
         {/* Invitational fallback note when the LLM call failed and the
             templated text is what's showing. Framed as a starting-point
@@ -596,8 +603,17 @@ export default function ReportDraftingWorkspace() {
               type="button"
               data-testid="exec-summary-edit-button"
               onClick={() => beginEdit('summary')}
-              disabled={llmRefining}
-              title={llmRefining ? 'Wait for the agent to finish drafting' : undefined}
+              // Disable while EITHER section is mid-LLM-refinement. Saving an
+              // exec edit while conclusions is refining would clobber the
+              // in-flight conclusions write with the stale templated text
+              // currently in render state (saveSummary writes report.conclusions
+              // directly). Same race in reverse for the conclusions Edit.
+              disabled={llmRefining || llmConclusionsRefining}
+              title={
+                llmRefining || llmConclusionsRefining
+                  ? 'Wait for the agent to finish drafting'
+                  : undefined
+              }
               className={`mt-3 inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${buttonSecondary}`}
             >
               <Pencil size={12} />
@@ -750,20 +766,9 @@ export default function ReportDraftingWorkspace() {
           />
         </div>
 
-        {report.conclusions_source === 'llm' && (
-          <div className="mb-3">
-            <PrefillAgentNote
-              storageKey={`piq-stage7-llm-conclusions-banner-dismissed:${auditId}`}
-              headline="Drafted with AI."
-              message={
-                <>
-                  Recommendation drafted from your approved Stage 4 risk summary
-                  and Stage 6 findings. Review and edit before approving.
-                </>
-              }
-            />
-          </div>
-        )}
+        {/* "Drafted with AI" narration is page-level (above) — covers both
+            sections in one statement. The conclusions chip below still
+            declares this section's source. */}
 
         {llmConclusionsFallback && report.conclusions_source === 'templated' && (
           <div
@@ -842,8 +847,14 @@ export default function ReportDraftingWorkspace() {
               type="button"
               data-testid="conclusions-edit-button"
               onClick={() => beginEdit('conclusions')}
-              disabled={llmConclusionsRefining}
-              title={llmConclusionsRefining ? 'Wait for the agent to finish drafting' : undefined}
+              // Same cross-section race guard as exec-summary Edit — see comment
+              // on that button. Disabled while EITHER section is in-flight.
+              disabled={llmConclusionsRefining || llmRefining}
+              title={
+                llmConclusionsRefining || llmRefining
+                  ? 'Wait for the agent to finish drafting'
+                  : undefined
+              }
               className={`mt-3 inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${buttonSecondary}`}
             >
               <Pencil size={12} />
