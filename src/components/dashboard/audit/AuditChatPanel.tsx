@@ -87,12 +87,20 @@ interface Props {
 
 type WritebackKind = 'executive_summary' | 'conclusions';
 type WritebackPending = {
-  /** Index of the assistant turn the auditor opened the confirm on. Only
-   *  one confirm can be open at a time — opening a second collapses the
-   *  first. Keyed by index rather than turn identity because turns don't
-   *  have stable ids. */
+  /** Index of the assistant turn the auditor opened the confirm on. Used
+   *  ONLY to render the confirm block under the right bubble — not as the
+   *  source of truth for what gets written. Indices can shift if the local
+   *  history trim drops the head of the thread mid-confirm (a 22+ message
+   *  sequence after opening). */
   turnIndex: number;
   kind: WritebackKind;
+  /** Snapshot of the assistant turn's content taken at open-time. The
+   *  write-back uses THIS, not messages[turnIndex], so trim or any future
+   *  mid-thread mutation can't silently shift what gets written.
+   *  Belt-and-suspenders alongside the turnIndex; if they diverge, the
+   *  snapshot wins and the confirm UI just renders under the closest
+   *  surviving turn. */
+  content: string;
 };
 
 const WRITEBACK_KIND_LABELS: Record<WritebackKind, string> = {
@@ -118,6 +126,11 @@ export default function AuditChatPanel({
   // both pass the `!canSend` gate before React commits setPending(true).
   // A ref is the precise tool: synchronous flip, no render coupling.
   const inFlightRef  = useRef(false);
+  // Same defensive pattern for the write-back confirm — rapid double-click
+  // (or held Enter on the focused button) could fire onAssistantWriteback
+  // twice before writebackInFlight state commits. Mirrors PR #76's
+  // handleSend ref guard.
+  const writebackInFlightRef = useRef(false);
   useOverlay({ isOpen: true, onClose, containerRef: panelRef });
   const swipe = useSwipeDismiss({ onClose });
 
@@ -200,15 +213,19 @@ export default function AuditChatPanel({
   };
 
   // Open the inline write-back confirm for a specific assistant turn +
-  // destination field. Replaces any previously-open confirm; only one
-  // confirm visible at a time.
+  // destination field. Snapshots the assistant turn's content at open-time
+  // so a later history trim or other mutation can't silently shift what
+  // gets written. Replaces any previously-open confirm; only one confirm
+  // visible at a time.
   const openWritebackConfirm = (turnIndex: number, kind: WritebackKind) => {
+    const turn = messages[turnIndex];
+    if (!turn || turn.role !== 'assistant') return;
     setWritebackError(null);
-    setWritebackPending({ turnIndex, kind });
+    setWritebackPending({ turnIndex, kind, content: turn.content });
   };
 
   const cancelWriteback = () => {
-    if (writebackInFlight) return;
+    if (writebackInFlightRef.current) return;
     setWritebackPending(null);
     setWritebackError(null);
   };
@@ -218,16 +235,27 @@ export default function AuditChatPanel({
   // RPC + audit context wired). On success the shell typically closes the
   // panel and routes the auditor to Stage 7. On failure we surface inside
   // the confirm block so the auditor sees the error next to the action.
+  //
+  // Uses writebackPending.content (snapshotted at open-time) rather than
+  // messages[turnIndex] — defensive against any mid-confirm mutation that
+  // could shift indices (history trim, future edit-in-place affordances).
+  // Ref guard fires synchronously to prevent double-firing before the
+  // writebackInFlight state commit.
   const confirmWriteback = async () => {
-    if (!writebackPending || !onAssistantWriteback || writebackInFlight) return;
-    const { turnIndex, kind } = writebackPending;
-    const turn = messages[turnIndex];
-    if (!turn || turn.role !== 'assistant') return;
+    if (
+      !writebackPending ||
+      !onAssistantWriteback ||
+      writebackInFlightRef.current
+    ) {
+      return;
+    }
+    writebackInFlightRef.current = true;
+    const { kind, content } = writebackPending;
 
     setWritebackInFlight(true);
     setWritebackError(null);
     try {
-      await onAssistantWriteback(kind, turn.content);
+      await onAssistantWriteback(kind, content);
       // Parent owns navigation (closes panel, sets viewedStage). Reset
       // local state in case the panel re-mounts on the same audit.
       setWritebackPending(null);
@@ -238,6 +266,7 @@ export default function AuditChatPanel({
           : 'Could not save to Stage 7. Try again, or copy the text manually.',
       );
     } finally {
+      writebackInFlightRef.current = false;
       setWritebackInFlight(false);
     }
   };
@@ -469,12 +498,10 @@ export default function AuditChatPanel({
                         className="mt-2 max-w-[85%] rounded-md border border-[#4a6fa5]/30 dark:border-[#4a6fa5]/40 bg-[#eef2f6] dark:bg-white/[0.04] px-3 py-2.5 text-xs text-fg-heading"
                       >
                         <p className="font-semibold mb-1">
-                          Send this to your {WRITEBACK_KIND_LABELS[writebackPending.kind]} draft?
+                          Drop this into your {WRITEBACK_KIND_LABELS[writebackPending.kind]} draft?
                         </p>
                         <p className="text-fg-sub leading-relaxed mb-2">
-                          PIQC will replace your current{' '}
-                          {WRITEBACK_KIND_LABELS[writebackPending.kind]} text on Stage 7 with
-                          this reply. You'll review and save it there — nothing is final until you do.
+                          I'll replace your current text. You'll review it on Stage 7 before saving.
                         </p>
                         {writebackError && (
                           <p

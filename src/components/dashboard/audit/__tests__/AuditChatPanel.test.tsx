@@ -375,7 +375,11 @@ describe('AuditChatPanel — earned write-back to Stage 7', () => {
     expect(screen.getByTestId('audit-chat-writeback-confirm-1')).toBeInTheDocument();
     expect(screen.queryByTestId('audit-chat-writeback-row-1')).not.toBeInTheDocument();
     expect(screen.getByTestId('audit-chat-writeback-confirm-1'))
-      .toHaveTextContent(/Send this to your exec summary draft\?/i);
+      // Confirm copy is first-person partner voice ("Drop this into…" + "I'll
+      // replace…") — consistent with the empty-state primer's "Hi — I've been
+      // reading along" register. Locking the copy so a future drift back to
+      // third-person system voice ("PIQC will replace…") fails this test.
+      .toHaveTextContent(/Drop this into your exec summary draft\?/i);
   });
 
   it('Cancel restores the affordance row without invoking the callback', async () => {
