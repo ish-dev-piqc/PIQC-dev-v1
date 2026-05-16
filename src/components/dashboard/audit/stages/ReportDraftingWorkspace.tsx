@@ -7,6 +7,7 @@ import {
   Sparkles,
   FileText,
   History as HistoryIcon,
+  Loader2,
 } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useAudit } from '../../../../context/AuditContext';
@@ -21,6 +22,8 @@ import {
   upsertReportDraft,
   approveReportDraft,
   prefillReportDraft,
+  requestLlmExecutiveSummary,
+  LlmExecutiveSummaryError,
 } from '../../../../lib/audit/reportApi';
 import type { MockWorkspaceEntry } from '../../../../lib/audit/mockWorkspaceEntries';
 import type { ProvisionalClassification } from '../../../../types/audit';
@@ -57,6 +60,12 @@ export default function ReportDraftingWorkspace() {
   const [draftSummary, setDraftSummary] = useState('');
   const [draftConclusions, setDraftConclusions] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
+  // LLM refinement state for the executive summary.
+  //   llmLoading: spinner on the Refine button + disables it
+  //   llmError:   inline error surfaced near the textarea so the auditor
+  //               knows the existing text was preserved
+  const [llmLoading, setLlmLoading] = useState(false);
+  const [llmError, setLlmError] = useState<string | null>(null);
 
   // Tracks audits whose prefill RPC has already been attempted in this session
   // so opening Stage 7 / re-rendering doesn't fire the RPC repeatedly. The
@@ -141,15 +150,77 @@ export default function ReportDraftingWorkspace() {
     if (!report) return;
     setDraftSummary(report.executive_summary);
     setDraftConclusions(report.conclusions);
+    setLlmError(null);
     setEditing(which);
   };
 
   const saveSummary = async () => {
     if (!report || !auditId) return;
-    const updated = await upsertReportDraft(auditId, draftSummary.trim(), report.conclusions);
+    // Source resolution on save:
+    //   - If current source is 'llm' AND the auditor didn't change the text
+    //     since the LLM filled it, keep 'llm' (they accepted the draft as-is)
+    //   - Otherwise flag 'auditor_edited' so the audit trail captures the
+    //     human edit. The server preserves the previous value if we omit
+    //     the param entirely — passing 'auditor_edited' is the explicit
+    //     transition signal.
+    const trimmed = draftSummary.trim();
+    const llmDraftAcceptedAsIs =
+      report.executive_summary_source === 'llm' &&
+      trimmed === report.executive_summary;
+    const newSource: 'llm' | 'auditor_edited' = llmDraftAcceptedAsIs
+      ? 'llm'
+      : 'auditor_edited';
+
+    const updated = await upsertReportDraft(
+      auditId,
+      trimmed,
+      report.conclusions,
+      undefined,
+      newSource,
+    );
     if (updated) {
       setReports((prev) => ({ ...prev, [auditId]: updated }));
       setEditing(null);
+      setLlmError(null);
+    }
+  };
+
+  // LLM "Refine with AI" handler. Calls the audit-summary edge function,
+  // drops the returned narrative into the editor (open it if it's closed),
+  // and flags the source so the next save records the provenance.
+  // Failure preserves existing text; surfaces an inline error.
+  const refineWithLlm = async () => {
+    if (!report || !auditId || llmLoading) return;
+    setLlmLoading(true);
+    setLlmError(null);
+    try {
+      const narrative = await requestLlmExecutiveSummary(auditId);
+      // Pre-fill the editor with the LLM draft and open it for review.
+      // We do NOT auto-persist — the auditor still owns the apply step.
+      setDraftSummary(narrative);
+      setDraftConclusions(report.conclusions);
+      setEditing('summary');
+      // Persist 'llm' source immediately so the trail captures the LLM
+      // call even if the auditor backs out of the edit. The text in storage
+      // is the narrative; if they cancel, they can revert via History.
+      const persisted = await upsertReportDraft(
+        auditId,
+        narrative,
+        report.conclusions,
+        'Executive summary refined by LLM',
+        'llm',
+      );
+      if (persisted) {
+        setReports((prev) => ({ ...prev, [auditId]: persisted }));
+      }
+    } catch (err) {
+      const message =
+        err instanceof LlmExecutiveSummaryError
+          ? err.message
+          : 'Could not generate an AI draft. Your existing summary is unchanged.';
+      setLlmError(message);
+    } finally {
+      setLlmLoading(false);
     }
   };
 
@@ -284,6 +355,13 @@ export default function ReportDraftingWorkspace() {
 
       {/* Executive summary — editable */}
       <Section title="Executive summary" sectionHeader={sectionHeader}>
+        {/* Source chip — small, declarative, sits above the content so the
+            auditor knows at a glance whether they're looking at the templated
+            scaffold, an LLM draft, or their own edit. */}
+        <ExecSummarySourceChip
+          source={report.executive_summary_source ?? 'templated'}
+          isLight={isLight}
+        />
         {editing === 'summary' ? (
           <div className={`${cardBg} border rounded-md p-4 space-y-3`}>
             <textarea
@@ -306,7 +384,15 @@ export default function ReportDraftingWorkspace() {
                 </p>
               </div>
             )}
-            <div className="flex items-center gap-2">
+            {llmError && (
+              <p
+                role="alert"
+                className={`text-[11px] ${isLight ? 'text-rose-600' : 'text-rose-400'}`}
+              >
+                {llmError}
+              </p>
+            )}
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
                 onClick={saveSummary}
@@ -322,6 +408,17 @@ export default function ReportDraftingWorkspace() {
               >
                 Cancel
               </button>
+              <button
+                type="button"
+                onClick={refineWithLlm}
+                disabled={llmLoading}
+                data-testid="exec-summary-refine-with-ai"
+                title="Generate an AI-drafted executive summary from your approved Stage 4 + Stage 6 context"
+                className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 ${buttonSecondary}`}
+              >
+                {llmLoading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                {llmLoading ? 'Refining…' : 'Refine with AI'}
+              </button>
             </div>
           </div>
         ) : (
@@ -329,14 +426,35 @@ export default function ReportDraftingWorkspace() {
             <p className={`${headingColor} text-sm whitespace-pre-wrap leading-relaxed`}>
               {report.executive_summary}
             </p>
-            <button
-              type="button"
-              onClick={() => beginEdit('summary')}
-              className={`mt-3 inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
-            >
-              <Pencil size={12} />
-              {approved ? 'Revise' : 'Edit'}
-            </button>
+            {llmError && (
+              <p
+                role="alert"
+                className={`mt-3 text-[11px] ${isLight ? 'text-rose-600' : 'text-rose-400'}`}
+              >
+                {llmError}
+              </p>
+            )}
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => beginEdit('summary')}
+                className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+              >
+                <Pencil size={12} />
+                {approved ? 'Revise' : 'Edit'}
+              </button>
+              <button
+                type="button"
+                onClick={refineWithLlm}
+                disabled={llmLoading}
+                data-testid="exec-summary-refine-with-ai"
+                title="Generate an AI-drafted executive summary from your approved Stage 4 + Stage 6 context"
+                className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors disabled:opacity-50 ${buttonSecondary}`}
+              >
+                {llmLoading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                {llmLoading ? 'Refining…' : 'Refine with AI'}
+              </button>
+            </div>
           </div>
         )}
       </Section>
@@ -637,6 +755,49 @@ function AutoCompiledNote({ text, mutedColor }: { text: string; mutedColor: stri
 
 function Empty({ subColor, children }: { subColor: string; children: React.ReactNode }) {
   return <p className={`${subColor} text-sm italic`}>{children}</p>;
+}
+
+// ExecSummarySourceChip — declarative provenance affordance.
+// Tells the auditor what kind of draft they're looking at without competing
+// with the executive summary text itself. Muted by default; the LLM and
+// edited states have just enough color to be noticeable.
+function ExecSummarySourceChip({
+  source,
+  isLight,
+}: {
+  source: 'templated' | 'llm' | 'auditor_edited';
+  isLight: boolean;
+}) {
+  const labels: Record<typeof source, string> = {
+    templated: 'Templated draft',
+    llm: 'AI-drafted',
+    auditor_edited: 'Edited by auditor',
+  };
+  const tone = (() => {
+    if (source === 'llm') {
+      return isLight
+        ? 'bg-[#eef2f6] border-[#cbd2db] text-[#4a6fa5]'
+        : 'bg-white/[0.04] border-white/10 text-[#6e8fb5]';
+    }
+    if (source === 'auditor_edited') {
+      return isLight
+        ? 'bg-white border-[#e2e8ee] text-[#374152]'
+        : 'bg-[#131a22] border-white/10 text-[#d2d7e0]';
+    }
+    return isLight
+      ? 'bg-white border-[#e2e8ee] text-[#374152]/65'
+      : 'bg-[#131a22] border-white/10 text-[#d2d7e0]/60';
+  })();
+  return (
+    <span
+      data-testid="exec-summary-source-chip"
+      data-source={source}
+      className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md border mb-2 ${tone}`}
+    >
+      {source === 'llm' && <Sparkles size={9} />}
+      {labels[source]}
+    </span>
+  );
 }
 
 function StatusBadge({ approved, isLight }: { approved: boolean; isLight: boolean }) {

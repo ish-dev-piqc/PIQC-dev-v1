@@ -27,6 +27,11 @@ export interface MockReportDraft {
   // approved Stage 4 risk summary + Stage 6 workspace entries.
   source_risk_summary_id?: string | null;
   prefilled_at?: string | null;
+  // Exec-summary provenance. 'templated' = PR #62 SQL scaffold; 'llm' = LLM-
+  // drafted via /functions/v1/audit-summary; 'auditor_edited' = auditor has
+  // modified the text. Optional only for backward compat; server defaults to
+  // 'templated' so every freshly-fetched row should always have a value.
+  executive_summary_source?: 'templated' | 'llm' | 'auditor_edited';
 }
 
 export const MOCK_REPORTS: Record<string, MockReportDraft | null> = {
