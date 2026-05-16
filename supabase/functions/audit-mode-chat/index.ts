@@ -135,6 +135,7 @@ Hard rules:
 - Sponsor names must NOT appear in your replies (the audit artifacts are sponsor-name-free; sponsor branding is added externally on export).
 - If the context is too sparse to answer a question, say so plainly and suggest what would be needed.
 - Keep replies tight — most answers fit in 3-6 sentences. Use a short bulleted list only when the auditor explicitly asks to enumerate.
+- When you paraphrase a specific questionnaire response or a protocol item, name its source so the auditor can verify — e.g. "the response under 'Data Integrity'…" for a questionnaire answer, or "the parsed protocol item 'visit_window[1]'…" for a SOTR item. This is verification scaffolding, not a citation requirement; one mention per quoted source is enough.
 
 Tone:
 - Calm, professional, evidence-based.
@@ -219,6 +220,20 @@ const STAGE_FOCUS_HINTS: Record<string, string> = {
   REPORT_DRAFTING:       "The auditor is writing the report; questions are likely about phrasing, recommendation framing, and which findings to surface.",
   FINAL_REVIEW_EXPORT:   "The auditor is finalizing and exporting; questions are likely about sign-off, missing approvals, and export readiness.",
 };
+
+// Drift invariant: VALID_VIEWED_STAGES and STAGE_FOCUS_HINTS are two independent
+// sources of truth. If a future change adds a stage to one without the other,
+// PIQC silently loses its focus hint for that stage. Fail loud at deploy
+// instead — Deno evaluates the module on cold start, so the throw surfaces in
+// the function's first request log.
+for (const stage of VALID_VIEWED_STAGES) {
+  if (!(stage in STAGE_FOCUS_HINTS)) {
+    throw new Error(
+      `audit-mode-chat: STAGE_FOCUS_HINTS is missing an entry for ${stage} — ` +
+      `update both VALID_VIEWED_STAGES and STAGE_FOCUS_HINTS together.`,
+    );
+  }
+}
 
 function buildContextMessage(ctx: AuditChatContext): string {
   const lines: string[] = [];
@@ -463,44 +478,47 @@ Deno.serve(async (req: Request) => {
   const vendorName = (Array.isArray(vendor) ? vendor[0]?.name : vendor?.name) ?? null;
   const protocolTitle = (Array.isArray(protocol) ? protocol[0]?.title : protocol?.title) ?? null;
 
+  // ---------------------------------------------------------------------------
+  // Parallel context fetches. After the audit row lands, riskSummary,
+  // entries, reportDraft, and questionnaireInstance are all independent —
+  // batching saves ~100-200ms of round-trip latency on a typical request.
+  // ---------------------------------------------------------------------------
+  const [
+    { data: riskSummary },
+    { data: entries },
+    { data: reportDraft },
+    { data: questionnaireInstance },
+  ] = await Promise.all([
+    supabase
+      .from("vendor_risk_summary_objects")
+      .select("executive_summary_text, composite_score, tier, focus_areas, approval_status")
+      .eq("audit_id", auditId)
+      .maybeSingle(),
+    supabase
+      .from("audit_workspace_entry_objects")
+      .select("vendor_domain, provisional_classification, provisional_impact, observation_text, source_extracted_item_id")
+      .eq("audit_id", auditId)
+      .order("created_at", { ascending: true })
+      .limit(MAX_ENTRIES_IN_CTX),
+    supabase
+      .from("report_draft_objects")
+      .select("executive_summary, conclusions")
+      .eq("audit_id", auditId)
+      .maybeSingle(),
+    supabase
+      .from("questionnaire_instances")
+      .select("id, approved_at")
+      .eq("audit_id", auditId)
+      .maybeSingle(),
+  ]);
+
   // Risk summary — only inject if approved. Pre-approval drafts may be
   // contradictory or stale; we don't want the chat to anchor on them.
-  const { data: riskSummary } = await supabase
-    .from("vendor_risk_summary_objects")
-    .select("executive_summary_text, composite_score, tier, focus_areas, approval_status")
-    .eq("audit_id", auditId)
-    .maybeSingle();
-
   const riskApproved = riskSummary?.approval_status === "APPROVED";
-
-  const { data: entries } = await supabase
-    .from("audit_workspace_entry_objects")
-    .select("vendor_domain, provisional_classification, provisional_impact, observation_text, source_extracted_item_id")
-    .eq("audit_id", auditId)
-    .order("created_at", { ascending: true })
-    .limit(MAX_ENTRIES_IN_CTX);
-
   const rows = entries ?? [];
-
-  const { data: reportDraft } = await supabase
-    .from("report_draft_objects")
-    .select("executive_summary, conclusions")
-    .eq("audit_id", auditId)
-    .maybeSingle();
-
-  // ---------------------------------------------------------------------------
-  // Questionnaire (Stage 3). Approval gate: approved_at IS NOT NULL.
-  // Two-step fetch: instance first (gate the gate), then responses joined
-  // to questions for the prompt + section_title. PostgREST nested select
-  // (questionnaire_questions inner join via question_id FK) keeps it one
-  // round-trip on the response side.
-  // ---------------------------------------------------------------------------
-  const { data: questionnaireInstance } = await supabase
-    .from("questionnaire_instances")
-    .select("id, approved_at")
-    .eq("audit_id", auditId)
-    .maybeSingle();
-
+  // Questionnaire approval gate: approved_at IS NOT NULL is the canonical
+  // signal (status=COMPLETE is stamped at the same moment, but approved_at
+  // is the timestamp the rest of the system reads from).
   const questionnaireApproved = !!questionnaireInstance?.approved_at;
 
   let questionnaireResponsesRaw: Array<{
@@ -651,6 +669,17 @@ Deno.serve(async (req: Request) => {
     sotr_recent_reviewed:    sotrRecentReviewed,
   };
 
+  // Pre-compute the context message once so we can both log its size and
+  // pass it to OpenAI without rebuilding. estimated_input_chars is a rough
+  // proxy for token cost (1 token ≈ 4 chars for English) — gives the dev
+  // team a cost-per-turn baseline as PIQC's recall surface grows.
+  const contextMessage = buildContextMessage(ctx);
+  const estimatedInputChars =
+    SYSTEM_PROMPT.length +
+    (viewedStage && STAGE_FOCUS_HINTS[viewedStage] ? STAGE_FOCUS_HINTS[viewedStage].length + 18 : 0) +
+    contextMessage.length +
+    messages.reduce((sum, m) => sum + m.content.length, 0);
+
   log("info", "audit_mode_chat.request", {
     request_id: requestId,
     audit_id: auditId,
@@ -666,6 +695,7 @@ Deno.serve(async (req: Request) => {
     sotr_total: sotrTotal,
     sotr_awaiting_review: sotrAwaiting,
     sotr_reviewed_sample: sotrRecentReviewed.length,
+    estimated_input_chars: estimatedInputChars,
   });
 
   // ---------------------------------------------------------------------------
@@ -703,7 +733,7 @@ Deno.serve(async (req: Request) => {
               ? `${SYSTEM_PROMPT}\n\nStage focus: ${STAGE_FOCUS_HINTS[viewedStage]}`
               : SYSTEM_PROMPT,
           },
-          { role: "system", content: buildContextMessage(ctx) },
+          { role: "system", content: contextMessage },
           ...messages,
         ],
       }),

@@ -204,10 +204,17 @@ export default function AuditChatPanel({
                 Ask anything about this audit.
               </p>
               <p>
-                The assistant can see your approved risk summary, workspace
-                entries, and any report draft you've started. It can help you
-                spot gaps, restate findings in different words, or sanity-check
-                your reasoning before you commit a change.
+                The assistant reads along with you. It can recall from:
+              </p>
+              <ul className="list-disc pl-5 space-y-0.5 text-xs">
+                <li>the approved vendor questionnaire</li>
+                <li>protocol items you've reviewed in the parsed source list</li>
+                <li>your approved risk summary and any workspace findings</li>
+                <li>any report draft you've started</li>
+              </ul>
+              <p>
+                Use it to spot gaps, restate findings in different words, or
+                sanity-check your reasoning before you commit a change.
               </p>
               <p className="text-xs text-fg-muted">
                 It's advisory only — you stay the decision-maker. Nothing here
