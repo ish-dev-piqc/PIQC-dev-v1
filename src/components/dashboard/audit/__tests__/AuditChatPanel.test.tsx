@@ -226,11 +226,28 @@ describe('AuditChatPanel — viewedStage prop forwarding', () => {
   });
 });
 
+describe('AuditChatPanel — stage focus chip (visible PIQC presence signal)', () => {
+  it('renders "Focused on …" when viewedStage is a valid AuditStage', () => {
+    setup([], 'AUDIT_CONDUCT');
+    const chip = screen.getByTestId('audit-chat-stage-focus');
+    // Uses STAGE_LABELS so the chip reads as "Focused on Audit Conduct",
+    // not the raw enum value. Locking the label-via-helper contract here
+    // so a future renaming of stage labels doesn't silently drift.
+    expect(chip).toHaveTextContent(/Focused on /i);
+    expect(chip).not.toHaveTextContent('AUDIT_CONDUCT');
+  });
+
+  it('hides the chip when viewedStage is omitted', () => {
+    setup([]);
+    expect(screen.queryByTestId('audit-chat-stage-focus')).not.toBeInTheDocument();
+  });
+});
+
 describe('AuditChatPanel — close affordance', () => {
   it('invokes onClose when the close button is clicked', async () => {
     const user = userEvent.setup();
     const { onClose } = setup([]);
-    await user.click(screen.getByLabelText('Close audit assistant'));
+    await user.click(screen.getByLabelText('Close PIQC'));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
