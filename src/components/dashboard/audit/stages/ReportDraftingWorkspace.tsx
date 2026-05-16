@@ -422,26 +422,28 @@ export default function ReportDraftingWorkspace() {
         {/* Invitational fallback note when the LLM call failed and the
             templated text is what's showing. Framed as a starting-point
             invitation ("Starting from your templated draft — edit below.")
-            rather than a remedial confession. Dismissable so it doesn't
-            nag. The console.warn upstream carries the "AI failed" signal
-            for the dev team — the auditor's surface stays agentic-positive. */}
+            rather than a remedial confession.
+            Icon + palette deliberately neutral (FileText, calm bg matching
+            PrefillAgentNote) — amber + AlertTriangle would contradict the
+            invitational copy by signalling "warning." The console.warn
+            upstream carries the "AI failed" signal for the dev team. */}
         {llmFallback && report.executive_summary_source === 'templated' && (
           <div
             data-testid="exec-summary-llm-fallback"
             className={`flex items-start gap-2 px-3 py-2 mb-3 rounded-md border ${
               isLight
-                ? 'bg-amber-50/60 border-amber-200/80 text-amber-700'
-                : 'bg-amber-500/[0.06] border-amber-500/20 text-amber-300'
+                ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]'
+                : 'bg-white/[0.04] border-white/10 text-[#d2d7e0]'
             }`}
           >
-            <AlertTriangle size={12} className="flex-shrink-0 mt-0.5" />
+            <FileText size={12} className="flex-shrink-0 mt-0.5 opacity-70" />
             <p className="text-[11px] leading-relaxed flex-1">{llmFallback}</p>
             <button
               type="button"
               onClick={() => setLlmFallback(null)}
               aria-label="Dismiss"
               className={`inline-flex items-center justify-center w-5 h-5 rounded ${
-                isLight ? 'text-amber-700/60 hover:bg-white/60' : 'text-amber-300/60 hover:bg-white/[0.06]'
+                isLight ? 'text-[#374152]/55 hover:bg-white/60' : 'text-[#d2d7e0]/55 hover:bg-white/[0.06]'
               }`}
             >
               <XIcon size={11} />
@@ -500,11 +502,16 @@ export default function ReportDraftingWorkspace() {
             </p>
             {/* Edit button disabled during the LLM refinement window — text
                 the auditor would edit is about to be replaced. Re-enables
-                automatically when the call resolves (success or failure). */}
+                automatically when the call resolves (success or failure).
+                The `title` attribute carries the reason to both visible
+                tooltip and screen readers — without it, the disabled state
+                reads as "system is broken" rather than "agent is working." */}
             <button
               type="button"
+              data-testid="exec-summary-edit-button"
               onClick={() => beginEdit('summary')}
               disabled={llmRefining}
+              title={llmRefining ? 'Wait for the agent to finish drafting' : undefined}
               className={`mt-3 inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${buttonSecondary}`}
             >
               <Pencil size={12} />

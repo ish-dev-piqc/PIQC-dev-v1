@@ -317,7 +317,9 @@ describe('ReportDraftingWorkspace — agentic-UX assertions', () => {
   it('UI: source chip swaps to unified "Drafting with AI…" state during refinement', async () => {
     // Hold the LLM promise open so we can assert on the in-flight UI before
     // it resolves. Without this gating, the spinner-state would race against
-    // the post-resolve render and flake.
+    // the post-resolve render and flake. The promise is resolved in the
+    // finally block so an assertion throw still leaves the promise settled
+    // (avoids pending-promise warnings from the test runner).
     let resolveLlm: (value: string) => void = () => {};
     const llmPromise = new Promise<string>((resolve) => {
       resolveLlm = resolve;
@@ -327,19 +329,21 @@ describe('ReportDraftingWorkspace — agentic-UX assertions', () => {
     mockFetch.mockResolvedValue(templated);
     mockRequestLlm.mockReturnValueOnce(llmPromise);
 
-    render(<ReportDraftingWorkspace />);
+    try {
+      render(<ReportDraftingWorkspace />);
 
-    // While the LLM call is in-flight, the source chip should read the
-    // unified "Drafting with AI…" state. data-source="refining" is the
-    // contract a future refactor must preserve.
-    await waitFor(() => {
-      const chip = screen.getByTestId('exec-summary-source-chip');
-      expect(chip).toHaveAttribute('data-source', 'refining');
-      expect(chip).toHaveTextContent(/drafting with ai/i);
-    });
-
-    // Resolve the LLM so other tests' async chains don't leak.
-    resolveLlm('AI-refined narrative.');
+      // While the LLM call is in-flight, the source chip should read the
+      // unified "Drafting with AI…" state. data-source="refining" is the
+      // contract a future refactor must preserve.
+      await waitFor(() => {
+        const chip = screen.getByTestId('exec-summary-source-chip');
+        expect(chip).toHaveAttribute('data-source', 'refining');
+        expect(chip).toHaveTextContent(/drafting with ai/i);
+      });
+    } finally {
+      // Always resolve so the component's async chain can complete cleanly.
+      resolveLlm('AI-refined narrative.');
+    }
   });
 
   it('UI: Edit button disabled during refinement to prevent edits on text about to be replaced', async () => {
@@ -352,14 +356,26 @@ describe('ReportDraftingWorkspace — agentic-UX assertions', () => {
     mockFetch.mockResolvedValue(templated);
     mockRequestLlm.mockReturnValueOnce(llmPromise);
 
-    render(<ReportDraftingWorkspace />);
+    try {
+      render(<ReportDraftingWorkspace />);
 
-    await waitFor(() => {
-      const editButton = screen.getByRole('button', { name: /^edit$/i });
-      expect(editButton).toBeDisabled();
-    });
-
-    resolveLlm('AI-refined narrative.');
+      // Use the production data-testid rather than getByRole('button', { name })
+      // because TWO Edit buttons render (executive summary + conclusions);
+      // the role+name selector would throw on multiple matches.
+      await waitFor(() => {
+        const editButton = screen.getByTestId('exec-summary-edit-button');
+        expect(editButton).toBeDisabled();
+        // Disabled-state reason should be carried by the title attribute so
+        // it reaches both visible tooltip and screen readers — addresses the
+        // "system is broken vs agent is working" tone gap.
+        expect(editButton).toHaveAttribute(
+          'title',
+          expect.stringContaining('Wait for the agent'),
+        );
+      });
+    } finally {
+      resolveLlm('AI-refined narrative.');
+    }
   });
 
   it('UI: "Drafted with AI" banner appears when source === "llm" (success state)', async () => {
