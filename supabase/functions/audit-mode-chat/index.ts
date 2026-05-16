@@ -52,6 +52,32 @@ const MAX_MESSAGES          = 24;        // cap turns sent to OpenAI per request
 const MAX_MESSAGE_CHARS     = 2_000;     // per-turn content cap — see math above
 const MAX_OBSERVATION_CHARS = 800;       // truncate per-entry observation_text in context
 const MAX_ENTRIES_IN_CTX    = 25;        // cap audit context size
+// Stage-aware recall caps. Tuned for token budget vs. fidelity:
+//   Questionnaire — auditor wants paraphrase recall, so cap response text
+//   tighter than workspace observations. Cap responses to ANSWERED rows
+//   only; PENDING/UNANSWERED rows would just confuse the model.
+//   SOTR — auditor wants protocol quotes. Reviewed items only (review_status
+//   set and not 'draft'). Recency-ordered so the most recently validated
+//   items lead the context.
+const MAX_QUESTIONNAIRE_RESPONSES = 60;
+const MAX_RESPONSE_TEXT_CHARS     = 500;
+const MAX_SOTR_ITEMS              = 15;
+const MAX_SOTR_TEXT_CHARS         = 600;
+
+// Allow-list for viewed_stage. Mirrors AUDIT_STAGES in src/types/audit.ts;
+// kept inline rather than imported so this Deno function has no app-side
+// coupling. Unknown values are rejected (400) rather than silently dropped,
+// matching the section discriminator pattern from audit-summary.
+const VALID_VIEWED_STAGES = new Set([
+  "INTAKE",
+  "VENDOR_ENRICHMENT",
+  "QUESTIONNAIRE_REVIEW",
+  "SCOPE_AND_RISK_REVIEW",
+  "PRE_AUDIT_DRAFTING",
+  "AUDIT_CONDUCT",
+  "REPORT_DRAFTING",
+  "FINAL_REVIEW_EXPORT",
+]);
 
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 
@@ -129,11 +155,25 @@ interface WorkspaceEntryContext {
   has_source_link:             boolean;
 }
 
+interface QuestionnaireResponseContext {
+  section_title: string;
+  prompt:        string;
+  response_text: string;
+  flagged:       boolean;
+}
+
+interface SotrItemContext {
+  field_type: string;
+  field_path: string;
+  text:       string;
+}
+
 interface AuditChatContext {
   vendor_name:                 string | null;
   protocol_title:              string | null;
   audit_type:                  string | null;
   current_stage:               string | null;
+  viewed_stage:                string | null;
   risk_summary_narrative:      string | null;
   risk_tier:                   string | null;
   risk_score:                  number | null;
@@ -147,6 +187,16 @@ interface AuditChatContext {
     opportunity_for_improvement: number;
     not_yet_classified:          number;
   };
+  // Questionnaire (Stage 3). Only present when the instance has approved_at
+  // set — pre-approval drafts would anchor the model on unvalidated answers.
+  questionnaire_approved:      boolean;
+  questionnaire_responses:     QuestionnaireResponseContext[];
+  // SOTR / parsed protocol (cross-stage; visible from any stage via the
+  // protocol-source drawer). Counts always present; sample items only when
+  // they've been auditor-reviewed (review_status set and not 'draft').
+  sotr_total:                  number;
+  sotr_awaiting_review:        number;
+  sotr_recent_reviewed:        SotrItemContext[];
 }
 
 // -----------------------------------------------------------------------------
@@ -155,6 +205,21 @@ interface AuditChatContext {
 // turns so the auditor's thread reads naturally.
 // -----------------------------------------------------------------------------
 
+// Per-stage focus hints. Appended to the system prompt only when the client
+// passes viewed_stage. Each line gives the model a one-sentence cue about
+// what the auditor is most likely thinking about in that stage. Hints are
+// soft — they don't constrain answers, they just bias relevance ranking.
+const STAGE_FOCUS_HINTS: Record<string, string> = {
+  INTAKE:                "The auditor is setting up the audit; questions are likely about scope, dates, and which vendor activities are in play.",
+  VENDOR_ENRICHMENT:     "The auditor is enriching vendor metadata; questions are likely about prior history, service domains, and known risk signals.",
+  QUESTIONNAIRE_REVIEW:  "The auditor is reviewing questionnaire responses; questions are likely about specific vendor answers, contradictions, and what to flag.",
+  SCOPE_AND_RISK_REVIEW: "The auditor is finalizing scope and risk posture; questions are likely about which domains to prioritize and why.",
+  PRE_AUDIT_DRAFTING:    "The auditor is drafting the audit plan; questions are likely about what to ask the vendor, evidence to request, and prior findings to chase.",
+  AUDIT_CONDUCT:         "The auditor is conducting the audit and capturing findings; questions are likely about classification, severity, and source-of-truth checks.",
+  REPORT_DRAFTING:       "The auditor is writing the report; questions are likely about phrasing, recommendation framing, and which findings to surface.",
+  FINAL_REVIEW_EXPORT:   "The auditor is finalizing and exporting; questions are likely about sign-off, missing approvals, and export readiness.",
+};
+
 function buildContextMessage(ctx: AuditChatContext): string {
   const lines: string[] = [];
   lines.push("AUDIT CONTEXT (read-only, do not echo back verbatim unless asked):");
@@ -162,7 +227,11 @@ function buildContextMessage(ctx: AuditChatContext): string {
   lines.push(`Vendor: ${ctx.vendor_name ?? "(unspecified)"}`);
   lines.push(`Protocol: ${ctx.protocol_title ?? "(unspecified)"}`);
   if (ctx.audit_type)     lines.push(`Audit type: ${ctx.audit_type}`);
-  if (ctx.current_stage)  lines.push(`Current stage: ${ctx.current_stage}`);
+  if (ctx.current_stage)  lines.push(`Workflow position (current_stage): ${ctx.current_stage}`);
+  // viewed_stage is what the auditor is LOOKING at right now — may be
+  // earlier than current_stage (auditors revisit prior stages). Distinguish
+  // explicitly so the model doesn't conflate the two.
+  if (ctx.viewed_stage)   lines.push(`Currently viewing: ${ctx.viewed_stage}`);
   lines.push("");
 
   lines.push("Risk summary (Stage 4):");
@@ -189,6 +258,45 @@ function buildContextMessage(ctx: AuditChatContext): string {
     }
     lines.push("");
   }
+
+  // Questionnaire — only if approved. We render a short summary (counts +
+  // up to MAX_QUESTIONNAIRE_RESPONSES Q+A pairs) so the model can recall
+  // specific vendor answers without us shipping the entire instrument.
+  if (ctx.questionnaire_approved) {
+    lines.push("Questionnaire (Stage 3, APPROVED):");
+    if (ctx.questionnaire_responses.length === 0) {
+      lines.push("(approved but no answered responses recorded)");
+    } else {
+      lines.push(`Showing up to ${MAX_QUESTIONNAIRE_RESPONSES} answered responses (response text truncated):`);
+      for (const r of ctx.questionnaire_responses) {
+        const flag = r.flagged ? " ⚑" : "";
+        lines.push(`- [${r.section_title}${flag}] ${r.prompt}`);
+        lines.push(`  → ${r.response_text}`);
+      }
+    }
+    lines.push("");
+  } else {
+    lines.push("Questionnaire (Stage 3): not yet approved — not injected to avoid anchoring on draft answers.");
+    lines.push("");
+  }
+
+  // SOTR — parsed protocol items. Counts are always useful (lets the model
+  // say "the protocol has N parsed items, M still awaiting review"). The
+  // sample list is reviewed items only, ordered by most-recently-reviewed
+  // first, so the auditor's recent attention shapes what the model can
+  // quote.
+  lines.push("Parsed protocol items (SOTR):");
+  lines.push(`- Total parsed: ${ctx.sotr_total}`);
+  lines.push(`- Awaiting auditor review: ${ctx.sotr_awaiting_review}`);
+  if (ctx.sotr_recent_reviewed.length > 0) {
+    lines.push(`Recent reviewed items (up to ${MAX_SOTR_ITEMS}, text truncated):`);
+    for (const it of ctx.sotr_recent_reviewed) {
+      lines.push(`- [${it.field_type} · ${it.field_path}] ${it.text}`);
+    }
+  } else {
+    lines.push("(no reviewed items yet — recall from the parsed protocol is limited until the auditor reviews items)");
+  }
+  lines.push("");
 
   if (ctx.report_executive_summary || ctx.report_conclusions) {
     lines.push("Report draft (Stage 7), if present:");
@@ -236,7 +344,7 @@ Deno.serve(async (req: Request) => {
       { status: 413, headers: jsonHeaders });
   }
 
-  let body: { audit_id?: unknown; messages?: unknown };
+  let body: { audit_id?: unknown; messages?: unknown; viewed_stage?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -248,6 +356,20 @@ Deno.serve(async (req: Request) => {
   if (typeof auditId !== "string" || auditId.length === 0) {
     return new Response(JSON.stringify({ error: "audit_id is required" }),
       { status: 400, headers: jsonHeaders });
+  }
+
+  // Optional viewed_stage. Strict allow-list — silently dropping unknown
+  // values would let typos quietly degrade PIQC's stage awareness. Better
+  // to fail loud at the client boundary.
+  let viewedStage: string | null = null;
+  if (body.viewed_stage !== undefined && body.viewed_stage !== null) {
+    if (typeof body.viewed_stage !== "string" || !VALID_VIEWED_STAGES.has(body.viewed_stage)) {
+      return new Response(
+        JSON.stringify({ error: `Invalid viewed_stage: ${String(body.viewed_stage)}` }),
+        { status: 400, headers: jsonHeaders },
+      );
+    }
+    viewedStage = body.viewed_stage;
   }
 
   // ---- Strict message-shape validation ----
@@ -367,6 +489,123 @@ Deno.serve(async (req: Request) => {
     .maybeSingle();
 
   // ---------------------------------------------------------------------------
+  // Questionnaire (Stage 3). Approval gate: approved_at IS NOT NULL.
+  // Two-step fetch: instance first (gate the gate), then responses joined
+  // to questions for the prompt + section_title. PostgREST nested select
+  // (questionnaire_questions inner join via question_id FK) keeps it one
+  // round-trip on the response side.
+  // ---------------------------------------------------------------------------
+  const { data: questionnaireInstance } = await supabase
+    .from("questionnaire_instances")
+    .select("id, approved_at")
+    .eq("audit_id", auditId)
+    .maybeSingle();
+
+  const questionnaireApproved = !!questionnaireInstance?.approved_at;
+
+  let questionnaireResponsesRaw: Array<{
+    response_text: string | null;
+    inconsistency_flag: boolean | null;
+    questionnaire_questions: { prompt?: string; section_title?: string }
+                          | Array<{ prompt?: string; section_title?: string }>
+                          | null;
+  }> = [];
+  if (questionnaireApproved && questionnaireInstance) {
+    // Order by created_at on the response row itself rather than nested
+    // ordinal — keeps the query simple and avoids PostgREST foreignTable
+    // ordering edge cases. Question order within a section is preserved
+    // because responses are created in question order during prefill.
+    const { data: responses } = await supabase
+      .from("questionnaire_response_objects")
+      .select(`
+        response_text,
+        inconsistency_flag,
+        questionnaire_questions!inner(prompt, section_title)
+      `)
+      .eq("audit_id", auditId)
+      .eq("response_status", "ANSWERED")
+      .order("created_at", { ascending: true })
+      .limit(MAX_QUESTIONNAIRE_RESPONSES);
+    questionnaireResponsesRaw = (responses ?? []) as typeof questionnaireResponsesRaw;
+  }
+
+  const questionnaireResponses: QuestionnaireResponseContext[] = questionnaireResponsesRaw.map((r) => {
+    const q = r.questionnaire_questions;
+    const qOne = Array.isArray(q) ? q[0] : q;
+    return {
+      section_title: qOne?.section_title ?? "(unknown section)",
+      prompt:        qOne?.prompt        ?? "(unknown prompt)",
+      response_text: String(r.response_text ?? "").slice(0, MAX_RESPONSE_TEXT_CHARS),
+      flagged:       !!r.inconsistency_flag,
+    };
+  });
+
+  // ---------------------------------------------------------------------------
+  // SOTR / parsed protocol items. Linked via the audit's protocol_id →
+  // documents.protocol_id → protocol_extracted_items.document_id. The
+  // existing `documents!inner(protocol_id)` PostgREST pattern from
+  // src/lib/sotr/sourceEvidenceApi.ts is the canonical join — reused here.
+  //
+  // Awaiting-review predicate matches src/lib/sotr/sourceEvidenceApi.ts
+  // exactly: review_status IS NULL or review_status = 'draft'. Diverging
+  // here would silently disagree with the in-app "Protocol source" badge.
+  // ---------------------------------------------------------------------------
+  const protocolId = (audit.protocol_id as string | null) ?? null;
+  let sotrTotal = 0;
+  let sotrAwaiting = 0;
+  let sotrRecentReviewed: SotrItemContext[] = [];
+
+  if (protocolId) {
+    const totalP = supabase
+      .from("protocol_extracted_items")
+      .select("id, documents!inner(protocol_id)", { count: "exact", head: true })
+      .eq("documents.protocol_id", protocolId);
+
+    const awaitingP = supabase
+      .from("protocol_extracted_items")
+      .select("id, documents!inner(protocol_id)", { count: "exact", head: true })
+      .eq("documents.protocol_id", protocolId)
+      .or("review_status.eq.draft,review_status.is.null");
+
+    const reviewedP = supabase
+      .from("protocol_extracted_items")
+      .select("field_type, field_path, current_text, extracted_value, documents!inner(protocol_id)")
+      .eq("documents.protocol_id", protocolId)
+      .not("review_status", "is", null)
+      .neq("review_status", "draft")
+      .order("updated_at", { ascending: false })
+      .limit(MAX_SOTR_ITEMS);
+
+    const [totalRes, awaitingRes, reviewedRes] = await Promise.all([totalP, awaitingP, reviewedP]);
+    sotrTotal = totalRes.count ?? 0;
+    sotrAwaiting = awaitingRes.count ?? 0;
+    sotrRecentReviewed = (reviewedRes.data ?? []).map((r) => {
+      // Prefer auditor-edited current_text over the raw extracted_value.
+      // current_text is the canonical post-review form; extracted_value is
+      // the parser's first pass and may not reflect the auditor's edits.
+      let text: string;
+      if (typeof r.current_text === "string" && r.current_text.trim().length > 0) {
+        text = r.current_text;
+      } else {
+        // extracted_value is JSONB — stringify defensively; auditors haven't
+        // necessarily seen the raw form, but it's the best fallback.
+        try {
+          text = typeof r.extracted_value === "string"
+            ? r.extracted_value
+            : JSON.stringify(r.extracted_value);
+        } catch {
+          text = "(unstringifiable extracted_value)";
+        }
+      }
+      return {
+        field_type: String(r.field_type ?? ""),
+        field_path: String(r.field_path ?? ""),
+        text:       text.slice(0, MAX_SOTR_TEXT_CHARS),
+      };
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // Build context. Safe logging: counts + lengths only.
   // ---------------------------------------------------------------------------
   const counts = {
@@ -396,6 +635,7 @@ Deno.serve(async (req: Request) => {
     protocol_title:          protocolTitle,
     audit_type:              (audit.audit_type as string | null) ?? null,
     current_stage:           (audit.current_stage as string | null) ?? null,
+    viewed_stage:            viewedStage,
     risk_summary_narrative:  riskApproved ? ((riskSummary?.executive_summary_text as string | null) ?? null) : null,
     risk_tier:               riskApproved ? ((riskSummary?.tier as string | null) ?? null) : null,
     risk_score:              riskApproved ? ((riskSummary?.composite_score as number | null) ?? null) : null,
@@ -404,17 +644,28 @@ Deno.serve(async (req: Request) => {
     report_conclusions:       (reportDraft?.conclusions as string | null) ?? null,
     entries:                 entriesCtx,
     counts,
+    questionnaire_approved:  questionnaireApproved,
+    questionnaire_responses: questionnaireResponses,
+    sotr_total:              sotrTotal,
+    sotr_awaiting_review:    sotrAwaiting,
+    sotr_recent_reviewed:    sotrRecentReviewed,
   };
 
   log("info", "audit_mode_chat.request", {
     request_id: requestId,
     audit_id: auditId,
+    viewed_stage: viewedStage,
     turns: messages.length,
     last_user_chars: messages[messages.length - 1].content.length,
     entry_count: rows.length,
     counts,
     risk_approved: riskApproved,
     has_report_draft: !!reportDraft,
+    questionnaire_approved: questionnaireApproved,
+    questionnaire_response_count: questionnaireResponses.length,
+    sotr_total: sotrTotal,
+    sotr_awaiting_review: sotrAwaiting,
+    sotr_reviewed_sample: sotrRecentReviewed.length,
   });
 
   // ---------------------------------------------------------------------------
@@ -442,7 +693,16 @@ Deno.serve(async (req: Request) => {
         temperature: 0.3,
         max_tokens: 600,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          {
+            role: "system",
+            // Append the per-stage focus hint when we have one. Concatenating
+            // onto the base SYSTEM_PROMPT (rather than emitting a third
+            // system message) keeps the framing + hard rules + relevance bias
+            // in a single block the model treats as one instruction.
+            content: viewedStage && STAGE_FOCUS_HINTS[viewedStage]
+              ? `${SYSTEM_PROMPT}\n\nStage focus: ${STAGE_FOCUS_HINTS[viewedStage]}`
+              : SYSTEM_PROMPT,
+          },
           { role: "system", content: buildContextMessage(ctx) },
           ...messages,
         ],

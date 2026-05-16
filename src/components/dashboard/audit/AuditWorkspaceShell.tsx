@@ -322,6 +322,11 @@ export default function AuditWorkspaceShell() {
             setChatThreads((prev) => ({ ...prev, [activeAudit.id]: next }))
           }
           onClose={() => setChatOpen(false)}
+          /* viewedStage — what the auditor is LOOKING at, not necessarily the
+             audit's workflow position. Lets PIQC bias relevance ("you're in
+             Stage 6, here's what I'd look at next") even when the auditor
+             revisits an earlier stage. */
+          viewedStage={viewedStage}
         />
       )}
 

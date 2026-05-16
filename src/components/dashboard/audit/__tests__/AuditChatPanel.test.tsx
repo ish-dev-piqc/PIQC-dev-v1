@@ -37,7 +37,7 @@ vi.mock('../../../../lib/audit/chatApi', async () => {
 import { requestAuditChat, AuditChatError } from '../../../../lib/audit/chatApi';
 const mockChat = requestAuditChat as unknown as ReturnType<typeof vi.fn>;
 
-function setup(initial: AuditChatMessage[] = []) {
+function setup(initial: AuditChatMessage[] = [], viewedStage?: string) {
   const onMessagesChange = vi.fn();
   const onClose = vi.fn();
   let messages = initial;
@@ -50,6 +50,7 @@ function setup(initial: AuditChatMessage[] = []) {
         onMessagesChange(next);
       }}
       onClose={onClose}
+      viewedStage={viewedStage}
     />
   );
   const utils = render(<Wrapper />);
@@ -196,6 +197,32 @@ describe('AuditChatPanel — thread trim contract', () => {
     // First old turn dropped, new turn at the tail.
     expect(sent[0]).toEqual({ role: 'assistant', content: 't1' });
     expect(sent[sent.length - 1]).toEqual({ role: 'user', content: 'NEW' });
+  });
+});
+
+describe('AuditChatPanel — viewedStage prop forwarding', () => {
+  it('passes viewedStage through to requestAuditChat when provided', async () => {
+    mockChat.mockResolvedValueOnce('ok');
+    const user = userEvent.setup();
+    setup([], 'AUDIT_CONDUCT');
+
+    await user.type(screen.getByTestId('audit-chat-input'), 'q');
+    await user.click(screen.getByTestId('audit-chat-send'));
+
+    await waitFor(() => expect(mockChat).toHaveBeenCalledTimes(1));
+    expect(mockChat.mock.calls[0][2]).toBe('AUDIT_CONDUCT');
+  });
+
+  it('passes undefined when viewedStage is omitted (no stage bias)', async () => {
+    mockChat.mockResolvedValueOnce('ok');
+    const user = userEvent.setup();
+    setup([]);
+
+    await user.type(screen.getByTestId('audit-chat-input'), 'q');
+    await user.click(screen.getByTestId('audit-chat-send'));
+
+    await waitFor(() => expect(mockChat).toHaveBeenCalledTimes(1));
+    expect(mockChat.mock.calls[0][2]).toBeUndefined();
   });
 });
 

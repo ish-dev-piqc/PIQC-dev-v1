@@ -45,6 +45,10 @@ interface Props {
   /** Replace the parent-owned thread for this audit. Parent persists keyed by audit id. */
   onMessagesChange: (next: AuditChatMessage[]) => void;
   onClose: () => void;
+  /** The stage the auditor is currently looking at. Forwarded to the edge
+   *  function so PIQC can bias its replies. Optional; server validates and
+   *  falls back to no stage bias when omitted. */
+  viewedStage?: string;
 }
 
 export default function AuditChatPanel({
@@ -52,6 +56,7 @@ export default function AuditChatPanel({
   messages,
   onMessagesChange,
   onClose,
+  viewedStage,
 }: Props) {
   const panelRef     = useRef<HTMLDivElement>(null);
   const scrollerRef  = useRef<HTMLDivElement>(null);
@@ -109,7 +114,7 @@ export default function AuditChatPanel({
     setPending(true);
 
     try {
-      const reply = await requestAuditChat(auditId, sendable);
+      const reply = await requestAuditChat(auditId, sendable, viewedStage);
       const withReply = [...localNext, { role: 'assistant' as const, content: reply }];
       const trimmedReply = withReply.length > MAX_LOCAL_HISTORY
         ? withReply.slice(-MAX_LOCAL_HISTORY)
