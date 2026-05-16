@@ -1160,6 +1160,14 @@ function PiqcLandingNote({
   return (
     <div
       data-testid={`piqc-landing-note-${field}`}
+      // role="status" announces the note's content to screen-reader users
+      // when it mounts. The note is the auditor's only signal that the
+      // textarea below them carries text they just sent from PIQC chat —
+      // a visual-only cue would leave SR users without the connective
+      // tissue. role="status" implies aria-live="polite" per WAI-ARIA, so
+      // the announcement waits for the SR user's current utterance to
+      // finish rather than interrupting.
+      role="status"
       className={`flex items-start gap-2 px-3 py-2 mb-3 rounded-md border ${
         isLight
           ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]'

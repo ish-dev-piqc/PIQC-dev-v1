@@ -711,15 +711,20 @@ describe('ReportDraftingWorkspace — PIQC write-back landing note (PR #80)', ()
         onDismissLandingNotice={vi.fn()}
       />,
     );
-    expect(screen.getByTestId('piqc-landing-note-executive_summary'))
-      .toBeInTheDocument();
+    const note = screen.getByTestId('piqc-landing-note-executive_summary');
+    expect(note).toBeInTheDocument();
     expect(screen.queryByTestId('piqc-landing-note-conclusions'))
       .not.toBeInTheDocument();
     // Voice check — first-person partner consistent with chat panel's
     // empty-state primer + confirm copy. Locks against drift back to
     // third-person system voice.
-    expect(screen.getByTestId('piqc-landing-note-executive_summary'))
-      .toHaveTextContent(/Just dropped this into your exec summary/i);
+    expect(note).toHaveTextContent(/Just dropped this into your exec summary/i);
+    // A11y — role="status" makes the note's appearance announceable to
+    // screen-reader users (implies aria-live="polite"). Without this,
+    // SR users would land on Stage 7 with new textarea text but no
+    // signal that PIQC just put it there. Locked so a future styling
+    // pass doesn't silently strip the role.
+    expect(note).toHaveAttribute('role', 'status');
   });
 
   it('renders the conclusions note above the conclusions section, not the exec section', () => {
