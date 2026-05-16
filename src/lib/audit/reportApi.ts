@@ -27,6 +27,10 @@ interface ReportDraftRow {
   // rows; present when the report was agent-bootstrapped.
   source_risk_summary_id?: string | null;
   prefilled_at?: string | null;
+  // Exec-summary provenance (this PR). 'templated' | 'llm' | 'auditor_edited'.
+  // NOT NULL on the server (DEFAULT 'templated' for backfill); optional here
+  // only to allow rows fetched before the migration applied to deserialize.
+  executive_summary_source?: 'templated' | 'llm' | 'auditor_edited';
 }
 
 async function resolveUserName(userId: string | null): Promise<string | null> {
@@ -57,6 +61,7 @@ async function flattenRow(row: ReportDraftRow): Promise<MockReportDraft> {
     exported_at: row.exported_at,
     source_risk_summary_id: row.source_risk_summary_id ?? null,
     prefilled_at: row.prefilled_at ?? null,
+    executive_summary_source: row.executive_summary_source ?? 'templated',
   };
 }
 
@@ -87,12 +92,17 @@ export async function upsertReportDraft(
   executiveSummary: string,
   conclusions: string,
   reason?: string,
+  /** Optional. When provided, server records the new exec-summary provenance
+   *  on the row. Omitted → server preserves the existing value (so saving an
+   *  edit to `conclusions` only doesn't reset the exec-summary trail). */
+  executiveSummarySource?: 'templated' | 'llm' | 'auditor_edited',
 ): Promise<MockReportDraft | null> {
   const { data, error } = await supabase.rpc('audit_mode_upsert_report_draft', {
     p_audit_id: auditId,
     p_executive_summary: executiveSummary,
     p_conclusions: conclusions,
     p_reason: reason ?? null,
+    p_executive_summary_source: executiveSummarySource ?? null,
   });
   if (error) {
     console.error('[reportApi] upsertReportDraft error:', error);
@@ -100,6 +110,65 @@ export async function upsertReportDraft(
   }
   if (!data) return null;
   return flattenRow(data as ReportDraftRow);
+}
+
+// ============================================================================
+// LLM-drafted executive summary (Stage 7)
+//
+// Calls the audit-summary edge function under the user's JWT. The function
+// fetches approved Stage 4 + Stage 6 server-side, builds a prompt, calls
+// OpenAI gpt-4o-mini, and returns the narrative.
+//
+// The wrapper does NOT persist the result — caller decides whether to apply
+// it. UI flow:
+//   1. Auditor clicks "Refine with AI" on the exec-summary section
+//   2. requestLlmExecutiveSummary(auditId) → { narrative }
+//   3. UI shows the narrative for review; auditor edits if needed
+//   4. UI calls upsertReportDraft with the new text + executiveSummarySource='llm'
+// ============================================================================
+
+export class LlmExecutiveSummaryError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'LlmExecutiveSummaryError';
+    this.status = status;
+  }
+}
+
+export async function requestLlmExecutiveSummary(
+  auditId: string,
+): Promise<string> {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token ?? supabaseAnonKey;
+
+  const res = await fetch(`${supabaseUrl}/functions/v1/audit-summary`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ audit_id: auditId }),
+  });
+
+  const data = (await res.json().catch(() => ({}))) as {
+    narrative?: string;
+    error?: string;
+  };
+
+  if (!res.ok) {
+    throw new LlmExecutiveSummaryError(
+      data.error || `LLM service returned ${res.status}`,
+      res.status,
+    );
+  }
+  if (!data.narrative) {
+    throw new LlmExecutiveSummaryError('LLM service returned empty narrative', 502);
+  }
+  return data.narrative;
 }
 
 export async function approveReportDraft(

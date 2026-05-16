@@ -7,6 +7,8 @@ import {
   Sparkles,
   FileText,
   History as HistoryIcon,
+  Loader2,
+  X as XIcon,
 } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useAudit } from '../../../../context/AuditContext';
@@ -21,6 +23,8 @@ import {
   upsertReportDraft,
   approveReportDraft,
   prefillReportDraft,
+  requestLlmExecutiveSummary,
+  LlmExecutiveSummaryError,
 } from '../../../../lib/audit/reportApi';
 import type { MockWorkspaceEntry } from '../../../../lib/audit/mockWorkspaceEntries';
 import type { ProvisionalClassification } from '../../../../types/audit';
@@ -57,6 +61,21 @@ export default function ReportDraftingWorkspace() {
   const [draftSummary, setDraftSummary] = useState('');
   const [draftConclusions, setDraftConclusions] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
+  // Auto-fire LLM refinement state. The agent runs on first Stage 7 open
+  // for any audit whose draft is still 'templated' — no button, no decision
+  // surface. Auditor lands on a drafted report; they review and approve.
+  //   llmRefining: background spinner on the source chip while in flight
+  //   llmFallback: dismissable inline note when LLM failed and we kept the
+  //                templated text intact (silent-with-signal degradation)
+  const [llmRefining, setLlmRefining] = useState(false);
+  const [llmFallback, setLlmFallback] = useState<string | null>(null);
+
+  // Tracks audits whose LLM-refinement attempt has fired in this session,
+  // so a re-render or navigation back to Stage 7 doesn't re-prompt OpenAI.
+  // The server-side trail (executive_summary_source column transitioning to
+  // 'llm') is the durable guard; this is the network-noise / cost optimisation.
+  // Mirrors attemptedPrefillRef's idempotency idiom from PRs #58 + #62.
+  const attemptedLlmRef = useRef<Set<string>>(new Set());
 
   // Tracks audits whose prefill RPC has already been attempted in this session
   // so opening Stage 7 / re-rendering doesn't fire the RPC repeatedly. The
@@ -74,6 +93,7 @@ export default function ReportDraftingWorkspace() {
 
     const load = async () => {
       const initial = await fetchReportDraft(id);
+      let draft = initial;
 
       // Silent agentic bootstrap: if no report exists AND we haven't already
       // attempted prefill for this audit this session, fire the prefill RPC.
@@ -82,10 +102,56 @@ export default function ReportDraftingWorkspace() {
       if (!initial && !attemptedPrefillRef.current.has(id)) {
         attemptedPrefillRef.current.add(id);
         await prefillReportDraft(id);
-        const refreshed = await fetchReportDraft(id);
-        setReports((prev) => ({ ...prev, [id]: refreshed }));
-      } else {
-        setReports((prev) => ({ ...prev, [id]: initial }));
+        draft = await fetchReportDraft(id);
+      }
+      setReports((prev) => ({ ...prev, [id]: draft }));
+
+      // North-star upgrade-in-place: if the draft is still templated AND
+      // hasn't been approved yet AND we haven't tried LLM in this session,
+      // fire the audit-summary edge function to refine the exec summary.
+      // The auditor sees the templated text first (calm), then it gets
+      // replaced by the LLM narrative when the call resolves (~3-8s).
+      //
+      // Guards:
+      //   - Skip if approved — auditor signed off on templated; don't
+      //     silently undo that by demoting the report back to DRAFT.
+      //   - Skip if source already 'llm' or 'auditor_edited' — no second-
+      //     guessing prior state in this session.
+      //   - In-session ref + server-side source column = double idempotency.
+      //
+      // Failure mode: templated text stays in place; surface a dismissable
+      // inline note so the auditor sees gracefully degraded behaviour and
+      // the dev team has a debug signal (console.warn).
+      if (
+        draft &&
+        draft.executive_summary_source === 'templated' &&
+        draft.approval_status === 'DRAFT' &&
+        !attemptedLlmRef.current.has(id)
+      ) {
+        attemptedLlmRef.current.add(id);
+        setLlmRefining(true);
+        try {
+          const narrative = await requestLlmExecutiveSummary(id);
+          const refined = await upsertReportDraft(
+            id,
+            narrative,
+            draft.conclusions,
+            'Executive summary refined by LLM',
+            'llm',
+          );
+          if (refined) {
+            setReports((prev) => ({ ...prev, [id]: refined }));
+          }
+        } catch (err) {
+          const message =
+            err instanceof LlmExecutiveSummaryError
+              ? err.message
+              : 'AI refinement is temporarily unavailable. Using the templated draft — you can edit it directly.';
+          console.warn('[ReportDraftingWorkspace] LLM refinement failed', err);
+          setLlmFallback(message);
+        } finally {
+          setLlmRefining(false);
+        }
       }
     };
 
@@ -146,7 +212,28 @@ export default function ReportDraftingWorkspace() {
 
   const saveSummary = async () => {
     if (!report || !auditId) return;
-    const updated = await upsertReportDraft(auditId, draftSummary.trim(), report.conclusions);
+    // Source resolution on save:
+    //   - If current source is 'llm' AND the auditor didn't change the text
+    //     since the LLM filled it, keep 'llm' (they accepted the draft as-is)
+    //   - Otherwise flag 'auditor_edited' so the audit trail captures the
+    //     human edit. The server preserves the previous value if we omit
+    //     the param entirely — passing 'auditor_edited' is the explicit
+    //     transition signal.
+    const trimmed = draftSummary.trim();
+    const llmDraftAcceptedAsIs =
+      report.executive_summary_source === 'llm' &&
+      trimmed === report.executive_summary;
+    const newSource: 'llm' | 'auditor_edited' = llmDraftAcceptedAsIs
+      ? 'llm'
+      : 'auditor_edited';
+
+    const updated = await upsertReportDraft(
+      auditId,
+      trimmed,
+      report.conclusions,
+      undefined,
+      newSource,
+    );
     if (updated) {
       setReports((prev) => ({ ...prev, [auditId]: updated }));
       setEditing(null);
@@ -254,8 +341,11 @@ export default function ReportDraftingWorkspace() {
       </div>
 
       {/* Agentic moment — one-time note. Dismissable; persists per (stage, audit)
-          in localStorage. Mirrors the Stage 5 banner pattern from PR #58. */}
-      {report.prefilled_at && (
+          in localStorage. Mirrors the Stage 5 banner pattern from PR #58.
+          Hidden when source === 'llm' — the per-section LLM banner below
+          carries the agentic narration in that state and stacking both
+          would add cognitive load instead of collapsing it. */}
+      {report.prefilled_at && report.executive_summary_source !== 'llm' && (
         <PrefillAgentNote
           storageKey={`piq-stage7-prefill-note-dismissed:${auditId}`}
           message="The executive summary and conclusions were drafted from your approved risk summary and audit observations. Review and edit each before approving."
@@ -282,8 +372,79 @@ export default function ReportDraftingWorkspace() {
         </div>
       )}
 
-      {/* Executive summary — editable */}
+      {/* Executive summary — editable. Agent has already drafted by the
+          time the auditor lands here (auto-fire on first open if templated).
+          Auditor reads, edits if needed, approves. No "generate" buttons. */}
       <Section title="Executive summary" sectionHeader={sectionHeader}>
+        {/* Source chip + in-flight indicator. While the LLM is refining the
+            templated draft in the background, the chip is paired with a small
+            "Refining with AI…" spinner so the auditor knows what's happening
+            and doesn't start editing text that's about to be replaced. */}
+        <div className="flex items-center gap-2 flex-wrap mb-2">
+          <ExecSummarySourceChip
+            source={report.executive_summary_source ?? 'templated'}
+            isLight={isLight}
+          />
+          {llmRefining && (
+            <span
+              data-testid="exec-summary-llm-refining"
+              className={`inline-flex items-center gap-1 text-[10px] font-medium ${
+                isLight ? 'text-[#4a6fa5]' : 'text-[#6e8fb5]'
+              }`}
+            >
+              <Loader2 size={9} className="animate-spin" />
+              Refining with AI…
+            </span>
+          )}
+        </div>
+
+        {/* Calm narration when the LLM successfully refined the draft.
+            Uses the established PrefillAgentNote pattern (PRs #58 + #62)
+            so the agentic moment reads consistently across stages. One-time
+            dismissable per (audit, llm). */}
+        {report.executive_summary_source === 'llm' && (
+          <div className="mb-3">
+            <PrefillAgentNote
+              storageKey={`piq-stage7-llm-banner-dismissed:${auditId}`}
+              headline="Drafted with AI."
+              message={
+                <>
+                  Refined from your approved Stage 4 risk summary and Stage 6
+                  observations. Review and edit before approving.
+                </>
+              }
+            />
+          </div>
+        )}
+
+        {/* Silent-with-signal fallback note when the LLM call failed and the
+            templated text is what's showing. Dismissable so it doesn't nag
+            after the auditor acknowledges it. Not an error — a calm
+            "we tried, here's what happened" signal. */}
+        {llmFallback && report.executive_summary_source === 'templated' && (
+          <div
+            data-testid="exec-summary-llm-fallback"
+            className={`flex items-start gap-2 px-3 py-2 mb-3 rounded-md border ${
+              isLight
+                ? 'bg-amber-50/60 border-amber-200/80 text-amber-700'
+                : 'bg-amber-500/[0.06] border-amber-500/20 text-amber-300'
+            }`}
+          >
+            <AlertTriangle size={12} className="flex-shrink-0 mt-0.5" />
+            <p className="text-[11px] leading-relaxed flex-1">{llmFallback}</p>
+            <button
+              type="button"
+              onClick={() => setLlmFallback(null)}
+              aria-label="Dismiss"
+              className={`inline-flex items-center justify-center w-5 h-5 rounded ${
+                isLight ? 'text-amber-700/60 hover:bg-white/60' : 'text-amber-300/60 hover:bg-white/[0.06]'
+              }`}
+            >
+              <XIcon size={11} />
+            </button>
+          </div>
+        )}
+
         {editing === 'summary' ? (
           <div className={`${cardBg} border rounded-md p-4 space-y-3`}>
             <textarea
@@ -306,7 +467,7 @@ export default function ReportDraftingWorkspace() {
                 </p>
               </div>
             )}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
                 onClick={saveSummary}
@@ -637,6 +798,49 @@ function AutoCompiledNote({ text, mutedColor }: { text: string; mutedColor: stri
 
 function Empty({ subColor, children }: { subColor: string; children: React.ReactNode }) {
   return <p className={`${subColor} text-sm italic`}>{children}</p>;
+}
+
+// ExecSummarySourceChip — declarative provenance affordance.
+// Tells the auditor what kind of draft they're looking at without competing
+// with the executive summary text itself. Muted by default; the LLM and
+// edited states have just enough color to be noticeable.
+function ExecSummarySourceChip({
+  source,
+  isLight,
+}: {
+  source: 'templated' | 'llm' | 'auditor_edited';
+  isLight: boolean;
+}) {
+  const labels: Record<typeof source, string> = {
+    templated: 'Templated draft',
+    llm: 'AI-drafted',
+    auditor_edited: 'Edited by auditor',
+  };
+  const tone = (() => {
+    if (source === 'llm') {
+      return isLight
+        ? 'bg-[#eef2f6] border-[#cbd2db] text-[#4a6fa5]'
+        : 'bg-white/[0.04] border-white/10 text-[#6e8fb5]';
+    }
+    if (source === 'auditor_edited') {
+      return isLight
+        ? 'bg-white border-[#e2e8ee] text-[#374152]'
+        : 'bg-[#131a22] border-white/10 text-[#d2d7e0]';
+    }
+    return isLight
+      ? 'bg-white border-[#e2e8ee] text-[#374152]/65'
+      : 'bg-[#131a22] border-white/10 text-[#d2d7e0]/60';
+  })();
+  return (
+    <span
+      data-testid="exec-summary-source-chip"
+      data-source={source}
+      className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md border mb-2 ${tone}`}
+    >
+      {source === 'llm' && <Sparkles size={9} />}
+      {labels[source]}
+    </span>
+  );
 }
 
 function StatusBadge({ approved, isLight }: { approved: boolean; isLight: boolean }) {
