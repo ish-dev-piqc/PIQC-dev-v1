@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Sparkles, X, Send } from 'lucide-react';
+import { X, Send } from 'lucide-react';
 import { useOverlay } from '../../../hooks/useOverlay';
 import { useSwipeDismiss } from '../../../hooks/useSwipeDismiss';
 import {
@@ -7,6 +7,9 @@ import {
   AuditChatError,
   type AuditChatMessage,
 } from '../../../lib/audit/chatApi';
+import { STAGE_LABELS } from '../../../lib/audit/labels';
+import type { AuditStage } from '../../../types/audit';
+import PiqcMark from './PiqcMark';
 
 // =============================================================================
 // AuditChatPanel (F-3) — freeform auditor chat about the active audit.
@@ -156,7 +159,7 @@ export default function AuditChatPanel({
       className="fixed inset-0 z-40 flex justify-end"
       role="dialog"
       aria-modal="true"
-      aria-label="Audit assistant chat"
+      aria-label="PIQC chat"
     >
       <div
         data-testid="audit-chat-panel-backdrop"
@@ -169,25 +172,53 @@ export default function AuditChatPanel({
         {...swipe}
         className="relative w-full max-w-xl h-full bg-[#f5f7fa] dark:bg-[#0d1118] shadow-xl border-l border-[#e2e8ee] dark:border-white/5 flex flex-col"
       >
-        {/* Header */}
-        <div className="sticky top-0 z-10 bg-[#f5f7fa]/95 dark:bg-[#0d1118]/95 backdrop-blur px-5 py-3.5 border-b border-[#e2e8ee] dark:border-white/5 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <Sparkles size={14} className="text-[#4a6fa5] dark:text-[#6e8fb5] flex-shrink-0" aria-hidden />
-            <h2 className="text-fg-heading text-sm font-semibold truncate">
-              Audit assistant
-            </h2>
-            <span
-              className="text-[10px] uppercase tracking-wider font-semibold text-fg-muted bg-[#eef2f6] dark:bg-white/[0.04] border border-[#cbd2db] dark:border-white/10 rounded px-1.5 py-0.5 flex-shrink-0"
-              aria-label="AI-drafted, advisory only"
-            >
-              AI · advisory
-            </span>
+        {/* Header.
+            PIQC's brand mark + name lead; the "AI · advisory" honesty chip
+            stays — it's the trust signal, not the brand signal. When the
+            auditor is viewing a specific stage, a soft "focused on …" chip
+            renders below so PIQC's stage-awareness is visible, not just
+            inferred from replies. */}
+        <div className="sticky top-0 z-10 bg-[#f5f7fa]/95 dark:bg-[#0d1118]/95 backdrop-blur px-5 py-3 border-b border-[#e2e8ee] dark:border-white/5 flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[#4a6fa5] dark:text-[#6e8fb5] flex-shrink-0">
+                <PiqcMark size={14} />
+              </span>
+              <h2
+                className="text-fg-heading text-sm font-semibold truncate"
+                /* Pronunciation cue lives in the hover layer — "PIQC" in
+                   writing is unrecoverable as "pixie" without it. Quiet and
+                   professional; never appears as visible body copy. */
+                title="PIQC (pronounced 'pixie')"
+              >
+                PIQC
+              </h2>
+              <span
+                className="text-[10px] uppercase tracking-wider font-semibold text-fg-muted bg-[#eef2f6] dark:bg-white/[0.04] border border-[#cbd2db] dark:border-white/10 rounded px-1.5 py-0.5 flex-shrink-0"
+                aria-label="AI-drafted, advisory only"
+              >
+                AI · advisory
+              </span>
+            </div>
+            {/* The `as AuditStage` cast is informational: viewedStage
+                originates from the shell's AuditStage state and is round-
+                tripped through the edge function's VALID_VIEWED_STAGES
+                allow-list. The short-circuit `&& STAGE_LABELS[...]` is
+                the runtime safety net — unknown values render nothing. */}
+            {viewedStage && STAGE_LABELS[viewedStage as AuditStage] && (
+              <p
+                data-testid="audit-chat-stage-focus"
+                className="text-[11px] text-fg-muted mt-0.5 truncate"
+              >
+                Focused on {STAGE_LABELS[viewedStage as AuditStage]}
+              </p>
+            )}
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close audit assistant"
-            className="inline-flex items-center justify-center w-7 h-7 rounded-md text-fg-sub hover:bg-[#e2e8ee] dark:hover:bg-white/[0.06]"
+            aria-label="Close PIQC"
+            className="inline-flex items-center justify-center w-7 h-7 rounded-md text-fg-sub hover:bg-[#e2e8ee] dark:hover:bg-white/[0.06] flex-shrink-0"
           >
             <X size={14} />
           </button>
@@ -201,10 +232,10 @@ export default function AuditChatPanel({
               className="text-sm text-fg-sub leading-relaxed space-y-3"
             >
               <p className="text-fg-heading font-medium">
-                Ask anything about this audit.
+                Hi — I've been reading along.
               </p>
               <p>
-                The assistant reads along with you. It can recall from:
+                Ask me anything about this audit. I can recall from:
               </p>
               <ul className="list-disc pl-5 space-y-0.5 text-xs">
                 <li>the approved vendor questionnaire</li>
@@ -213,11 +244,11 @@ export default function AuditChatPanel({
                 <li>any report draft you've started</li>
               </ul>
               <p>
-                Use it to spot gaps, restate findings in different words, or
+                Use me to spot gaps, restate findings in different words, or
                 sanity-check your reasoning before you commit a change.
               </p>
               <p className="text-xs text-fg-muted">
-                It's advisory only — you stay the decision-maker. Nothing here
+                I'm advisory only — you stay the decision-maker. Nothing I say
                 writes back to the audit.
               </p>
             </div>
@@ -280,7 +311,7 @@ export default function AuditChatPanel({
               placeholder="Ask about findings, risk posture, or what's missing…"
               rows={2}
               disabled={pending}
-              aria-label="Message the audit assistant"
+              aria-label="Message PIQC"
               data-testid="audit-chat-input"
               className="flex-1 resize-none rounded-md border border-[#dce4ed] dark:border-white/10 bg-white dark:bg-[#131a22] text-sm text-fg-heading placeholder:text-fg-muted px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30 disabled:opacity-60"
             />
