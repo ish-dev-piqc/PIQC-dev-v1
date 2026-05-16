@@ -12,7 +12,6 @@ import NewAuditDrawer from './onboarding/NewAuditDrawer';
 import AuditChatPanel from './AuditChatPanel';
 import PiqcDock from './PiqcDock';
 import type { AuditChatMessage } from '../../../lib/audit/chatApi';
-import { useWorksheetReviewCount } from '../../../hooks/useWorksheetReviewCount';
 import { usePiqcSignals } from '../../../hooks/usePiqcSignals';
 import { AUDIT_STAGES } from '../../../types/audit';
 import IntakeWorkspace from './stages/IntakeWorkspace';
@@ -77,19 +76,21 @@ export default function AuditWorkspaceShell() {
   // thread (see useEffect on activeAudit?.id below) to prevent context bleed.
   const [chatOpen, setChatOpen] = useState(false);
   const [chatThreads, setChatThreads] = useState<Record<string, AuditChatMessage[]>>({});
-  // F-2: bump on drawer close so the badge picks up newly reviewed items
-  // without forcing a remount. Increment-only token; identity matters, value
-  // doesn't.
+  // Refresh token bumped on SOTR drawer close so PIQC's dock dot picks up
+  // newly reviewed items without forcing a remount. Increment-only token;
+  // identity matters, value doesn't.
+  //
+  // Pre-#77: an additional useWorksheetReviewCount fetch drove an amber
+  // badge on the Protocol-source button. The badge duplicated PIQC's dock
+  // signal (two amber surfaces, one fact), so the header badge + its
+  // hook were retired (the hook is gone from the codebase entirely).
+  // PIQC's usePiqcSignals fetches the SOTR count internally — single
+  // fetch, one surface, no cognitive-load redundancy.
   const [reviewCountToken, setReviewCountToken] = useState(0);
-  const reviewCount = useWorksheetReviewCount(
-    activeAudit?.protocol_id ?? null,
-    reviewCountToken,
-  );
 
   // PIQC ambient signals (v1: SOTR review queue + questionnaire-flagged
-  // responses). Re-uses reviewCountToken so the same drawer-close refresh
-  // that updates the Protocol-source badge also refreshes PIQC's dot.
-  // Single source of truth for "the audit just changed, re-derive."
+  // responses). Reuses reviewCountToken as the single "audit just changed"
+  // refresh trigger.
   const piqcSignals = usePiqcSignals(
     activeAudit?.id ?? null,
     activeAudit?.protocol_id ?? null,
@@ -212,17 +213,25 @@ export default function AuditWorkspaceShell() {
                 <Plus size={12} />
                 New audit
               </button>
+              {/* Protocol source — pure navigation affordance.
+                  Previously carried an amber review-queue badge that
+                  duplicated PIQC's dock dot (both surfaced the same SOTR
+                  backlog signal). The badge was retired in PR #77 so PIQC
+                  owns SOTR signaling exclusively — single intelligence
+                  surface, no double-amber-affordance violation of the
+                  cognitive-load doctrine.
+                  The SOTR count now flows through usePiqcSignals (which
+                  fetches the count itself) → dock dot + panel "Worth a
+                  look:" + "Take me there →" shortcut. Hover tooltip kept
+                  its always-on copy (no per-count branching) — hover is
+                  not a visual conflict with the dock. */}
               <button
                 type="button"
                 onClick={() => setProtocolSourceOpen(true)}
                 disabled={!activeAudit.protocol_id}
                 title={
                   activeAudit.protocol_id
-                    ? reviewCount.data && reviewCount.data.awaitingReview > 0
-                      ? `${reviewCount.data.awaitingReview} parsed item${
-                          reviewCount.data.awaitingReview === 1 ? '' : 's'
-                        } awaiting your review`
-                      : 'View what the parser extracted from the protocol PDF'
+                    ? 'View what the parser extracted from the protocol PDF'
                     : 'No protocol associated with this audit'
                 }
                 data-testid="audit-protocol-source-button"
@@ -234,23 +243,6 @@ export default function AuditWorkspaceShell() {
               >
                 <FileSearch size={12} />
                 Protocol source
-                {/* Review-queue badge — only shown when there's something to do.
-                    Amber, not blue: amber reads as "action needed" in the
-                    design system. Calm, not alarming; the auditor decides
-                    when to click in. */}
-                {reviewCount.data && reviewCount.data.awaitingReview > 0 && (
-                  <span
-                    data-testid="audit-protocol-source-review-badge"
-                    className={`ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-semibold leading-none border ${
-                      isLight
-                        ? 'bg-amber-50 border-amber-200 text-amber-700'
-                        : 'bg-amber-500/[0.08] border-amber-500/30 text-amber-300'
-                    }`}
-                    aria-label={`${reviewCount.data.awaitingReview} awaiting review`}
-                  >
-                    {reviewCount.data.awaitingReview}
-                  </span>
-                )}
               </button>
               {/* PIQC is summoned from the PiqcDock (bottom-right). The old
                   header "Ask" button was deliberately removed in the rename +

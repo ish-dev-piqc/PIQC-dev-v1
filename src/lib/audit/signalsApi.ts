@@ -14,8 +14,8 @@ import { supabase } from '../supabase';
 //     facts the auditor would themselves call "yes, I should look at that."
 //
 // v1 ships two signals:
-//   1. SOTR items awaiting review (sourced from useWorksheetReviewCount,
-//      already wired in the shell — no new fetch here)
+//   1. SOTR items awaiting review (PIQC fetches via countWorksheetItemsForStudy
+//      from src/lib/sotr/sourceEvidenceApi — see usePiqcSignals)
 //   2. Questionnaire responses the auditor flagged as inconsistent
 //      (this file's job — lightweight count query)
 //
