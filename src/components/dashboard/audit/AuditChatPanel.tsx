@@ -9,6 +9,7 @@ import {
 } from '../../../lib/audit/chatApi';
 import { STAGE_LABELS } from '../../../lib/audit/labels';
 import type { AuditStage } from '../../../types/audit';
+import type { PiqcSignal } from '../../../hooks/usePiqcSignals';
 import PiqcMark from './PiqcMark';
 
 // =============================================================================
@@ -52,6 +53,11 @@ interface Props {
    *  function so PIQC can bias its replies. Optional; server validates and
    *  falls back to no stage bias when omitted. */
   viewedStage?: string;
+  /** Ambient signals PIQC has noticed about this audit. Rendered in the
+   *  empty state when present; never shown alongside thread turns (PIQC
+   *  doesn't keep haranguing the auditor mid-conversation). Empty array
+   *  treated the same as undefined. */
+  signals?: PiqcSignal[];
 }
 
 export default function AuditChatPanel({
@@ -60,6 +66,7 @@ export default function AuditChatPanel({
   onMessagesChange,
   onClose,
   viewedStage,
+  signals,
 }: Props) {
   const panelRef     = useRef<HTMLDivElement>(null);
   const scrollerRef  = useRef<HTMLDivElement>(null);
@@ -234,6 +241,34 @@ export default function AuditChatPanel({
               <p className="text-fg-heading font-medium">
                 Hi — I've been reading along.
               </p>
+
+              {/* Ambient signals — when PIQC has noticed something specific,
+                  it leads with that before the generic primer. The auditor
+                  came here because the dock's dot caught their eye; landing
+                  on the signal answers "what did you notice?" within one
+                  read. The block uses an amber bookmark accent that mirrors
+                  the dot — same color = same affordance, no new vocabulary. */}
+              {signals && signals.length > 0 && (
+                <div
+                  data-testid="audit-chat-signals"
+                  className="rounded-md border border-amber-300/60 dark:border-amber-500/30 bg-amber-50/70 dark:bg-amber-500/[0.06] px-3 py-2.5"
+                >
+                  <p className="text-xs font-semibold text-amber-800 dark:text-amber-200 mb-1">
+                    PIQC noticed:
+                  </p>
+                  <ul className="list-disc pl-5 space-y-0.5 text-xs text-amber-900/90 dark:text-amber-100/90">
+                    {signals.map((s) => (
+                      <li
+                        key={s.kind}
+                        data-testid={`audit-chat-signal-${s.kind}`}
+                      >
+                        {s.label}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <p>
                 Ask me anything about this audit. I can recall from:
               </p>

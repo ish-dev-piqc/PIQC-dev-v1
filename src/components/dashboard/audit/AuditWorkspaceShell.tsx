@@ -13,6 +13,7 @@ import AuditChatPanel from './AuditChatPanel';
 import PiqcDock from './PiqcDock';
 import type { AuditChatMessage } from '../../../lib/audit/chatApi';
 import { useWorksheetReviewCount } from '../../../hooks/useWorksheetReviewCount';
+import { usePiqcSignals } from '../../../hooks/usePiqcSignals';
 import { AUDIT_STAGES } from '../../../types/audit';
 import IntakeWorkspace from './stages/IntakeWorkspace';
 import VendorEnrichmentWorkspace from './stages/VendorEnrichmentWorkspace';
@@ -81,6 +82,16 @@ export default function AuditWorkspaceShell() {
   // doesn't.
   const [reviewCountToken, setReviewCountToken] = useState(0);
   const reviewCount = useWorksheetReviewCount(
+    activeAudit?.protocol_id ?? null,
+    reviewCountToken,
+  );
+
+  // PIQC ambient signals (v1: SOTR review queue + questionnaire-flagged
+  // responses). Re-uses reviewCountToken so the same drawer-close refresh
+  // that updates the Protocol-source badge also refreshes PIQC's dot.
+  // Single source of truth for "the audit just changed, re-derive."
+  const piqcSignals = usePiqcSignals(
+    activeAudit?.id ?? null,
     activeAudit?.protocol_id ?? null,
     reviewCountToken,
   );
@@ -308,7 +319,11 @@ export default function AuditWorkspaceShell() {
           Hidden while the chat panel is open so it doesn't fight the
           slide-over animation. Always mounted otherwise — that's the
           point of an on-shoulder presence. */}
-      <PiqcDock onOpen={() => setChatOpen(true)} hidden={chatOpen} />
+      <PiqcDock
+        onOpen={() => setChatOpen(true)}
+        hidden={chatOpen}
+        hasSignals={piqcSignals.signals.length > 0}
+      />
 
       {/* PIQC chat panel. Mount only while open so the backdrop + focus
           traps aren't in the DOM during normal stage work. Thread state
@@ -326,6 +341,9 @@ export default function AuditWorkspaceShell() {
              Stage 6, here's what I'd look at next") even when the auditor
              revisits an earlier stage. */
           viewedStage={viewedStage}
+          /* signals — surface in the empty state so opening the panel
+             from a dot-on-dock answers "what did you notice?" immediately. */
+          signals={piqcSignals.signals}
         />
       )}
 

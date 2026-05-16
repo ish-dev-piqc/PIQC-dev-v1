@@ -37,7 +37,11 @@ vi.mock('../../../../lib/audit/chatApi', async () => {
 import { requestAuditChat, AuditChatError } from '../../../../lib/audit/chatApi';
 const mockChat = requestAuditChat as unknown as ReturnType<typeof vi.fn>;
 
-function setup(initial: AuditChatMessage[] = [], viewedStage?: string) {
+function setup(
+  initial: AuditChatMessage[] = [],
+  viewedStage?: string,
+  signals?: import('../../../../hooks/usePiqcSignals').PiqcSignal[],
+) {
   const onMessagesChange = vi.fn();
   const onClose = vi.fn();
   let messages = initial;
@@ -51,6 +55,7 @@ function setup(initial: AuditChatMessage[] = [], viewedStage?: string) {
       }}
       onClose={onClose}
       viewedStage={viewedStage}
+      signals={signals}
     />
   );
   const utils = render(<Wrapper />);
@@ -223,6 +228,38 @@ describe('AuditChatPanel — viewedStage prop forwarding', () => {
 
     await waitFor(() => expect(mockChat).toHaveBeenCalledTimes(1));
     expect(mockChat.mock.calls[0][2]).toBeUndefined();
+  });
+});
+
+describe('AuditChatPanel — ambient signals in empty state', () => {
+  it('does not render the signals block when none are present', () => {
+    setup([]);
+    expect(screen.queryByTestId('audit-chat-signals')).not.toBeInTheDocument();
+  });
+
+  it('renders "PIQC noticed:" with one line per signal', () => {
+    setup([], undefined, [
+      { kind: 'sotr_awaiting_review',    count: 3, label: '3 parsed protocol items awaiting your review' },
+      { kind: 'questionnaire_flagged',   count: 1, label: '1 questionnaire response you flagged as inconsistent' },
+    ]);
+    const block = screen.getByTestId('audit-chat-signals');
+    expect(block).toHaveTextContent(/PIQC noticed:/i);
+    expect(screen.getByTestId('audit-chat-signal-sotr_awaiting_review'))
+      .toHaveTextContent('3 parsed protocol items awaiting your review');
+    expect(screen.getByTestId('audit-chat-signal-questionnaire_flagged'))
+      .toHaveTextContent('1 questionnaire response you flagged as inconsistent');
+  });
+
+  it('hides the signals block once the thread is non-empty (PIQC stops haranguing mid-conversation)', () => {
+    setup(
+      [{ role: 'user', content: 'q' }],
+      undefined,
+      [{ kind: 'sotr_awaiting_review', count: 2, label: '2 items awaiting your review' }],
+    );
+    // The empty-state primer (and its signals) only renders when messages.length === 0.
+    // Once the auditor starts a conversation, PIQC respects the thread and
+    // doesn't keep re-surfacing what the dot already conveyed.
+    expect(screen.queryByTestId('audit-chat-signals')).not.toBeInTheDocument();
   });
 });
 
