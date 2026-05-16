@@ -13,6 +13,7 @@ import {
 import { useTheme } from '../../../../context/ThemeContext';
 import { useAudit } from '../../../../context/AuditContext';
 import { useAuditData } from '../../../../context/AuditDataContext';
+import PiqcMark from '../PiqcMark';
 import {
   PROVISIONAL_IMPACT_LABELS,
   PROVISIONAL_CLASSIFICATION_LABELS,
@@ -52,7 +53,21 @@ const CLASSIFICATION_GROUPS: { key: ProvisionalClassification; label: string }[]
   { key: 'NOT_YET_CLASSIFIED', label: 'Not yet classified' },
 ];
 
-export default function ReportDraftingWorkspace() {
+// Landing notice — transient acknowledgment that a PIQC chat write-back
+// just landed text on Stage 7. Set by AuditWorkspaceShell after a
+// successful onAssistantWriteback; cleared by dismiss button, audit
+// switch, or navigation away from Stage 7. Optional so the workspace
+// can still mount headless from tests or from any future caller that
+// doesn't wire the notice channel.
+interface Props {
+  landingNotice?: { field: 'executive_summary' | 'conclusions'; at: number } | null;
+  onDismissLandingNotice?: () => void;
+}
+
+export default function ReportDraftingWorkspace({
+  landingNotice,
+  onDismissLandingNotice,
+}: Props = {}) {
   const { theme } = useTheme();
   const { activeAudit, advanceStage } = useAudit();
   const { reports, setReports, ...data } = useAuditData();
@@ -499,6 +514,13 @@ export default function ReportDraftingWorkspace() {
           body that reads as final). North-star alignment: collapse cognitive
           load by way of the agentic workflow experience. */}
       <Section title="Executive summary" sectionHeader={sectionHeader}>
+        {landingNotice?.field === 'executive_summary' && (
+          <PiqcLandingNote
+            field="executive_summary"
+            onDismiss={onDismissLandingNotice}
+            isLight={isLight}
+          />
+        )}
         <div className="mb-2">
           <ExecSummarySourceChip
             source={report.executive_summary_source ?? 'templated'}
@@ -758,6 +780,13 @@ export default function ReportDraftingWorkspace() {
           the auditor can land on an LLM exec summary + templated conclusions
           (or vice versa) if one of the two LLM calls fails. */}
       <Section title="Conclusions" sectionHeader={sectionHeader}>
+        {landingNotice?.field === 'conclusions' && (
+          <PiqcLandingNote
+            field="conclusions"
+            onDismiss={onDismissLandingNotice}
+            isLight={isLight}
+          />
+        )}
         <div className="mb-2">
           <ConclusionsSourceChip
             source={report.conclusions_source ?? 'templated'}
@@ -1102,4 +1131,66 @@ function formatTimestamp(iso: string): string {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+// =============================================================================
+// PiqcLandingNote — transient acknowledgment when a PIQC chat write-back
+// just landed text on this section. Lives ABOVE the section's source chip
+// so the auditor sees the connective tissue (chat → land) before the
+// existing provenance signals (source chip + draft pill).
+//
+// Voice: first-person partner, consistent with the chat panel's empty-state
+// primer + signal block + write-back confirm. Single sentence; the source
+// chip below carries the formal provenance, so the note can stay light.
+//
+// Lifecycle is owned by AuditWorkspaceShell — see pendingWritebackNotice
+// state there. Dismiss button calls onDismiss which the shell wires to
+// clear the state.
+// =============================================================================
+function PiqcLandingNote({
+  field,
+  onDismiss,
+  isLight,
+}: {
+  field: 'executive_summary' | 'conclusions';
+  onDismiss?: () => void;
+  isLight: boolean;
+}) {
+  const fieldLabel = field === 'executive_summary' ? 'exec summary' : 'conclusions';
+  return (
+    <div
+      data-testid={`piqc-landing-note-${field}`}
+      className={`flex items-start gap-2 px-3 py-2 mb-3 rounded-md border ${
+        isLight
+          ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]'
+          : 'bg-white/[0.04] border-white/10 text-[#d2d7e0]'
+      }`}
+    >
+      <span
+        className={`mt-0.5 flex-shrink-0 ${isLight ? 'text-[#4a6fa5]' : 'text-[#6e8fb5]'}`}
+        aria-hidden
+      >
+        <PiqcMark size={12} />
+      </span>
+      <p className="text-[11px] leading-relaxed flex-1">
+        Just dropped this into your {fieldLabel} from our chat. Review and edit
+        below — nothing is final until you save.
+      </p>
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Dismiss this note"
+          data-testid={`piqc-landing-note-dismiss-${field}`}
+          className={`inline-flex items-center justify-center w-5 h-5 rounded flex-shrink-0 ${
+            isLight
+              ? 'text-[#374152]/55 hover:text-[#1a1f28] hover:bg-white/60'
+              : 'text-[#d2d7e0]/55 hover:text-white hover:bg-white/[0.06]'
+          }`}
+        >
+          <XIcon size={11} />
+        </button>
+      )}
+    </div>
+  );
 }

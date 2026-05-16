@@ -77,6 +77,25 @@ export default function AuditWorkspaceShell() {
   // thread (see useEffect on activeAudit?.id below) to prevent context bleed.
   const [chatOpen, setChatOpen] = useState(false);
   const [chatThreads, setChatThreads] = useState<Record<string, AuditChatMessage[]>>({});
+  // Transient acknowledgment that a PIQC chat write-back just landed text on
+  // Stage 7. Surfaces as a dismissible inline note inside REPORT_DRAFTING so
+  // the auditor's arrival on Stage 7 reads as ONE continuous PIQC moment
+  // (chat → land → review), not two disconnected events (chat closed →
+  // alone on Stage 7 with new text from nowhere).
+  //
+  // Lifecycle:
+  //   - Set inside onAssistantWriteback after the upsert returns.
+  //   - Cleared when the auditor dismisses the note, or when the active
+  //     audit changes (see useEffect on activeAudit?.id), or when the
+  //     auditor navigates away from REPORT_DRAFTING (see useEffect on
+  //     viewedStage). Never persisted — pure UX cue.
+  //
+  // Single-entry: a second write-back before dismissal replaces the
+  // previous notice. Both writes still land in the DB; only the most
+  // recent gets the landing acknowledgment.
+  const [pendingWritebackNotice, setPendingWritebackNotice] = useState<
+    { field: 'executive_summary' | 'conclusions'; at: number } | null
+  >(null);
   // Refresh token bumped on SOTR drawer close so PIQC's dock dot picks up
   // newly reviewed items without forcing a remount. Increment-only token;
   // identity matters, value doesn't.
@@ -121,7 +140,21 @@ export default function AuditWorkspaceShell() {
       const keep = prev[activeAudit.id];
       return keep ? { [activeAudit.id]: keep } : {};
     });
+    // Clear the landing notice on audit switch. It was scoped to the
+    // previous audit's Stage 7 work; surfacing it on a different audit
+    // would be a category error (the new audit didn't receive PIQC's
+    // text). Never lives across audits.
+    setPendingWritebackNotice(null);
   }, [activeAudit?.id]);
+
+  // Clear the landing notice when the auditor leaves REPORT_DRAFTING.
+  // The notice's whole job is to bridge the chat → Stage 7 moment; once
+  // the auditor has navigated away, the bridge is no longer relevant.
+  // If they come back, the field is already saved (or in DRAFT) and the
+  // source chip carries the provenance — they don't need a re-greeting.
+  useEffect(() => {
+    if (viewedStage !== 'REPORT_DRAFTING') setPendingWritebackNotice(null);
+  }, [viewedStage]);
 
   // Snap the viewed stage to the audit's current_stage when the active audit
   // (or its workflow position) changes. We intentionally depend on the
@@ -276,6 +309,19 @@ export default function AuditWorkspaceShell() {
             force the auditor to scroll past the dock to read content. */}
         <div className="flex-1 overflow-y-auto pb-20" style={{ minHeight: 0 }}>
           {(() => {
+            // REPORT_DRAFTING is specialized so the shell can hand it the
+            // transient PIQC write-back landing notice. Every other stage
+            // dispatches through the no-props record below. If a second
+            // stage ever needs shell-injected state, hoist this into a
+            // dedicated context rather than growing the if-ladder.
+            if (viewedStage === 'REPORT_DRAFTING') {
+              return (
+                <ReportDraftingWorkspace
+                  landingNotice={pendingWritebackNotice}
+                  onDismissLandingNotice={() => setPendingWritebackNotice(null)}
+                />
+              );
+            }
             const Workspace = STAGE_COMPONENTS[viewedStage];
             return <Workspace />;
           })()}
@@ -420,6 +466,12 @@ export default function AuditWorkspaceShell() {
                 'Could not save to Stage 7. Try again, or copy the text manually.',
               );
             }
+            // Set the landing-notice BEFORE flipping viewedStage so Stage 7's
+            // mount sees the notice on first paint — no flash of "no notice"
+            // followed by "notice appears." The notice is keyed to (field, at)
+            // so two writes to the same field still re-trigger a fresh
+            // acknowledgment (Date.now identity).
+            setPendingWritebackNotice({ field: kind, at: Date.now() });
             setChatOpen(false);
             setViewedStage('REPORT_DRAFTING');
           }}
