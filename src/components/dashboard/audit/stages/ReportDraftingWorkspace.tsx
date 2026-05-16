@@ -143,10 +143,19 @@ export default function ReportDraftingWorkspace() {
             setReports((prev) => ({ ...prev, [id]: refined }));
           }
         } catch (err) {
+          // Invitational framing, not remedial. The auditor doesn't need to
+          // read "AI failed" — the console.warn above carries the dev-team
+          // debug signal. The visible note pivots from "we tried and failed"
+          // to "here's your starting point — extend below." Same information
+          // surface; agentic-positive tone matches the north star.
+          //
+          // Server-side specific errors (e.g. 409 "Stage 4 not approved") still
+          // surface their message verbatim since they're actionable upstream
+          // signals the auditor needs to act on.
           const message =
             err instanceof LlmExecutiveSummaryError
               ? err.message
-              : 'AI refinement is temporarily unavailable. Using the templated draft — you can edit it directly.';
+              : 'Starting from your templated draft — edit below.';
           console.warn('[ReportDraftingWorkspace] LLM refinement failed', err);
           setLlmFallback(message);
         } finally {
@@ -374,28 +383,21 @@ export default function ReportDraftingWorkspace() {
 
       {/* Executive summary — editable. Agent has already drafted by the
           time the auditor lands here (auto-fire on first open if templated).
-          Auditor reads, edits if needed, approves. No "generate" buttons. */}
+          Auditor reads, edits if needed, approves. No "generate" buttons.
+
+          During the in-flight refinement window (~3-8s), the chip itself
+          says "Drafting with AI…" and the templated body dims to opacity-60
+          so the auditor sees ONE narrative — agent is drafting — instead of
+          three contradicting signals (templated chip + spinner + templated
+          body that reads as final). North-star alignment: collapse cognitive
+          load by way of the agentic workflow experience. */}
       <Section title="Executive summary" sectionHeader={sectionHeader}>
-        {/* Source chip + in-flight indicator. While the LLM is refining the
-            templated draft in the background, the chip is paired with a small
-            "Refining with AI…" spinner so the auditor knows what's happening
-            and doesn't start editing text that's about to be replaced. */}
-        <div className="flex items-center gap-2 flex-wrap mb-2">
+        <div className="mb-2">
           <ExecSummarySourceChip
             source={report.executive_summary_source ?? 'templated'}
+            refining={llmRefining}
             isLight={isLight}
           />
-          {llmRefining && (
-            <span
-              data-testid="exec-summary-llm-refining"
-              className={`inline-flex items-center gap-1 text-[10px] font-medium ${
-                isLight ? 'text-[#4a6fa5]' : 'text-[#6e8fb5]'
-              }`}
-            >
-              <Loader2 size={9} className="animate-spin" />
-              Refining with AI…
-            </span>
-          )}
         </div>
 
         {/* Calm narration when the LLM successfully refined the draft.
@@ -417,10 +419,12 @@ export default function ReportDraftingWorkspace() {
           </div>
         )}
 
-        {/* Silent-with-signal fallback note when the LLM call failed and the
-            templated text is what's showing. Dismissable so it doesn't nag
-            after the auditor acknowledges it. Not an error — a calm
-            "we tried, here's what happened" signal. */}
+        {/* Invitational fallback note when the LLM call failed and the
+            templated text is what's showing. Framed as a starting-point
+            invitation ("Starting from your templated draft — edit below.")
+            rather than a remedial confession. Dismissable so it doesn't
+            nag. The console.warn upstream carries the "AI failed" signal
+            for the dev team — the auditor's surface stays agentic-positive. */}
         {llmFallback && report.executive_summary_source === 'templated' && (
           <div
             data-testid="exec-summary-llm-fallback"
@@ -487,13 +491,21 @@ export default function ReportDraftingWorkspace() {
           </div>
         ) : (
           <div className={`${cardBg} border rounded-md p-4`}>
-            <p className={`${headingColor} text-sm whitespace-pre-wrap leading-relaxed`}>
+            <p
+              className={`${headingColor} text-sm whitespace-pre-wrap leading-relaxed transition-opacity ${
+                llmRefining ? 'opacity-60' : ''
+              }`}
+            >
               {report.executive_summary}
             </p>
+            {/* Edit button disabled during the LLM refinement window — text
+                the auditor would edit is about to be replaced. Re-enables
+                automatically when the call resolves (success or failure). */}
             <button
               type="button"
               onClick={() => beginEdit('summary')}
-              className={`mt-3 inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+              disabled={llmRefining}
+              className={`mt-3 inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${buttonSecondary}`}
             >
               <Pencil size={12} />
               {approved ? 'Revise' : 'Edit'}
@@ -802,16 +814,43 @@ function Empty({ subColor, children }: { subColor: string; children: React.React
 
 // ExecSummarySourceChip — declarative provenance affordance.
 // Tells the auditor what kind of draft they're looking at without competing
-// with the executive summary text itself. Muted by default; the LLM and
-// edited states have just enough color to be noticeable.
+// with the executive summary text itself.
+//
+// During an in-flight LLM refinement the chip swaps to a unified "Drafting
+// with AI…" state. Without this, the chip ("Templated draft") and the
+// separate spinner ("Refining…") contradict each other for 3-8 seconds,
+// while the templated body text reads as final. One signal, one tense —
+// matches the north-star "agentic feel" doctrine.
 function ExecSummarySourceChip({
   source,
+  refining,
   isLight,
 }: {
   source: 'templated' | 'llm' | 'auditor_edited';
+  refining: boolean;
   isLight: boolean;
 }) {
-  const labels: Record<typeof source, string> = {
+  // Refining always wins regardless of underlying source — the chip is a
+  // status affordance, not a history affordance. History lives in the delta
+  // trail via the History drawer.
+  if (refining) {
+    return (
+      <span
+        data-testid="exec-summary-source-chip"
+        data-source="refining"
+        className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+          isLight
+            ? 'bg-[#eef2f6] border-[#cbd2db] text-[#4a6fa5]'
+            : 'bg-white/[0.04] border-white/10 text-[#6e8fb5]'
+        }`}
+      >
+        <Loader2 size={9} className="animate-spin" />
+        Drafting with AI…
+      </span>
+    );
+  }
+
+  const labels: Record<'templated' | 'llm' | 'auditor_edited', string> = {
     templated: 'Templated draft',
     llm: 'AI-drafted',
     auditor_edited: 'Edited by auditor',
@@ -835,7 +874,7 @@ function ExecSummarySourceChip({
     <span
       data-testid="exec-summary-source-chip"
       data-source={source}
-      className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md border mb-2 ${tone}`}
+      className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md border ${tone}`}
     >
       {source === 'llm' && <Sparkles size={9} />}
       {labels[source]}

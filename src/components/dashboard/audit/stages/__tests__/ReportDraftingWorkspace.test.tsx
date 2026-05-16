@@ -291,3 +291,131 @@ describe('ReportDraftingWorkspace — LLM auto-fire guards (PR #69)', () => {
     warnSpy.mockRestore();
   });
 });
+
+// =============================================================================
+// Agentic-UX assertions
+//
+// PR #69 + #70 covered the LLM-decision GUARDS (correctness). This block covers
+// the user-visible AGENTIC FEEL — the surfaces a future refactor could break
+// silently while the guards still pass:
+//
+//   - The unified "Drafting with AI…" chip during the refinement window
+//   - The Edit button disabled while the agent is drafting
+//   - The "Drafted with AI" success banner appearing after LLM resolves
+//   - The fallback note's invitational copy (not remedial)
+//
+// These map to the /design-critique north-star refinements from the agentic-UX
+// pass: collapse cognitive load, one signal per moment, agentic-positive copy.
+// =============================================================================
+
+describe('ReportDraftingWorkspace — agentic-UX assertions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPrefill.mockResolvedValue(null);
+  });
+
+  it('UI: source chip swaps to unified "Drafting with AI…" state during refinement', async () => {
+    // Hold the LLM promise open so we can assert on the in-flight UI before
+    // it resolves. Without this gating, the spinner-state would race against
+    // the post-resolve render and flake.
+    let resolveLlm: (value: string) => void = () => {};
+    const llmPromise = new Promise<string>((resolve) => {
+      resolveLlm = resolve;
+    });
+    const templated = makeReportDraft({ executive_summary_source: 'templated' });
+    setupContext(templated);
+    mockFetch.mockResolvedValue(templated);
+    mockRequestLlm.mockReturnValueOnce(llmPromise);
+
+    render(<ReportDraftingWorkspace />);
+
+    // While the LLM call is in-flight, the source chip should read the
+    // unified "Drafting with AI…" state. data-source="refining" is the
+    // contract a future refactor must preserve.
+    await waitFor(() => {
+      const chip = screen.getByTestId('exec-summary-source-chip');
+      expect(chip).toHaveAttribute('data-source', 'refining');
+      expect(chip).toHaveTextContent(/drafting with ai/i);
+    });
+
+    // Resolve the LLM so other tests' async chains don't leak.
+    resolveLlm('AI-refined narrative.');
+  });
+
+  it('UI: Edit button disabled during refinement to prevent edits on text about to be replaced', async () => {
+    let resolveLlm: (value: string) => void = () => {};
+    const llmPromise = new Promise<string>((resolve) => {
+      resolveLlm = resolve;
+    });
+    const templated = makeReportDraft({ executive_summary_source: 'templated' });
+    setupContext(templated);
+    mockFetch.mockResolvedValue(templated);
+    mockRequestLlm.mockReturnValueOnce(llmPromise);
+
+    render(<ReportDraftingWorkspace />);
+
+    await waitFor(() => {
+      const editButton = screen.getByRole('button', { name: /^edit$/i });
+      expect(editButton).toBeDisabled();
+    });
+
+    resolveLlm('AI-refined narrative.');
+  });
+
+  it('UI: "Drafted with AI" banner appears when source === "llm" (success state)', async () => {
+    // Render directly with source='llm' already in place — the banner mounts
+    // off the rendered report state, independent of how the LLM call resolved.
+    const refined = makeReportDraft({
+      executive_summary_source: 'llm',
+      executive_summary: 'AI-drafted narrative.',
+    });
+    setupContext(refined);
+    mockFetch.mockResolvedValue(refined);
+
+    render(<ReportDraftingWorkspace />);
+
+    // The PrefillAgentNote sets data-testid="prefill-agent-note" — the
+    // shared component reuse from PRs #58 + #62 means the same testid
+    // identifies the banner across all three stages that use it.
+    await waitFor(() => {
+      const banner = screen.getByTestId('prefill-agent-note');
+      // Banner text identifies it as the LLM-specific instance vs the
+      // templated-prefill instance.
+      expect(banner).toHaveTextContent(/drafted with ai/i);
+      expect(banner).toHaveTextContent(/refined from your approved/i);
+    });
+  });
+
+  it('UI: fallback copy is invitational, not remedial', async () => {
+    // North-star copy contract: the auditor never reads "AI failed" or
+    // "temporarily unavailable" in the GENERIC failure case. The console.warn
+    // upstream carries that signal for the dev team. The visible note pivots
+    // to "Starting from your templated draft — edit below." — same surface,
+    // agentic-positive tone.
+    //
+    // Server-specific errors (e.g. 409 "Stage 4 not approved") still surface
+    // their actionable message verbatim; this test covers the GENERIC case.
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const templated = makeReportDraft({ executive_summary_source: 'templated' });
+    setupContext(templated);
+    mockFetch.mockResolvedValue(templated);
+    // Throw a plain Error (not LlmExecutiveSummaryError) to exercise the
+    // generic-fallback copy path. The class-narrowing check in the catch
+    // block routes server errors through err.message and everything else
+    // through the invitational generic message.
+    mockRequestLlm.mockRejectedValueOnce(new Error('network died'));
+
+    render(<ReportDraftingWorkspace />);
+
+    await waitFor(() => {
+      const note = screen.getByTestId('exec-summary-llm-fallback');
+      expect(note).toHaveTextContent(/starting from your templated draft/i);
+      // Hard negatives — the remedial phrasings must NOT appear in the
+      // visible note. If a future copy change reintroduces them, this fails.
+      expect(note).not.toHaveTextContent(/temporarily unavailable/i);
+      expect(note).not.toHaveTextContent(/ai (refinement|service) failed/i);
+    });
+
+    warnSpy.mockRestore();
+  });
+});
