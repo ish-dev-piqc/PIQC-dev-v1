@@ -24,6 +24,7 @@ import {
   approveReportDraft,
   prefillReportDraft,
   requestLlmExecutiveSummary,
+  requestLlmConclusions,
   LlmExecutiveSummaryError,
 } from '../../../../lib/audit/reportApi';
 import type { MockWorkspaceEntry } from '../../../../lib/audit/mockWorkspaceEntries';
@@ -69,6 +70,12 @@ export default function ReportDraftingWorkspace() {
   //                templated text intact (silent-with-signal degradation)
   const [llmRefining, setLlmRefining] = useState(false);
   const [llmFallback, setLlmFallback] = useState<string | null>(null);
+  // Independent in-flight + fallback state for the conclusions section. The
+  // two refinements run in parallel from the same useEffect but each has its
+  // own UI surface — the chip, body dim, Edit-disabled, and dismissable
+  // fallback note all read per-section.
+  const [llmConclusionsRefining, setLlmConclusionsRefining] = useState(false);
+  const [llmConclusionsFallback, setLlmConclusionsFallback] = useState<string | null>(null);
 
   // Tracks audits whose LLM-refinement attempt has fired in this session,
   // so a re-render or navigation back to Stage 7 doesn't re-prompt OpenAI.
@@ -76,6 +83,11 @@ export default function ReportDraftingWorkspace() {
   // 'llm') is the durable guard; this is the network-noise / cost optimisation.
   // Mirrors attemptedPrefillRef's idempotency idiom from PRs #58 + #62.
   const attemptedLlmRef = useRef<Set<string>>(new Set());
+  // Separate idempotency ref for the conclusions LLM call — the two sections
+  // refine independently, and a failure-then-retry on one shouldn't gate the
+  // other. Double idempotency (in-session ref + server-side conclusions_source
+  // = 'templated' guard) matches the exec-summary pattern.
+  const attemptedLlmConclusionsRef = useRef<Set<string>>(new Set());
 
   // Tracks audits whose prefill RPC has already been attempted in this session
   // so opening Stage 7 / re-rendering doesn't fire the RPC repeatedly. The
@@ -108,20 +120,28 @@ export default function ReportDraftingWorkspace() {
 
       // North-star upgrade-in-place: if the draft is still templated AND
       // hasn't been approved yet AND we haven't tried LLM in this session,
-      // fire the audit-summary edge function to refine the exec summary.
-      // The auditor sees the templated text first (calm), then it gets
-      // replaced by the LLM narrative when the call resolves (~3-8s).
+      // fire the audit-summary edge function to refine each section. The
+      // auditor sees the templated text first (calm), then it gets replaced
+      // by the LLM narrative when the call resolves (~3-8s).
       //
-      // Guards:
-      //   - Skip if approved — auditor signed off on templated; don't
-      //     silently undo that by demoting the report back to DRAFT.
-      //   - Skip if source already 'llm' or 'auditor_edited' — no second-
-      //     guessing prior state in this session.
-      //   - In-session ref + server-side source column = double idempotency.
+      // Exec summary + conclusions LLM refinements fire in PARALLEL. Each
+      // has independent in-flight / fallback state so the auditor can see
+      // either resolve first. Server-side guards still serialize the writes:
+      // both flows call audit_mode_upsert_report_draft, but each call passes
+      // only its section's source field, leaving the other field's source
+      // preserved by the RPC's COALESCE. The two await chains don't share
+      // any closure-mutable state — `draft` is captured once at entry, and
+      // each branch reads its own provenance/text from the original snapshot.
       //
-      // Failure mode: templated text stays in place; surface a dismissable
-      // inline note so the auditor sees gracefully degraded behaviour and
-      // the dev team has a debug signal (console.warn).
+      // Guards (per section):
+      //   - Skip if approved — auditor signed off; don't silently demote
+      //   - Skip if source already 'llm' or 'auditor_edited'
+      //   - In-session ref + server source column = double idempotency
+      //
+      // Failure mode (per section): templated text stays in place; surface
+      // an invitational inline note; console.warn carries the dev-team signal.
+      const llmTasks: Promise<void>[] = [];
+
       if (
         draft &&
         draft.executive_summary_source === 'templated' &&
@@ -130,38 +150,92 @@ export default function ReportDraftingWorkspace() {
       ) {
         attemptedLlmRef.current.add(id);
         setLlmRefining(true);
-        try {
-          const narrative = await requestLlmExecutiveSummary(id);
-          const refined = await upsertReportDraft(
-            id,
-            narrative,
-            draft.conclusions,
-            'Executive summary refined by LLM',
-            'llm',
-          );
-          if (refined) {
-            setReports((prev) => ({ ...prev, [id]: refined }));
-          }
-        } catch (err) {
-          // Invitational framing, not remedial. The auditor doesn't need to
-          // read "AI failed" — the console.warn above carries the dev-team
-          // debug signal. The visible note pivots from "we tried and failed"
-          // to "here's your starting point — extend below." Same information
-          // surface; agentic-positive tone matches the north star.
-          //
-          // Server-side specific errors (e.g. 409 "Stage 4 not approved") still
-          // surface their message verbatim since they're actionable upstream
-          // signals the auditor needs to act on.
-          const message =
-            err instanceof LlmExecutiveSummaryError
-              ? err.message
-              : 'Starting from your templated draft — edit below.';
-          console.warn('[ReportDraftingWorkspace] LLM refinement failed', err);
-          setLlmFallback(message);
-        } finally {
-          setLlmRefining(false);
-        }
+        llmTasks.push(
+          (async () => {
+            try {
+              const narrative = await requestLlmExecutiveSummary(id);
+              // Refetch right before write to pick up any conclusions LLM
+              // refinement that raced ahead. If the refetch FAILS (returns
+              // null — RLS denial, network blip), bail rather than fall back
+              // to the stale templated snapshot — that fallback could clobber
+              // a conclusions LLM write that already landed. Templated text
+              // stays in place; the silent-with-signal fallback note shows.
+              const current = await fetchReportDraft(id);
+              if (!current) {
+                throw new Error('Pre-write refetch returned null; refusing to write to avoid stale clobber');
+              }
+              const refined = await upsertReportDraft(
+                id,
+                narrative,
+                current.conclusions,
+                'Executive summary refined by LLM',
+                'llm',
+              );
+              if (refined) {
+                setReports((prev) => ({ ...prev, [id]: refined }));
+              }
+            } catch (err) {
+              const message =
+                err instanceof LlmExecutiveSummaryError
+                  ? err.message
+                  : 'Starting from your templated draft — edit below.';
+              console.warn('[ReportDraftingWorkspace] LLM exec-summary refinement failed', err);
+              setLlmFallback(message);
+            } finally {
+              setLlmRefining(false);
+            }
+          })(),
+        );
       }
+
+      if (
+        draft &&
+        draft.conclusions_source === 'templated' &&
+        draft.approval_status === 'DRAFT' &&
+        !attemptedLlmConclusionsRef.current.has(id)
+      ) {
+        attemptedLlmConclusionsRef.current.add(id);
+        setLlmConclusionsRefining(true);
+        llmTasks.push(
+          (async () => {
+            try {
+              const narrative = await requestLlmConclusions(id);
+              // Same refetch-or-bail contract as the exec-summary branch:
+              // if the refetch fails we must NOT fall back to the stale
+              // snapshot, because a successful exec-summary LLM write may
+              // have already landed and the snapshot still holds templated
+              // text. Better to leave the templated conclusions in place and
+              // surface the fallback note than silently demote exec back.
+              const current = await fetchReportDraft(id);
+              if (!current) {
+                throw new Error('Pre-write refetch returned null; refusing to write to avoid stale clobber');
+              }
+              const refined = await upsertReportDraft(
+                id,
+                current.executive_summary,
+                narrative,
+                'Conclusions refined by LLM',
+                undefined,
+                'llm',
+              );
+              if (refined) {
+                setReports((prev) => ({ ...prev, [id]: refined }));
+              }
+            } catch (err) {
+              const message =
+                err instanceof LlmExecutiveSummaryError
+                  ? err.message
+                  : 'Starting from your templated conclusions — edit below.';
+              console.warn('[ReportDraftingWorkspace] LLM conclusions refinement failed', err);
+              setLlmConclusionsFallback(message);
+            } finally {
+              setLlmConclusionsRefining(false);
+            }
+          })(),
+        );
+      }
+
+      await Promise.all(llmTasks);
     };
 
     load();
@@ -251,7 +325,24 @@ export default function ReportDraftingWorkspace() {
 
   const saveConclusions = async () => {
     if (!report || !auditId) return;
-    const updated = await upsertReportDraft(auditId, report.executive_summary, draftConclusions.trim());
+    // Symmetric with saveSummary: if the auditor opens the editor and saves
+    // an LLM draft unchanged, keep the 'llm' provenance (they accepted as-is).
+    // Any modification → 'auditor_edited' so the GxP trail captures the human
+    // touch. Omitting the source preserves the previous value server-side,
+    // but explicit transitions read more cleanly in the delta log.
+    const trimmed = draftConclusions.trim();
+    const llmDraftAcceptedAsIs =
+      report.conclusions_source === 'llm' && trimmed === report.conclusions;
+    const newSource: 'llm' | 'auditor_edited' = llmDraftAcceptedAsIs ? 'llm' : 'auditor_edited';
+
+    const updated = await upsertReportDraft(
+      auditId,
+      report.executive_summary,
+      trimmed,
+      undefined,
+      undefined,
+      newSource,
+    );
     if (updated) {
       setReports((prev) => ({ ...prev, [auditId]: updated }));
       setEditing(null);
@@ -349,15 +440,31 @@ export default function ReportDraftingWorkspace() {
         <StatusBadge approved={approved} isLight={isLight} />
       </div>
 
-      {/* Agentic moment — one-time note. Dismissable; persists per (stage, audit)
-          in localStorage. Mirrors the Stage 5 banner pattern from PR #58.
-          Hidden when source === 'llm' — the per-section LLM banner below
-          carries the agentic narration in that state and stacking both
-          would add cognitive load instead of collapsing it. */}
-      {report.prefilled_at && report.executive_summary_source !== 'llm' && (
+      {/* Templated-prefill banner. Hidden once EITHER section flips to 'llm' —
+          the page-level "Drafted with AI" banner below carries the stronger
+          agentic narration. Stacking templated + LLM banners adds cognitive
+          load instead of collapsing it (doctrine_agentic_ux_patterns.md). */}
+      {report.prefilled_at &&
+        report.executive_summary_source !== 'llm' &&
+        report.conclusions_source !== 'llm' && (
+          <PrefillAgentNote
+            storageKey={`piq-stage7-prefill-note-dismissed:${auditId}`}
+            message="The executive summary and conclusions were drafted from your approved risk summary and audit observations. Review and edit each before approving."
+          />
+        )}
+
+      {/* Page-level LLM banner. ONE statement covering both sections when
+          either (or both) is AI-drafted. Replaces what used to be two per-
+          section banners stacking with near-identical "Drafted with AI"
+          headlines — north-star regression. Per-section *chips* still tell
+          the auditor which sections are AI-drafted vs templated vs edited;
+          this banner narrates *that* the agent did work, not *which* one. */}
+      {(report.executive_summary_source === 'llm' ||
+        report.conclusions_source === 'llm') && (
         <PrefillAgentNote
-          storageKey={`piq-stage7-prefill-note-dismissed:${auditId}`}
-          message="The executive summary and conclusions were drafted from your approved risk summary and audit observations. Review and edit each before approving."
+          storageKey={`piq-stage7-llm-banner-dismissed:${auditId}`}
+          headline="Drafted with AI."
+          message="Refined from your approved Stage 4 risk summary and Stage 6 findings. Review and edit each section before approving."
         />
       )}
 
@@ -400,24 +507,10 @@ export default function ReportDraftingWorkspace() {
           />
         </div>
 
-        {/* Calm narration when the LLM successfully refined the draft.
-            Uses the established PrefillAgentNote pattern (PRs #58 + #62)
-            so the agentic moment reads consistently across stages. One-time
-            dismissable per (audit, llm). */}
-        {report.executive_summary_source === 'llm' && (
-          <div className="mb-3">
-            <PrefillAgentNote
-              storageKey={`piq-stage7-llm-banner-dismissed:${auditId}`}
-              headline="Drafted with AI."
-              message={
-                <>
-                  Refined from your approved Stage 4 risk summary and Stage 6
-                  observations. Review and edit before approving.
-                </>
-              }
-            />
-          </div>
-        )}
+        {/* The "Drafted with AI" narration moved up to the page-level banner
+            above the unclassified warning (one statement covers both sections).
+            Per-section chip below still tells the auditor this section is
+            AI-drafted vs templated vs edited. */}
 
         {/* Invitational fallback note when the LLM call failed and the
             templated text is what's showing. Framed as a starting-point
@@ -510,8 +603,17 @@ export default function ReportDraftingWorkspace() {
               type="button"
               data-testid="exec-summary-edit-button"
               onClick={() => beginEdit('summary')}
-              disabled={llmRefining}
-              title={llmRefining ? 'Wait for the agent to finish drafting' : undefined}
+              // Disable while EITHER section is mid-LLM-refinement. Saving an
+              // exec edit while conclusions is refining would clobber the
+              // in-flight conclusions write with the stale templated text
+              // currently in render state (saveSummary writes report.conclusions
+              // directly). Same race in reverse for the conclusions Edit.
+              disabled={llmRefining || llmConclusionsRefining}
+              title={
+                llmRefining || llmConclusionsRefining
+                  ? 'Wait for the agent to finish drafting'
+                  : undefined
+              }
               className={`mt-3 inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${buttonSecondary}`}
             >
               <Pencil size={12} />
@@ -650,8 +752,48 @@ export default function ReportDraftingWorkspace() {
         );
       })}
 
-      {/* Conclusions — editable */}
+      {/* Conclusions — editable. Mirrors the exec-summary surface: source
+          chip + LLM banner + invitational fallback + body dim during in-flight
+          + Edit disabled during in-flight. Each side reads independently;
+          the auditor can land on an LLM exec summary + templated conclusions
+          (or vice versa) if one of the two LLM calls fails. */}
       <Section title="Conclusions" sectionHeader={sectionHeader}>
+        <div className="mb-2">
+          <ConclusionsSourceChip
+            source={report.conclusions_source ?? 'templated'}
+            refining={llmConclusionsRefining}
+            isLight={isLight}
+          />
+        </div>
+
+        {/* "Drafted with AI" narration is page-level (above) — covers both
+            sections in one statement. The conclusions chip below still
+            declares this section's source. */}
+
+        {llmConclusionsFallback && report.conclusions_source === 'templated' && (
+          <div
+            data-testid="conclusions-llm-fallback"
+            className={`flex items-start gap-2 px-3 py-2 mb-3 rounded-md border ${
+              isLight
+                ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]'
+                : 'bg-white/[0.04] border-white/10 text-[#d2d7e0]'
+            }`}
+          >
+            <FileText size={12} className="flex-shrink-0 mt-0.5 opacity-70" />
+            <p className="text-[11px] leading-relaxed flex-1">{llmConclusionsFallback}</p>
+            <button
+              type="button"
+              onClick={() => setLlmConclusionsFallback(null)}
+              aria-label="Dismiss"
+              className={`inline-flex items-center justify-center w-5 h-5 rounded ${
+                isLight ? 'text-[#374152]/55 hover:bg-white/60' : 'text-[#d2d7e0]/55 hover:bg-white/[0.06]'
+              }`}
+            >
+              <XIcon size={11} />
+            </button>
+          </div>
+        )}
+
         {editing === 'conclusions' ? (
           <div className={`${cardBg} border rounded-md p-4 space-y-3`}>
             <textarea
@@ -694,13 +836,26 @@ export default function ReportDraftingWorkspace() {
           </div>
         ) : (
           <div className={`${cardBg} border rounded-md p-4`}>
-            <p className={`${headingColor} text-sm whitespace-pre-wrap leading-relaxed`}>
+            <p
+              className={`${headingColor} text-sm whitespace-pre-wrap leading-relaxed transition-opacity ${
+                llmConclusionsRefining ? 'opacity-60' : ''
+              }`}
+            >
               {report.conclusions}
             </p>
             <button
               type="button"
+              data-testid="conclusions-edit-button"
               onClick={() => beginEdit('conclusions')}
-              className={`mt-3 inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+              // Same cross-section race guard as exec-summary Edit — see comment
+              // on that button. Disabled while EITHER section is in-flight.
+              disabled={llmConclusionsRefining || llmRefining}
+              title={
+                llmConclusionsRefining || llmRefining
+                  ? 'Wait for the agent to finish drafting'
+                  : undefined
+              }
+              className={`mt-3 inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${buttonSecondary}`}
             >
               <Pencil size={12} />
               {approved ? 'Revise' : 'Edit'}
@@ -819,23 +974,28 @@ function Empty({ subColor, children }: { subColor: string; children: React.React
   return <p className={`${subColor} text-sm italic`}>{children}</p>;
 }
 
-// ExecSummarySourceChip — declarative provenance affordance.
+// SourceChip — declarative provenance affordance.
 // Tells the auditor what kind of draft they're looking at without competing
-// with the executive summary text itself.
+// with the section body text itself. Shared by both exec-summary and
+// conclusions; the two sections render independent instances with distinct
+// data-testids so test selectors and the future delta-history wiring can
+// scope cleanly.
 //
 // During an in-flight LLM refinement the chip swaps to a unified "Drafting
-// with AI…" state. Without this, the chip ("Templated draft") and the
-// separate spinner ("Refining…") contradict each other for 3-8 seconds,
-// while the templated body text reads as final. One signal, one tense —
-// matches the north-star "agentic feel" doctrine.
-function ExecSummarySourceChip({
+// with AI…" state. Without this, the chip ("Templated draft") and a separate
+// spinner ("Refining…") contradict each other for 3-8 seconds while the
+// templated body text reads as final. One signal, one tense — matches the
+// north-star "agentic feel" doctrine.
+function SourceChip({
   source,
   refining,
   isLight,
+  testId,
 }: {
   source: 'templated' | 'llm' | 'auditor_edited';
   refining: boolean;
   isLight: boolean;
+  testId: string;
 }) {
   // Refining always wins regardless of underlying source — the chip is a
   // status affordance, not a history affordance. History lives in the delta
@@ -843,7 +1003,7 @@ function ExecSummarySourceChip({
   if (refining) {
     return (
       <span
-        data-testid="exec-summary-source-chip"
+        data-testid={testId}
         data-source="refining"
         className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
           isLight
@@ -879,7 +1039,7 @@ function ExecSummarySourceChip({
   })();
   return (
     <span
-      data-testid="exec-summary-source-chip"
+      data-testid={testId}
       data-source={source}
       className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md border ${tone}`}
     >
@@ -887,6 +1047,24 @@ function ExecSummarySourceChip({
       {labels[source]}
     </span>
   );
+}
+
+// Thin wrappers preserve test-friendly section-scoped data-testids and let
+// the two callsites read self-documenting at the JSX level.
+function ExecSummarySourceChip(props: {
+  source: 'templated' | 'llm' | 'auditor_edited';
+  refining: boolean;
+  isLight: boolean;
+}) {
+  return <SourceChip {...props} testId="exec-summary-source-chip" />;
+}
+
+function ConclusionsSourceChip(props: {
+  source: 'templated' | 'llm' | 'auditor_edited';
+  refining: boolean;
+  isLight: boolean;
+}) {
+  return <SourceChip {...props} testId="conclusions-source-chip" />;
 }
 
 function StatusBadge({ approved, isLight }: { approved: boolean; isLight: boolean }) {

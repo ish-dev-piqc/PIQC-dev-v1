@@ -83,7 +83,7 @@ function log(level: "info" | "warn" | "error", event: string, fields: Record<str
 // observations don't support.
 // -----------------------------------------------------------------------------
 
-const SYSTEM_PROMPT = `You are drafting the executive summary section of a vendor audit report.
+const EXEC_SUMMARY_PROMPT = `You are drafting the executive summary section of a vendor audit report.
 
 Voice and structure:
 - Calm, professional, evidence-based. No marketing language.
@@ -98,6 +98,27 @@ Hard rules:
 - The output is an auditor's draft. Write as if the auditor will review and edit before approval.
 
 If the provided context is sparse (few entries, no findings classified), say so plainly — do not pad the summary with generic phrasing.`;
+
+// The conclusions section answers "should this vendor continue, and what
+// happens next?" — shorter than the exec summary, action-oriented, narrowly
+// scoped to recommendation + follow-up. Same evidence-rooted discipline.
+const CONCLUSIONS_PROMPT = `You are drafting the conclusions section of a vendor audit report.
+
+Voice and structure:
+- Calm, professional, evidence-based. No marketing language.
+- Plain prose. No headers, no bullet points, no markdown.
+- 80–150 words. Shorter than the executive summary.
+- Open with a recommendation on whether the vendor should continue providing the audited service (suitable / suitable-with-conditions / not suitable), grounded in the observed findings.
+- Reference any remediation commitments by paraphrasing the observation text — do not invent commitments.
+- Close with a single sentence on follow-up: whether a re-audit is required and how findings will be tracked through CAPA or equivalent.
+
+Hard rules:
+- Sponsor names must NOT appear in the output.
+- Do NOT invent remediation timelines, CAPA promises, or follow-up audits that are not supported by the workspace entries.
+- Do NOT cite by ID.
+- The output is an auditor's draft. Write as if the auditor will review and edit before approval.
+
+If the provided context is sparse, recommend "suitable pending further review" plainly — do not pad with generic phrasing.`;
 
 interface WorkspaceEntryContext {
   vendor_domain:               string;
@@ -187,7 +208,7 @@ Deno.serve(async (req: Request) => {
       { status: 413, headers: jsonHeaders });
   }
 
-  let body: { audit_id?: string };
+  let body: { audit_id?: string; section?: string };
   try {
     body = await req.json();
   } catch {
@@ -198,6 +219,22 @@ Deno.serve(async (req: Request) => {
   if (!auditId || typeof auditId !== "string") {
     return new Response(JSON.stringify({ error: "audit_id is required" }),
       { status: 400, headers: jsonHeaders });
+  }
+  // Section discriminator. Defaults to 'executive_summary' (back-compat with
+  // PR #69 clients that don't send the param). Any *explicit* value other
+  // than the two known sections is a programming bug — fail loudly with a
+  // 400 rather than silently routing to exec-summary, which would write
+  // conclusions text with exec-summary copy.
+  let section: "executive_summary" | "conclusions" = "executive_summary";
+  if (body.section !== undefined) {
+    if (body.section === "executive_summary" || body.section === "conclusions") {
+      section = body.section;
+    } else {
+      return new Response(
+        JSON.stringify({ error: `Unknown section: ${String(body.section)}` }),
+        { status: 400, headers: jsonHeaders },
+      );
+    }
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -324,6 +361,7 @@ Deno.serve(async (req: Request) => {
   log("info", "audit_summary.request", {
     request_id: requestId,
     audit_id: auditId,
+    section,
     entry_count: rows.length,
     counts,
   });
@@ -347,10 +385,15 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify({
         model: "gpt-4o-mini",
         temperature: 0.4,
-        max_tokens: 700,
+        // Conclusions are shorter (80-150 words); exec summary is 150-250.
+        // Cap accordingly to keep cost predictable per section.
+        max_tokens: section === "conclusions" ? 400 : 700,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user",   content: buildUserMessage(ctx) },
+          {
+            role: "system",
+            content: section === "conclusions" ? CONCLUSIONS_PROMPT : EXEC_SUMMARY_PROMPT,
+          },
+          { role: "user", content: buildUserMessage(ctx) },
         ],
       }),
       signal: controller.signal,
@@ -388,6 +431,7 @@ Deno.serve(async (req: Request) => {
   log("info", "audit_summary.response", {
     request_id: requestId,
     audit_id: auditId,
+    section,
     narrative_length: narrative.length,
   });
 
