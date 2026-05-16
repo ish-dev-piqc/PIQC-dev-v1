@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Sparkles, X, Send } from 'lucide-react';
 import { useOverlay } from '../../../hooks/useOverlay';
 import { useSwipeDismiss } from '../../../hooks/useSwipeDismiss';
@@ -28,8 +28,16 @@ import {
 // MAX_MESSAGES guard (24). Keep one below the server cap to leave headroom.
 // =============================================================================
 
+// Server caps (see supabase/functions/audit-mode-chat/index.ts):
+//   MAX_MESSAGES      = 24  → we send 22 to leave headroom
+//   MAX_MESSAGE_CHARS = 2000 → mirrored here exactly
+// MAX_LOCAL_HISTORY caps the in-panel view at 2x the sent slice. Without
+// this, a long session accumulates turns the model never sees but the
+// browser still renders — death by a thousand <li>s. The trim happens
+// once per send, dropping the oldest turns past the cap.
 const MAX_LOCAL_MESSAGES = 22;
-const MAX_INPUT_CHARS    = 4_000;
+const MAX_LOCAL_HISTORY  = MAX_LOCAL_MESSAGES * 2;
+const MAX_INPUT_CHARS    = 2_000;
 
 interface Props {
   auditId:  string;
@@ -48,6 +56,11 @@ export default function AuditChatPanel({
   const panelRef     = useRef<HTMLDivElement>(null);
   const scrollerRef  = useRef<HTMLDivElement>(null);
   const inputRef     = useRef<HTMLTextAreaElement>(null);
+  // Re-entrancy guard for handleSend. `pending` state is the user-visible
+  // signal, but state updates are async — two rapid Enter keydowns could
+  // both pass the `!canSend` gate before React commits setPending(true).
+  // A ref is the precise tool: synchronous flip, no render coupling.
+  const inFlightRef  = useRef(false);
   useOverlay({ isOpen: true, onClose, containerRef: panelRef });
   const swipe = useSwipeDismiss({ onClose });
 
@@ -74,14 +87,21 @@ export default function AuditChatPanel({
   }, []);
 
   const handleSend = async () => {
-    if (!canSend) return;
+    if (!canSend || inFlightRef.current) return;
+    inFlightRef.current = true;
     setError(null);
 
     const userTurn: AuditChatMessage = { role: 'user', content: trimmed };
     // Compose what we'll send AND what the UI will show. They diverge only
-    // if the thread is being trimmed for the server cap — the local view
-    // keeps the full history so the auditor never loses context they typed.
-    const localNext = [...messages, userTurn];
+    // when the local thread is being trimmed for performance — the SENT
+    // slice always honours the server cap (MAX_LOCAL_MESSAGES); the local
+    // view is also capped at MAX_LOCAL_HISTORY to keep the panel responsive
+    // over long sessions. Dropped older turns are gone from both stores;
+    // the model never saw them anyway (they were already past the send cap).
+    const appended = [...messages, userTurn];
+    const localNext = appended.length > MAX_LOCAL_HISTORY
+      ? appended.slice(-MAX_LOCAL_HISTORY)
+      : appended;
     const sendable = localNext.slice(-MAX_LOCAL_MESSAGES);
 
     onMessagesChange(localNext);
@@ -90,7 +110,11 @@ export default function AuditChatPanel({
 
     try {
       const reply = await requestAuditChat(auditId, sendable);
-      onMessagesChange([...localNext, { role: 'assistant', content: reply }]);
+      const withReply = [...localNext, { role: 'assistant' as const, content: reply }];
+      const trimmedReply = withReply.length > MAX_LOCAL_HISTORY
+        ? withReply.slice(-MAX_LOCAL_HISTORY)
+        : withReply;
+      onMessagesChange(trimmedReply);
     } catch (err) {
       const status =
         err instanceof AuditChatError ? err.status : 0;
@@ -104,6 +128,7 @@ export default function AuditChatPanel({
       // confused with model output.
       setError(`${message}${status ? ` (${status})` : ''}`);
     } finally {
+      inFlightRef.current = false;
       setPending(false);
     }
   };
@@ -118,9 +143,7 @@ export default function AuditChatPanel({
   };
 
   const empty = messages.length === 0 && !pending;
-
-  // Memo the count just so the header doesn't recompute on every keystroke.
-  const turnCount = useMemo(() => messages.length, [messages]);
+  const turnCount = messages.length;
 
   return (
     <div

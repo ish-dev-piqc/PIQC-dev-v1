@@ -40,10 +40,16 @@ const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
 
 const RATE_LIMIT_WINDOW_MS  = 60_000;
 const RATE_LIMIT_MAX        = 30;        // chat is lighter than narrative-gen
-const MAX_BODY_BYTES        = 60_000;    // larger than audit-summary — carries thread history
+// Body-size math: MAX_MESSAGES (24) × MAX_MESSAGE_CHARS (2000) ≈ 48KB worst
+// case, comfortably under MAX_BODY_BYTES. Keeping the per-message ceiling
+// at 2000 (down from a looser 4000) so that a fully-packed legitimate
+// thread can never trip the 413 before per-message validation runs. Per-
+// turn 2000 chars is generous for a freeform auditor question; long-form
+// content belongs on the stage workspace, not in chat.
+const MAX_BODY_BYTES        = 60_000;
 const OPENAI_TIMEOUT_MS     = 30_000;
 const MAX_MESSAGES          = 24;        // cap turns sent to OpenAI per request
-const MAX_MESSAGE_CHARS     = 4_000;     // per-turn content cap
+const MAX_MESSAGE_CHARS     = 2_000;     // per-turn content cap — see math above
 const MAX_OBSERVATION_CHARS = 800;       // truncate per-entry observation_text in context
 const MAX_ENTRIES_IN_CTX    = 25;        // cap audit context size
 
