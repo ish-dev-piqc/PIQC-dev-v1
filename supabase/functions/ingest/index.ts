@@ -362,14 +362,23 @@ async function parsePdfWithReducto(fileId: string, reductoKey: string): Promise<
     let rawChunks: ReductoChunk[] = [];
     let resultJobId: string | null = (data.job_id as string | undefined) ?? null;
 
+    // Reducto returns one of:
+    //   (a) synchronous: data.result.chunks            (small docs)
+    //   (b) async, top-level URL:    data.url          (legacy)
+    //   (c) async, nested URL:       data.result.url   (current shape for large docs)
+    // The fetched async payload itself returns chunks at the top level (current)
+    // or under .result.chunks (legacy). Accept both at each layer.
+    const asyncUrl = data.result?.url ?? data.url;
     if (data.result && Array.isArray(data.result.chunks)) {
       rawChunks = data.result.chunks;
-    } else if (data.url) {
+    } else if (asyncUrl) {
       try {
-        const urlRes = await fetch(data.url);
+        const urlRes = await fetch(asyncUrl);
         if (!urlRes.ok) throw new Error(`Reducto result fetch error: ${urlRes.status}`);
         const urlData = await urlRes.json();
-        if (urlData.result && Array.isArray(urlData.result.chunks)) {
+        if (Array.isArray(urlData.chunks)) {
+          rawChunks = urlData.chunks;
+        } else if (urlData.result && Array.isArray(urlData.result.chunks)) {
           rawChunks = urlData.result.chunks;
         }
         if (!resultJobId && typeof urlData.job_id === "string") {
@@ -714,13 +723,13 @@ async function extractClinicalFields(
     // (e.g. "visit_name " or "schedule_of_events "). Strip them recursively
     // before downstream code reads the fields; without this the SOTR adapter
     // and visit dedup step would silently miss the affected fields.
-    const result = trimKeys((data.result ?? data)) as Record<string, unknown>;
-    // Preserve Reducto citations alongside extracted values so the SOTR adapter
-    // can create source evidence records. Keyed as _reducto_citations to avoid
-    // collision with any CLINICAL_EXTRACT_SCHEMA field names.
-    const rawCitations = (data.citations ?? (data.result as Record<string, unknown> | null | undefined)?.citations) ?? null;
-    const citations = rawCitations !== null ? trimKeys(rawCitations) : null;
-    return citations ? { ...result, _reducto_citations: citations } : result;
+    const trimmed = trimKeys((data.result ?? data)) as Record<string, unknown>;
+    // Reducto wraps every leaf field as { value, citations } (nested too, e.g.
+    // schedule_of_events[i].visit_name = { value, citations }). The SOTR
+    // adapter expects flat values + a single top-level _reducto_citations
+    // sentinel keyed by field name. Reshape here so the adapter contract
+    // doesn't have to know about the wrapper shape.
+    return reshapeReductoExtractForAdapter(trimmed);
   }, "extractClinicalFields");
 }
 
@@ -735,6 +744,133 @@ function trimKeys(value: unknown): unknown {
     );
   }
   return value;
+}
+
+// Normalize a raw Reducto citation into the shape the SOTR adapter expects:
+//   { text, pages: number[], confidence, section?, bbox: [{page,x1,y1,x2,y2}] }
+// Reducto's per-field citation has:
+//   { content, bbox: {left, top, width, height, page}, confidence, ... }
+// Returns null if the input isn't recognisable as a citation.
+function normalizeReductoCitation(raw: unknown): Record<string, unknown> | null {
+  if (!raw || typeof raw !== "object") return null;
+  const c = raw as Record<string, unknown>;
+  const text = typeof c.content === "string"
+    ? c.content
+    : typeof c.text === "string" ? c.text : undefined;
+
+  let pages: number[] | undefined;
+  let bbox: Array<Record<string, number>> | undefined;
+  const rawBbox = c.bbox;
+  if (rawBbox && typeof rawBbox === "object" && !Array.isArray(rawBbox)) {
+    const b = rawBbox as Record<string, unknown>;
+    if (typeof b.page === "number") pages = [b.page];
+    if (
+      typeof b.left   === "number" && typeof b.top    === "number" &&
+      typeof b.width  === "number" && typeof b.height === "number" &&
+      typeof b.page   === "number"
+    ) {
+      bbox = [{
+        page: b.page,
+        x1:   b.left,
+        y1:   b.top,
+        x2:   b.left + b.width,
+        y2:   b.top  + b.height,
+      }];
+    }
+  } else if (Array.isArray(rawBbox)) {
+    bbox  = rawBbox as Array<Record<string, number>>;
+    pages = (rawBbox as Array<Record<string, unknown>>)
+      .map((b) => b?.page)
+      .filter((p): p is number => typeof p === "number");
+  }
+
+  return {
+    ...(text !== undefined            ? { text } : {}),
+    ...(pages?.length                  ? { pages } : {}),
+    ...(typeof c.confidence === "string" ? { confidence: c.confidence } : {}),
+    ...(typeof c.section    === "string" ? { section:    c.section }    : {}),
+    ...(bbox?.length                  ? { bbox } : {}),
+  };
+}
+
+// Recursively unwrap Reducto's per-leaf {value, citations} wrappers. Returns
+// the flat value and one representative citation for this subtree (used for
+// array elements where the adapter expects a single citation per entry).
+function unwrapValueCitations(
+  node: unknown,
+): { value: unknown; cit: Record<string, unknown> | null } {
+  if (Array.isArray(node)) {
+    return { value: node.map((n) => unwrapValueCitations(n).value), cit: null };
+  }
+  if (node === null || typeof node !== "object") {
+    return { value: node, cit: null };
+  }
+  const obj = node as Record<string, unknown>;
+  const keys = Object.keys(obj);
+
+  // {value, citations} wrapper — unwrap to the inner value and lift the first citation.
+  if (keys.length === 2 && "value" in obj && "citations" in obj) {
+    const inner   = unwrapValueCitations(obj.value);
+    const citList = Array.isArray(obj.citations) ? obj.citations : [obj.citations];
+    const cit     = normalizeReductoCitation(citList[0]) ?? inner.cit;
+    return { value: inner.value, cit };
+  }
+
+  // Plain object (e.g. one schedule_of_events entry): recurse into each
+  // property. Pick visit_name's citation as the representative when present —
+  // it's the most semantically meaningful per-visit anchor.
+  const out: Record<string, unknown> = {};
+  let representative: Record<string, unknown> | null = null;
+
+  if ("visit_name" in obj) {
+    const r = unwrapValueCitations(obj.visit_name);
+    out.visit_name = r.value;
+    representative = r.cit;
+  }
+  for (const k of keys) {
+    if (k === "visit_name") continue;
+    const r = unwrapValueCitations(obj[k]);
+    out[k] = r.value;
+    if (!representative) representative = r.cit;
+  }
+  return { value: out, cit: representative };
+}
+
+// Convert Reducto's nested {value, citations} response into the flat shape +
+// _reducto_citations sentinel that the SOTR adapter consumes. Backward-
+// compatible: if Reducto returns the old flat shape, citations come back
+// empty and items still persist (just without evidence rows).
+function reshapeReductoExtractForAdapter(
+  result: Record<string, unknown>,
+): Record<string, unknown> {
+  const flat: Record<string, unknown> = {};
+  const citationMap: Record<string, unknown> = {};
+
+  for (const [field, node] of Object.entries(result)) {
+    if (node === null || node === undefined) {
+      flat[field] = node;
+      continue;
+    }
+    if (Array.isArray(node)) {
+      // Adapter expects citations[field] to be an array of citations parallel
+      // to the value array (one per element).
+      const elems: unknown[] = [];
+      const cites: Array<Record<string, unknown> | null> = [];
+      for (const elem of node) {
+        const r = unwrapValueCitations(elem);
+        elems.push(r.value);
+        cites.push(r.cit);
+      }
+      flat[field] = elems;
+      citationMap[field] = cites;
+    } else {
+      const r = unwrapValueCitations(node);
+      flat[field] = r.value;
+      if (r.cit) citationMap[field] = r.cit;
+    }
+  }
+
+  return { ...flat, _reducto_citations: citationMap };
 }
 
 Deno.serve(async (req: Request) => {

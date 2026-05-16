@@ -600,7 +600,7 @@ echo
 # ---------------------------------------------------------------------------
 # T13–T17  Source of Truth Reviewer (SOTR) — smoke tests
 #
-# Requires: 20260508000000_sotr_schema.sql + 20260508010000_sotr_rpcs.sql
+# Requires: 20260508000000_sotr_schema.sql + 20260508010100_sotr_rpcs.sql
 # deployed. Uses the auditor's user JWT and documents owned by that user.
 # We create and then clean up a temporary document row for isolation.
 # ---------------------------------------------------------------------------
