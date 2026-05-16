@@ -42,6 +42,10 @@ function setup(
   viewedStage?: string,
   signals?: import('../../../../hooks/usePiqcSignals').PiqcSignal[],
   onSignalAction?: (kind: import('../../../../hooks/usePiqcSignals').PiqcSignalKind) => void,
+  onAssistantWriteback?: (
+    kind: 'executive_summary' | 'conclusions',
+    text: string,
+  ) => Promise<void>,
 ) {
   const onMessagesChange = vi.fn();
   const onClose = vi.fn();
@@ -58,6 +62,7 @@ function setup(
       viewedStage={viewedStage}
       signals={signals}
       onSignalAction={onSignalAction}
+      onAssistantWriteback={onAssistantWriteback}
     />
   );
   const utils = render(<Wrapper />);
@@ -334,6 +339,102 @@ describe('AuditChatPanel — stage focus chip (visible PIQC presence signal)', (
   it('hides the chip when viewedStage is omitted', () => {
     setup([]);
     expect(screen.queryByTestId('audit-chat-stage-focus')).not.toBeInTheDocument();
+  });
+});
+
+describe('AuditChatPanel — earned write-back to Stage 7', () => {
+  const assistantTurn: AuditChatMessage = {
+    role: 'assistant',
+    content: 'Suggested executive summary: the vendor demonstrated strong validation evidence…',
+  };
+  const userTurn: AuditChatMessage = { role: 'user', content: 'Draft an exec summary' };
+
+  it('hides write-back affordances entirely when onAssistantWriteback is not wired', () => {
+    setup([userTurn, assistantTurn]);
+    expect(screen.queryByTestId('audit-chat-writeback-row-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('audit-chat-writeback-open-exec-1')).not.toBeInTheDocument();
+  });
+
+  it('renders affordance row on assistant turns only — never on user turns', () => {
+    setup([userTurn, assistantTurn], undefined, undefined, undefined, vi.fn());
+    // User turn (index 0) → no affordance.
+    expect(screen.queryByTestId('audit-chat-writeback-row-0')).not.toBeInTheDocument();
+    // Assistant turn (index 1) → both destination buttons.
+    expect(screen.getByTestId('audit-chat-writeback-row-1')).toBeInTheDocument();
+    expect(screen.getByTestId('audit-chat-writeback-open-exec-1')).toBeInTheDocument();
+    expect(screen.getByTestId('audit-chat-writeback-open-conclusions-1')).toBeInTheDocument();
+  });
+
+  it('opens the inline confirm when an affordance is clicked', async () => {
+    const user = userEvent.setup();
+    setup([userTurn, assistantTurn], undefined, undefined, undefined, vi.fn());
+
+    await user.click(screen.getByTestId('audit-chat-writeback-open-exec-1'));
+
+    // Confirm block visible; affordance row collapses.
+    expect(screen.getByTestId('audit-chat-writeback-confirm-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('audit-chat-writeback-row-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('audit-chat-writeback-confirm-1'))
+      // Confirm copy is first-person partner voice ("Drop this into…" + "I'll
+      // replace…") — consistent with the empty-state primer's "Hi — I've been
+      // reading along" register. Locking the copy so a future drift back to
+      // third-person system voice ("PIQC will replace…") fails this test.
+      .toHaveTextContent(/Drop this into your exec summary draft\?/i);
+  });
+
+  it('Cancel restores the affordance row without invoking the callback', async () => {
+    const onWriteback = vi.fn();
+    const user = userEvent.setup();
+    setup([userTurn, assistantTurn], undefined, undefined, undefined, onWriteback);
+
+    await user.click(screen.getByTestId('audit-chat-writeback-open-conclusions-1'));
+    expect(screen.getByTestId('audit-chat-writeback-confirm-1')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('audit-chat-writeback-cancel-1'));
+    // Confirm hidden; affordance back; callback never fired.
+    expect(screen.queryByTestId('audit-chat-writeback-confirm-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('audit-chat-writeback-row-1')).toBeInTheDocument();
+    expect(onWriteback).not.toHaveBeenCalled();
+  });
+
+  it('confirm invokes onAssistantWriteback with the chosen kind + the assistant text', async () => {
+    const onWriteback = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    setup([userTurn, assistantTurn], undefined, undefined, undefined, onWriteback);
+
+    await user.click(screen.getByTestId('audit-chat-writeback-open-exec-1'));
+    await user.click(screen.getByTestId('audit-chat-writeback-confirm-action-1'));
+
+    await waitFor(() => expect(onWriteback).toHaveBeenCalledTimes(1));
+    expect(onWriteback).toHaveBeenCalledWith('executive_summary', assistantTurn.content);
+  });
+
+  it('routes to the conclusions destination when the conclusions affordance was chosen', async () => {
+    const onWriteback = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    setup([userTurn, assistantTurn], undefined, undefined, undefined, onWriteback);
+
+    await user.click(screen.getByTestId('audit-chat-writeback-open-conclusions-1'));
+    await user.click(screen.getByTestId('audit-chat-writeback-confirm-action-1'));
+
+    await waitFor(() => expect(onWriteback).toHaveBeenCalledTimes(1));
+    expect(onWriteback).toHaveBeenCalledWith('conclusions', assistantTurn.content);
+  });
+
+  it('surfaces a writeback error inside the confirm block without losing the auditor state', async () => {
+    const onWriteback = vi.fn().mockRejectedValue(new Error('Refetch returned null'));
+    const user = userEvent.setup();
+    setup([userTurn, assistantTurn], undefined, undefined, undefined, onWriteback);
+
+    await user.click(screen.getByTestId('audit-chat-writeback-open-exec-1'));
+    await user.click(screen.getByTestId('audit-chat-writeback-confirm-action-1'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('audit-chat-writeback-error-1'))
+        .toHaveTextContent('Refetch returned null'),
+    );
+    // Confirm block stays open so the auditor can retry or cancel.
+    expect(screen.getByTestId('audit-chat-writeback-confirm-1')).toBeInTheDocument();
   });
 });
 

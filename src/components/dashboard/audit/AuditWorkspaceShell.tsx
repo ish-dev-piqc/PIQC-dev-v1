@@ -12,6 +12,7 @@ import NewAuditDrawer from './onboarding/NewAuditDrawer';
 import AuditChatPanel from './AuditChatPanel';
 import PiqcDock from './PiqcDock';
 import type { AuditChatMessage } from '../../../lib/audit/chatApi';
+import { fetchReportDraft, upsertReportDraft } from '../../../lib/audit/reportApi';
 import { usePiqcSignals } from '../../../hooks/usePiqcSignals';
 import { AUDIT_STAGES } from '../../../types/audit';
 import IntakeWorkspace from './stages/IntakeWorkspace';
@@ -353,6 +354,74 @@ export default function AuditWorkspaceShell() {
             } else if (kind === 'questionnaire_flagged') {
               setViewedStage('QUESTIONNAIRE_REVIEW');
             }
+          }}
+          /* Earned write-back (PR #78). The auditor opens an inline
+             confirm on a PIQC reply ("Use in exec summary →"), confirms,
+             and we land the text on Stage 7.
+
+             Why refetch-or-bail before upsert: audit_mode_upsert_report_draft
+             takes BOTH fields. Writing exec summary requires the current
+             conclusions text to be preserved verbatim. Refetching here
+             reads the freshest values from the DB; if it returns null
+             (RLS denial / network blip), we throw rather than send a
+             stale or empty conclusions field that would clobber the
+             other field. Same pattern PR #69 + #72 used for auto-fire.
+
+             Source flip: the destination field is tagged 'llm'; the
+             other field's source is omitted (null), which the RPC
+             treats as "preserve current value" per the migration's
+             COALESCE-preserve rule.
+
+             After the upsert returns, close the panel and navigate
+             viewedStage to REPORT_DRAFTING. Stage 7 re-fetches on
+             mount; the auditor sees PIQC's text in the textarea,
+             reviews + edits + saves (flipping source to 'auditor_edited'
+             per PR #72's contract on any text change). */
+          onAssistantWriteback={async (kind, text) => {
+            // Refetch is best-effort — null is a legitimate state when the
+            // audit hasn't entered Stage 7 yet (no report_draft_objects row
+            // exists). In that case we go through the RPC's INSERT path with
+            // explicit 'templated' source on the OTHER field so its
+            // provenance reads correctly: PIQC drafted exec summary; the
+            // unwritten conclusions stays template-empty until someone
+            // writes it. Without the explicit source, the RPC defaults to
+            // 'auditor_edited' (per the INSERT-path COALESCE in
+            // 20260516020000_audit_mode_conclusions_llm.sql) which would
+            // mislabel an empty field as auditor work.
+            const current = await fetchReportDraft(activeAudit.id);
+            const reason = `Inserted from PIQC chat (${kind === 'executive_summary' ? 'exec summary' : 'conclusions'})`;
+            const isFreshInsert = current === null;
+
+            let result;
+            if (kind === 'executive_summary') {
+              result = await upsertReportDraft(
+                activeAudit.id,
+                text,
+                current?.conclusions ?? '',
+                reason,
+                'llm',
+                // Fresh insert → tag the empty conclusions as 'templated' so
+                // its provenance is honest. Existing row → undefined preserves
+                // whatever the conclusions source currently is.
+                isFreshInsert ? 'templated' : undefined,
+              );
+            } else {
+              result = await upsertReportDraft(
+                activeAudit.id,
+                current?.executive_summary ?? '',
+                text,
+                reason,
+                isFreshInsert ? 'templated' : undefined,
+                'llm',
+              );
+            }
+            if (!result) {
+              throw new Error(
+                'Could not save to Stage 7. Try again, or copy the text manually.',
+              );
+            }
+            setChatOpen(false);
+            setViewedStage('REPORT_DRAFTING');
           }}
         />
       )}

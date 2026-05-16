@@ -23,8 +23,15 @@ import PiqcMark from './PiqcMark';
 // Doctrine reminders:
 //   - Advisory only. Every reply renders with a "Drafted with AI" marker
 //     so the auditor never confuses the panel for a sign-off path.
-//   - Read-only. Nothing here writes to audit objects.
-//   - One copy-paste away from the actionable surface — chat is for thinking,
+//   - Earned write-back ONLY (since PR #78). When the auditor explicitly
+//     opts in via the per-turn "Use in exec summary →" / "Use in
+//     conclusions →" affordances + a second-step inline confirm, PIQC
+//     hands the assistant text to Stage 7 via the parent's
+//     onAssistantWriteback callback. Two human checkpoints (initiate +
+//     confirm) before any DB write. The auditor still reviews + saves on
+//     Stage 7; existing PR #72 contract flips the provenance source to
+//     'auditor_edited' on edit.
+//   - Stage workspaces remain the source of truth — chat is for thinking,
 //     stage workspaces are for committing.
 //
 // Server-side caps: thread is trimmed to MAX_LOCAL_MESSAGES turns before
@@ -66,7 +73,40 @@ interface Props {
    *  compat for any future caller that wants to render signals without
    *  enabling navigation. */
   onSignalAction?: (kind: PiqcSignalKind) => void;
+  /** Earned write-back: when the auditor confirms an assistant turn into
+   *  a Stage 7 field, the shell performs the refetch + upsert (preserving
+   *  the other field per PR #72's RPC contract) and routes the viewer to
+   *  Stage 7. Must throw on failure so the panel can surface an error.
+   *  Optional — when omitted, the per-turn write-back affordances are
+   *  hidden entirely. The auditor can still copy-paste manually. */
+  onAssistantWriteback?: (
+    kind: 'executive_summary' | 'conclusions',
+    text: string,
+  ) => Promise<void>;
 }
+
+type WritebackKind = 'executive_summary' | 'conclusions';
+type WritebackPending = {
+  /** Index of the assistant turn the auditor opened the confirm on. Used
+   *  ONLY to render the confirm block under the right bubble — not as the
+   *  source of truth for what gets written. Indices can shift if the local
+   *  history trim drops the head of the thread mid-confirm (a 22+ message
+   *  sequence after opening). */
+  turnIndex: number;
+  kind: WritebackKind;
+  /** Snapshot of the assistant turn's content taken at open-time. The
+   *  write-back uses THIS, not messages[turnIndex], so trim or any future
+   *  mid-thread mutation can't silently shift what gets written.
+   *  Belt-and-suspenders alongside the turnIndex; if they diverge, the
+   *  snapshot wins and the confirm UI just renders under the closest
+   *  surviving turn. */
+  content: string;
+};
+
+const WRITEBACK_KIND_LABELS: Record<WritebackKind, string> = {
+  executive_summary: 'exec summary',
+  conclusions:       'conclusions',
+};
 
 export default function AuditChatPanel({
   auditId,
@@ -76,6 +116,7 @@ export default function AuditChatPanel({
   viewedStage,
   signals,
   onSignalAction,
+  onAssistantWriteback,
 }: Props) {
   const panelRef     = useRef<HTMLDivElement>(null);
   const scrollerRef  = useRef<HTMLDivElement>(null);
@@ -85,12 +126,26 @@ export default function AuditChatPanel({
   // both pass the `!canSend` gate before React commits setPending(true).
   // A ref is the precise tool: synchronous flip, no render coupling.
   const inFlightRef  = useRef(false);
+  // Same defensive pattern for the write-back confirm — rapid double-click
+  // (or held Enter on the focused button) could fire onAssistantWriteback
+  // twice before writebackInFlight state commits. Mirrors PR #76's
+  // handleSend ref guard.
+  const writebackInFlightRef = useRef(false);
   useOverlay({ isOpen: true, onClose, containerRef: panelRef });
   const swipe = useSwipeDismiss({ onClose });
 
   const [draft, setDraft]         = useState('');
   const [pending, setPending]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
+  // Write-back UI state. `pending` is the auditor opening a confirm
+  // affordance on a specific assistant turn × destination. `inFlight`
+  // covers the async DB write so we can render a spinner + disable a
+  // second click. `error` surfaces inside the confirm block so it sits
+  // next to the action that produced it (not the general chat-error
+  // footer — that's for thread failures).
+  const [writebackPending, setWritebackPending]   = useState<WritebackPending | null>(null);
+  const [writebackInFlight, setWritebackInFlight] = useState(false);
+  const [writebackError, setWritebackError]       = useState<string | null>(null);
 
   const trimmed = draft.trim();
   const canSend = !pending && trimmed.length > 0 && trimmed.length <= MAX_INPUT_CHARS;
@@ -154,6 +209,65 @@ export default function AuditChatPanel({
     } finally {
       inFlightRef.current = false;
       setPending(false);
+    }
+  };
+
+  // Open the inline write-back confirm for a specific assistant turn +
+  // destination field. Snapshots the assistant turn's content at open-time
+  // so a later history trim or other mutation can't silently shift what
+  // gets written. Replaces any previously-open confirm; only one confirm
+  // visible at a time.
+  const openWritebackConfirm = (turnIndex: number, kind: WritebackKind) => {
+    const turn = messages[turnIndex];
+    if (!turn || turn.role !== 'assistant') return;
+    setWritebackError(null);
+    setWritebackPending({ turnIndex, kind, content: turn.content });
+  };
+
+  const cancelWriteback = () => {
+    if (writebackInFlightRef.current) return;
+    setWritebackPending(null);
+    setWritebackError(null);
+  };
+
+  // Execute the write-back. Calls the parent's onAssistantWriteback which
+  // is responsible for the refetch + upsert + navigation (parent has the
+  // RPC + audit context wired). On success the shell typically closes the
+  // panel and routes the auditor to Stage 7. On failure we surface inside
+  // the confirm block so the auditor sees the error next to the action.
+  //
+  // Uses writebackPending.content (snapshotted at open-time) rather than
+  // messages[turnIndex] — defensive against any mid-confirm mutation that
+  // could shift indices (history trim, future edit-in-place affordances).
+  // Ref guard fires synchronously to prevent double-firing before the
+  // writebackInFlight state commit.
+  const confirmWriteback = async () => {
+    if (
+      !writebackPending ||
+      !onAssistantWriteback ||
+      writebackInFlightRef.current
+    ) {
+      return;
+    }
+    writebackInFlightRef.current = true;
+    const { kind, content } = writebackPending;
+
+    setWritebackInFlight(true);
+    setWritebackError(null);
+    try {
+      await onAssistantWriteback(kind, content);
+      // Parent owns navigation (closes panel, sets viewedStage). Reset
+      // local state in case the panel re-mounts on the same audit.
+      setWritebackPending(null);
+    } catch (err) {
+      setWritebackError(
+        err instanceof Error
+          ? err.message
+          : 'Could not save to Stage 7. Try again, or copy the text manually.',
+      );
+    } finally {
+      writebackInFlightRef.current = false;
+      setWritebackInFlight(false);
     }
   };
 
@@ -319,27 +433,110 @@ export default function AuditChatPanel({
 
           {messages.length > 0 && (
             <ul className="space-y-3" data-testid="audit-chat-thread">
-              {messages.map((m, i) => (
-                <li
-                  key={i}
-                  data-testid={m.role === 'user' ? 'audit-chat-user-turn' : 'audit-chat-assistant-turn'}
-                  className={
-                    m.role === 'user'
-                      ? 'flex justify-end'
-                      : 'flex justify-start'
-                  }
-                >
-                  <div
-                    className={`max-w-[85%] rounded-lg px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
+              {messages.map((m, i) => {
+                const isAssistant = m.role === 'assistant';
+                const writebackOpen =
+                  writebackPending !== null && writebackPending.turnIndex === i;
+                return (
+                  <li
+                    key={i}
+                    data-testid={m.role === 'user' ? 'audit-chat-user-turn' : 'audit-chat-assistant-turn'}
+                    className={
                       m.role === 'user'
-                        ? 'bg-[#4a6fa5] text-white'
-                        : 'bg-white dark:bg-white/[0.04] border border-[#e2e8ee] dark:border-white/10 text-fg-heading'
-                    }`}
+                        ? 'flex flex-col items-end'
+                        : 'flex flex-col items-start'
+                    }
                   >
-                    {m.content}
-                  </div>
-                </li>
-              ))}
+                    <div
+                      className={`max-w-[85%] rounded-lg px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
+                        m.role === 'user'
+                          ? 'bg-[#4a6fa5] text-white'
+                          : 'bg-white dark:bg-white/[0.04] border border-[#e2e8ee] dark:border-white/10 text-fg-heading'
+                      }`}
+                    >
+                      {m.content}
+                    </div>
+
+                    {/* Earned write-back affordance — assistant turns only.
+                        Two subtle buttons, one per destination field.
+                        Hidden when onAssistantWriteback is unwired (caller
+                        opted out). Hidden while the confirm for THIS turn
+                        is open (replaced by the confirm block below). */}
+                    {isAssistant && onAssistantWriteback && !writebackOpen && (
+                      <div
+                        data-testid={`audit-chat-writeback-row-${i}`}
+                        className="mt-1 flex flex-wrap gap-3 text-[11px] text-fg-sub"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => openWritebackConfirm(i, 'executive_summary')}
+                          data-testid={`audit-chat-writeback-open-exec-${i}`}
+                          className="font-medium underline underline-offset-2 decoration-[#4a6fa5]/40 hover:decoration-[#4a6fa5] hover:text-fg-heading"
+                          aria-label="Use this PIQC reply as your executive summary draft"
+                        >
+                          Use in exec summary →
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openWritebackConfirm(i, 'conclusions')}
+                          data-testid={`audit-chat-writeback-open-conclusions-${i}`}
+                          className="font-medium underline underline-offset-2 decoration-[#4a6fa5]/40 hover:decoration-[#4a6fa5] hover:text-fg-heading"
+                          aria-label="Use this PIQC reply as your conclusions draft"
+                        >
+                          Use in conclusions →
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Inline confirm block — only renders when this turn ×
+                        destination is selected. Sits beneath the assistant
+                        bubble so the auditor sees what they're sending and
+                        where it's going in the same visual unit. */}
+                    {isAssistant && writebackOpen && writebackPending && (
+                      <div
+                        data-testid={`audit-chat-writeback-confirm-${i}`}
+                        className="mt-2 max-w-[85%] rounded-md border border-[#4a6fa5]/30 dark:border-[#4a6fa5]/40 bg-[#eef2f6] dark:bg-white/[0.04] px-3 py-2.5 text-xs text-fg-heading"
+                      >
+                        <p className="font-semibold mb-1">
+                          Drop this into your {WRITEBACK_KIND_LABELS[writebackPending.kind]} draft?
+                        </p>
+                        <p className="text-fg-sub leading-relaxed mb-2">
+                          I'll replace your current text. You'll review it on Stage 7 before saving.
+                        </p>
+                        {writebackError && (
+                          <p
+                            data-testid={`audit-chat-writeback-error-${i}`}
+                            className="text-amber-800 dark:text-amber-300 mb-2"
+                            role="alert"
+                          >
+                            {writebackError}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={cancelWriteback}
+                            disabled={writebackInFlight}
+                            data-testid={`audit-chat-writeback-cancel-${i}`}
+                            className="text-[11px] font-medium text-fg-sub hover:text-fg-heading disabled:opacity-50"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={confirmWriteback}
+                            disabled={writebackInFlight}
+                            data-testid={`audit-chat-writeback-confirm-action-${i}`}
+                            className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-[#4a6fa5] text-white hover:bg-[#3f5f8e] disabled:opacity-60 disabled:cursor-not-allowed"
+                          >
+                            {writebackInFlight ? 'Saving…' : 'Replace and review →'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
               {pending && (
                 <li className="flex justify-start" data-testid="audit-chat-pending">
                   <div className="bg-white dark:bg-white/[0.04] border border-[#e2e8ee] dark:border-white/10 rounded-lg px-3.5 py-2.5 text-sm text-fg-sub italic">
