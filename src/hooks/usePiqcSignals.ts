@@ -37,6 +37,13 @@ export interface PiqcSignal {
    * we'd rather say nothing than say something noisy.
    */
   themeHint?: string;
+  /**
+   * The dominant cluster, structured. Present iff `themeHint` is present
+   * (same threshold gate). Lets downstream surfaces (chat-prompt
+   * pre-seed in PR #82) reference the label/count without re-parsing
+   * the display string.
+   */
+  topTheme?: SignalTheme;
 }
 
 interface State {
@@ -80,6 +87,59 @@ export function buildThemeHint(
   return `— ${topCount} are about ${top.label}`;
 }
 
+/**
+ * Returns the dominant cluster (label + clamped count) when it qualifies
+ * for a hint, otherwise undefined. Same threshold pipeline as
+ * `buildThemeHint` so the two surfaces — display string + structured
+ * data — can never disagree about whether a theme exists.
+ *
+ * Lives next to `buildThemeHint` so future threshold changes have to
+ * update both in lockstep. Tests assert the lockstep.
+ */
+export function buildClusterTopTheme(
+  total:  number,
+  themes: SignalTheme[],
+): SignalTheme | undefined {
+  if (buildThemeHint(total, themes) === undefined) return undefined;
+  const top = themes[0]!;
+  return { label: top.label, count: Math.min(top.count, total) };
+}
+
+/**
+ * Auditor-voiced prompt seeded into the chat composer when the auditor
+ * clicks "Ask about these →" on a clustered signal. The seed is a
+ * DRAFT — it sits in the input field; the auditor reads, edits if
+ * desired, and clicks Send. Two human checkpoints (click + Send)
+ * preserve the no-silent-write doctrine.
+ *
+ * Voice: this is the AUDITOR speaking to PIQC, not PIQC speaking to the
+ * auditor. First-person from the auditor's perspective ("my review",
+ * "I flagged"). Concise; the auditor can always rewrite.
+ *
+ * Returns undefined for unknown signal kinds or signals without a
+ * topTheme — the caller (panel) gates the button on a defined return.
+ */
+export function buildClusterPrompt(signal: PiqcSignal): string | undefined {
+  const top = signal.topTheme;
+  if (!top) return undefined;
+
+  const isAll       = top.count === signal.count;
+  const countPhrase = isAll ? '' : ` ${top.count}`;
+
+  switch (signal.kind) {
+    case 'sotr_awaiting_review':
+      // SOTR theme labels are short noun phrases ("visit schedule",
+      // "eligibility criteria") so they compose cleanly into "items".
+      return `Tell me about the${countPhrase} ${top.label} items awaiting my review.`;
+    case 'questionnaire_flagged':
+      // section_title is free-form template metadata. Auditor can
+      // re-word in the composer if it reads off for their template.
+      return `What's inconsistent about the${countPhrase} ${top.label} responses I flagged?`;
+    default:
+      return undefined;
+  }
+}
+
 export function usePiqcSignals(
   auditId:    string | null | undefined,
   protocolId: string | null | undefined,
@@ -116,6 +176,7 @@ export function usePiqcSignals(
           count:     n,
           label:     `${n} parsed protocol item${n === 1 ? '' : 's'} awaiting your review`,
           themeHint: buildThemeHint(n, sotr.themes),
+          topTheme:  buildClusterTopTheme(n, sotr.themes),
         });
       }
 
@@ -126,6 +187,7 @@ export function usePiqcSignals(
           count:     n,
           label:     `${n} questionnaire response${n === 1 ? '' : 's'} you flagged as inconsistent`,
           themeHint: buildThemeHint(n, flag.themes),
+          topTheme:  buildClusterTopTheme(n, flag.themes),
         });
       }
 
