@@ -396,6 +396,56 @@ describe('AuditChatPanel — ambient signals in empty state', () => {
     expect(mockChat).not.toHaveBeenCalled();
   });
 
+  it('does NOT overwrite the composer when the auditor has already typed a draft (no agentic surprise)', async () => {
+    // Worst-kind-of-clobber doctrine: an auditor who's started typing
+    // should never see their text silently replaced. Click focuses the
+    // input but leaves the draft intact when non-empty.
+    const user = userEvent.setup();
+    setup([], undefined, [
+      {
+        kind:      'sotr_awaiting_review',
+        count:     3,
+        label:     '3 parsed protocol items awaiting your review',
+        themeHint: '— 2 are about visit schedule',
+        topTheme:  { label: 'visit schedule', count: 2 },
+      },
+    ]);
+
+    const input = screen.getByTestId('audit-chat-input') as HTMLTextAreaElement;
+    await user.type(input, 'need to ask about');
+    expect(input.value).toBe('need to ask about');
+
+    await user.click(screen.getByTestId('audit-chat-signal-cluster-prompt-sotr_awaiting_review'));
+
+    // Draft preserved verbatim.
+    expect(input.value).toBe('need to ask about');
+    // Focus still moves to the input — the click confirmed intent, the
+    // auditor's hand goes to finish typing.
+    expect(document.activeElement).toBe(input);
+    expect(mockChat).not.toHaveBeenCalled();
+  });
+
+  it('treats whitespace-only drafts as empty (seed proceeds normally)', async () => {
+    // "      " counts as empty — preserving spaces would yield "  Tell me about..."
+    // which reads weird. trim() before the empty check.
+    const user = userEvent.setup();
+    setup([], undefined, [
+      {
+        kind:      'sotr_awaiting_review',
+        count:     3,
+        label:     '3 parsed protocol items awaiting your review',
+        themeHint: '— 2 are about visit schedule',
+        topTheme:  { label: 'visit schedule', count: 2 },
+      },
+    ]);
+
+    const input = screen.getByTestId('audit-chat-input') as HTMLTextAreaElement;
+    await user.type(input, '   ');
+    await user.click(screen.getByTestId('audit-chat-signal-cluster-prompt-sotr_awaiting_review'));
+
+    expect(input.value).toBe('Tell me about the 2 visit schedule items awaiting my review.');
+  });
+
   it('has an accessible aria-label naming the cluster (not just generic "Ask")', () => {
     setup([], undefined, [
       {

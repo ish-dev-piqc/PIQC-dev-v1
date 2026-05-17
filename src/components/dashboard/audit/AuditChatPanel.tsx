@@ -427,13 +427,30 @@ export default function AuditChatPanel({
                                     type="button"
                                     data-testid={`audit-chat-signal-cluster-prompt-${s.kind}`}
                                     onClick={() => {
-                                      setDraft(clusterPrompt);
-                                      // Matches the focus pattern used on
-                                      // send completion (see inputRef.focus
-                                      // earlier in this file).
+                                      // Don't clobber auditor work. If
+                                      // they've already typed a draft,
+                                      // just focus the input and let
+                                      // them finish — silently
+                                      // overwriting their text would be
+                                      // the worst kind of "agentic
+                                      // surprise." When draft is empty
+                                      // (the common case for the
+                                      // empty-state surface), seed it
+                                      // with the cluster prompt.
+                                      if (draft.trim() === '') {
+                                        setDraft(clusterPrompt);
+                                      }
+                                      // Matches the focus pattern used
+                                      // on send completion (see
+                                      // inputRef.focus earlier in this
+                                      // file).
                                       inputRef.current?.focus();
                                     }}
-                                    aria-label={`Ask PIQC about the ${s.topTheme?.label ?? ''} items`}
+                                    aria-label={
+                                      s.topTheme
+                                        ? `Ask PIQC about the ${s.topTheme.label} items`
+                                        : 'Ask PIQC about these items'
+                                    }
                                     className="ml-2 inline text-[11px] font-medium text-amber-800 dark:text-amber-200 hover:text-amber-900 dark:hover:text-amber-100 underline underline-offset-2 decoration-amber-400/50 hover:decoration-amber-500"
                                   >
                                     Ask about these →
