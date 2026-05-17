@@ -312,6 +312,38 @@ describe('AuditChatPanel — ambient signals in empty state', () => {
     expect(onSignalAction).toHaveBeenCalledTimes(2);
   });
 
+  it('renders themeHint as a quieter sub-line under the signal label (v2)', () => {
+    setup([], undefined, [
+      {
+        kind:      'sotr_awaiting_review',
+        count:     3,
+        label:     '3 parsed protocol items awaiting your review',
+        themeHint: '2 about visit schedule',
+      },
+    ]);
+    // The hint shares the signal row but renders as a separate testid so
+    // future style changes can target it without touching the label.
+    const hint = screen.getByTestId('audit-chat-signal-hint-sotr_awaiting_review');
+    expect(hint).toBeInTheDocument();
+    expect(hint).toHaveTextContent('2 about visit schedule');
+    // And the original label still reads — the hint adds, doesn't replace.
+    expect(screen.getByTestId('audit-chat-signal-sotr_awaiting_review'))
+      .toHaveTextContent('3 parsed protocol items awaiting your review');
+  });
+
+  it('omits the hint element entirely when themeHint is absent (no empty sub-line)', () => {
+    setup([], undefined, [
+      {
+        kind:  'questionnaire_flagged',
+        count: 1,
+        label: '1 questionnaire response you flagged as inconsistent',
+        // no themeHint
+      },
+    ]);
+    expect(screen.queryByTestId('audit-chat-signal-hint-questionnaire_flagged'))
+      .not.toBeInTheDocument();
+  });
+
   it('hides the signals block once the thread is non-empty (PIQC stops haranguing mid-conversation)', () => {
     setup(
       [{ role: 'user', content: 'q' }],

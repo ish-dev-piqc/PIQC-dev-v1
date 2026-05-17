@@ -393,7 +393,23 @@ export default function AuditChatPanel({
                         data-testid={`audit-chat-signal-${s.kind}`}
                         className="flex items-start gap-2"
                       >
-                        <span className="flex-1 min-w-0">{s.label}</span>
+                        <span className="flex-1 min-w-0">
+                          {s.label}
+                          {/* Thematic hint (v2 / PR after #80) — a quieter
+                              sub-line surfaces when one cluster dominates
+                              the underlying rows. Reads as "PIQC noticed a
+                              pattern" rather than "PIQC counted." Skipped
+                              by the hook when no theme is decisive (see
+                              buildThemeHint in usePiqcSignals.ts). */}
+                          {s.themeHint && (
+                            <span
+                              data-testid={`audit-chat-signal-hint-${s.kind}`}
+                              className="block text-[11px] mt-0.5 text-amber-800/75 dark:text-amber-200/75"
+                            >
+                              {s.themeHint}
+                            </span>
+                          )}
+                        </span>
                         {onSignalAction && (
                           <button
                             type="button"

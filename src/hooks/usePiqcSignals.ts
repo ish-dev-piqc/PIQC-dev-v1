@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
-import { countQuestionnaireFlaggedResponses } from '../lib/audit/signalsApi';
-import { countWorksheetItemsForStudy } from '../lib/sotr/sourceEvidenceApi';
+import {
+  fetchFlaggedResponsesSignal,
+  fetchSotrAwaitingReviewSignal,
+  type SignalTheme,
+} from '../lib/audit/signalsApi';
 
 // =============================================================================
 // usePiqcSignals — aggregates ambient attention cues for the active audit.
@@ -10,13 +13,11 @@ import { countWorksheetItemsForStudy } from '../lib/sotr/sourceEvidenceApi';
 // The hook intentionally does NOT trigger toasts, modals, or any auto-action;
 // the founder vision is on-shoulder presence, not interruption.
 //
-// Two signals in v1 — see signalsApi.ts header for the rationale + the
-// deferred-signal backlog. Adding a third signal later means:
-//   1. Add a fetch
-//   2. Add a case to the `signals` accumulator below
-//   3. Map the new kind in the panel's renderer
-// No other surfaces need to change. The kind/label/action shape is the
-// extension point.
+// v1 (PR #76) shipped raw counts. v2 (this file) adds `themeHint` — a
+// one-line clustering of the underlying rows by the most common field
+// value (SOTR field_type / questionnaire section_title). The hint makes
+// PIQC read as "noticed a pattern" rather than "knows arithmetic." See
+// signalsApi.ts header for the doctrine rationale.
 //
 // Refetches when auditId or protocolId change. `bumpToken` invalidates the
 // cache (parent increments it after the auditor closes a drawer where they
@@ -30,6 +31,12 @@ export interface PiqcSignal {
   count:  number;
   /** Human-readable one-liner for the panel's empty-state surface. */
   label:  string;
+  /**
+   * Optional thematic hint when one cluster dominates the signal. See
+   * `buildThemeHint` for the rules. Absent when no theme is decisive —
+   * we'd rather say nothing than say something noisy.
+   */
+  themeHint?: string;
 }
 
 interface State {
@@ -38,6 +45,35 @@ interface State {
 }
 
 const EMPTY_STATE: State = { signals: [], loading: false };
+
+// -----------------------------------------------------------------------------
+// Theme-hint thresholds.
+//
+// Goal: hint only when one cluster genuinely dominates. The reading
+// auditor should never look at a hint and think "that's not what's
+// actually in there." False positives erode trust faster than missing
+// hints erode usefulness.
+//
+//   - Skip when total <= 1     (clusters of 1 aren't insights)
+//   - Skip when top cluster < 2 items
+//   - Skip when top cluster < 50% of total (no clear dominance)
+//   - "all about X" when top cluster == total
+//   - "N about X"   otherwise
+//
+// These thresholds are deliberate; tweaking them changes how chatty
+// PIQC gets. Update the test suite in lockstep.
+// -----------------------------------------------------------------------------
+export function buildThemeHint(
+  total:  number,
+  themes: SignalTheme[],
+): string | undefined {
+  if (total <= 1) return undefined;
+  const top = themes[0];
+  if (!top || top.count < 2)            return undefined;
+  if (top.count / total < 0.5)          return undefined;
+  if (top.count === total)              return `all about ${top.label}`;
+  return `${top.count} about ${top.label}`;
+}
 
 export function usePiqcSignals(
   auditId:    string | null | undefined,
@@ -54,53 +90,38 @@ export function usePiqcSignals(
     let cancelled = false;
     setState({ signals: [], loading: true });
 
-    // Parallel fetches — both are RLS-gated and either may RLS-deny without
-    // affecting the other. Promise.allSettled so one failure doesn't void
-    // the other signal.
-    //
-    // Asymmetric error contracts (intentional, named here so a future reader
-    // doesn't try to "fix" the asymmetry):
-    //   - countWorksheetItemsForStudy THROWS on failure — the rejected
-    //     handler below logs + drops the SOTR signal.
-    //   - countQuestionnaireFlaggedResponses SWALLOWS + returns 0 — its
-    //     own silent-degrade contract (see signalsApi.ts header). It will
-    //     always appear as `fulfilled` here; the `count > 0` guard does
-    //     the work of deciding whether to surface a signal.
-    // The asymmetry exists because the SOTR helper predates PIQC and is
-    // shared with other surfaces; the questionnaire helper was written
-    // for this hook with the dock's no-throw doctrine baked in.
+    // Both fetchers silent-degrade on error (return { count: 0, themes: [] }).
+    // Using Promise.all is safe — neither side throws — and reads cleaner
+    // than allSettled now that the asymmetric error contract from v1 is
+    // gone. PIQC owns both fetch paths in src/lib/audit/signalsApi.ts.
     const sotrP = protocolId
-      ? countWorksheetItemsForStudy(protocolId)
-      : Promise.resolve({ total: 0, awaitingReview: 0 });
-    const flagP = countQuestionnaireFlaggedResponses(auditId);
+      ? fetchSotrAwaitingReviewSignal(protocolId)
+      : Promise.resolve({ count: 0, themes: [] });
+    const flagP = fetchFlaggedResponsesSignal(auditId);
 
-    Promise.allSettled([sotrP, flagP]).then(([sotrRes, flagRes]) => {
+    Promise.all([sotrP, flagP]).then(([sotr, flag]) => {
       if (cancelled) return;
 
       const signals: PiqcSignal[] = [];
 
-      if (sotrRes.status === 'fulfilled' && sotrRes.value.awaitingReview > 0) {
-        const n = sotrRes.value.awaitingReview;
+      if (sotr.count > 0) {
+        const n = sotr.count;
         signals.push({
-          kind:  'sotr_awaiting_review',
-          count: n,
-          label: `${n} parsed protocol item${n === 1 ? '' : 's'} awaiting your review`,
+          kind:      'sotr_awaiting_review',
+          count:     n,
+          label:     `${n} parsed protocol item${n === 1 ? '' : 's'} awaiting your review`,
+          themeHint: buildThemeHint(n, sotr.themes),
         });
-      } else if (sotrRes.status === 'rejected') {
-        // Silent degrade — RLS denial on a cross-user protocol is a real
-        // path. We don't want PIQC to throw a dot for "I couldn't read."
-        console.warn('[piqc-signals] SOTR fetch failed', sotrRes.reason);
       }
 
-      if (flagRes.status === 'fulfilled' && flagRes.value > 0) {
-        const n = flagRes.value;
+      if (flag.count > 0) {
+        const n = flag.count;
         signals.push({
-          kind:  'questionnaire_flagged',
-          count: n,
-          label: `${n} questionnaire response${n === 1 ? '' : 's'} you flagged as inconsistent`,
+          kind:      'questionnaire_flagged',
+          count:     n,
+          label:     `${n} questionnaire response${n === 1 ? '' : 's'} you flagged as inconsistent`,
+          themeHint: buildThemeHint(n, flag.themes),
         });
-      } else if (flagRes.status === 'rejected') {
-        console.warn('[piqc-signals] questionnaire-flag fetch failed', flagRes.reason);
       }
 
       setState({ signals, loading: false });
