@@ -5,7 +5,7 @@
 //   - supabase/migrations/20260502000000_site_mode_schema.sql
 //   - supabase/migrations/20260506000100_add_protocol_id_to_documents.sql
 //   - supabase/migrations/20260507000000_protocol_visit_templates.sql
-//   - supabase/migrations/20260508000000_visit_template_cross_references.sql
+//   - supabase/migrations/20260508000100_visit_template_cross_references.sql
 //
 // The visit type matches the existing CalendarVisit shape (camelCase) so the
 // calendar UI in TodayTab and the Reports table can keep their consumer code.

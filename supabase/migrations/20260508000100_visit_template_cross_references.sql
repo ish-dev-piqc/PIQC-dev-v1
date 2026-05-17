@@ -30,7 +30,7 @@
 -- =============================================================================
 
 ALTER TABLE protocol_visit_templates
-  ADD COLUMN cross_references JSONB NOT NULL DEFAULT '[]'::jsonb;
+  ADD COLUMN IF NOT EXISTS cross_references JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 COMMENT ON COLUMN protocol_visit_templates.cross_references IS
   'Aggregated mentions of this visit elsewhere in the protocol documents — '
