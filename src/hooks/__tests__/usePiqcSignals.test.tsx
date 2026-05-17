@@ -22,7 +22,14 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
-import { usePiqcSignals, buildThemeHint } from '../usePiqcSignals';
+import {
+  usePiqcSignals,
+  buildThemeHint,
+  buildClusterTopTheme,
+  buildClusterPrompt,
+  type PiqcSignal,
+  type PiqcSignalKind,
+} from '../usePiqcSignals';
 
 vi.mock('../../lib/audit/signalsApi', () => ({
   fetchSotrAwaitingReviewSignal: vi.fn(),
@@ -99,6 +106,105 @@ describe('buildThemeHint — thresholds', () => {
     // ever does we clamp to total instead of producing a >100% share.
     expect(buildThemeHint(3, [{ label: 'visit schedule', count: 5 }]))
       .toBe('— all are about visit schedule');
+  });
+});
+
+// ============================================================================
+// Pure: buildClusterTopTheme — same thresholds as buildThemeHint, structured
+// ============================================================================
+
+describe('buildClusterTopTheme — lockstep with buildThemeHint', () => {
+  it('returns undefined when buildThemeHint would also return undefined', () => {
+    expect(buildClusterTopTheme(1, [{ label: 'x', count: 1 }])).toBeUndefined();
+    expect(buildClusterTopTheme(3, [
+      { label: 'a', count: 1 },
+      { label: 'b', count: 1 },
+      { label: 'c', count: 1 },
+    ])).toBeUndefined();
+    expect(buildClusterTopTheme(5, [
+      { label: 'a', count: 2 },
+      { label: 'b', count: 2 },
+      { label: 'c', count: 1 },
+    ])).toBeUndefined();
+  });
+
+  it('returns the clamped top theme when a cluster qualifies', () => {
+    expect(buildClusterTopTheme(5, [
+      { label: 'visit schedule', count: 3 },
+      { label: 'dosing',         count: 2 },
+    ])).toEqual({ label: 'visit schedule', count: 3 });
+  });
+
+  it('clamps count against total for the structured form too', () => {
+    expect(buildClusterTopTheme(3, [{ label: 'visit schedule', count: 5 }]))
+      .toEqual({ label: 'visit schedule', count: 3 });
+  });
+});
+
+// ============================================================================
+// Pure: buildClusterPrompt — auditor-voiced chat composer seed
+// ============================================================================
+
+describe('buildClusterPrompt — auditor-voice seed', () => {
+  // Voice: auditor speaking to PIQC, not PIQC speaking to auditor.
+  // First-person from auditor's perspective ("my review", "I flagged").
+  // The prompt is a DRAFT — auditor reads + edits + sends.
+
+  const sotrSignal = (overrides: Partial<PiqcSignal> = {}): PiqcSignal => ({
+    kind:     'sotr_awaiting_review',
+    count:    3,
+    label:    '3 parsed protocol items awaiting your review',
+    themeHint:'— 2 are about visit schedule',
+    topTheme: { label: 'visit schedule', count: 2 },
+    ...overrides,
+  });
+  const flaggedSignal = (overrides: Partial<PiqcSignal> = {}): PiqcSignal => ({
+    kind:     'questionnaire_flagged',
+    count:    3,
+    label:    '3 questionnaire responses you flagged as inconsistent',
+    themeHint:'— 2 are about Vendor oversight',
+    topTheme: { label: 'Vendor oversight', count: 2 },
+    ...overrides,
+  });
+
+  it('returns undefined when the signal has no topTheme (no cluster to ask about)', () => {
+    expect(buildClusterPrompt(sotrSignal({ topTheme: undefined }))).toBeUndefined();
+  });
+
+  it('SOTR partial-cluster prompt names the count + label', () => {
+    expect(buildClusterPrompt(sotrSignal())).toBe(
+      'Tell me about the 2 visit schedule items awaiting my review.',
+    );
+  });
+
+  it('SOTR all-cluster prompt drops the count (reads naturally without it)', () => {
+    expect(buildClusterPrompt(sotrSignal({
+      count: 4,
+      topTheme: { label: 'visit schedule', count: 4 },
+    }))).toBe('Tell me about the visit schedule items awaiting my review.');
+  });
+
+  it('questionnaire partial-cluster prompt asks for inconsistency context', () => {
+    expect(buildClusterPrompt(flaggedSignal())).toBe(
+      "What's inconsistent about the 2 Vendor oversight responses I flagged?",
+    );
+  });
+
+  it('questionnaire all-cluster prompt drops the count', () => {
+    expect(buildClusterPrompt(flaggedSignal({
+      count: 3,
+      topTheme: { label: 'Vendor oversight', count: 3 },
+    }))).toBe("What's inconsistent about the Vendor oversight responses I flagged?");
+  });
+
+  it('returns undefined for unknown signal kinds (graceful skip, not a crash)', () => {
+    expect(buildClusterPrompt({
+      kind:     'unknown_kind' as PiqcSignalKind,
+      count:    3,
+      label:    'x',
+      themeHint:'— 2 are about x',
+      topTheme: { label: 'x', count: 2 },
+    } as PiqcSignal)).toBeUndefined();
   });
 });
 
@@ -193,6 +299,11 @@ describe('usePiqcSignals — themeHint surfacing (v2)', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(result.current.signals[0].themeHint).toBe('— 2 are about visit schedule');
+    // topTheme accompanies the hint as structured data (used by the
+    // panel's cluster-prompt affordance, PR #82). The two move together
+    // because they share the same threshold gate.
+    expect(result.current.signals[0].topTheme)
+      .toEqual({ label: 'visit schedule', count: 2 });
   });
 
   it('uses "— all are about X" when every item shares the top theme', async () => {

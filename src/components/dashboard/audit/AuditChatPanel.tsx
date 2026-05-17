@@ -11,6 +11,7 @@ import { STAGE_LABELS } from '../../../lib/audit/labels';
 import type { AuditStage } from '../../../types/audit';
 import type { PiqcSignal, PiqcSignalKind } from '../../../hooks/usePiqcSignals';
 import PiqcMark from './PiqcMark';
+import { buildClusterPrompt } from '../../../hooks/usePiqcSignals';
 
 // =============================================================================
 // AuditChatPanel (F-3) — freeform auditor chat about the active audit.
@@ -387,47 +388,91 @@ export default function AuditChatPanel({
                     Worth a look:
                   </p>
                   <ul className="space-y-1.5 text-xs text-amber-900/90 dark:text-amber-100/90">
-                    {signals.map((s) => (
-                      <li
-                        key={s.kind}
-                        data-testid={`audit-chat-signal-${s.kind}`}
-                        className="flex items-start gap-2"
-                      >
-                        <span className="flex-1 min-w-0">
-                          {s.label}
-                          {/* Thematic hint (v2 / PR after #80) — a quieter
-                              sub-line surfaces when one cluster dominates
-                              the underlying rows. Reads as "PIQC noticed a
-                              pattern" rather than "PIQC counted." Skipped
-                              by the hook when no theme is decisive (see
-                              buildThemeHint in usePiqcSignals.ts). */}
-                          {s.themeHint && (
-                            <span
-                              data-testid={`audit-chat-signal-hint-${s.kind}`}
-                              // /85 (not /75) — the smaller font and the
-                              // em-dash prefix already de-emphasize the
-                              // sub-line; a heavier opacity drop on amber-
-                              // 800 over amber-50 hit WCAG AA's lower
-                              // bound at 11px. /85 stays accessible.
-                              className="block text-[11px] mt-0.5 text-amber-800/85 dark:text-amber-200/85"
+                    {signals.map((s) => {
+                      // Cluster-prompt seed (PR #82). Buildable only when
+                      // the signal has a topTheme AND its kind has a
+                      // template. If either is missing the affordance is
+                      // silently dropped — better than rendering a button
+                      // that produces no draft on click.
+                      const clusterPrompt = buildClusterPrompt(s);
+                      return (
+                        <li
+                          key={s.kind}
+                          data-testid={`audit-chat-signal-${s.kind}`}
+                          className="flex items-start gap-2"
+                        >
+                          <span className="flex-1 min-w-0">
+                            {s.label}
+                            {/* Thematic hint (PR #81) — a quieter sub-line
+                                surfaces when one cluster dominates the
+                                underlying rows. Reads as "PIQC noticed a
+                                pattern" rather than "PIQC counted." */}
+                            {s.themeHint && (
+                              <span
+                                data-testid={`audit-chat-signal-hint-${s.kind}`}
+                                // /85 (not /75) — the smaller font + em-
+                                // dash prefix already de-emphasize; a
+                                // heavier opacity drop hit WCAG AA's
+                                // lower bound at 11px.
+                                className="block text-[11px] mt-0.5 text-amber-800/85 dark:text-amber-200/85"
+                              >
+                                {s.themeHint}
+                                {/* "Ask about these →" — pre-seed the
+                                    composer with an auditor-voice prompt
+                                    scoped to the cluster, then focus the
+                                    input. Two human checkpoints (click +
+                                    Send); no auto-send. */}
+                                {clusterPrompt && (
+                                  <button
+                                    type="button"
+                                    data-testid={`audit-chat-signal-cluster-prompt-${s.kind}`}
+                                    onClick={() => {
+                                      // Don't clobber auditor work. If
+                                      // they've already typed a draft,
+                                      // just focus the input and let
+                                      // them finish — silently
+                                      // overwriting their text would be
+                                      // the worst kind of "agentic
+                                      // surprise." When draft is empty
+                                      // (the common case for the
+                                      // empty-state surface), seed it
+                                      // with the cluster prompt.
+                                      if (draft.trim() === '') {
+                                        setDraft(clusterPrompt);
+                                      }
+                                      // Matches the focus pattern used
+                                      // on send completion (see
+                                      // inputRef.focus earlier in this
+                                      // file).
+                                      inputRef.current?.focus();
+                                    }}
+                                    aria-label={
+                                      s.topTheme
+                                        ? `Ask PIQC about the ${s.topTheme.label} items`
+                                        : 'Ask PIQC about these items'
+                                    }
+                                    className="ml-2 inline text-[11px] font-medium text-amber-800 dark:text-amber-200 hover:text-amber-900 dark:hover:text-amber-100 underline underline-offset-2 decoration-amber-400/50 hover:decoration-amber-500"
+                                  >
+                                    Ask about these →
+                                  </button>
+                                )}
+                              </span>
+                            )}
+                          </span>
+                          {onSignalAction && (
+                            <button
+                              type="button"
+                              onClick={() => onSignalAction(s.kind)}
+                              data-testid={`audit-chat-signal-action-${s.kind}`}
+                              className="flex-shrink-0 text-[11px] font-medium text-amber-800 dark:text-amber-200 hover:text-amber-900 dark:hover:text-amber-100 underline underline-offset-2 decoration-amber-400/50 hover:decoration-amber-500"
+                              aria-label={`Take me to ${s.label}`}
                             >
-                              {s.themeHint}
-                            </span>
+                              Take me there →
+                            </button>
                           )}
-                        </span>
-                        {onSignalAction && (
-                          <button
-                            type="button"
-                            onClick={() => onSignalAction(s.kind)}
-                            data-testid={`audit-chat-signal-action-${s.kind}`}
-                            className="flex-shrink-0 text-[11px] font-medium text-amber-800 dark:text-amber-200 hover:text-amber-900 dark:hover:text-amber-100 underline underline-offset-2 decoration-amber-400/50 hover:decoration-amber-500"
-                            aria-label={`Take me to ${s.label}`}
-                          >
-                            Take me there →
-                          </button>
-                        )}
-                      </li>
-                    ))}
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               )}

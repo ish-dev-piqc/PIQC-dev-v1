@@ -344,6 +344,122 @@ describe('AuditChatPanel — ambient signals in empty state', () => {
       .not.toBeInTheDocument();
   });
 
+  it('renders "Ask about these →" only when the signal has a topTheme + buildable prompt', () => {
+    setup([], undefined, [
+      // Has topTheme → button renders
+      {
+        kind:      'sotr_awaiting_review',
+        count:     3,
+        label:     '3 parsed protocol items awaiting your review',
+        themeHint: '— 2 are about visit schedule',
+        topTheme:  { label: 'visit schedule', count: 2 },
+      },
+      // No topTheme → no cluster prompt affordance, even if a hint
+      // somehow existed (defensive — the hook keeps them in lockstep
+      // but the panel doesn't assume).
+      {
+        kind:      'questionnaire_flagged',
+        count:     1,
+        label:     '1 questionnaire response you flagged as inconsistent',
+        // no themeHint, no topTheme
+      },
+    ]);
+    expect(screen.getByTestId('audit-chat-signal-cluster-prompt-sotr_awaiting_review'))
+      .toBeInTheDocument();
+    expect(screen.queryByTestId('audit-chat-signal-cluster-prompt-questionnaire_flagged'))
+      .not.toBeInTheDocument();
+  });
+
+  it('clicking "Ask about these →" pre-seeds the composer + focuses input (two checkpoints, no auto-send)', async () => {
+    const user = userEvent.setup();
+    setup([], undefined, [
+      {
+        kind:      'sotr_awaiting_review',
+        count:     3,
+        label:     '3 parsed protocol items awaiting your review',
+        themeHint: '— 2 are about visit schedule',
+        topTheme:  { label: 'visit schedule', count: 2 },
+      },
+    ]);
+
+    await user.click(screen.getByTestId('audit-chat-signal-cluster-prompt-sotr_awaiting_review'));
+
+    // Draft is pre-filled — auditor sees the question, can edit, then
+    // clicks Send. Locked auditor-voice phrasing.
+    const input = screen.getByTestId('audit-chat-input') as HTMLTextAreaElement;
+    expect(input.value).toBe('Tell me about the 2 visit schedule items awaiting my review.');
+    // Focus moves to the input — the auditor's hand naturally goes to
+    // edit/send.
+    expect(document.activeElement).toBe(input);
+    // No premature send — chatApi was not called. The mock would record
+    // any call.
+    expect(mockChat).not.toHaveBeenCalled();
+  });
+
+  it('does NOT overwrite the composer when the auditor has already typed a draft (no agentic surprise)', async () => {
+    // Worst-kind-of-clobber doctrine: an auditor who's started typing
+    // should never see their text silently replaced. Click focuses the
+    // input but leaves the draft intact when non-empty.
+    const user = userEvent.setup();
+    setup([], undefined, [
+      {
+        kind:      'sotr_awaiting_review',
+        count:     3,
+        label:     '3 parsed protocol items awaiting your review',
+        themeHint: '— 2 are about visit schedule',
+        topTheme:  { label: 'visit schedule', count: 2 },
+      },
+    ]);
+
+    const input = screen.getByTestId('audit-chat-input') as HTMLTextAreaElement;
+    await user.type(input, 'need to ask about');
+    expect(input.value).toBe('need to ask about');
+
+    await user.click(screen.getByTestId('audit-chat-signal-cluster-prompt-sotr_awaiting_review'));
+
+    // Draft preserved verbatim.
+    expect(input.value).toBe('need to ask about');
+    // Focus still moves to the input — the click confirmed intent, the
+    // auditor's hand goes to finish typing.
+    expect(document.activeElement).toBe(input);
+    expect(mockChat).not.toHaveBeenCalled();
+  });
+
+  it('treats whitespace-only drafts as empty (seed proceeds normally)', async () => {
+    // "      " counts as empty — preserving spaces would yield "  Tell me about..."
+    // which reads weird. trim() before the empty check.
+    const user = userEvent.setup();
+    setup([], undefined, [
+      {
+        kind:      'sotr_awaiting_review',
+        count:     3,
+        label:     '3 parsed protocol items awaiting your review',
+        themeHint: '— 2 are about visit schedule',
+        topTheme:  { label: 'visit schedule', count: 2 },
+      },
+    ]);
+
+    const input = screen.getByTestId('audit-chat-input') as HTMLTextAreaElement;
+    await user.type(input, '   ');
+    await user.click(screen.getByTestId('audit-chat-signal-cluster-prompt-sotr_awaiting_review'));
+
+    expect(input.value).toBe('Tell me about the 2 visit schedule items awaiting my review.');
+  });
+
+  it('has an accessible aria-label naming the cluster (not just generic "Ask")', () => {
+    setup([], undefined, [
+      {
+        kind:      'questionnaire_flagged',
+        count:     3,
+        label:     '3 questionnaire responses you flagged as inconsistent',
+        themeHint: '— 2 are about Vendor oversight',
+        topTheme:  { label: 'Vendor oversight', count: 2 },
+      },
+    ]);
+    expect(screen.getByLabelText(/Ask PIQC about the Vendor oversight items/i))
+      .toBeInTheDocument();
+  });
+
   it('hides the signals block once the thread is non-empty (PIQC stops haranguing mid-conversation)', () => {
     setup(
       [{ role: 'user', content: 'q' }],
