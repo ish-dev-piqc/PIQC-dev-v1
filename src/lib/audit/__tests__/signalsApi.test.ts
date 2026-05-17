@@ -145,6 +145,39 @@ describe('fetchFlaggedResponsesSignal — theme aggregation', () => {
     expect(result).toEqual({ count: 0, themes: [] });
   });
 
+  it('keeps orphan-join rows in count but excludes them from themes (honesty)', async () => {
+    // Scenario: 3 flagged responses, but one has a missing/empty
+    // section_title on the join (deleted question, FK gap, etc.).
+    // The count must stay at 3 (the auditor flagged 3) and themes
+    // must only describe the 2 we can name — otherwise the hint
+    // would claim coverage of a row we couldn't read.
+    setPending({
+      data: [
+        { id: '1', questionnaire_questions: { section_title: 'Vendor oversight' } },
+        { id: '2', questionnaire_questions: { section_title: 'Vendor oversight' } },
+        { id: '3', questionnaire_questions: null },
+      ],
+      error: null,
+    });
+    const result = await fetchFlaggedResponsesSignal('audit-1');
+    expect(result.count).toBe(3);
+    expect(result.themes).toEqual([{ label: 'Vendor oversight', count: 2 }]);
+  });
+
+  it('also excludes rows whose joined section_title is empty/missing', async () => {
+    setPending({
+      data: [
+        { id: '1', questionnaire_questions: { section_title: 'Vendor oversight' } },
+        { id: '2', questionnaire_questions: { section_title: '' } }, // empty string
+        { id: '3', questionnaire_questions: [] },                    // empty array
+      ],
+      error: null,
+    });
+    const result = await fetchFlaggedResponsesSignal('audit-1');
+    expect(result.count).toBe(3);
+    expect(result.themes).toEqual([{ label: 'Vendor oversight', count: 1 }]);
+  });
+
   it('silent-degrades on error (count: 0, themes: [], logs)', async () => {
     setPending({ data: null, error: { message: 'rls denial' } });
     const result = await fetchFlaggedResponsesSignal('audit-1');
@@ -176,21 +209,42 @@ describe('fetchSotrAwaitingReviewSignal — theme aggregation', () => {
     ]);
   });
 
-  it('falls back to "other" for unmapped field_type values + logs once', async () => {
+  it('excludes unmapped field_type rows from themes but keeps them in the count', async () => {
+    // Honesty contract: the count must reflect every awaiting-review
+    // item the auditor will see in the queue, but themes only contain
+    // categories PIQC can name. This prevents grammatical garbage like
+    // "all about other" from ever rising into a hint.
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     setPending({
       data: [
         { id: '1', field_type: 'unknown_kind_xyz' },
         { id: '2', field_type: 'unknown_kind_xyz' }, // 2nd occurrence — should NOT re-log
-        { id: '3', field_type: null },               // null → 'other' without warning
+        { id: '3', field_type: null },               // null → excluded silently (no warn)
+        { id: '4', field_type: 'visit' },            // mapped → 'visit schedule'
       ],
       error: null,
     });
     const result = await fetchSotrAwaitingReviewSignal('protocol-1');
-    expect(result.themes).toEqual([{ label: 'other', count: 3 }]);
-    // Log-once discipline — warning fires only on the first novel value.
+    expect(result.count).toBe(4);
+    expect(result.themes).toEqual([{ label: 'visit schedule', count: 1 }]);
+    // Log-once discipline — warning fires only on the first novel
+    // unmapped enum value, not on nulls and not on repeats.
     expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(warnSpy.mock.calls[0][0]).toMatch(/unknown_kind_xyz/);
+    warnSpy.mockRestore();
+  });
+
+  it('returns empty themes when every row has an unmapped/null field_type (count still truthful)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    setPending({
+      data: [
+        { id: '1', field_type: null },
+        { id: '2', field_type: null },
+      ],
+      error: null,
+    });
+    const result = await fetchSotrAwaitingReviewSignal('protocol-1');
+    expect(result).toEqual({ count: 2, themes: [] });
     warnSpy.mockRestore();
   });
 

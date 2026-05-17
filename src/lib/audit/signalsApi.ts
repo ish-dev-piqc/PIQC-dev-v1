@@ -84,19 +84,30 @@ const SOTR_FIELD_TYPE_LABELS: Record<string, string> = {
   metadata:  'study metadata',
 };
 
-const seenUnknownFieldTypes = new Set<string>();
-function labelForFieldType(value: string | null | undefined): string {
-  if (!value) return 'other';
+// Module-level set; never drained. Bounded in practice by the SOTR
+// field_type enum size (5 values today, plus any drift), so this is a
+// log-once dedup not a leak.
+/**
+ * Maps a field_type value to its human label, or `null` for unknown /
+ * missing values. Returning `null` (rather than a sentinel like "other")
+ * keeps unmapped rows out of the themes array entirely — they still
+ * count toward the signal total, but they can never rise into a hint as
+ * "all about other" or similar grammatical garbage. Log-once dedup on
+ * first sighting of a novel value so the SOTR enum drifting is visible
+ * in dev consoles without flooding logs.
+ */
+function labelForFieldType(value: string | null | undefined): string | null {
+  if (!value) return null;
   const mapped = SOTR_FIELD_TYPE_LABELS[value];
   if (mapped) return mapped;
   if (!seenUnknownFieldTypes.has(value)) {
     seenUnknownFieldTypes.add(value);
     console.warn(
-      `[signalsApi] Unmapped SOTR field_type "${value}" — falling back to "other". ` +
+      `[signalsApi] Unmapped SOTR field_type "${value}" — excluded from themes. ` +
       `Add to SOTR_FIELD_TYPE_LABELS in src/lib/audit/signalsApi.ts.`,
     );
   }
-  return 'other';
+  return null;
 }
 
 /**
@@ -145,6 +156,14 @@ export async function fetchFlaggedResponsesSignal(
 
   // PostgREST may return the joined row as an array or a single object
   // depending on the version + relationship cardinality. Normalize both.
+  // Rows whose join didn't land (null relation / empty section_title —
+  // deleted question, FK gap) are kept in the count but excluded from
+  // themes. Doctrine: the count must stay truthful ("auditor flagged 3,
+  // PIQC reports 3"); themes are advisory and shouldn't claim coverage
+  // of rows we couldn't read. The hint-share calculation then divides
+  // a known cluster against the TRUE total, which keeps the hint
+  // proportional ("2 of 3 are about X" stays honest even when the 3rd
+  // is uncategorized).
   const labels: string[] = [];
   for (const row of rows) {
     const q = row.questionnaire_questions;
@@ -184,7 +203,12 @@ export async function fetchSotrAwaitingReviewSignal(
     return EMPTY_SOTR;
   }
   const rows = (data ?? []) as Array<{ field_type: string | null }>;
-  const labels = rows.map((r) => labelForFieldType(r.field_type));
+  // Unmapped + null field_type rows count toward the total but are
+  // excluded from themes — see labelForFieldType doctrine note. Same
+  // honesty contract as the questionnaire fetcher above.
+  const labels = rows
+    .map((r) => labelForFieldType(r.field_type))
+    .filter((l): l is string => l !== null);
 
   return { count: rows.length, themes: buildThemes(labels) };
 }

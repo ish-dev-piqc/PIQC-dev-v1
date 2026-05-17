@@ -73,23 +73,32 @@ describe('buildThemeHint — thresholds', () => {
     ])).toBeUndefined();
   });
 
-  it('returns "all about X" when one cluster is the entire signal', () => {
+  it('returns "— all are about X" when one cluster is the entire signal', () => {
+    // Em-dash prefix + "are about" reads as a phrase modifying the
+    // signal count above, not a sibling fact.
     expect(buildThemeHint(4, [{ label: 'visit schedule', count: 4 }]))
-      .toBe('all about visit schedule');
+      .toBe('— all are about visit schedule');
   });
 
-  it('returns "N about X" when one cluster dominates (>= 50%) but not all', () => {
+  it('returns "— N are about X" when one cluster dominates (>= 50%) but not all', () => {
     expect(buildThemeHint(5, [
       { label: 'visit schedule', count: 3 },
       { label: 'dosing',         count: 2 },
-    ])).toBe('3 about visit schedule');
+    ])).toBe('— 3 are about visit schedule');
   });
 
   it('treats exactly-50% as decisive (the >= threshold, not > )', () => {
     expect(buildThemeHint(4, [
       { label: 'visit schedule', count: 2 },
       { label: 'dosing',         count: 2 },
-    ])).toBe('2 about visit schedule');
+    ])).toBe('— 2 are about visit schedule');
+  });
+
+  it('clamps a top.count that exceeds total (defensive invariant)', () => {
+    // A fetcher should never report this shape, but if a regression
+    // ever does we clamp to total instead of producing a >100% share.
+    expect(buildThemeHint(3, [{ label: 'visit schedule', count: 5 }]))
+      .toBe('— all are about visit schedule');
   });
 });
 
@@ -183,10 +192,10 @@ describe('usePiqcSignals — themeHint surfacing (v2)', () => {
     const { result } = renderHook(() => usePiqcSignals('audit-1', 'proto-1'));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    expect(result.current.signals[0].themeHint).toBe('2 about visit schedule');
+    expect(result.current.signals[0].themeHint).toBe('— 2 are about visit schedule');
   });
 
-  it('uses "all about X" when every item shares the top theme', async () => {
+  it('uses "— all are about X" when every item shares the top theme', async () => {
     mockSotr.mockResolvedValueOnce({ count: 0, themes: [] });
     mockFlags.mockResolvedValueOnce({
       count:  4,
@@ -196,13 +205,29 @@ describe('usePiqcSignals — themeHint surfacing (v2)', () => {
     const { result } = renderHook(() => usePiqcSignals('audit-1', 'proto-1'));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    expect(result.current.signals[0].themeHint).toBe('all about Vendor oversight');
+    expect(result.current.signals[0].themeHint).toBe('— all are about Vendor oversight');
   });
 
   it('omits hint when the signal is too small to theme (count === 1)', async () => {
     mockSotr.mockResolvedValueOnce({ count: 0, themes: [] });
     mockFlags.mockResolvedValueOnce({
       count:  1,
+      themes: [{ label: 'Vendor oversight', count: 1 }],
+    });
+
+    const { result } = renderHook(() => usePiqcSignals('audit-1', 'proto-1'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.signals[0].themeHint).toBeUndefined();
+  });
+
+  it('respects honest dominance when themes sum < total (orphan-join scenario)', async () => {
+    // The fetcher returns count=3 but only 1 row produced a usable
+    // theme (the other 2 are orphan joins / unmapped enum values).
+    // 1/3 == 33% — below the 50% threshold. No hint.
+    mockSotr.mockResolvedValueOnce({ count: 0, themes: [] });
+    mockFlags.mockResolvedValueOnce({
+      count:  3,
       themes: [{ label: 'Vendor oversight', count: 1 }],
     });
 

@@ -404,7 +404,12 @@ export default function AuditChatPanel({
                           {s.themeHint && (
                             <span
                               data-testid={`audit-chat-signal-hint-${s.kind}`}
-                              className="block text-[11px] mt-0.5 text-amber-800/75 dark:text-amber-200/75"
+                              // /85 (not /75) — the smaller font and the
+                              // em-dash prefix already de-emphasize the
+                              // sub-line; a heavier opacity drop on amber-
+                              // 800 over amber-50 hit WCAG AA's lower
+                              // bound at 11px. /85 stays accessible.
+                              className="block text-[11px] mt-0.5 text-amber-800/85 dark:text-amber-200/85"
                             >
                               {s.themeHint}
                             </span>

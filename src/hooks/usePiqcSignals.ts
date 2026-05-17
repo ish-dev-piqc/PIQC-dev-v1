@@ -69,10 +69,15 @@ export function buildThemeHint(
 ): string | undefined {
   if (total <= 1) return undefined;
   const top = themes[0];
-  if (!top || top.count < 2)            return undefined;
-  if (top.count / total < 0.5)          return undefined;
-  if (top.count === total)              return `all about ${top.label}`;
-  return `${top.count} about ${top.label}`;
+  if (!top || top.count < 2) return undefined;
+  // Defensive invariant: a fetcher should never report a cluster larger
+  // than the total, but if it ever does (refactor regression, partial
+  // pagination, etc.) clamp instead of producing a >100% share. Wrong-
+  // looking copy is worse than missing copy.
+  const topCount = Math.min(top.count, total);
+  if (topCount / total < 0.5) return undefined;
+  if (topCount === total)     return `— all are about ${top.label}`;
+  return `— ${topCount} are about ${top.label}`;
 }
 
 export function usePiqcSignals(

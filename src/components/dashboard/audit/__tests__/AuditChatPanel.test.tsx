@@ -318,14 +318,14 @@ describe('AuditChatPanel — ambient signals in empty state', () => {
         kind:      'sotr_awaiting_review',
         count:     3,
         label:     '3 parsed protocol items awaiting your review',
-        themeHint: '2 about visit schedule',
+        themeHint: '— 2 are about visit schedule',
       },
     ]);
     // The hint shares the signal row but renders as a separate testid so
     // future style changes can target it without touching the label.
     const hint = screen.getByTestId('audit-chat-signal-hint-sotr_awaiting_review');
     expect(hint).toBeInTheDocument();
-    expect(hint).toHaveTextContent('2 about visit schedule');
+    expect(hint).toHaveTextContent('— 2 are about visit schedule');
     // And the original label still reads — the hint adds, doesn't replace.
     expect(screen.getByTestId('audit-chat-signal-sotr_awaiting_review'))
       .toHaveTextContent('3 parsed protocol items awaiting your review');
