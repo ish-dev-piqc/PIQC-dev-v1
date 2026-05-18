@@ -3,7 +3,7 @@ owner: ish-dev-piqc
 feature: discipline-workflow-baseline
 status: in-review
 started: 2026-05-18
-target_pr:
+target_pr: 87
 ---
 
 # Discipline workflow: realistic baseline against the existing codebase
