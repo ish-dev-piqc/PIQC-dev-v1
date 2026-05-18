@@ -11,6 +11,7 @@ export interface UserProfile {
   timezone: string | null;
   phone: string | null;
   profile_completed_at: string | null;
+  is_demo_user: boolean;
 }
 
 interface AuthContextValue {
@@ -43,7 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfileLoading(true);
     const { data, error } = await supabase
       .from('user_profiles')
-      .select('id, name, role, title, organization, timezone, phone, profile_completed_at')
+      .select('id, name, role, title, organization, timezone, phone, profile_completed_at, is_demo_user')
       .eq('id', userId)
       .maybeSingle();
     if (error) {
