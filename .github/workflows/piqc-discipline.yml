@@ -101,11 +101,14 @@ jobs:
       - name: Forbid `any` types in src/lib
         # `as any` is allowed in test mocks (e.g. mocking the Supabase client's
         # complex storage type); production code should always have a real
-        # type. Restrict the rule to non-test files.
+        # type. Restrict the rule to non-test files, and skip comment lines so
+        # English prose like "any sessionStorage read failure" in a `// ...`
+        # comment doesn't trip the regex.
         run: |
           set -u
           hits=$(grep -rnE "(:\s*any\b|\bas\s+any\b)" src/lib --include="*.ts" --include="*.tsx" 2>/dev/null \
-                 | grep -vE "(/__tests__/|\.test\.)" || true)
+                 | grep -vE "(/__tests__/|\.test\.)" \
+                 | grep -vE ":[0-9]+:\s*(//|\*)" || true)
           if [ -n "$hits" ]; then
             echo "::error::': any' / 'as any' are not allowed in src/lib/** (non-test). Use proper types or Result<T>."
             echo "$hits"
@@ -181,10 +184,17 @@ jobs:
           exit $fail
 
       - name: Plan MD referenced in PR body
+        # IMPORTANT: pass the PR body via env, not via `${{ }}` interpolation
+        # directly into the script. Inline interpolation lets backticks /
+        # $(...) / etc. in the PR body get executed as shell commands —
+        # observed on PR #85 where markdown code spans in the body caused
+        # "command not found" cascades. Env-var pattern mirrors the
+        # "DB schema → type mirror" step above.
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           set -u
-          pr_body="${{ github.event.pull_request.body }}"
-          if ! echo "$pr_body" | grep -qE "plans/[a-z0-9_-]+/[a-z0-9_.-]+\.md"; then
+          if ! printf '%s' "$PR_BODY" | grep -qE "plans/[a-z0-9_-]+/[a-z0-9_.-]+\.md"; then
             echo "::error::PR body must reference a plan MD (e.g. plans/ishika/draft-comments.md). See .github/pull_request_template.md."
             exit 1
           fi
