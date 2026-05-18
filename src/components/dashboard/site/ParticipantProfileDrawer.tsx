@@ -18,11 +18,8 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useOverlay } from '../../../hooks/useOverlay';
 import { useSwipeDismiss } from '../../../hooks/useSwipeDismiss';
 import { useSiteData } from '../../../context/SiteDataContext';
-import {
-  PARTICIPANT_STATUS_LABELS,
-  type ParticipantStatus,
-} from '../../../lib/mockSiteData';
-import { type VisitStatus } from '../../../lib/mockCalendarData';
+import type { ParticipantStatus, VisitStatus } from '../../../lib/site/types';
+import { PARTICIPANT_STATUS_LABELS } from '../../../lib/site/labels';
 import { deleteParticipant } from '../../../lib/site/siteApi';
 import type { Protocol } from '../../../context/ProtocolContext';
 import ParticipantFormDrawer from './ParticipantFormDrawer';

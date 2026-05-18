@@ -20,19 +20,30 @@ Site Mode today reads from real Supabase tables that are also seeded with three 
 - `src/context/SiteDataContext.tsx`
 - `src/context/ProtocolContext.tsx`
 - `src/lib/site/types.ts`
+- `src/lib/site/labels.ts` (NEW — type/label exports relocated out of the mock files)
 - `src/lib/site/siteApi.ts`
 - `src/lib/site/repos/*` (NEW folder)
 - `src/lib/demo/**` (NEW folder)
+- `src/lib/heatmap.ts` (swap `CalendarVisit`/`MockParticipant` for canonical `SiteVisit`/`SiteParticipant`)
 - `src/components/Navbar.tsx`
+- `src/components/dashboard/Dashboard.tsx` (mount the DemoBanner inside the site-mode container)
+- `src/components/dashboard/site/AskTab.tsx` (branch on demoActive to render DemoAskPanel)
+- `src/components/dashboard/site/DemoAskPanel.tsx` (NEW)
 - `src/components/dashboard/site/DemoBanner.tsx` (NEW)
 - `src/components/dashboard/site/TodayTab.tsx`
 - `src/components/dashboard/site/VisitsTab.tsx`
 - `src/components/dashboard/site/ReportsTab.tsx`
+- `src/components/dashboard/site/ParticipantsTab.tsx` (import-source updates only)
+- `src/components/dashboard/site/ParticipantFormDrawer.tsx` (import-source updates only)
+- `src/components/dashboard/site/ParticipantProfileDrawer.tsx` (import-source updates only)
+- `src/components/dashboard/site/VisitDetailDrawer.tsx` (`CalendarVisit` → `SiteVisit`)
+- `src/components/dashboard/site/TeamTab.tsx` (import-source updates only)
 - `src/lib/mockCalendarData.ts` (DELETE after types relocated)
 - `src/lib/mockSiteData.ts` (DELETE after types relocated)
 - `src/components/dashboard/site/MockCalendarToggle.tsx` (DELETE)
 - `src/components/dashboard/site/SitePlaceholder.tsx` (DELETE — unreferenced)
 - `src/App.tsx`
+- `src/main.tsx` (one-time localStorage cleanup of the old toggle key)
 - `plans/ishika/site-demo-mode.md`
 
 ## Out of scope (files forbidden)

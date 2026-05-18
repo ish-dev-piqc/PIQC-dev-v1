@@ -15,10 +15,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useOverlay } from '../../../hooks/useOverlay';
 import { useSwipeDismiss } from '../../../hooks/useSwipeDismiss';
 import { getProtocolColorsById } from '../../../lib/site/protocolColors';
-import {
-  type CalendarVisit,
-  type VisitStatus,
-} from '../../../lib/mockCalendarData';
+import type { SiteVisit, VisitStatus } from '../../../lib/site/types';
 import type { Protocol } from '../../../context/ProtocolContext';
 import ParticipantProfileDrawer from './ParticipantProfileDrawer';
 import { updateVisit } from '../../../lib/site/siteApi';
@@ -31,7 +28,7 @@ import {
 } from '../../../lib/site/dateUtils';
 
 // =============================================================================
-// VisitDetailDrawer — slide-in right panel for a single CalendarVisit.
+// VisitDetailDrawer — slide-in right panel for a single SiteVisit.
 //
 // Used in TodayTab (calendar) and ReportsTab (deviation / missed visit rows).
 // "Start visit" mode transforms the procedure list into a live checklist.
@@ -74,7 +71,7 @@ function statusLabel(status: VisitStatus): string {
 }
 
 export interface VisitDetailDrawerProps {
-  visit: CalendarVisit;
+  visit: SiteVisit;
   protocols: Protocol[];
   today: Date;
   onClose: () => void;

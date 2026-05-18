@@ -11,11 +11,8 @@ import {
 import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useSiteData } from '../../../context/SiteDataContext';
-import {
-  PARTICIPANT_STATUS_LABELS,
-  type ParticipantStatus,
-} from '../../../lib/mockSiteData';
-import type { SiteParticipant } from '../../../lib/site/types';
+import type { SiteParticipant, ParticipantStatus } from '../../../lib/site/types';
+import { PARTICIPANT_STATUS_LABELS } from '../../../lib/site/labels';
 import HeatIndicator from '../../heatmap/HeatIndicator';
 import { scoreParticipant } from '../../../lib/heatmap';
 import ParticipantProfileDrawer from './ParticipantProfileDrawer';

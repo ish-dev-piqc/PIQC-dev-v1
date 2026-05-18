@@ -23,12 +23,8 @@ import { useOverlay } from '../../../hooks/useOverlay';
 import { useSwipeDismiss } from '../../../hooks/useSwipeDismiss';
 import { getProtocolColorsById } from '../../../lib/site/protocolColors';
 import { fetchVisitTemplates, materializeVisits } from '../../../lib/site/siteApi';
-import MockCalendarToggle, { MockCalendarBanner } from './MockCalendarToggle';
 import AnchorDateModal from './AnchorDateModal';
-import {
-  type CalendarVisit,
-  type VisitStatus,
-} from '../../../lib/mockCalendarData';
+import type { SiteVisit, VisitStatus } from '../../../lib/site/types';
 import {
   formatYmd,
   parseYmd,
@@ -150,7 +146,7 @@ export default function TodayTab({ onNavigateToVisits }: { onNavigateToVisits?: 
   const [view, setView] = useState<ViewMode>('week');
   const [anchorDate, setAnchorDate] = useState<Date>(today);
   const [filters, setFilters] = useState<FilterState>(() => loadFilters());
-  const [openVisit, setOpenVisit] = useState<CalendarVisit | null>(null);
+  const [openVisit, setOpenVisit] = useState<SiteVisit | null>(null);
   const [openDay, setOpenDay] = useState<Date | null>(null);
   const [filterPanelOpen, setFilterPanelOpen] = useState<boolean>(true);
 
@@ -208,7 +204,7 @@ export default function TodayTab({ onNavigateToVisits }: { onNavigateToVisits?: 
 
   // Group visits by date for fast lookup.
   const visitsByDate = useMemo(() => {
-    const map = new Map<string, CalendarVisit[]>();
+    const map = new Map<string, SiteVisit[]>();
     for (const v of visibleVisits) {
       const arr = map.get(v.date) ?? [];
       arr.push(v);
@@ -241,7 +237,7 @@ export default function TodayTab({ onNavigateToVisits }: { onNavigateToVisits?: 
   }, [view, anchorDate]);
 
   const isInRange = useCallback(
-    (v: CalendarVisit) => {
+    (v: SiteVisit) => {
       const d = parseYmd(v.date);
       return d >= viewRange.start && d <= viewRange.end;
     },
@@ -373,7 +369,6 @@ export default function TodayTab({ onNavigateToVisits }: { onNavigateToVisits?: 
         </div>
 
         <div className="flex items-center gap-2">
-          <MockCalendarToggle />
           <div
             className={`inline-flex items-center rounded-lg border p-0.5 ${
               isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5'
@@ -403,7 +398,6 @@ export default function TodayTab({ onNavigateToVisits }: { onNavigateToVisits?: 
           </div>
         </div>
       </div>
-      <MockCalendarBanner />
 
       {/* Phase E: schedule-extracted-but-not-projected banner */}
       {!isHome && templateCount > 0 && !activeProtocol.demoAnchorDate && (
@@ -579,11 +573,11 @@ function parseTime(t: string): number {
 // ────────────────────────────────────────────────────────────────────────────
 
 interface NeedsAttentionBandProps {
-  items: CalendarVisit[];
+  items: SiteVisit[];
   isLight: boolean;
   isHome: boolean;
   protocols: { id: string; code: string }[];
-  onItemClick: (v: CalendarVisit) => void;
+  onItemClick: (v: SiteVisit) => void;
 }
 
 const NEEDS_ATTENTION_ORDER: Record<string, number> = {
@@ -591,7 +585,7 @@ const NEEDS_ATTENTION_ORDER: Record<string, number> = {
   closing_soon: 1,
 };
 
-function sortNeedsAttention(items: CalendarVisit[]): CalendarVisit[] {
+function sortNeedsAttention(items: SiteVisit[]): SiteVisit[] {
   return [...items].sort((a, b) => {
     const sev = (NEEDS_ATTENTION_ORDER[a.status] ?? 99) - (NEEDS_ATTENTION_ORDER[b.status] ?? 99);
     if (sev !== 0) return sev;
@@ -655,7 +649,7 @@ function NeedsAttentionBand({ items, isLight, isHome, protocols, onItemClick }: 
     ? 'bg-amber-100/60 border-amber-300/60 text-amber-800 hover:bg-amber-100'
     : 'bg-amber-500/[0.08] border-amber-500/25 text-amber-300 hover:bg-amber-500/[0.12]';
 
-  const renderItemInline = (v: CalendarVisit) => (
+  const renderItemInline = (v: SiteVisit) => (
     <button
       key={v.id}
       type="button"
@@ -677,7 +671,7 @@ function NeedsAttentionBand({ items, isLight, isHome, protocols, onItemClick }: 
     </button>
   );
 
-  const renderItemPopover = (v: CalendarVisit) => (
+  const renderItemPopover = (v: SiteVisit) => (
     <button
       key={v.id}
       type="button"
@@ -967,9 +961,9 @@ interface ViewProps {
   isHome: boolean;
   anchorDate: Date;
   today: Date;
-  visitsByDate: Map<string, CalendarVisit[]>;
+  visitsByDate: Map<string, SiteVisit[]>;
   protocols: { id: string; code: string }[];
-  onVisitClick: (v: CalendarVisit) => void;
+  onVisitClick: (v: SiteVisit) => void;
   onDayClick: (d: Date) => void;
 }
 
@@ -1118,7 +1112,7 @@ function WeekView({ isLight, isHome, anchorDate, today, visitsByDate, protocols,
 }
 
 interface WeekVisitRowProps {
-  visit: CalendarVisit;
+  visit: SiteVisit;
   isLight: boolean;
   isHome: boolean;
   past: boolean;
@@ -1301,10 +1295,10 @@ interface DayDetailDrawerProps {
   isHome: boolean;
   day: Date;
   today: Date;
-  visits: CalendarVisit[];
+  visits: SiteVisit[];
   protocols: { id: string; code: string }[];
   onClose: () => void;
-  onVisitClick: (v: CalendarVisit) => void;
+  onVisitClick: (v: SiteVisit) => void;
 }
 
 function DayDetailDrawer({ isLight, isHome, day, today, visits, protocols, onClose, onVisitClick }: DayDetailDrawerProps) {

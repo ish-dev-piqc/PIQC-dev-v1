@@ -12,9 +12,8 @@
 // honest to render.
 // =============================================================================
 
-import type { CalendarVisit } from './mockCalendarData';
+import type { SiteVisit, SiteParticipant } from './site/types';
 import type { MockWorkspaceEntry } from './audit/mockWorkspaceEntries';
-import type { MockParticipant } from './mockSiteData';
 import type { AuditStage } from '../types/audit';
 
 // 'none' is a valid score that suppresses the indicator entirely. Higher tones
@@ -68,7 +67,7 @@ export const HEAT_BAR_DARK: Record<HeatScore, string> = {
 // Visits — heat reflects cross-study deviation/missed-window frequency for
 // similar visit types. High for time-sensitive dosing/AE windows; moderate
 // for early-engagement visits; low for routine follow-ups.
-export function scoreVisit(v: CalendarVisit): HeatScore {
+export function scoreVisit(v: SiteVisit): HeatScore {
   // Active urgency wins regardless of visit type
   if (v.status === 'overdue') return 'high';
   if (v.status === 'closing_soon') return 'high';
@@ -132,7 +131,7 @@ export function scoreWorkspaceEntry(e: MockWorkspaceEntry): HeatScore {
 // Participants — heat reflects the cross-study likelihood that this
 // participant becomes a deviation/dropout case. Phase B mock heuristics:
 // open-deviation count is the strongest signal; status conveys the rest.
-export function scoreParticipant(p: MockParticipant): HeatScore {
+export function scoreParticipant(p: SiteParticipant): HeatScore {
   // Multiple open deviations on a single participant — common follow-up
   // case across studies.
   if (p.open_deviations >= 2) return 'high';

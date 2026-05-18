@@ -4,11 +4,8 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useOverlay } from '../../../hooks/useOverlay';
 import { useSwipeDismiss } from '../../../hooks/useSwipeDismiss';
 import { createParticipant, updateParticipant } from '../../../lib/site/siteApi';
-import type { SiteParticipant } from '../../../lib/site/types';
-import {
-  PARTICIPANT_STATUS_LABELS,
-  type ParticipantStatus,
-} from '../../../lib/mockSiteData';
+import type { SiteParticipant, ParticipantStatus } from '../../../lib/site/types';
+import { PARTICIPANT_STATUS_LABELS } from '../../../lib/site/labels';
 
 // =============================================================================
 // ParticipantFormDrawer — create or edit a site_participants row.

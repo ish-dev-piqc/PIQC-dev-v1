@@ -12,8 +12,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useSiteData } from '../../../context/SiteDataContext';
 import { getProtocolColors } from '../../../lib/site/protocolColors';
-import { type CalendarVisit } from '../../../lib/mockCalendarData';
-import MockCalendarToggle, { MockCalendarBanner } from './MockCalendarToggle';
+import type { SiteVisit } from '../../../lib/site/types';
 import VisitDetailDrawer from './VisitDetailDrawer';
 
 // =============================================================================
@@ -29,7 +28,7 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
   const isLight = theme === 'light';
   const today = useMemo(() => new Date(), []);
   const todayStr = useMemo(() => today.toISOString().slice(0, 10), [today]);
-  const [selectedVisit, setSelectedVisit] = useState<CalendarVisit | null>(null);
+  const [selectedVisit, setSelectedVisit] = useState<SiteVisit | null>(null);
 
   const headingColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
@@ -164,7 +163,6 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <MockCalendarToggle />
             <button
               type="button"
               onClick={exportCSV}
@@ -175,8 +173,6 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
             </button>
           </div>
         </div>
-
-        <MockCalendarBanner />
 
         {error && (
           <div
