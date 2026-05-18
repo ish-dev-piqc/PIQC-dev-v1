@@ -1,7 +1,7 @@
 ---
 owner: ish-dev-piqc
 feature: cross-mode-sotr-exemption
-status: active
+status: in-review
 started: 2026-05-18
 target_pr:
 ---
