@@ -1,5 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useAuth } from './AuthContext';
+import { setSiteRepo } from '../lib/site/siteApi';
+import { realSiteRepo } from '../lib/site/repos/realSiteRepo';
+import { demoSiteRepo } from '../lib/site/repos/demoSiteRepo';
 
 // =============================================================================
 // DemoModeContext — server-gated demo toggle.
@@ -59,6 +62,13 @@ export function DemoModeProvider({ children }: { children: React.ReactNode }) {
   );
 
   const demoActive = localBit && canUseDemo;
+
+  // Flip the siteApi dispatcher whenever effective demoActive changes.
+  // Subscribers (SiteDataContext, ProtocolContext) react via subscribeSiteRepo
+  // and refresh their cached state.
+  useEffect(() => {
+    setSiteRepo(demoActive ? demoSiteRepo : realSiteRepo);
+  }, [demoActive]);
 
   const value = useMemo<DemoModeContextValue>(
     () => ({ demoActive, setDemoActive, canUseDemo }),

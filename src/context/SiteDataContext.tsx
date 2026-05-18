@@ -16,12 +16,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useProtocol } from './ProtocolContext';
+import { useDemoMode } from './DemoModeContext';
 import {
   fetchParticipants,
   fetchVisitsForProtocol,
   fetchTeamMembers,
   fetchProtocolDocuments,
+  subscribeSiteRepo,
 } from '../lib/site/siteApi';
+import { getDemoStore } from '../lib/demo';
 import type {
   SiteParticipant,
   SiteVisit,
@@ -70,6 +73,7 @@ const SiteDataContext = createContext<SiteDataContextValue>({
 
 export function SiteDataProvider({ children }: { children: React.ReactNode }) {
   const { activeProtocol, protocols } = useProtocol();
+  const { demoActive } = useDemoMode();
   const [participants, setParticipants] = useState<SiteParticipant[]>([]);
   const [realVisits, setRealVisits] = useState<SiteVisit[]>([]);
   const [teamMembers, setTeamMembers] = useState<SiteTeamMember[]>([]);
@@ -190,8 +194,22 @@ export function SiteDataProvider({ children }: { children: React.ReactNode }) {
     refresh();
   }, [refresh]);
 
-  // Realtime: one channel per active scope. Re-runs when scope changes.
+  // Re-fetch when the active site repo swaps (demo toggle flipped). Without
+  // this, flipping the toggle leaves cached data from the previous repo on
+  // screen until the next protocol switch.
   useEffect(() => {
+    return subscribeSiteRepo(() => refresh());
+  }, [refresh]);
+
+  // Realtime: in real mode, subscribe to Supabase postgres changes per scope.
+  // In demo mode, subscribe to demoStore changes so mutations re-trigger
+  // refresh without going through Supabase realtime (which the demo data
+  // never hits anyway).
+  useEffect(() => {
+    if (demoActive) {
+      return getDemoStore().subscribe(() => refresh());
+    }
+
     const channel = supabase.channel(`site-data-${activeProtocol?.id ?? 'all'}`);
     const pid = activeProtocol?.id ?? null;
 
@@ -230,7 +248,7 @@ export function SiteDataProvider({ children }: { children: React.ReactNode }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [activeProtocol?.id, refresh]);
+  }, [activeProtocol?.id, refresh, demoActive]);
 
   return (
     <SiteDataContext.Provider
