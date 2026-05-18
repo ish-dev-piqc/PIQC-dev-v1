@@ -3,7 +3,7 @@ owner: ish-dev-piqc
 feature: discipline-workflow-hardening
 status: in-review
 started: 2026-05-18
-target_pr:
+target_pr: 88
 ---
 
 # Discipline workflow: shell-injection fix + `: any` regex prose-match fix
