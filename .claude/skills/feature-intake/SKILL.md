@@ -25,7 +25,7 @@ Everything else: run the intake.
    - List the architecture layers in play: `{migration, RPC, adapter, context, component, test}`.
    - Note whether mock data is involved (almost always "none").
 
-3. **Look up owners.** Read `.github/CODEOWNERS`. For each impacted file, resolve the owner. Flag files outside the current dev's ownership.
+3. **Look up owners.** Read `docs/CODEOWNERS.md`. For each impacted file, resolve the owner. Flag files outside the current dev's ownership.
 
 4. **Detect overlap across all devs.** Plan MDs live on feature branches, not just main, so you must scan the whole repo:
    1. `git fetch --all --prune` — pull every dev's latest branches.
