@@ -21,7 +21,7 @@ You don't memorize slash commands. Talk normally.
 
 ## Ownership
 
-Source of truth: [.github/CODEOWNERS](.github/CODEOWNERS). Summary:
+Source of truth: [docs/CODEOWNERS.md](docs/CODEOWNERS.md). Summary:
 
 | Area | Owner |
 |---|---|

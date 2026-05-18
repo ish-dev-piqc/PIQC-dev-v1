@@ -15,7 +15,7 @@ Run these checks on the current branch (`git diff main...HEAD`) in order. For ea
 - **Fail** if any changed file is outside Scope or in Out-of-scope.
 
 ### 2. Ownership
-- Parse `.github/CODEOWNERS`.
+- Parse `docs/CODEOWNERS.md`.
 - For each changed file, resolve the owner.
 - **Fail** if a file's owner is not the current dev *and* is not listed under the plan's "Approved-by" section.
 

@@ -1,6 +1,20 @@
 # PIQC-dev-v1 codeowners
-# Context: CLAUDE.md, plans/README.md
 
+> **Why this lives at `docs/CODEOWNERS.md` instead of `.github/CODEOWNERS`:**
+> GitHub only treats the magic paths (`.github/CODEOWNERS`, `/CODEOWNERS`, `docs/CODEOWNERS`)
+> as active rules that trigger auto-review-requests. We deliberately moved this file to
+> `docs/CODEOWNERS.md` (note the `.md` extension) so GitHub stops auto-pinging owners on
+> every PR while we keep the file as the source of truth for ownership lookups by
+> [`feature-intake`](../.claude/skills/feature-intake/SKILL.md),
+> [`piqc-review`](../.claude/skills/piqc-review/SKILL.md), and humans.
+>
+> Merge gating is unchanged: branch protection on `main` still requires 1 approving review.
+> Owners listed below are still the de-facto reviewers — the PR author requests them
+> manually now instead of GitHub auto-assigning.
+
+## Ownership rules
+
+```text
 # SOTR — Ishika
 /src/lib/sotr/                    @ish-dev-piqc
 /src/components/dashboard/sotr/   @ish-dev-piqc
@@ -28,8 +42,9 @@
 
 # Discipline package
 /CLAUDE.md                        @ish-dev-piqc
-/.github/CODEOWNERS               @ish-dev-piqc
+/docs/CODEOWNERS.md               @ish-dev-piqc
 /.github/pull_request_template.md @ish-dev-piqc
 /.claude/                         @ish-dev-piqc
 /plans/README.md                  @ish-dev-piqc
 /plans/_template.md               @ish-dev-piqc
+```
