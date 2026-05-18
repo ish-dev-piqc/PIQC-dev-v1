@@ -1,0 +1,163 @@
+name: PIQC Discipline
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  mechanical-checks:
+    if: ${{ !startsWith(github.head_ref, 'archive/') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Cross-mode imports (site/audit/sotr don't import from each other)
+        run: |
+          set -u
+          fail=0
+          for domain in audit site sotr; do
+            others=$(echo "audit site sotr" | tr ' ' '\n' | grep -v "^${domain}$" | tr '\n' '|' | sed 's/|$//')
+            for base in src/lib src/components/dashboard src/types; do
+              dir="${base}/${domain}"
+              [ -d "$dir" ] || continue
+              hits=$(grep -rnE "from ['\"][^'\"]*\b(${others})\b[^'\"]*['\"]" "$dir" 2>/dev/null || true)
+              if [ -n "$hits" ]; then
+                echo "::error::Cross-mode import in ${dir}"
+                echo "$hits"
+                fail=1
+              fi
+            done
+          done
+          exit $fail
+
+      - name: Raw Tailwind color classes (use text-fg-*)
+        run: |
+          set -u
+          hits=$(grep -rnE "\btext-(gray|slate|zinc|neutral)-[0-9]" src --include="*.tsx" --include="*.ts" 2>/dev/null || true)
+          if [ -n "$hits" ]; then
+            echo "::error::Raw Tailwind color classes found. Use text-fg-heading / text-fg-body / text-fg-sub / text-fg-muted / text-fg-label instead."
+            echo "$hits"
+            exit 1
+          fi
+
+      - name: Components must not import supabase directly
+        run: |
+          set -u
+          hits=$(grep -rnE "from ['\"](@supabase/supabase-js|[^'\"]*lib/supabase)['\"]" src/components 2>/dev/null || true)
+          if [ -n "$hits" ]; then
+            echo "::error::Components must not import supabase. Move the fetch into the context layer (src/context/) or an Api file (src/lib/<domain>/<name>Api.ts)."
+            echo "$hits"
+            exit 1
+          fi
+
+      - name: Adapters must be pure (no supabase import)
+        run: |
+          set -u
+          adapters=$(find src/lib -type f -name "*Adapter.ts" 2>/dev/null || true)
+          fail=0
+          for f in $adapters; do
+            if grep -qE "from ['\"][^'\"]*supabase[^'\"]*['\"]" "$f"; then
+              echo "::error file=${f}::Adapter imports supabase. Adapters must be pure mappers — move the fetch into the matching Api file."
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Realtime subscriptions belong in context layer
+        run: |
+          set -u
+          hits=$(grep -rnE "\.channel\(|\.on\(['\"]postgres_changes" src/components 2>/dev/null || true)
+          if [ -n "$hits" ]; then
+            echo "::error::Realtime subscriptions must live in src/context/, not src/components/."
+            echo "$hits"
+            exit 1
+          fi
+
+      - name: Forbid `any` types in src/lib
+        run: |
+          set -u
+          hits=$(grep -rnE "(:\s*any\b|\bas\s+any\b)" src/lib --include="*.ts" --include="*.tsx" 2>/dev/null || true)
+          if [ -n "$hits" ]; then
+            echo "::error::': any' / 'as any' are not allowed in src/lib/**. Use proper types or Result<T>."
+            echo "$hits"
+            exit 1
+          fi
+
+      - name: Migrations are append-only
+        run: |
+          set -u
+          base="origin/main"
+          modified=$(git diff "${base}...HEAD" --diff-filter=M --name-only -- 'supabase/migrations/*.sql' 2>/dev/null || true)
+          if [ -n "$modified" ]; then
+            echo "::error::Migrations were modified, not added. Migrations must be append-only — create a new migration file instead."
+            echo "$modified"
+            exit 1
+          fi
+
+      - name: DB schema change should update TS type mirror
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -u
+          base="origin/main"
+          sql_changed=$(git diff "${base}...HEAD" --name-only -- 'supabase/migrations/' 2>/dev/null | grep '\.sql$' || true)
+          types_changed=$(git diff "${base}...HEAD" --name-only -- 'src/types/' 2>/dev/null || true)
+          if [ -n "$sql_changed" ] && [ -z "$types_changed" ]; then
+            if ! printf '%s' "$PR_BODY" | grep -qi "no type impact"; then
+              echo "::warning::Migration changed but src/types/ was not updated. If this is intentional, add 'no type impact' to the PR description."
+              echo "$sql_changed"
+            fi
+          fi
+
+      - name: No console.log in non-test code
+        run: |
+          set -u
+          base="origin/main"
+          hits=$(git diff "${base}...HEAD" --unified=0 -- 'src/**/*.ts' 'src/**/*.tsx' \
+            | grep -E "^\+" \
+            | grep -vE "^\+\+\+" \
+            | grep -vE "__tests__|\.test\." \
+            | grep -E "console\.(log|debug)" || true)
+          if [ -n "$hits" ]; then
+            echo "::error::console.log/console.debug found in added lines. Remove before merging."
+            echo "$hits"
+            exit 1
+          fi
+
+      - name: No vitest timestamp litter at repo root
+        run: |
+          set -u
+          if ls vitest.config.ts.timestamp-*.mjs >/dev/null 2>&1; then
+            echo "::error::vitest.config.ts.timestamp-*.mjs files at repo root must be removed and gitignored."
+            ls vitest.config.ts.timestamp-*.mjs
+            exit 1
+          fi
+
+      - name: New API/adapter files have tests
+        run: |
+          set -u
+          base="origin/main"
+          new_files=$(git diff "${base}...HEAD" --diff-filter=A --name-only \
+            -- 'src/lib/*/*Api.ts' 'src/lib/*/*Adapter.ts' 2>/dev/null || true)
+          fail=0
+          for f in $new_files; do
+            dir=$(dirname "$f")
+            name=$(basename "$f" .ts)
+            test_file="${dir}/__tests__/${name}.test.ts"
+            if [ ! -f "$test_file" ]; then
+              echo "::error file=${f}::New API/adapter file has no sibling test at ${test_file}"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Plan MD referenced in PR body
+        run: |
+          set -u
+          pr_body="${{ github.event.pull_request.body }}"
+          if ! echo "$pr_body" | grep -qE "plans/[a-z0-9_-]+/[a-z0-9_.-]+\.md"; then
+            echo "::error::PR body must reference a plan MD (e.g. plans/ishika/draft-comments.md). See .github/pull_request_template.md."
+            exit 1
+          fi

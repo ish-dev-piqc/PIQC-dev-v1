@@ -1,0 +1,35 @@
+# PIQC-dev-v1 codeowners
+# Context: CLAUDE.md, plans/README.md
+
+# SOTR — Ishika
+/src/lib/sotr/                    @ish-dev-piqc
+/src/components/dashboard/sotr/   @ish-dev-piqc
+/src/types/sotr/                  @ish-dev-piqc
+
+# Site Mode — Kiara
+/src/lib/site/                    @ki-dev-piqc
+/src/components/dashboard/site/   @ki-dev-piqc
+
+# Audit Mode — Karl
+/src/lib/audit/                   @karl-dev-piqc
+/src/components/dashboard/audit/  @karl-dev-piqc
+/src/types/audit/                 @karl-dev-piqc
+
+# Backend / ingest — Roger
+/supabase/                        @rv61
+/src/lib/supabase.ts              @rv61
+
+# Shared infra — 2 reviewers required
+/src/context/                     @ish-dev-piqc @ki-dev-piqc
+/src/components/auth/             @ish-dev-piqc @ki-dev-piqc
+/src/components/billing/          @ish-dev-piqc @ki-dev-piqc
+/src/lib/entitlements.ts          @ish-dev-piqc @ki-dev-piqc
+/plan.md                          @ish-dev-piqc @ki-dev-piqc @karl-dev-piqc
+
+# Discipline package
+/CLAUDE.md                        @ish-dev-piqc
+/.github/CODEOWNERS               @ish-dev-piqc
+/.github/pull_request_template.md @ish-dev-piqc
+/.claude/                         @ish-dev-piqc
+/plans/README.md                  @ish-dev-piqc
+/plans/_template.md               @ish-dev-piqc
