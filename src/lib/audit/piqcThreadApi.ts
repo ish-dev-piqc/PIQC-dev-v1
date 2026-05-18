@@ -9,20 +9,12 @@ import type { AuditChatMessage } from './chatApi';
 // thread per audit via `piqc_thread_messages` so an auditor returning
 // to an audit picks up exactly where they left off.
 //
-// Two contracts, both silent-degrade:
-//
-//   - fetchPiqcThread(auditId) → ordered messages, or [] on error
-//   - savePiqcThread(auditId, messages) → void, swallows errors + logs
-//
-// (Clearing a thread is just `savePiqcThread(auditId, [])` — the RPC
-// treats whole-replace-with-empty as delete. Not introducing a third
-// named helper for one line of forwarding.)
-//
-// Silent-degrade matches the dock-signal doctrine (signalsApi.ts): a
-// thrown error from a permission-denied response would crash the shell
-// mount, and the chat panel's quietest fallback is "no prior thread"
-// not "Application Error." Persistence failures show up in dev consoles
-// + Supabase logs; they don't surface to the auditor.
+// Two contracts, both returning `Result<T>` per CLAUDE.md §"Result<T>
+// in API layers". Neither throws — the API logs the error and returns
+// the error variant, matching the canonical pattern in
+// `src/lib/site/siteApi.ts`. The shell consumer silent-degrades on
+// `!ok` (treats it as "no prior thread") so a permission-denied
+// response can't crash the shell mount.
 //
 // Doctrine alignment:
 //   - PIQC observes, doesn't create — the persistence is mirrored
@@ -34,25 +26,35 @@ import type { AuditChatMessage } from './chatApi';
 //     thread content never goes to logs.
 // =============================================================================
 
+export type Result<T> =
+  | { ok: true;  data: T }
+  | { ok: false; error: string };
+
+function fail<T>(label: string, error: unknown): Result<T> {
+  const msg = error instanceof Error ? error.message : String(error);
+  console.error(`[piqcThreadApi] ${label}:`, error);
+  return { ok: false, error: msg };
+}
+
 /**
- * Loads the persisted thread for an audit in turn-order. Returns [] on
- * error, missing thread, or RLS denial — never throws. The shell uses
- * this to populate a freshly-mounted panel; an empty return is
- * indistinguishable from "no prior thread" which is the correct UX.
+ * Loads the persisted thread for an audit in turn-order. The shell
+ * hydrates a freshly-mounted panel from this; an `ok: true, data: []`
+ * is the correct "no prior thread" return.
+ *
+ * Defensive row-filtering on success: drop any row with an invalid
+ * role or empty content. The CHECK constraint on the table prevents
+ * these, but belt-and-suspenders against future schema drift.
  */
 export async function fetchPiqcThread(
   auditId: string,
-): Promise<AuditChatMessage[]> {
+): Promise<Result<AuditChatMessage[]>> {
   const { data, error } = await supabase
     .from('piqc_thread_messages')
     .select('role, content, ordinal')
     .eq('audit_id', auditId)
     .order('ordinal', { ascending: true });
 
-  if (error) {
-    console.error('[piqcThreadApi] fetchPiqcThread error:', error);
-    return [];
-  }
+  if (error) return fail('fetchPiqcThread', error);
 
   const rows = (data ?? []) as Array<{
     role:    'user' | 'assistant';
@@ -60,38 +62,32 @@ export async function fetchPiqcThread(
     ordinal: number;
   }>;
 
-  // Defensive: drop any row that doesn't satisfy the panel's message
-  // shape. The CHECK constraint on the table prevents malformed roles,
-  // but we belt-and-suspender in case a future migration loosens the
-  // shape without updating this client.
-  return rows
+  const messages = rows
     .filter((r) =>
       (r.role === 'user' || r.role === 'assistant') &&
       typeof r.content === 'string' &&
       r.content.length > 0,
     )
     .map((r) => ({ role: r.role, content: r.content }));
+
+  return { ok: true, data: messages };
 }
 
 /**
  * Atomically replaces the thread with the given messages. The server-
  * side RPC handles ordinal assignment, so client and server can't
- * disagree about order even across optimistic / final commits.
- *
- * Swallows all errors — see module doctrine. The caller (shell) does
- * not need to handle a rejected promise; persistence failure is a quiet
- * background concern, not an auditor-facing event.
+ * disagree about order across optimistic / final commits. Passing
+ * `[]` is the canonical clear-thread path — same RPC, no second
+ * code path.
  */
 export async function savePiqcThread(
   auditId:  string,
   messages: AuditChatMessage[],
-): Promise<void> {
+): Promise<Result<void>> {
   const { error } = await supabase.rpc('save_piqc_thread', {
     p_audit_id: auditId,
     p_messages: messages,
   });
-  if (error) {
-    console.error('[piqcThreadApi] savePiqcThread error:', error);
-  }
+  if (error) return fail('savePiqcThread', error);
+  return { ok: true, data: undefined };
 }
-

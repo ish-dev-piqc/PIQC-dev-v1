@@ -188,8 +188,13 @@ export default function AuditWorkspaceShell() {
     }
 
     let cancelled = false;
-    fetchPiqcThread(auditId).then((msgs) => {
+    fetchPiqcThread(auditId).then((res) => {
       if (cancelled) return;
+      // Silent-degrade on Result<T> error variant — treat as "no
+      // prior thread." The fail() helper inside piqcThreadApi already
+      // logged the cause; we just need to mark hydrated so saves can
+      // resume.
+      const msgs = res.ok ? res.data : [];
       setChatThreads((prev) => {
         const inMemory = prev[auditId] ?? [];
         if (inMemory.length > 0 && msgs.length > 0) {

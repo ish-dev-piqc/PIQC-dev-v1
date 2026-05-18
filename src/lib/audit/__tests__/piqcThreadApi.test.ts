@@ -2,20 +2,18 @@
 //
 // Three contracts to lock:
 //
-//   1. Round-trip fidelity — fetchPiqcThread returns ordered messages
+//   1. Result<T> contract — both helpers return { ok: true, data } |
+//      { ok: false, error } per CLAUDE.md §"Result<T> in API layers"
+//      (canonical: src/lib/site/siteApi.ts). Neither throws.
+//   2. Round-trip fidelity — fetchPiqcThread returns ordered messages
 //      with only the fields the panel needs (role + content; ordinal
 //      is server-internal).
-//   2. Silent-degrade — neither helper throws. The shell wires these
-//      into useEffect side effects; a thrown rejection from a
-//      permission-denied response would surface as an unhandled
-//      rejection or a crashed effect. Quiet failure on the persistence
-//      surface is doctrine (matches signalsApi.ts).
-//   3. Empty-array clear path — savePiqcThread([]) is the canonical
-//      delete; the RPC handles whole-replace-as-empty.
+//   3. Defensive row-filtering on fetch — a row with an invalid role
+//      or empty content from a future migration should be dropped,
+//      not crash the panel.
 //
-// Defensive row-filtering on fetch is also tested — a row with an
-// invalid role or empty content from a future migration should be
-// dropped, not crash the panel.
+// Empty-array clear path is also tested — savePiqcThread([]) is the
+// canonical delete; the RPC handles whole-replace-as-empty.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fetchPiqcThread, savePiqcThread } from '../piqcThreadApi';
@@ -66,11 +64,11 @@ beforeEach(() => {
 });
 
 // ============================================================================
-// fetchPiqcThread
+// fetchPiqcThread — Result<T> + round-trip
 // ============================================================================
 
 describe('fetchPiqcThread — round-trip', () => {
-  it('returns role/content pairs in row order (RPC orders by ordinal asc)', async () => {
+  it('returns { ok: true, data } with role/content pairs in row order', async () => {
     setPending({
       data: [
         { role: 'user',      content: 'Hi PIQC.',         ordinal: 0 },
@@ -79,12 +77,15 @@ describe('fetchPiqcThread — round-trip', () => {
       ],
       error: null,
     });
-    const result = await fetchPiqcThread('audit-1');
-    expect(result).toEqual([
-      { role: 'user',      content: 'Hi PIQC.' },
-      { role: 'assistant', content: 'Hi — reading along.' },
-      { role: 'user',      content: 'Anything missing?' },
-    ]);
+    const res = await fetchPiqcThread('audit-1');
+    expect(res).toEqual({
+      ok:   true,
+      data: [
+        { role: 'user',      content: 'Hi PIQC.' },
+        { role: 'assistant', content: 'Hi — reading along.' },
+        { role: 'user',      content: 'Anything missing?' },
+      ],
+    });
   });
 
   it('strips the ordinal field (server-internal, panel doesn\'t want it)', async () => {
@@ -92,8 +93,10 @@ describe('fetchPiqcThread — round-trip', () => {
       data: [{ role: 'user', content: 'q', ordinal: 0 }],
       error: null,
     });
-    const result = await fetchPiqcThread('audit-1');
-    expect(result[0]).not.toHaveProperty('ordinal');
+    const res = await fetchPiqcThread('audit-1');
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data[0]).not.toHaveProperty('ordinal');
   });
 });
 
@@ -107,11 +110,13 @@ describe('fetchPiqcThread — defensive filtering', () => {
       ],
       error: null,
     });
-    const result = await fetchPiqcThread('audit-1');
-    expect(result.map((m) => m.content)).toEqual(['ok', 'fine']);
+    const res = await fetchPiqcThread('audit-1');
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data.map((m) => m.content)).toEqual(['ok', 'fine']);
   });
 
-  it('drops rows with empty content (CHECK constraint should prevent, but belt+suspenders)', async () => {
+  it('drops rows with empty content (CHECK should prevent, but belt+suspenders)', async () => {
     setPending({
       data: [
         { role: 'user',      content: 'ok', ordinal: 0 },
@@ -119,44 +124,49 @@ describe('fetchPiqcThread — defensive filtering', () => {
       ],
       error: null,
     });
-    const result = await fetchPiqcThread('audit-1');
-    expect(result).toEqual([{ role: 'user', content: 'ok' }]);
+    const res = await fetchPiqcThread('audit-1');
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data).toEqual([{ role: 'user', content: 'ok' }]);
   });
 });
 
-describe('fetchPiqcThread — silent-degrade contract', () => {
-  it('returns [] on PostgREST error (never throws — shell-effect-safe)', async () => {
+describe('fetchPiqcThread — Result<T> error variant (never throws)', () => {
+  it('returns { ok: false, error } on PostgREST error', async () => {
     setPending({ data: null, error: { message: 'permission denied' } });
-    const result = await fetchPiqcThread('audit-1');
-    expect(result).toEqual([]);
+    const res = await fetchPiqcThread('audit-1');
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.error).toBe('permission denied');
     expect(errorSpy).toHaveBeenCalled();
   });
 
-  it('returns [] when data is null (no rows yet for this audit)', async () => {
+  it('returns { ok: true, data: [] } when data is null (no rows yet)', async () => {
     setPending({ data: null, error: null });
-    const result = await fetchPiqcThread('audit-1');
-    expect(result).toEqual([]);
+    const res = await fetchPiqcThread('audit-1');
+    expect(res).toEqual({ ok: true, data: [] });
     expect(errorSpy).not.toHaveBeenCalled();
   });
 
-  it('returns [] when data is [] (RLS scope but no thread persisted)', async () => {
+  it('returns { ok: true, data: [] } when data is [] (RLS scope, no thread)', async () => {
     setPending({ data: [], error: null });
-    const result = await fetchPiqcThread('audit-1');
-    expect(result).toEqual([]);
+    const res = await fetchPiqcThread('audit-1');
+    expect(res).toEqual({ ok: true, data: [] });
   });
 });
 
 // ============================================================================
-// savePiqcThread
+// savePiqcThread — Result<T> + RPC invocation
 // ============================================================================
 
 describe('savePiqcThread — RPC invocation', () => {
-  it('forwards audit_id + messages to save_piqc_thread RPC', async () => {
+  it('forwards audit_id + messages to save_piqc_thread RPC and returns ok', async () => {
     setPending({ data: null, error: null });
-    await savePiqcThread('audit-1', [
+    const res = await savePiqcThread('audit-1', [
       { role: 'user',      content: 'q1' },
       { role: 'assistant', content: 'a1' },
     ]);
+    expect(res).toEqual({ ok: true, data: undefined });
     expect(lastRpcCall()).toEqual({
       name: 'save_piqc_thread',
       args: {
@@ -171,7 +181,8 @@ describe('savePiqcThread — RPC invocation', () => {
 
   it('whole-replace-with-empty is the canonical clear path', async () => {
     setPending({ data: null, error: null });
-    await savePiqcThread('audit-1', []);
+    const res = await savePiqcThread('audit-1', []);
+    expect(res.ok).toBe(true);
     expect(lastRpcCall()).toEqual({
       name: 'save_piqc_thread',
       args: { p_audit_id: 'audit-1', p_messages: [] },
@@ -179,13 +190,16 @@ describe('savePiqcThread — RPC invocation', () => {
   });
 });
 
-describe('savePiqcThread — silent-degrade contract', () => {
-  it('swallows RPC errors and logs (the shell debounce-effect must never throw)', async () => {
+describe('savePiqcThread — Result<T> error variant (never throws)', () => {
+  it('returns { ok: false, error } on RPC error and logs', async () => {
     setPending({ data: null, error: { message: 'rls denial' } });
     // Should not throw — if it did, vitest would catch as a rejected promise.
-    await expect(savePiqcThread('audit-1', [
+    const res = await savePiqcThread('audit-1', [
       { role: 'user', content: 'q' },
-    ])).resolves.toBeUndefined();
+    ]);
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.error).toBe('rls denial');
     expect(errorSpy).toHaveBeenCalled();
   });
 });
