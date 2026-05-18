@@ -11,8 +11,8 @@
 // fresh tab/sign-in starts from a clean fixture snapshot. The store is a
 // module-level singleton; everything outside this file talks to `demoStore`.
 //
-// Defensive design: any sessionStorage read failure (private-browsing, quota,
-// stale shape) falls back silently to fresh fixtures.
+// Defensive design — sessionStorage read failures (private-browsing, quota,
+// stale shape) fall back silently to fresh fixtures.
 // =============================================================================
 
 import type {
