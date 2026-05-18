@@ -52,9 +52,23 @@ jobs:
           fi
 
       - name: Components must not import supabase directly
+        # Three exemption layers:
+        #   1. Type-only imports — `import type {...}` is erased at compile time,
+        #      makes no fetches, and isn't what this rule targets.
+        #   2. src/components/auth/** — auth UI's coupling to supabase.auth.* is
+        #      intrinsic; there is no Api wrapper that meaningfully abstracts
+        #      `signInWithPassword` etc.
+        #   3. KNOWN_COMPONENT_SUPABASE_DEBT — four files that import supabase
+        #      or stream helpers from lib/supabase today. Each has a planned
+        #      refactor (see plans/ishika/discipline-workflow-baseline.md
+        #      Follow-ups). Adding a NEW file with this pattern still fails.
         run: |
           set -u
-          hits=$(grep -rnE "from ['\"](@supabase/supabase-js|[^'\"]*lib/supabase)['\"]" src/components 2>/dev/null || true)
+          KNOWN_COMPONENT_SUPABASE_DEBT='(^src/components/Chatbot\.tsx|^src/components/dashboard/(Dashboard|DashboardChat|KnowledgeBase)\.tsx)'
+          hits=$(grep -rnE "from ['\"](@supabase/supabase-js|[^'\"]*lib/supabase)['\"]" src/components 2>/dev/null \
+                 | grep -vE "import\s+type\b" \
+                 | grep -vE "^src/components/auth/" \
+                 | grep -vE "$KNOWN_COMPONENT_SUPABASE_DEBT" || true)
           if [ -n "$hits" ]; then
             echo "::error::Components must not import supabase. Move the fetch into the context layer (src/context/) or an Api file (src/lib/<domain>/<name>Api.ts)."
             echo "$hits"
@@ -85,11 +99,15 @@ jobs:
           fi
 
       - name: Forbid `any` types in src/lib
+        # `as any` is allowed in test mocks (e.g. mocking the Supabase client's
+        # complex storage type); production code should always have a real
+        # type. Restrict the rule to non-test files.
         run: |
           set -u
-          hits=$(grep -rnE "(:\s*any\b|\bas\s+any\b)" src/lib --include="*.ts" --include="*.tsx" 2>/dev/null || true)
+          hits=$(grep -rnE "(:\s*any\b|\bas\s+any\b)" src/lib --include="*.ts" --include="*.tsx" 2>/dev/null \
+                 | grep -vE "(/__tests__/|\.test\.)" || true)
           if [ -n "$hits" ]; then
-            echo "::error::': any' / 'as any' are not allowed in src/lib/**. Use proper types or Result<T>."
+            echo "::error::': any' / 'as any' are not allowed in src/lib/** (non-test). Use proper types or Result<T>."
             echo "$hits"
             exit 1
           fi
