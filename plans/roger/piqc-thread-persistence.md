@@ -18,13 +18,23 @@ PIQC's F-3 chat thread has lived in `AuditWorkspaceShell` state since PR #73; re
 - `src/lib/audit/piqcThreadApi.ts`
 - `src/lib/audit/__tests__/piqcThreadApi.test.ts`
 - `src/components/dashboard/audit/AuditWorkspaceShell.tsx`
+- `src/components/dashboard/audit/AuditChatPanel.tsx` (added post-review — see "Scope expansion" below)
+- `src/components/dashboard/audit/__tests__/AuditChatPanel.test.tsx` (added post-review)
 - `plans/roger/piqc-thread-persistence.md`
+
+### Scope expansion (2026-05-18, post `/design-critique` + `/code-review`)
+
+Design critique surfaced three UX issues that genuinely belong in the panel, not the shell:
+  1. Empty-state primer + "Worth a look:" signals flash during the hydration window (panel renders based on `messages.length === 0`; needs a `hydrated` gate)
+  2. No scroll-to-bottom after hydration on long persisted threads
+  3. No "Picking up from earlier" cue on a fresh hydration
+
+These were originally out-of-scope per the deferral-of-panel-work clause below. The founder authorized scope expansion to apply them in this PR rather than spinning off a follow-up. Karl is now on the hook to review `AuditChatPanel.tsx` changes; see Approved-by.
 
 ## Out of scope (files forbidden)
 
 Any other Audit Mode file — Karl's lane. In particular:
 
-- `src/components/dashboard/audit/AuditChatPanel.tsx` (the panel itself isn't touched; the shell owns thread state today)
 - `src/lib/audit/chatApi.ts` (only consumed via the existing `AuditChatMessage` type)
 - `src/lib/audit/signalsApi.ts`, `src/hooks/usePiqcSignals.ts`
 - Any `stages/` workspace
@@ -50,7 +60,10 @@ None. Real Supabase reads/writes from the moment the migration lands.
 
 ## Approved-by
 
-- @karl-dev-piqc — owns `src/lib/audit/` and `src/components/dashboard/audit/`; this feature adds `piqcThreadApi.ts` to his lane and adds two effects to `AuditWorkspaceShell.tsx`
+- @karl-dev-piqc — owns `src/lib/audit/` and `src/components/dashboard/audit/`. This feature:
+  - adds `src/lib/audit/piqcThreadApi.ts` (new file in his lane)
+  - adds two effects to `src/components/dashboard/audit/AuditWorkspaceShell.tsx`
+  - **expanded scope:** adds a `hydrated` prop + scroll-to-bottom-on-hydration + "Picking up from earlier" cue to `src/components/dashboard/audit/AuditChatPanel.tsx` (UX polish surfaced by `/design-critique`)
 
 ## Verification
 

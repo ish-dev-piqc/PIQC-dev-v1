@@ -150,31 +150,33 @@ export default function AuditWorkspaceShell() {
 
   // PIQC thread persistence (PR #83) — hydrate the panel from
   // `piqc_thread_messages` when an audit is activated, debounce-save
-  // on changes. Two refs coordinate the dance:
+  // on changes.
   //
-  //   - `activeAuditHydratedRef` — flips to TRUE once the current
-  //     audit's fetch has landed (or been skipped because in-memory
-  //     was already populated). RESET on every audit switch — the
-  //     cross-audit cleanup effect above drops in-memory threads on
-  //     switch, so we MUST re-fetch on return; treating "hydrated"
-  //     as session-wide would skip the re-fetch and let a subsequent
-  //     debounce-save write an empty state over real persisted
-  //     history (silent data loss).
+  // `activeAuditHydrated` is STATE (not a ref) because the panel
+  // needs it as a prop to gate the empty-state primer + signals
+  // block during the hydration window. Refs don't trigger re-renders;
+  // a stale-prop pass would leave the panel forever in "unknown
+  // hydration" state. State changes trigger one extra render per
+  // audit switch — acceptable.
   //
-  //   - `skipNextThreadSaveRef` — single-shot flag that absorbs the
-  //     fetch's echo. Without it, setting state to the fetched value
-  //     would trigger the save effect, which would write back
-  //     exactly what we just fetched. Wasted RPC + log noise.
+  // `skipNextThreadSaveRef` stays a ref — it's a single-shot guard
+  // used inside the save effect only; no render needs it.
+  //
+  // Reset-on-switch is critical: the cross-audit cleanup effect
+  // above drops in-memory threads on switch, so we MUST re-fetch on
+  // return; treating "hydrated" as session-wide would skip the
+  // re-fetch and let a subsequent debounce-save write an empty
+  // state over real persisted history (silent data loss).
   //
   // Merge-on-race: if the auditor manages to commit a turn during
   // the fetch window (rare but real), we merge — persisted history
   // first, their typed state after. Same doctrine as PR #82's no-
   // clobber: auditor work never gets silently overwritten by an
   // async PIQC operation.
-  const activeAuditHydratedRef = useRef(false);
+  const [activeAuditHydrated, setActiveAuditHydrated] = useState(false);
   const skipNextThreadSaveRef  = useRef(false);
   useEffect(() => {
-    activeAuditHydratedRef.current = false;
+    setActiveAuditHydrated(false);
     if (!activeAudit) return;
     const auditId = activeAudit.id;
 
@@ -183,7 +185,7 @@ export default function AuditWorkspaceShell() {
     // anything the DB has, so we don't re-fetch.
     const existing = chatThreads[auditId];
     if (existing && existing.length > 0) {
-      activeAuditHydratedRef.current = true;
+      setActiveAuditHydrated(true);
       return;
     }
 
@@ -202,23 +204,25 @@ export default function AuditWorkspaceShell() {
           // persisted history first, their new turn(s) after. The
           // save effect will fire shortly and persist the merged
           // state; don't skip-next-save (we want the merge written).
-          activeAuditHydratedRef.current = true;
           return { ...prev, [auditId]: [...msgs, ...inMemory] };
         }
         if (msgs.length > 0) {
           // Pure hydration. The next save-effect run is the echo of
           // what we just fetched — skip it to avoid a wasted RPC.
           skipNextThreadSaveRef.current = true;
-          activeAuditHydratedRef.current = true;
           return { ...prev, [auditId]: msgs };
         }
-        // No persisted thread + no in-memory state. Just mark hydrated
-        // so future saves (the auditor's first turn) can fire.
-        activeAuditHydratedRef.current = true;
+        // No persisted thread + no in-memory state. Nothing to apply.
         return prev;
       });
+      setActiveAuditHydrated(true);
     });
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // chatThreads is read from closure intentionally — we only want to
+    // check what's in memory at the moment of audit switch, not re-run
+    // the fetch every time chatThreads mutates (the save effect handles
+    // that downstream).
   }, [activeAudit?.id]);
 
   // Debounced thread save. Fires 750ms after the last change to the
@@ -230,7 +234,7 @@ export default function AuditWorkspaceShell() {
   // interrupting toast.
   useEffect(() => {
     if (!activeAudit) return;
-    if (!activeAuditHydratedRef.current) return;
+    if (!activeAuditHydrated) return;
     if (skipNextThreadSaveRef.current) {
       skipNextThreadSaveRef.current = false;
       return;
@@ -241,7 +245,7 @@ export default function AuditWorkspaceShell() {
       savePiqcThread(auditId, messages);
     }, 750);
     return () => window.clearTimeout(t);
-  }, [activeAudit?.id, chatThreads]);
+  }, [activeAudit?.id, chatThreads, activeAuditHydrated]);
 
   // Clear the landing notice when the auditor leaves REPORT_DRAFTING.
   // The notice's whole job is to bridge the chat → Stage 7 moment; once
@@ -471,6 +475,13 @@ export default function AuditWorkspaceShell() {
             setChatThreads((prev) => ({ ...prev, [activeAudit.id]: next }))
           }
           onClose={() => setChatOpen(false)}
+          /* hydrated — true once `piqc_thread_messages` fetch has
+             landed (or been skipped because in-memory was already
+             populated). Suppresses the panel's empty-state primer +
+             "Worth a look:" signals during the hydration window so
+             a returning auditor doesn't see a flash of the wrong
+             greeting before their thread snaps in. PR #83. */
+          hydrated={activeAuditHydrated}
           /* viewedStage — what the auditor is LOOKING at, not necessarily the
              audit's workflow position. Lets PIQC bias relevance ("you're in
              Stage 6, here's what I'd look at next") even when the auditor

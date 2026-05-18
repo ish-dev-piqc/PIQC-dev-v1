@@ -84,6 +84,13 @@ interface Props {
     kind: 'executive_summary' | 'conclusions',
     text: string,
   ) => Promise<void>;
+  /** Whether the shell has finished hydrating the thread from the DB.
+   *  When `false`, the panel suppresses the empty-state primer and the
+   *  "Worth a look:" signals block — those greetings are wrong for a
+   *  returning auditor whose persisted thread is mid-flight. Defaults
+   *  to `true` for non-persistence-aware callers (no behavior change).
+   *  See PR #83 (thread persistence). */
+  hydrated?: boolean;
 }
 
 type WritebackKind = 'executive_summary' | 'conclusions';
@@ -118,6 +125,7 @@ export default function AuditChatPanel({
   signals,
   onSignalAction,
   onAssistantWriteback,
+  hydrated = true,
 }: Props) {
   const panelRef     = useRef<HTMLDivElement>(null);
   const scrollerRef  = useRef<HTMLDivElement>(null);
@@ -281,8 +289,47 @@ export default function AuditChatPanel({
     }
   };
 
-  const empty = messages.length === 0 && !pending;
+  // Empty-state primer + "Worth a look:" signals only render when the
+  // thread is KNOWN empty — i.e. messages is empty AND the shell has
+  // finished hydrating from `piqc_thread_messages`. Without the
+  // `hydrated` gate, a returning auditor sees a flash of the wrong
+  // greeting ("Hi — I've been reading along…") for the 100-300ms
+  // between mount and fetch completion, then a snap to their persisted
+  // thread. The gate keeps the panel quiet during the hydration window.
+  // PR #83 — thread persistence.
+  const empty = messages.length === 0 && !pending && hydrated;
   const turnCount = messages.length;
+
+  // "Picking up from earlier" cue. Fires once per panel-open session
+  // when the panel mounts with messages already present (i.e. the
+  // shell hydrated the thread before the panel opened) OR when
+  // messages first becomes non-empty after mount (hydration completing
+  // after the panel was already open). Doesn't fire when a fresh send
+  // appends to an empty thread — that's not "picking up," that's "just
+  // started." Tracked via a ref so re-renders don't re-show it.
+  const pickedUpRef = useRef(false);
+  const [showPickedUp, setShowPickedUp] = useState(false);
+  useEffect(() => {
+    if (pickedUpRef.current) return;
+    if (!hydrated) return;
+    if (messages.length === 0) return;
+    pickedUpRef.current = true;
+    setShowPickedUp(true);
+  }, [hydrated, messages.length]);
+
+  // Scroll-to-bottom on first hydration. Long persisted threads
+  // otherwise show the top message first; the auditor would have to
+  // scroll to find where they left off. Mirrors `pickedUpRef` —
+  // single-shot per panel session.
+  const scrolledToBottomRef = useRef(false);
+  useEffect(() => {
+    if (scrolledToBottomRef.current) return;
+    if (!hydrated || messages.length === 0) return;
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    scrolledToBottomRef.current = true;
+  }, [hydrated, messages.length]);
 
   return (
     <div
@@ -498,6 +545,40 @@ export default function AuditChatPanel({
           )}
 
           {messages.length > 0 && (
+            <>
+              {/* "Picking up from earlier" — quiet, first-person, fires
+                  once per panel-open when the persisted thread hydrated
+                  from `piqc_thread_messages` (PR #83). Mirrors the
+                  Stage 7 landing-note pattern from PR #80: PiqcMark +
+                  amber muted text + `role="status"` for SR parity +
+                  dismissible. The cue carries no data — it's a
+                  presence acknowledgment, not a notification. */}
+              {showPickedUp && (
+                <div
+                  data-testid="audit-chat-picking-up"
+                  role="status"
+                  className="mb-3 flex items-start gap-2 rounded-md border border-amber-300/40 dark:border-amber-500/20 bg-amber-50/50 dark:bg-amber-500/[0.04] px-3 py-2"
+                >
+                  <span
+                    className="mt-0.5 flex-shrink-0 text-[#4a6fa5] dark:text-[#6e8fb5]"
+                    aria-hidden
+                  >
+                    <PiqcMark size={12} />
+                  </span>
+                  <p className="text-[11px] leading-relaxed flex-1 text-amber-800/85 dark:text-amber-200/85">
+                    Picking up from earlier.
+                  </p>
+                  <button
+                    type="button"
+                    data-testid="audit-chat-picking-up-dismiss"
+                    onClick={() => setShowPickedUp(false)}
+                    aria-label="Dismiss"
+                    className="flex-shrink-0 text-[11px] text-amber-800/70 dark:text-amber-200/70 hover:text-amber-900 dark:hover:text-amber-100"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
             <ul className="space-y-3" data-testid="audit-chat-thread">
               {messages.map((m, i) => {
                 const isAssistant = m.role === 'assistant';
@@ -611,6 +692,7 @@ export default function AuditChatPanel({
                 </li>
               )}
             </ul>
+            </>
           )}
         </div>
 

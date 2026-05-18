@@ -594,3 +594,114 @@ describe('AuditChatPanel — close affordance', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
+
+// =============================================================================
+// PR #83 — thread persistence: hydration prop + "Picking up from earlier" cue
+// =============================================================================
+
+// Standalone render helper that exposes the `hydrated` prop. The shared
+// setup() helper doesn't take this knob (existing tests pre-date PR #83);
+// rather than break its signature, we render directly here.
+function renderHydrated(opts: {
+  messages?: AuditChatMessage[];
+  hydrated:  boolean;
+  signals?:  import('../../../../hooks/usePiqcSignals').PiqcSignal[];
+}) {
+  return render(
+    <AuditChatPanel
+      auditId="audit-1"
+      messages={opts.messages ?? []}
+      onMessagesChange={() => {}}
+      onClose={() => {}}
+      hydrated={opts.hydrated}
+      signals={opts.signals}
+    />,
+  );
+}
+
+describe('AuditChatPanel — hydration gate (PR #83)', () => {
+  it('suppresses the empty-state primer while hydration is in flight', () => {
+    // The empty-state primer is the "Hi — I've been reading along" greeting.
+    // For a returning auditor it'd be the WRONG greeting (their thread is
+    // about to snap in from the DB). The hydrated=false gate hides it.
+    renderHydrated({ messages: [], hydrated: false });
+    expect(screen.queryByTestId('audit-chat-empty')).not.toBeInTheDocument();
+  });
+
+  it('suppresses the "Worth a look:" signals block while hydration is in flight', () => {
+    renderHydrated({
+      messages: [],
+      hydrated: false,
+      signals:  [{
+        kind:  'sotr_awaiting_review',
+        count: 3,
+        label: '3 parsed protocol items awaiting your review',
+      }],
+    });
+    // Signals only appear in the empty state; gating empty on hydrated
+    // also gates signals on hydrated by composition.
+    expect(screen.queryByTestId('audit-chat-signals')).not.toBeInTheDocument();
+  });
+
+  it('renders the empty-state primer once hydration completes with empty thread', () => {
+    renderHydrated({ messages: [], hydrated: true });
+    expect(screen.getByTestId('audit-chat-empty')).toBeInTheDocument();
+  });
+
+  it('defaults hydrated to true for non-persistence-aware callers (back-compat)', () => {
+    // No hydrated prop passed — defaults to true → empty state renders.
+    render(
+      <AuditChatPanel
+        auditId="audit-1"
+        messages={[]}
+        onMessagesChange={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('audit-chat-empty')).toBeInTheDocument();
+  });
+});
+
+describe('AuditChatPanel — "Picking up from earlier" cue (PR #83)', () => {
+  it('renders the cue when the panel mounts with messages already present', () => {
+    // Persisted thread was hydrated before the panel opened — auditor
+    // returning to an audit. The cue acknowledges "PIQC remembered."
+    renderHydrated({
+      messages: [{ role: 'user', content: 'q1' }],
+      hydrated: true,
+    });
+    expect(screen.getByTestId('audit-chat-picking-up')).toBeInTheDocument();
+    expect(screen.getByTestId('audit-chat-picking-up')).toHaveTextContent(/Picking up from earlier/);
+  });
+
+  it('uses role="status" for screen-reader parity (matches Stage 7 landing pattern)', () => {
+    renderHydrated({
+      messages: [{ role: 'user', content: 'q1' }],
+      hydrated: true,
+    });
+    expect(screen.getByTestId('audit-chat-picking-up').getAttribute('role')).toBe('status');
+  });
+
+  it('dismisses on click and stays dismissed', async () => {
+    const user = userEvent.setup();
+    renderHydrated({
+      messages: [{ role: 'user', content: 'q1' }],
+      hydrated: true,
+    });
+    await user.click(screen.getByTestId('audit-chat-picking-up-dismiss'));
+    expect(screen.queryByTestId('audit-chat-picking-up')).not.toBeInTheDocument();
+  });
+
+  it('does NOT render when panel opens with an empty thread (no "picking up" if nothing to pick up)', () => {
+    renderHydrated({ messages: [], hydrated: true });
+    expect(screen.queryByTestId('audit-chat-picking-up')).not.toBeInTheDocument();
+  });
+
+  it('does NOT render before hydration completes (no premature acknowledgment)', () => {
+    renderHydrated({
+      messages: [{ role: 'user', content: 'q1' }],
+      hydrated: false,
+    });
+    expect(screen.queryByTestId('audit-chat-picking-up')).not.toBeInTheDocument();
+  });
+});

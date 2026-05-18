@@ -47,7 +47,14 @@ CREATE TABLE piqc_thread_messages (
   audit_id   UUID        NOT NULL REFERENCES audits(id) ON DELETE CASCADE,
   ordinal    INTEGER     NOT NULL,
   role       TEXT        NOT NULL CHECK (role IN ('user', 'assistant')),
-  content    TEXT        NOT NULL,
+  -- Length cap mirrors (and exceeds) the edge function's MAX_MESSAGE_CHARS
+  -- (= 2000) so the persistence layer can't be inflated by a client that
+  -- skips the edge function and calls save_piqc_thread directly with a
+  -- valid JWT. 8000 leaves headroom for the assistant's own replies
+  -- (typically 500-1500 chars; cap allows 4x growth without a schema
+  -- change). Defense in depth: a hostile client with a valid auth token
+  -- still can't fill the DB row-by-row.
+  content    TEXT        NOT NULL CHECK (length(content) <= 8000),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (audit_id, ordinal)
 );
@@ -127,10 +134,13 @@ BEGIN
   FOR msg IN SELECT * FROM jsonb_array_elements(p_messages)
   LOOP
     -- Defensive: skip malformed entries rather than throw. A single
-    -- bad message shouldn't lose the rest of the thread. Empty role
-    -- or content is a client-side bug we'd rather notice in logs.
+    -- bad message shouldn't lose the rest of the thread. Empty role,
+    -- empty content, or content over the CHECK length cap is a
+    -- client-side bug (or worst case a hostile client) we'd rather
+    -- log + skip than abort the whole batch on.
     IF msg->>'role' NOT IN ('user', 'assistant') OR
-       COALESCE(msg->>'content', '') = '' THEN
+       COALESCE(msg->>'content', '') = '' OR
+       length(msg->>'content') > 8000 THEN
       CONTINUE;
     END IF;
 
