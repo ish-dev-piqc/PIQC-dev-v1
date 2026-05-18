@@ -7,6 +7,7 @@ import AskTab from './site/AskTab';
 import ParticipantsTab from './site/ParticipantsTab';
 import VisitsTab from './site/VisitsTab';
 import TeamTab from './site/TeamTab';
+import DemoBanner from './site/DemoBanner';
 import ReportsTab from './site/ReportsTab';
 import ProtocolTab from './site/ProtocolTab';
 import ProtocolRequiredGate from './site/ProtocolRequiredGate';
@@ -613,6 +614,7 @@ export default function Dashboard({
 
   return (
     <div className={`h-screen ${pageBg} pt-16 flex flex-col overflow-hidden`}>
+      <DemoBanner />
       <div className={`flex-shrink-0 border-b ${tabBarBg} backdrop-blur-sm`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide py-1">

@@ -10,7 +10,9 @@ import {
 import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useSiteData } from '../../../context/SiteDataContext';
+import { useDemoMode } from '../../../context/DemoModeContext';
 import DashboardChat from '../DashboardChat';
+import DemoAskPanel from './DemoAskPanel';
 import type { ChatMessage, RagStatus } from '../../../lib/supabase';
 
 // =============================================================================
@@ -55,6 +57,7 @@ export default function AskTab({
   const { theme } = useTheme();
   const { activeProtocol } = useProtocol();
   const { documents, loading } = useSiteData();
+  const { demoActive } = useDemoMode();
   const isLight = theme === 'light';
 
   // Local doc-id list scoped to this protocol's tagged documents. Recomputes
@@ -132,8 +135,11 @@ export default function AskTab({
         </div>
       </div>
 
-      {/* Hard-block when no protocol documents exist for this protocol */}
-      {documents.length === 0 ? (
+      {/* Demo mode: short-circuit to canned-response panel — never hits the live LLM. */}
+      {demoActive ? (
+        <DemoAskPanel />
+      ) : /* Hard-block when no protocol documents exist for this protocol */
+      documents.length === 0 ? (
         <div className="flex-1 min-h-0 overflow-y-auto p-8">
           <div
             className={`max-w-md mx-auto text-center border rounded-xl px-6 py-10 ${
