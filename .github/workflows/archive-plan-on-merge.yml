@@ -1,0 +1,99 @@
+name: Archive Plan on Merge
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+jobs:
+  archive:
+    if: ${{ github.event.pull_request.merged == true && !startsWith(github.head_ref, 'archive/') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Parse plan MD path from PR body
+        id: parse
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -u
+          plan=$(printf '%s' "$PR_BODY" | grep -oE 'plans/[a-z0-9_-]+/[a-z0-9_.-]+\.md' | head -1 || true)
+          if [ -z "$plan" ]; then
+            echo "::notice::No plan MD referenced in PR body; nothing to archive."
+            echo "plan=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$plan" == *"_archive/"* ]]; then
+            echo "::notice::Plan already in _archive/: $plan"
+            echo "plan=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ ! -f "$plan" ]; then
+            echo "::notice::Plan file does not exist at $plan; nothing to archive."
+            echo "plan=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "plan=$plan" >> "$GITHUB_OUTPUT"
+
+      - name: Move plan to _archive/ and update frontmatter
+        if: steps.parse.outputs.plan != ''
+        id: archive
+        env:
+          PLAN: ${{ steps.parse.outputs.plan }}
+          PR_NUM: ${{ github.event.pull_request.number }}
+        run: |
+          set -eu
+          dir=$(dirname "$PLAN")
+          name=$(basename "$PLAN")
+          new_dir="${dir}/_archive"
+          new_path="${new_dir}/${name}"
+          mkdir -p "$new_dir"
+          git mv "$PLAN" "$new_path"
+          today=$(date +%Y-%m-%d)
+          if grep -qE '^status:' "$new_path"; then
+            sed -i -E "s/^status:.*/status: merged/" "$new_path"
+          fi
+          if grep -qE '^merged:' "$new_path"; then
+            sed -i -E "s/^merged:.*/merged: ${today}/" "$new_path"
+          else
+            sed -i -E "/^status: merged/a\\
+          merged: ${today}" "$new_path"
+          fi
+          if grep -qE '^target_pr:' "$new_path"; then
+            sed -i -E "s/^target_pr:.*/target_pr: #${PR_NUM}/" "$new_path"
+          fi
+          echo "new_path=$new_path" >> "$GITHUB_OUTPUT"
+          echo "feature=$(basename "$PLAN" .md)" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and open followup PR
+        if: steps.parse.outputs.plan != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PLAN: ${{ steps.parse.outputs.plan }}
+          NEW_PATH: ${{ steps.archive.outputs.new_path }}
+          FEATURE: ${{ steps.archive.outputs.feature }}
+          PR_NUM: ${{ github.event.pull_request.number }}
+        run: |
+          set -eu
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          branch="archive/pr-${PR_NUM}"
+          git checkout -b "$branch"
+          git add "$PLAN" "$NEW_PATH"
+          git commit -m "Archive plan: ${FEATURE}
+
+          Auto-archive after PR #${PR_NUM} merged."
+          git push -u origin "$branch"
+          gh pr create \
+            --title "Archive plan: ${FEATURE}" \
+            --body "Auto-archive of \`${PLAN}\` after #${PR_NUM} merged. Safe to squash-merge — no review needed (docs-only)." \
+            --base main \
+            --head "$branch"
+          gh pr merge --squash --auto || echo "::notice::Auto-merge not enabled on this repo. Merge the followup PR manually."
