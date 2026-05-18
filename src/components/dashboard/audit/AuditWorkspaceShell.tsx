@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useAudit } from '../../../context/AuditContext';
 import type { AuditStage } from '../../../types/audit';
@@ -13,6 +13,7 @@ import AuditChatPanel from './AuditChatPanel';
 import PiqcDock from './PiqcDock';
 import type { AuditChatMessage } from '../../../lib/audit/chatApi';
 import { fetchReportDraft, upsertReportDraft } from '../../../lib/audit/reportApi';
+import { fetchPiqcThread, savePiqcThread } from '../../../lib/audit/piqcThreadApi';
 import { usePiqcSignals } from '../../../hooks/usePiqcSignals';
 import { AUDIT_STAGES } from '../../../types/audit';
 import IntakeWorkspace from './stages/IntakeWorkspace';
@@ -146,6 +147,96 @@ export default function AuditWorkspaceShell() {
     // text). Never lives across audits.
     setPendingWritebackNotice(null);
   }, [activeAudit?.id]);
+
+  // PIQC thread persistence (PR #83) — hydrate the panel from
+  // `piqc_thread_messages` when an audit is activated, debounce-save
+  // on changes. Two refs coordinate the dance:
+  //
+  //   - `activeAuditHydratedRef` — flips to TRUE once the current
+  //     audit's fetch has landed (or been skipped because in-memory
+  //     was already populated). RESET on every audit switch — the
+  //     cross-audit cleanup effect above drops in-memory threads on
+  //     switch, so we MUST re-fetch on return; treating "hydrated"
+  //     as session-wide would skip the re-fetch and let a subsequent
+  //     debounce-save write an empty state over real persisted
+  //     history (silent data loss).
+  //
+  //   - `skipNextThreadSaveRef` — single-shot flag that absorbs the
+  //     fetch's echo. Without it, setting state to the fetched value
+  //     would trigger the save effect, which would write back
+  //     exactly what we just fetched. Wasted RPC + log noise.
+  //
+  // Merge-on-race: if the auditor manages to commit a turn during
+  // the fetch window (rare but real), we merge — persisted history
+  // first, their typed state after. Same doctrine as PR #82's no-
+  // clobber: auditor work never gets silently overwritten by an
+  // async PIQC operation.
+  const activeAuditHydratedRef = useRef(false);
+  const skipNextThreadSaveRef  = useRef(false);
+  useEffect(() => {
+    activeAuditHydratedRef.current = false;
+    if (!activeAudit) return;
+    const auditId = activeAudit.id;
+
+    // Already populated in-memory (e.g. same audit re-render). Treat
+    // as already hydrated — the in-memory snapshot is fresher than
+    // anything the DB has, so we don't re-fetch.
+    const existing = chatThreads[auditId];
+    if (existing && existing.length > 0) {
+      activeAuditHydratedRef.current = true;
+      return;
+    }
+
+    let cancelled = false;
+    fetchPiqcThread(auditId).then((msgs) => {
+      if (cancelled) return;
+      setChatThreads((prev) => {
+        const inMemory = prev[auditId] ?? [];
+        if (inMemory.length > 0 && msgs.length > 0) {
+          // Race: auditor sent a turn while we were fetching. Merge —
+          // persisted history first, their new turn(s) after. The
+          // save effect will fire shortly and persist the merged
+          // state; don't skip-next-save (we want the merge written).
+          activeAuditHydratedRef.current = true;
+          return { ...prev, [auditId]: [...msgs, ...inMemory] };
+        }
+        if (msgs.length > 0) {
+          // Pure hydration. The next save-effect run is the echo of
+          // what we just fetched — skip it to avoid a wasted RPC.
+          skipNextThreadSaveRef.current = true;
+          activeAuditHydratedRef.current = true;
+          return { ...prev, [auditId]: msgs };
+        }
+        // No persisted thread + no in-memory state. Just mark hydrated
+        // so future saves (the auditor's first turn) can fire.
+        activeAuditHydratedRef.current = true;
+        return prev;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [activeAudit?.id]);
+
+  // Debounced thread save. Fires 750ms after the last change to the
+  // active audit's thread; cleanup cancels in-flight timers so a fast
+  // optimistic-then-final commit only produces ONE write (the final).
+  // Gated on hydration so a pre-fetch send can't overwrite history.
+  // All errors swallowed inside savePiqcThread — persistence failures
+  // stay quiet (dev console + Supabase logs) and never surface as an
+  // interrupting toast.
+  useEffect(() => {
+    if (!activeAudit) return;
+    if (!activeAuditHydratedRef.current) return;
+    if (skipNextThreadSaveRef.current) {
+      skipNextThreadSaveRef.current = false;
+      return;
+    }
+    const auditId = activeAudit.id;
+    const messages = chatThreads[auditId] ?? [];
+    const t = window.setTimeout(() => {
+      savePiqcThread(auditId, messages);
+    }, 750);
+    return () => window.clearTimeout(t);
+  }, [activeAudit?.id, chatThreads]);
 
   // Clear the landing notice when the auditor leaves REPORT_DRAFTING.
   // The notice's whole job is to bridge the chat → Stage 7 moment; once
