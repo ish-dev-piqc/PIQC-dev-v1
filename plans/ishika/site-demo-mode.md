@@ -1,7 +1,7 @@
 ---
 owner: ish-dev-piqc
 feature: site-demo-mode
-status: active
+status: in-review
 started: 2026-05-18
 target_pr:
 ---
@@ -64,7 +64,13 @@ This feature does **not** touch audit-mode, SOTR, ingest, or the existing site-m
 - [x] adapter (`src/lib/site/repos/realSiteRepo.ts`, `demoSiteRepo.ts`)
 - [x] context (`src/context/DemoModeContext.tsx`, plus extensions to AuthContext / SiteDataContext / ProtocolContext)
 - [x] component (`src/components/Navbar.tsx` toggle, new `DemoBanner.tsx`, MockCalendarToggle cleanup)
-- [x] test (`src/lib/demo/__tests__/store.test.ts`)
+- [x] test (`src/lib/demo/__tests__/store.test.ts`, `src/lib/site/repos/__tests__/demoSiteRepo.test.ts`)
+
+**No `src/types/` impact.** The DB column `user_profiles.is_demo_user` is
+mirrored in `src/context/AuthContext.tsx`'s `UserProfile` interface (the
+project's actual convention — auth profile lives in the context module, not
+in a `src/types/auth/` folder). The `piqc-discipline` B2 type-mirror check
+defaults to `src/types/<domain>/`; calling it out here keeps the rule honest.
 
 ## Mock data plan
 

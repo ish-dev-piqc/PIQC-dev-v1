@@ -21,7 +21,6 @@ import ParticipantProfileDrawer from './ParticipantProfileDrawer';
 import { updateVisit } from '../../../lib/site/siteApi';
 import {
   parseYmd,
-  startOfDay,
   isSameDay,
   isPast,
   formatFullDate,
