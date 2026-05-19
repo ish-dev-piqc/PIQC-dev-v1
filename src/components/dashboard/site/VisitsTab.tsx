@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import VisitFormDrawer from './VisitFormDrawer';
+import { Plus } from 'lucide-react';
 import {
   Search,
   X,
@@ -62,6 +64,7 @@ export default function VisitsTab() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [groupMode, setGroupMode] = useState<GroupMode>('date');
   const [openVisit, setOpenVisit] = useState<SiteVisit | null>(null);
+  const [scheduleFormOpen, setScheduleFormOpen] = useState(false);
 
   // Scope to the active protocol — empty array when no protocol selected so
   // the hooks below can run unconditionally.
@@ -177,6 +180,18 @@ export default function VisitsTab() {
           <p className={`${subColor} text-sm`}>
             {scoped.length} total · {counts.UPCOMING} upcoming
           </p>
+          <button
+            type="button"
+            onClick={() => setScheduleFormOpen(true)}
+            className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
+              isLight
+                ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
+                : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]'
+            }`}
+          >
+            <Plus size={13} />
+            Schedule visit
+          </button>
         </div>
       </div>
 
@@ -332,6 +347,12 @@ export default function VisitsTab() {
           protocols={protocols}
           today={todayDate}
           onClose={() => setOpenVisit(null)}
+        />
+      )}
+      {scheduleFormOpen && (
+        <VisitFormDrawer
+          protocolId={activeProtocol.id}
+          onClose={() => setScheduleFormOpen(false)}
         />
       )}
     </div>

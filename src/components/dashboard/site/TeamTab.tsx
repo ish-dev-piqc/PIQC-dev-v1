@@ -6,11 +6,16 @@ import {
   Mail,
   Calendar,
   Users,
+  Plus,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useSiteData } from '../../../context/SiteDataContext';
 import { TEAM_ROLE_LABELS, TEAM_ROLE_SHORT } from '../../../lib/site/labels';
+import { deleteTeamMember } from '../../../lib/site/siteApi';
+import TeamFormDrawer from './TeamFormDrawer';
 import type {
   SiteTeamMember,
   TeamRole,
@@ -46,6 +51,18 @@ export default function TeamTab() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('ALL');
   const [showInactive, setShowInactive] = useState(true);
+  const [formMode, setFormMode] = useState<'create' | 'edit' | null>(null);
+  const [editTarget, setEditTarget] = useState<SiteTeamMember | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  const handleDelete = async (member: SiteTeamMember) => {
+    if (deleting) return;
+    const confirmed = window.confirm(`Remove ${member.name} from the team?`);
+    if (!confirmed) return;
+    setDeleting(member.id);
+    await deleteTeamMember(member.id);
+    setDeleting(null);
+  };
 
   // Scope to the active protocol — empty array when no protocol selected so
   // the hooks below can run unconditionally. The context also pre-filters by
@@ -134,10 +151,27 @@ export default function TeamTab() {
             Site staff and the delegation log for this protocol.
           </p>
         </div>
-        <p className={`${subColor} text-sm`}>
-          {scoped.length} total ·{' '}
-          {scoped.filter((m) => m.status === 'ACTIVE').length} active
-        </p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <p className={`${subColor} text-sm`}>
+            {scoped.length} total ·{' '}
+            {scoped.filter((m) => m.status === 'ACTIVE').length} active
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setEditTarget(null);
+              setFormMode('create');
+            }}
+            className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
+              isLight
+                ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
+                : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]'
+            }`}
+          >
+            <Plus size={13} />
+            Add team member
+          </button>
+        </div>
       </div>
 
       {/* Error banner */}
@@ -268,9 +302,27 @@ export default function TeamTab() {
               headingColor={headingColor}
               subColor={subColor}
               mutedColor={mutedColor}
+              onEdit={(member) => {
+                setEditTarget(member);
+                setFormMode('edit');
+              }}
+              onDelete={handleDelete}
+              deleting={deleting === m.id}
             />
           ))}
         </div>
+      )}
+
+      {formMode && (
+        <TeamFormDrawer
+          mode={formMode}
+          protocolId={activeProtocol.id}
+          initial={editTarget ?? undefined}
+          onClose={() => {
+            setFormMode(null);
+            setEditTarget(null);
+          }}
+        />
       )}
     </div>
   );
@@ -287,9 +339,12 @@ interface TeamCardProps {
   headingColor: string;
   subColor: string;
   mutedColor: string;
+  onEdit: (m: SiteTeamMember) => void;
+  onDelete: (m: SiteTeamMember) => void;
+  deleting: boolean;
 }
 
-function TeamCard({ member, isLight, cardBg, headingColor, subColor, mutedColor }: TeamCardProps) {
+function TeamCard({ member, isLight, cardBg, headingColor, subColor, mutedColor, onEdit, onDelete, deleting }: TeamCardProps) {
   const isInactive = member.status === 'INACTIVE';
   const certExpired = isCertExpired(member.certified_through);
   const certExpiring = !certExpired && isCertExpiringSoon(member.certified_through);
@@ -378,10 +433,37 @@ function TeamCard({ member, isLight, cardBg, headingColor, subColor, mutedColor 
         <p className={`text-xs mt-3 leading-relaxed ${subColor}`}>{member.notes}</p>
       )}
 
-      {/* Footer */}
-      <p className={`text-[11px] mt-3 ${mutedColor}`}>
-        Joined protocol {formatDate(member.added_at)}
-      </p>
+      {/* Footer + actions */}
+      <div className={`flex items-center justify-between mt-3 pt-3 border-t ${isLight ? 'border-[#f0f3f6]' : 'border-white/[0.04]'}`}>
+        <p className={`text-[11px] ${mutedColor}`}>
+          Joined protocol {formatDate(member.added_at)}
+        </p>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onEdit(member)}
+            className={`inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded transition-colors ${
+              isLight ? 'text-[#374152]/70 hover:bg-[#1a1f28]/[0.05]' : 'text-[#d2d7e0]/60 hover:bg-white/[0.05]'
+            }`}
+            aria-label={`Edit ${member.name}`}
+          >
+            <Pencil size={11} />
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(member)}
+            disabled={deleting}
+            className={`inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded transition-colors ${
+              isLight ? 'text-red-600 hover:bg-red-500/[0.06]' : 'text-red-400 hover:bg-red-500/[0.08]'
+            } disabled:opacity-50`}
+            aria-label={`Remove ${member.name}`}
+          >
+            <Trash2 size={11} />
+            {deleting ? 'Removing…' : 'Remove'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
