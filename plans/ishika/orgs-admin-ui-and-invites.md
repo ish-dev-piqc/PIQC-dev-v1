@@ -1,9 +1,9 @@
 ---
 owner: ish-dev-piqc
 feature: orgs-admin-ui-and-invites
-status: active
+status: in-review
 started: 2026-05-18
-target_pr:
+target_pr: 95
 ---
 
 # Org admin UI + invite flow
