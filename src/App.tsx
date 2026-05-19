@@ -42,6 +42,36 @@ function AppContent() {
     }
   }, [session, loading, view]);
 
+  // Accept-invite flow: if the URL has ?invite=<token> and the user is signed
+  // in, redeem the invite on dashboard load. Strips the param after either
+  // success or failure so a refresh doesn't try again. Errors surface as
+  // alerts — non-blocking for the rest of the app load.
+  useEffect(() => {
+    if (loading || !session || profileLoading) return;
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const token = url.searchParams.get('invite');
+    if (!token) return;
+
+    let cancelled = false;
+    (async () => {
+      const { acceptOrgInvite } = await import('./lib/orgs/orgApi');
+      const result = await acceptOrgInvite(token);
+      if (cancelled) return;
+      if (result.ok) {
+        alert(`You're now a ${result.data.role} of ${result.data.org_name}.`);
+      } else {
+        alert(`Couldn't accept invite: ${result.error}`);
+      }
+      url.searchParams.delete('invite');
+      window.history.replaceState({}, '', url.toString());
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, session, profileLoading]);
+
   useEffect(() => {
     if (view === 'landing' && scrollTarget) {
       const el = document.getElementById(scrollTarget);

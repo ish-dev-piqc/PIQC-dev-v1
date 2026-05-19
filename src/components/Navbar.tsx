@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Menu, X, Activity, LogOut, ChevronDown, User, Home, Sun, Moon, ClipboardList, Flame, UserCircle2, Shield, CreditCard, Beaker, Plus } from 'lucide-react';
+import { Menu, X, Activity, LogOut, ChevronDown, User, Home, Sun, Moon, ClipboardList, Flame, UserCircle2, Shield, CreditCard, Beaker, Building2, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useMode, type DashboardMode } from '../context/ModeContext';
@@ -7,6 +7,7 @@ import { useProtocol } from '../context/ProtocolContext';
 import { useAudit } from '../context/AuditContext';
 import { useHeatmap } from '../context/HeatmapContext';
 import { useDemoMode } from '../context/DemoModeContext';
+import OrgSettingsDrawer from './dashboard/site/OrgSettingsDrawer';
 import AddProtocolModal from './dashboard/site/AddProtocolModal';
 import type { AuditStage } from '../types/audit';
 import type { AppView } from '../App';
@@ -23,6 +24,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [orgDrawerOpen, setOrgDrawerOpen] = useState(false);
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [protocolMenuOpen, setProtocolMenuOpen] = useState(false);
   const [addProtocolOpen, setAddProtocolOpen] = useState(false);
@@ -514,6 +516,16 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                         <CreditCard size={14} />
                         Billing
                       </button>
+                      <button
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          setOrgDrawerOpen(true);
+                        }}
+                        className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm ${isLight ? 'text-[#374152]/60 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.05]' : 'text-[#d2d7e0]/60 hover:text-white hover:bg-white/[0.05]'} rounded-lg transition-all duration-150`}
+                      >
+                        <Building2 size={14} />
+                        Organization
+                      </button>
                       <p className={`px-3 pt-3 pb-1.5 text-[11px] uppercase tracking-wider ${isLight ? 'text-[#374152]/35' : 'text-[#d2d7e0]/35'}`}>
                         Appearance
                       </p>
@@ -730,6 +742,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
       )}
     </header>
     {addProtocolOpen && <AddProtocolModal onClose={() => setAddProtocolOpen(false)} />}
+    {orgDrawerOpen && <OrgSettingsDrawer onClose={() => setOrgDrawerOpen(false)} />}
     </>
   );
 }
