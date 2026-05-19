@@ -1,9 +1,9 @@
 ---
 owner: ish-dev-piqc
 feature: cross-org-collaboration
-status: active
+status: in-review
 started: 2026-05-18
-target_pr:
+target_pr: 96
 ---
 
 # Cross-org collaboration — protocol-level multi-org access
