@@ -34,7 +34,7 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-function UploadForm({ onSuccess, isLight }: { onSuccess: () => void; isLight: boolean }) {
+export function UploadForm({ onSuccess, isLight }: { onSuccess: () => void; isLight: boolean }) {
   const [mode, setMode] = useState<UploadMode>('pdf');
   const [title, setTitle] = useState('');
   const [source, setSource] = useState('');

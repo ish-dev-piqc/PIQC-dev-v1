@@ -15,6 +15,8 @@ import {
 import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useSiteData } from '../../../context/SiteDataContext';
+import { useDemoMode } from '../../../context/DemoModeContext';
+import SiteWelcomePanel from './SiteWelcomePanel';
 import { useAuth } from '../../../context/AuthContext';
 import VisitDetailDrawer from './VisitDetailDrawer';
 import HeatIndicator from '../../heatmap/HeatIndicator';
@@ -136,6 +138,7 @@ type ViewMode = 'week' | 'month';
 export default function TodayTab({ onNavigateToVisits }: { onNavigateToVisits?: () => void } = {}) {
   const { theme } = useTheme();
   const { activeProtocol, protocols } = useProtocol();
+  const { demoActive } = useDemoMode();
   const { visits: allSiteVisits, participants: allSiteParticipants, refresh } = useSiteData();
   const { user } = useAuth();
   const isLight = theme === 'light';
@@ -284,6 +287,13 @@ export default function TodayTab({ onNavigateToVisits }: { onNavigateToVisits?: 
         : [...f.hiddenParticipants, id],
     }));
   };
+
+  // First-run state: user is in real mode (not demo), has no protocols
+  // anywhere, and the Home/All-protocols scope is active. Replace the empty
+  // calendar with the welcome panel.
+  if (!demoActive && protocols.length === 0 && isHome) {
+    return <SiteWelcomePanel />;
+  }
 
   return (
     <div className="h-full flex flex-col overflow-hidden">

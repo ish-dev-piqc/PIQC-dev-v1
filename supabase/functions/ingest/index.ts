@@ -1143,7 +1143,107 @@ Deno.serve(async (req: Request) => {
         .eq("id", docId)
         .maybeSingle();
 
-      const resolvedProtocolId = docRow?.protocol_id ?? null;
+      let resolvedProtocolId = docRow?.protocol_id ?? null;
+
+      // ---------------------------------------------------------------------
+      // B2.4: auto-create protocol when the extracted study_number didn't
+      // match any existing row for the caller's org.
+      //
+      // The documents_autotag_protocol_trg trigger above sets protocol_id
+      // only when a `protocols.study_number_normalized` match exists. If
+      // we still have a null protocol_id but Reducto pulled out a
+      // protocol_number, that means this is the caller's first time loading
+      // this study — create the protocols row, stamp it with the caller's
+      // ownership, then tag this document to it.
+      // ---------------------------------------------------------------------
+      if (!resolvedProtocolId && extractedFields) {
+        const studyNumber =
+          typeof extractedFields.protocol_number === "string"
+            ? extractedFields.protocol_number.trim()
+            : "";
+        if (studyNumber) {
+          const { data: profile } = await supabase
+            .from("user_profiles")
+            .select("organization")
+            .eq("id", userId)
+            .maybeSingle();
+          const ownerOrg = typeof profile?.organization === "string" ? profile.organization.trim() : "";
+
+          if (!ownerOrg) {
+            console.warn("[ingest] protocol_autocreate_skipped", {
+              document_id: docId,
+              reason: "user_profile_missing_organization",
+            });
+          } else {
+            const protoTitle =
+              (typeof extractedFields.protocol_title === "string" && extractedFields.protocol_title.trim()) ||
+              studyNumber;
+            const sponsorName =
+              (typeof extractedFields.sponsor_name === "string" && extractedFields.sponsor_name.trim()) ||
+              "Unknown sponsor";
+
+            // Map Reducto's study_phase to the DB enum.
+            const phaseRaw =
+              typeof extractedFields.study_phase === "string" ? extractedFields.study_phase : "";
+            const PHASE_MAP: Record<string, string> = {
+              "Phase I": "PHASE_1",
+              "Phase II": "PHASE_2",
+              "Phase III": "PHASE_3",
+              "Phase IV": "PHASE_4",
+              "Not applicable": "NOT_APPLICABLE",
+              "Unknown": "NOT_APPLICABLE",
+            };
+            const phaseEnum = PHASE_MAP[phaseRaw] ?? "NOT_APPLICABLE";
+
+            const { data: newProtocol, error: insertProtocolError } = await supabase
+              .from("protocols")
+              .insert({
+                study_number: studyNumber,
+                title: protoTitle,
+                sponsor: sponsorName,
+                owner_id: userId,
+                owner_org: ownerOrg,
+              })
+              .select("id")
+              .maybeSingle();
+
+            if (insertProtocolError) {
+              // 23505 = unique violation. Could happen if a parallel ingest
+              // beat us to it. Re-read documents to see if the trigger
+              // caught up on second pass.
+              console.warn("[ingest] protocol_autocreate_failed", {
+                document_id: docId,
+                study_number: studyNumber,
+                error: insertProtocolError.message,
+              });
+            } else if (newProtocol) {
+              // Seed the ACTIVE protocol_version. Site Mode consumes the
+              // active version's phase label.
+              await supabase.from("protocol_versions").insert({
+                protocol_id: newProtocol.id,
+                version_number: 1,
+                status: "ACTIVE",
+                clinical_trial_phase: phaseEnum,
+              });
+
+              // Tag this document.
+              await supabase
+                .from("documents")
+                .update({ protocol_id: newProtocol.id })
+                .eq("id", docId);
+
+              resolvedProtocolId = newProtocol.id;
+              console.log("[ingest] protocol_autocreated", {
+                document_id: docId,
+                protocol_id: newProtocol.id,
+                study_number: studyNumber,
+                owner_id: userId,
+              });
+            }
+          }
+        }
+      }
+
       const schedule = Array.isArray(extractedFields?.schedule_of_events)
         ? extractedFields!.schedule_of_events
         : [];
