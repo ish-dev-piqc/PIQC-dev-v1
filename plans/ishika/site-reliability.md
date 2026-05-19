@@ -1,9 +1,9 @@
 ---
 owner: ish-dev-piqc
 feature: site-reliability
-status: active
+status: in-review
 started: 2026-05-18
-target_pr:
+target_pr: 92
 ---
 
 # Site reliability: Reducto failure surfacing + visit-status durability
