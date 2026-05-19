@@ -1,9 +1,9 @@
 ---
 owner: ish-dev-piqc
 feature: site-team-and-visit-crud
-status: active
+status: in-review
 started: 2026-05-18
-target_pr:
+target_pr: 93
 ---
 
 # Site Mode: Team CRUD + manual visit scheduling
