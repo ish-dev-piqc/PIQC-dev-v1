@@ -964,9 +964,20 @@ Deno.serve(async (req: Request) => {
       }
 
       if (parseResult.jobId) {
-        extractedFields = await extractClinicalFields(parseResult.jobId, reductoKey).catch(
-          () => null,
-        );
+        // B3.1: Strict failure semantics. If Reducto Parse succeeded (we have
+        // chunks) but Extract fails, the document is half-baked — no
+        // extracted_fields means an empty SOTR drawer, no auto-tag, no
+        // schedule of events. Surface the failure clearly so the user can
+        // retry, rather than silently producing a status='ready' doc with
+        // nothing useful in it. Outer catch at ~line 1417 maps thrown
+        // errors to documents.status='failed' + error_message + 5xx.
+        try {
+          extractedFields = await extractClinicalFields(parseResult.jobId, reductoKey);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error("[ingest] extract_failed", { error: msg });
+          throw new Error(`Reducto Extract pass failed: ${msg}`);
+        }
       }
     } else if (content && typeof content === "string") {
       chunks = splitIntoChunks(content);
