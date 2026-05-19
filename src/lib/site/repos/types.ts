@@ -44,6 +44,21 @@ export type VisitPatch = Partial<{
   prior_note: string | null;
 }>;
 
+export interface NewProtocolInput {
+  study_number: string;
+  title: string;
+  sponsor: string;
+  // ProtocolContext's PHASE_LABELS keys (matches DB enum values).
+  clinical_trial_phase:
+    | 'PHASE_1'
+    | 'PHASE_1_2'
+    | 'PHASE_2'
+    | 'PHASE_2_3'
+    | 'PHASE_3'
+    | 'PHASE_4'
+    | 'NOT_APPLICABLE';
+}
+
 export interface NewVisitInput {
   protocol_id: string;
   participant_uuid: string; // UUID PK of site_participants
@@ -70,9 +85,11 @@ export interface NewTeamMemberInput {
 
 export type TeamMemberPatch = Partial<Omit<NewTeamMemberInput, 'protocol_id'>>;
 
+
 export interface SiteRepo {
   // Protocols
   fetchProtocols(): Promise<Result<Protocol[]>>;
+  createProtocol(input: NewProtocolInput): Promise<Result<Protocol>>;
 
   // Participants
   fetchParticipants(protocolId: string): Promise<Result<SiteParticipant[]>>;

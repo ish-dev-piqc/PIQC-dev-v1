@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Menu, X, Activity, LogOut, ChevronDown, User, Home, Sun, Moon, ClipboardList, Flame, UserCircle2, Shield, CreditCard, Beaker } from 'lucide-react';
+import { Menu, X, Activity, LogOut, ChevronDown, User, Home, Sun, Moon, ClipboardList, Flame, UserCircle2, Shield, CreditCard, Beaker, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useMode, type DashboardMode } from '../context/ModeContext';
@@ -7,6 +7,7 @@ import { useProtocol } from '../context/ProtocolContext';
 import { useAudit } from '../context/AuditContext';
 import { useHeatmap } from '../context/HeatmapContext';
 import { useDemoMode } from '../context/DemoModeContext';
+import AddProtocolModal from './dashboard/site/AddProtocolModal';
 import type { AuditStage } from '../types/audit';
 import type { AppView } from '../App';
 import type { SettingsSection } from './dashboard/Dashboard';
@@ -24,6 +25,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [protocolMenuOpen, setProtocolMenuOpen] = useState(false);
+  const [addProtocolOpen, setAddProtocolOpen] = useState(false);
   const [auditMenuOpen, setAuditMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const modeMenuRef = useRef<HTMLDivElement>(null);
@@ -200,8 +202,8 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
               Loading protocols…
             </div>
           ) : protocols.length === 0 ? (
-            <div className={`px-3 py-3 text-[11px] ${isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/40'}`}>
-              No protocols found
+            <div className={`px-3 py-3 text-[11px] ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/50'}`}>
+              No protocols yet. Add your first one below.
             </div>
           ) : protocols.map((p) => {
             const active = !isHomeScope && p.id === activeProtocol.id;
@@ -244,6 +246,23 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
               </button>
             );
           })}
+          <div className={`border-t ${isLight ? 'border-[#e2e8ee]' : 'border-white/[0.06]'}`}>
+            <button
+              type="button"
+              onClick={() => {
+                setProtocolMenuOpen(false);
+                setAddProtocolOpen(true);
+              }}
+              className={`w-full text-left px-3 py-2.5 flex items-center gap-2 transition-colors ${
+                isLight
+                  ? 'text-[#4a6fa5] hover:bg-[#4a6fa5]/[0.06]'
+                  : 'text-[#6e8fb5] hover:bg-white/[0.04]'
+              }`}
+            >
+              <Plus size={13} />
+              <span className="text-xs font-semibold">Add protocol</span>
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -406,6 +425,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
   const logoTextColor = 'text-fg-heading';
 
   return (
+    <>
     <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${headerBg}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
@@ -709,5 +729,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
         </div>
       )}
     </header>
+    {addProtocolOpen && <AddProtocolModal onClose={() => setAddProtocolOpen(false)} />}
+    </>
   );
 }

@@ -16,6 +16,7 @@ import type {
 import type { Protocol } from '../../../context/ProtocolContext';
 import type {
   NewParticipantInput,
+  NewProtocolInput,
   NewTeamMemberInput,
   NewVisitInput,
   ParticipantPatch,
@@ -68,6 +69,74 @@ function rowToProtocol(row: ProtocolRow): Protocol {
     phase: phaseLabel(activeVersion?.clinical_trial_phase),
     demoAnchorDate: row.demo_anchor_date,
   };
+}
+
+async function createProtocol(input: NewProtocolInput): Promise<Result<Protocol>> {
+  try {
+    // Resolve the caller's organization from user_profiles. owner_id is
+    // auth.uid() server-side; owner_org is a free-text mirror so org-mates
+    // can see each other's protocols (per RLS in 20260519000200).
+    const { data: sessionData } = await supabase.auth.getUser();
+    const userId = sessionData?.user?.id;
+    if (!userId) return { ok: false, error: 'Not authenticated.' };
+
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('organization')
+      .eq('id', userId)
+      .maybeSingle();
+    if (profileError) throw profileError;
+    const ownerOrg = profile?.organization ?? '';
+    if (!ownerOrg) {
+      return {
+        ok: false,
+        error: 'Complete your profile (organization) before creating a protocol.',
+      };
+    }
+
+    // Insert the protocol. RLS protocols_owner_modify enforces owner_id = auth.uid().
+    const { data: created, error: insertError } = await supabase
+      .from('protocols')
+      .insert({
+        study_number: input.study_number,
+        title: input.title,
+        sponsor: input.sponsor,
+        owner_id: userId,
+        owner_org: ownerOrg,
+      })
+      .select('id, study_number, title, sponsor, demo_anchor_date')
+      .single();
+    if (insertError) {
+      if (insertError.code === '23505') {
+        return { ok: false, error: `Study number "${input.study_number}" is already in use.` };
+      }
+      throw insertError;
+    }
+
+    // Insert the initial ACTIVE protocol_version. Site Mode only ever consumes
+    // the active version; further amendments are an audit-mode concern.
+    const { error: versionError } = await supabase.from('protocol_versions').insert({
+      protocol_id: created.id,
+      version_number: 1,
+      status: 'ACTIVE',
+      clinical_trial_phase: input.clinical_trial_phase,
+    });
+    if (versionError) throw versionError;
+
+    return {
+      ok: true,
+      data: {
+        id: created.id,
+        code: created.study_number ?? '',
+        name: created.title,
+        sponsor: created.sponsor,
+        phase: phaseLabel(input.clinical_trial_phase),
+        demoAnchorDate: created.demo_anchor_date,
+      },
+    };
+  } catch (e) {
+    return fail('createProtocol', e);
+  }
 }
 
 async function fetchProtocols(): Promise<Result<Protocol[]>> {
@@ -484,6 +553,7 @@ async function materializeVisits(protocolId: string): Promise<Result<Materialize
 
 export const realSiteRepo: SiteRepo = {
   fetchProtocols,
+  createProtocol,
   fetchParticipants,
   createParticipant,
   updateParticipant,

@@ -131,6 +131,35 @@ describe('demoSiteRepo — visits + protocols', () => {
     expect(codes).toEqual(['BRIGHTEN-2', 'CARDIAC-7', 'IMMUNE-14']);
   });
 
+  it('createProtocol appends a new row visible on next fetch', async () => {
+    const created = await demoSiteRepo.createProtocol({
+      study_number: 'TEST-001',
+      title: 'Test protocol',
+      sponsor: 'Test sponsor',
+      clinical_trial_phase: 'PHASE_2',
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    expect(created.data.code).toBe('TEST-001');
+    expect(created.data.phase).toBe('Phase 2');
+
+    const after = await demoSiteRepo.fetchProtocols();
+    if (!after.ok) throw new Error(after.error);
+    expect(after.data.some((p) => p.code === 'TEST-001')).toBe(true);
+  });
+
+  it('createProtocol rejects duplicate study_number', async () => {
+    const dup = await demoSiteRepo.createProtocol({
+      study_number: 'BRIGHTEN-2', // already in fixtures
+      title: 'Duplicate attempt',
+      sponsor: 'X',
+      clinical_trial_phase: 'PHASE_1',
+    });
+    expect(dup.ok).toBe(false);
+    if (dup.ok) return;
+    expect(dup.error).toMatch(/already in use/i);
+  });
+
   it('updateVisit flips status and persists', async () => {
     const visits = await demoSiteRepo.fetchVisitsForProtocol(BRIGHTEN);
     if (!visits.ok) throw new Error(visits.error);
