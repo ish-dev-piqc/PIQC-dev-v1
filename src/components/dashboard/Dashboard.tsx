@@ -532,6 +532,10 @@ export default function Dashboard({
               onTabChange?.('visits');
               if (!onTabChange) setInternalActiveTab('visits');
             }}
+            onNavigateToTeam={() => {
+              onTabChange?.('team');
+              if (!onTabChange) setInternalActiveTab('team');
+            }}
           />
         );
       case 'participants':

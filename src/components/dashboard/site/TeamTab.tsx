@@ -15,6 +15,7 @@ import { useProtocol } from '../../../context/ProtocolContext';
 import { useSiteData } from '../../../context/SiteDataContext';
 import { TEAM_ROLE_LABELS, TEAM_ROLE_SHORT } from '../../../lib/site/labels';
 import { deleteTeamMember } from '../../../lib/site/siteApi';
+import { isCertExpired, isCertExpiringSoon } from '../../../lib/site/dateUtils';
 import TeamFormDrawer from './TeamFormDrawer';
 import type {
   SiteTeamMember,
@@ -529,15 +530,4 @@ function formatDate(iso: string): string {
     day: 'numeric',
     year: 'numeric',
   });
-}
-
-function isCertExpired(iso: string): boolean {
-  const d = new Date(iso + (iso.length === 10 ? 'T12:00:00' : ''));
-  return d.getTime() < Date.now();
-}
-
-function isCertExpiringSoon(iso: string): boolean {
-  const d = new Date(iso + (iso.length === 10 ? 'T12:00:00' : ''));
-  const ms30days = 30 * 24 * 60 * 60 * 1000;
-  return d.getTime() > Date.now() && d.getTime() < Date.now() + ms30days;
 }

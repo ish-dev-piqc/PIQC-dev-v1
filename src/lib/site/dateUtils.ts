@@ -89,6 +89,30 @@ export function formatMonth(d: Date): string {
 }
 
 /**
+ * Cert-expiry helpers (used by TeamTab + dashboard alerts). The `iso` input
+ * is an ISO date string — either `yyyy-mm-dd` (no clock) or a full timestamp.
+ * For yyyy-mm-dd we anchor at noon local time so DST doesn't bump the date.
+ */
+function parseCertDate(iso: string): Date {
+  return new Date(iso + (iso.length === 10 ? 'T12:00:00' : ''));
+}
+
+export function isCertExpired(iso: string): boolean {
+  return parseCertDate(iso).getTime() < Date.now();
+}
+
+export function isCertExpiringSoon(iso: string, windowDays = 30): boolean {
+  const t = parseCertDate(iso).getTime();
+  const now = Date.now();
+  return t > now && t < now + windowDays * 24 * 60 * 60 * 1000;
+}
+
+export function daysUntilCertExpiry(iso: string): number {
+  const diffMs = parseCertDate(iso).getTime() - Date.now();
+  return Math.ceil(diffMs / (24 * 60 * 60 * 1000));
+}
+
+/**
  * Format a 7-day week range starting at `start` as a human-readable string,
  * e.g. "May 10 – 16, 2026" or "Dec 28, 2025 – Jan 3, 2026".
  */

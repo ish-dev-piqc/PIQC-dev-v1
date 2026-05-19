@@ -26,7 +26,8 @@ import { useSwipeDismiss } from '../../../hooks/useSwipeDismiss';
 import { getProtocolColorsById } from '../../../lib/site/protocolColors';
 import { fetchVisitTemplates, materializeVisits } from '../../../lib/site/siteApi';
 import AnchorDateModal from './AnchorDateModal';
-import type { SiteVisit, VisitStatus } from '../../../lib/site/types';
+import type { SiteVisit, SiteTeamMember, VisitStatus } from '../../../lib/site/types';
+import { ShieldAlert } from 'lucide-react';
 import {
   formatYmd,
   parseYmd,
@@ -41,6 +42,9 @@ import {
   formatFullDate,
   formatMonth,
   formatWeekRange,
+  isCertExpired,
+  isCertExpiringSoon,
+  daysUntilCertExpiry,
 } from '../../../lib/site/dateUtils';
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -135,11 +139,16 @@ function statusLabel(status: VisitStatus): string {
 
 type ViewMode = 'week' | 'month';
 
-export default function TodayTab({ onNavigateToVisits }: { onNavigateToVisits?: () => void } = {}) {
+interface TodayTabProps {
+  onNavigateToVisits?: () => void;
+  onNavigateToTeam?: () => void;
+}
+
+export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: TodayTabProps = {}) {
   const { theme } = useTheme();
   const { activeProtocol, protocols } = useProtocol();
   const { demoActive } = useDemoMode();
-  const { visits: allSiteVisits, participants: allSiteParticipants, refresh } = useSiteData();
+  const { visits: allSiteVisits, participants: allSiteParticipants, teamMembers: allSiteTeam, refresh } = useSiteData();
   const { user } = useAuth();
   const isLight = theme === 'light';
   const isHome = activeProtocol === null;
@@ -229,6 +238,20 @@ export default function TodayTab({ onNavigateToVisits }: { onNavigateToVisits?: 
     return visibleVisits.filter((v) => v.status === 'overdue' || v.status === 'closing_soon');
   }, [visibleVisits]);
 
+  // Team-member certification alerts — scoped the same way as visits. Hidden
+  // protocols filter out their members. Inactive members are skipped because
+  // they're already off the delegation log.
+  const certAlerts = useMemo(() => {
+    const hiddenProtos = new Set(filters.hiddenProtocols);
+    const scope = isHome
+      ? allSiteTeam.filter((m) => !hiddenProtos.has(m.protocol_id))
+      : allSiteTeam.filter((m) => m.protocol_id === activeProtocol?.id);
+    return scope
+      .filter((m) => m.status === 'ACTIVE' && m.certified_through)
+      .filter((m) => isCertExpired(m.certified_through) || isCertExpiringSoon(m.certified_through))
+      .sort((a, b) => daysUntilCertExpiry(a.certified_through) - daysUntilCertExpiry(b.certified_through));
+  }, [allSiteTeam, filters.hiddenProtocols, isHome, activeProtocol]);
+
   // Compute the date range for the current view, for empty-state detection.
   const viewRange = useMemo(() => {
     if (view === 'week') {
@@ -311,6 +334,15 @@ export default function TodayTab({ onNavigateToVisits }: { onNavigateToVisits?: 
           </div>
         </div>
       </div>
+
+      {/* Cert-expiry band */}
+      {certAlerts.length > 0 && (
+        <CertExpiryBand
+          items={certAlerts}
+          isLight={isLight}
+          onClick={onNavigateToTeam}
+        />
+      )}
 
       {/* Needs Attention band */}
       {needsAttention.length > 0 && (
@@ -576,6 +608,71 @@ function parseTime(t: string): number {
   if (ampm === 'PM' && hour < 12) hour += 12;
   if (ampm === 'AM' && hour === 12) hour = 0;
   return hour * 60 + min;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Cert-expiry band — surfaces TeamTab's cert warning on the dashboard so
+// coordinators don't have to open Team to know who's about to lapse.
+// ────────────────────────────────────────────────────────────────────────────
+
+interface CertExpiryBandProps {
+  items: SiteTeamMember[];
+  isLight: boolean;
+  onClick?: () => void;
+}
+
+function CertExpiryBand({ items, isLight, onClick }: CertExpiryBandProps) {
+  const expired = items.filter((m) => isCertExpired(m.certified_through));
+  const expiring = items.filter(
+    (m) => !isCertExpired(m.certified_through) && isCertExpiringSoon(m.certified_through),
+  );
+  const severe = expired.length > 0;
+
+  const tone = severe
+    ? isLight
+      ? 'bg-[#fff1f1] border-[#f3c4c4] text-[#7a1a1a]'
+      : 'bg-[#2a1414] border-[#a4423d]/40 text-[#f3c4c4]'
+    : isLight
+      ? 'bg-[#fff6e8] border-[#f0d49a] text-[#7a4a14]'
+      : 'bg-[#2a2014] border-[#c89548]/40 text-[#f0d49a]';
+
+  const Summary = () => {
+    const parts: string[] = [];
+    if (expired.length > 0) {
+      parts.push(`${expired.length} expired`);
+    }
+    if (expiring.length > 0) {
+      parts.push(`${expiring.length} expiring within 30 days`);
+    }
+    return <>Team certifications — {parts.join(', ')}.</>;
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      className={`mx-6 mt-3 mb-2 rounded-lg border px-4 py-3 text-left text-sm flex items-start gap-3 transition-colors ${tone} ${
+        onClick ? 'hover:brightness-95 cursor-pointer' : 'cursor-default'
+      }`}
+    >
+      <ShieldAlert size={18} className="flex-shrink-0 mt-0.5" />
+      <div className="min-w-0 flex-1">
+        <div className="font-semibold mb-0.5">
+          <Summary />
+        </div>
+        <div className="text-[12px] opacity-80 truncate">
+          {items.slice(0, 4).map((m) => m.name).join(', ')}
+          {items.length > 4 ? ` +${items.length - 4} more` : ''}
+        </div>
+      </div>
+      {onClick && (
+        <span className="text-[11px] uppercase tracking-wider font-semibold opacity-80 flex-shrink-0">
+          Open team
+        </span>
+      )}
+    </button>
+  );
 }
 
 // ────────────────────────────────────────────────────────────────────────────

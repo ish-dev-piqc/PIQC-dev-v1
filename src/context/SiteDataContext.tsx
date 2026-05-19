@@ -30,6 +30,24 @@ import type {
   ProtocolDocument,
 } from '../lib/site/types';
 
+// Enrich each visit's crossReferences with the document title, looked up
+// against the documents we just fetched. The cross_references JSON stores
+// document_id only — joining it client-side keeps the migration JSON small
+// and avoids re-stamping titles into every visit row.
+function enrichCrossRefs(visits: SiteVisit[], docs: ProtocolDocument[]): SiteVisit[] {
+  if (visits.length === 0) return visits;
+  const titleById = new Map(docs.map((d) => [d.id, d.title]));
+  return visits.map((v) => {
+    if (!v.crossReferences || v.crossReferences.length === 0) return v;
+    const refs = v.crossReferences.map((r) => ({
+      ...r,
+      document_title:
+        r.document_title ?? (r.document_id ? titleById.get(r.document_id) : undefined),
+    }));
+    return { ...v, crossReferences: refs };
+  });
+}
+
 interface SiteDataContextValue {
   participants: SiteParticipant[];
   visits: SiteVisit[];
@@ -95,7 +113,7 @@ export function SiteDataProvider({ children }: { children: React.ReactNode }) {
         }
         if (token !== fetchTokenRef.current) return;
         setParticipants(allParticipants);
-        setVisits(allVisits);
+        setVisits(enrichCrossRefs(allVisits, allDocs));
         setTeamMembers(allTeam);
         setDocuments(allDocs);
         return;
@@ -113,7 +131,7 @@ export function SiteDataProvider({ children }: { children: React.ReactNode }) {
       if (!tr.ok) throw new Error(tr.error);
       if (!dr.ok) throw new Error(dr.error);
       setParticipants(pr.data);
-      setVisits(vr.data);
+      setVisits(enrichCrossRefs(vr.data, dr.data));
       setTeamMembers(tr.data);
       setDocuments(dr.data);
     } catch (e) {

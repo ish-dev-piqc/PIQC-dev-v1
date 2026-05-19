@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, beforeAll, describe, it, expect, vi } from 'vitest';
 import {
   formatYmd,
   parseYmd,
@@ -13,6 +13,9 @@ import {
   formatFullDate,
   formatMonth,
   formatWeekRange,
+  isCertExpired,
+  isCertExpiringSoon,
+  daysUntilCertExpiry,
 } from './dateUtils';
 
 // =============================================================================
@@ -227,6 +230,46 @@ describe('formatFullDate', () => {
 describe('formatMonth', () => {
   it('renders long month and year', () => {
     expect(formatMonth(new Date(2026, 4, 14))).toBe('May 2026');
+  });
+});
+
+describe('cert-expiry helpers', () => {
+  // Lock Date.now so the tests are deterministic regardless of when they run.
+  beforeAll(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-19T12:00:00').getTime());
+  });
+  afterAll(() => {
+    vi.useRealTimers();
+  });
+
+  it('isCertExpired is true for a past date', () => {
+    expect(isCertExpired('2026-05-18')).toBe(true);
+  });
+
+  it('isCertExpired is false for a future date', () => {
+    expect(isCertExpired('2026-06-01')).toBe(false);
+  });
+
+  it('isCertExpiringSoon is true within the 30-day window', () => {
+    expect(isCertExpiringSoon('2026-05-25')).toBe(true);
+    expect(isCertExpiringSoon('2026-06-15')).toBe(true);
+  });
+
+  it('isCertExpiringSoon is false outside the 30-day window', () => {
+    expect(isCertExpiringSoon('2026-07-01')).toBe(false);
+  });
+
+  it('isCertExpiringSoon is false for already-expired dates', () => {
+    expect(isCertExpiringSoon('2026-05-18')).toBe(false);
+  });
+
+  it('daysUntilCertExpiry returns days remaining (rounded up)', () => {
+    expect(daysUntilCertExpiry('2026-05-29')).toBe(10);
+  });
+
+  it('daysUntilCertExpiry is negative for past dates', () => {
+    expect(daysUntilCertExpiry('2026-05-09')).toBeLessThan(0);
   });
 });
 

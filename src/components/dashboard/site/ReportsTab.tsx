@@ -6,8 +6,11 @@ import {
   Calendar,
   Users,
   Download,
+  FileText,
   TrendingUp,
 } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useSiteData } from '../../../context/SiteDataContext';
@@ -145,6 +148,92 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
     URL.revokeObjectURL(url);
   };
 
+  const exportPDF = () => {
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+    const scopeLabel = activeProtocol ? activeProtocol.code : 'All protocols';
+
+    doc.setFontSize(16);
+    doc.text(`PIQ Clinical — Site Report`, 40, 50);
+    doc.setFontSize(11);
+    doc.setTextColor(120);
+    doc.text(`${scopeLabel} · Generated ${todayStr}`, 40, 68);
+    doc.setTextColor(0);
+
+    const summaryRows: [string, string][] = [
+      ['Active participants', String(stats.activeParticipants)],
+      [
+        'Visit compliance',
+        stats.complianceRate !== null ? `${stats.complianceRate}%` : '—',
+      ],
+      ['Completed visits', String(stats.completed)],
+      ['Missed visits', String(stats.missed)],
+      ['Deviations', String(stats.deviations)],
+      ['Open deviations', String(stats.openDeviations)],
+      ['Upcoming visits', String(stats.upcoming)],
+    ];
+    autoTable(doc, {
+      startY: 90,
+      head: [['Metric', 'Value']],
+      body: summaryRows,
+      theme: 'grid',
+      headStyles: { fillColor: [55, 65, 82] },
+      styles: { fontSize: 10 },
+    });
+
+    if (!activeProtocol && protocolRows.length > 0) {
+      autoTable(doc, {
+        head: [['Protocol', 'Enrolled', 'Concluded', 'Completed', 'Missed', 'Deviations', 'Rate']],
+        body: protocolRows.map((r) => [
+          r.protocol.code,
+          String(r.enrolled),
+          String(r.total),
+          String(r.completed),
+          String(r.missed),
+          String(r.deviation),
+          r.rate !== null ? `${r.rate}%` : '—',
+        ]),
+        theme: 'grid',
+        headStyles: { fillColor: [55, 65, 82] },
+        styles: { fontSize: 9 },
+      });
+    }
+
+    if (deviationLog.length > 0) {
+      autoTable(doc, {
+        head: [['Date', 'Participant', 'Visit', 'Reason']],
+        body: deviationLog.map((v) => [
+          v.date,
+          v.participantId,
+          v.visitName,
+          v.deviationReason ?? '',
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [180, 80, 80] },
+        styles: { fontSize: 9 },
+        didDrawPage: (data) => {
+          if (data.cursor && data.pageNumber === 1) {
+            doc.setFontSize(11);
+            doc.text('Deviations', 40, data.cursor.y - 14);
+          }
+        },
+      });
+    }
+
+    if (missedLog.length > 0) {
+      autoTable(doc, {
+        head: [['Date', 'Participant', 'Visit']],
+        body: missedLog.map((v) => [v.date, v.participantId, v.visitName]),
+        theme: 'striped',
+        headStyles: { fillColor: [120, 90, 30] },
+        styles: { fontSize: 9 },
+      });
+    }
+
+    doc.save(
+      `report_${activeProtocol ? activeProtocol.code : 'all-protocols'}_${todayStr}.pdf`,
+    );
+  };
+
   return (
     <div className={`${pageBg} h-full overflow-y-auto`}>
       <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -170,6 +259,14 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
             >
               <Download size={13} />
               Export CSV
+            </button>
+            <button
+              type="button"
+              onClick={exportPDF}
+              className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+            >
+              <FileText size={13} />
+              Export PDF
             </button>
           </div>
         </div>

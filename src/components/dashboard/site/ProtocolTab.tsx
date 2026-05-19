@@ -152,6 +152,7 @@ export default function ProtocolTab() {
                     });
                   }}
                   isLight={isLight}
+                  lockedProtocolId={activeProtocol?.id}
                 />
               </div>
             )}
