@@ -128,14 +128,17 @@ async function updateParticipant(
 }
 
 async function deleteParticipant(uuid: string): Promise<Result<void>> {
-  getDemoStore().mutate((s) => ({
-    ...s,
-    participants: s.participants.filter((p) => p.uuid !== uuid),
-    visits: s.visits.filter((v) => {
-      const p = s.participants.find((pp) => pp.uuid === uuid);
-      return !p || v.participantId !== p.id;
-    }),
-  }));
+  getDemoStore().mutate((s) => {
+    // Resolve the participant_code once, not per-visit (O(n+m) vs O(n*m)).
+    const targetCode = s.participants.find((p) => p.uuid === uuid)?.id;
+    return {
+      ...s,
+      participants: s.participants.filter((p) => p.uuid !== uuid),
+      visits: targetCode
+        ? s.visits.filter((v) => v.participantId !== targetCode)
+        : s.visits,
+    };
+  });
   return ok(undefined);
 }
 

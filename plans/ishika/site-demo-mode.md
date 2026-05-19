@@ -17,6 +17,7 @@ Site Mode today reads from real Supabase tables that are also seeded with three 
 - `supabase/migrations/20260518*_user_profiles_is_demo_user.sql` (NEW)
 - `src/context/AuthContext.tsx`
 - `src/context/DemoModeContext.tsx` (NEW)
+- `src/context/__tests__/DemoModeContext.test.tsx` (NEW — locks the security gate behavior)
 - `src/context/SiteDataContext.tsx`
 - `src/context/ProtocolContext.tsx`
 - `src/lib/site/types.ts`

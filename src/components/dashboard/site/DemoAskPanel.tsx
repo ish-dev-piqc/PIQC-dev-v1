@@ -48,6 +48,11 @@ export default function DemoAskPanel() {
 
   const responses = DEMO_ASK_RESPONSES[activeProtocol.id] ?? [];
 
+  // Fuzzy substring match is safe here because matchKey only ever comes from
+  // the content-controlled SUGGESTIONS_PER_PROTOCOL constants below — never
+  // from user-typed input. If we later allow free-form questions in demo
+  // mode, tighten this (or use the FALLBACK response) so unrelated keys
+  // don't accidentally match.
   function answerFor(matchKey: string): DemoAskResponse {
     const direct = responses.find((r) => r.key === matchKey);
     if (direct) return direct;
