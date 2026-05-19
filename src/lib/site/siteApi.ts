@@ -14,9 +14,12 @@ import { realSiteRepo } from './repos/realSiteRepo';
 import type {
   NewParticipantInput,
   NewProtocolInput,
+  NewTeamMemberInput,
+  NewVisitInput,
   ParticipantPatch,
   Result,
   SiteRepo,
+  TeamMemberPatch,
   VisitPatch,
 } from './repos/types';
 import type {
@@ -33,7 +36,10 @@ export type {
   Result,
   NewParticipantInput,
   NewProtocolInput,
+  NewTeamMemberInput,
+  NewVisitInput,
   ParticipantPatch,
+  TeamMemberPatch,
   VisitPatch,
   SiteRepo,
 };
@@ -98,12 +104,28 @@ export function fetchVisitsForProtocol(protocolId: string): Promise<Result<SiteV
   return activeRepo.fetchVisitsForProtocol(protocolId);
 }
 
+export function createVisit(input: NewVisitInput): Promise<Result<SiteVisit>> {
+  return activeRepo.createVisit(input);
+}
+
 export function updateVisit(visitId: string, patch: VisitPatch): Promise<Result<SiteVisit>> {
   return activeRepo.updateVisit(visitId, patch);
 }
 
 export function fetchTeamMembers(protocolId: string): Promise<Result<SiteTeamMember[]>> {
   return activeRepo.fetchTeamMembers(protocolId);
+}
+
+export function createTeamMember(input: NewTeamMemberInput): Promise<Result<SiteTeamMember>> {
+  return activeRepo.createTeamMember(input);
+}
+
+export function updateTeamMember(id: string, patch: TeamMemberPatch): Promise<Result<SiteTeamMember>> {
+  return activeRepo.updateTeamMember(id, patch);
+}
+
+export function deleteTeamMember(id: string): Promise<Result<void>> {
+  return activeRepo.deleteTeamMember(id);
 }
 
 export function fetchProtocolDocuments(

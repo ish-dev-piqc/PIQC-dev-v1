@@ -59,6 +59,33 @@ export interface NewProtocolInput {
     | 'NOT_APPLICABLE';
 }
 
+export interface NewVisitInput {
+  protocol_id: string;
+  participant_uuid: string; // UUID PK of site_participants
+  date: string; // yyyy-mm-dd
+  visit_name: string;
+  study_day: number;
+  time_of_day?: string | null;
+  window_closes?: string | null;
+  status?: SiteVisit['status'];
+  procedures?: string[];
+  prior_note?: string | null;
+}
+
+export interface NewTeamMemberInput {
+  protocol_id: string;
+  name: string;
+  role: SiteTeamMember['role'];
+  email?: string | null;
+  delegated_tasks?: string[];
+  certified_through?: string | null;
+  status?: SiteTeamMember['status'];
+  notes?: string | null;
+}
+
+export type TeamMemberPatch = Partial<Omit<NewTeamMemberInput, 'protocol_id'>>;
+
+
 export interface SiteRepo {
   // Protocols
   fetchProtocols(): Promise<Result<Protocol[]>>;
@@ -72,10 +99,14 @@ export interface SiteRepo {
 
   // Visits
   fetchVisitsForProtocol(protocolId: string): Promise<Result<SiteVisit[]>>;
+  createVisit(input: NewVisitInput): Promise<Result<SiteVisit>>;
   updateVisit(visitId: string, patch: VisitPatch): Promise<Result<SiteVisit>>;
 
   // Team
   fetchTeamMembers(protocolId: string): Promise<Result<SiteTeamMember[]>>;
+  createTeamMember(input: NewTeamMemberInput): Promise<Result<SiteTeamMember>>;
+  updateTeamMember(id: string, patch: TeamMemberPatch): Promise<Result<SiteTeamMember>>;
+  deleteTeamMember(id: string): Promise<Result<void>>;
 
   // Documents
   fetchProtocolDocuments(protocolId: string): Promise<Result<ProtocolDocument[]>>;
