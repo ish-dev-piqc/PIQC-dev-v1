@@ -1,5 +1,8 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { fetchProtocols as fetchProtocolsApi, subscribeSiteRepo } from '../lib/site/siteApi';
+import { useDemoMode } from './DemoModeContext';
+import { getDemoStore } from '../lib/demo';
 
 export interface Protocol {
   id: string;
@@ -21,43 +24,9 @@ interface ProtocolContextValue {
 const PROTOCOL_STORAGE_KEY = 'piq-protocol-v1';
 const HOME_SENTINEL = 'home';
 
-const PHASE_LABELS: Record<string, string> = {
-  PHASE_1:       'Phase 1',
-  PHASE_1_2:     'Phase 1/2',
-  PHASE_2:       'Phase 2',
-  PHASE_2_3:     'Phase 2/3',
-  PHASE_3:       'Phase 3',
-  PHASE_4:       'Phase 4',
-  NOT_APPLICABLE: 'N/A',
-};
-
-function phaseLabel(raw: string | null | undefined): string {
-  return raw ? (PHASE_LABELS[raw] ?? raw) : '';
-}
-
-// ---------------------------------------------------------------------------
-// Row shape returned by the Supabase query
-// ---------------------------------------------------------------------------
-interface ProtocolRow {
-  id: string;
-  study_number: string | null;
-  title: string;
-  sponsor: string;
-  demo_anchor_date: string | null;
-  protocol_versions: { clinical_trial_phase: string; status: string }[];
-}
-
-function rowToProtocol(row: ProtocolRow): Protocol {
-  const activeVersion = row.protocol_versions.find((v) => v.status === 'ACTIVE');
-  return {
-    id: row.id,
-    code: row.study_number ?? '',
-    name: row.title,
-    sponsor: row.sponsor,
-    phase: phaseLabel(activeVersion?.clinical_trial_phase),
-    demoAnchorDate: row.demo_anchor_date,
-  };
-}
+// rowToProtocol + the supabase select for protocols moved to realSiteRepo.
+// This provider just calls fetchProtocols() and the active SiteRepo handles
+// the rest (real → Supabase; demo → in-memory store).
 
 // ---------------------------------------------------------------------------
 // Context default (empty — provider always fills this in)
@@ -70,6 +39,7 @@ const ProtocolContext = createContext<ProtocolContextValue>({
 });
 
 export function ProtocolProvider({ children }: { children: React.ReactNode }) {
+  const { demoActive } = useDemoMode();
   const [protocols, setProtocols] = useState<Protocol[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeId, setActiveId] = useState<string>(() => {
@@ -89,36 +59,47 @@ export function ProtocolProvider({ children }: { children: React.ReactNode }) {
     }
   }, [activeId]);
 
-  // Fetch protocols + realtime subscription
+  // Load protocols via the active SiteRepo (Supabase in real mode, demo store
+  // in demo mode). Re-fetch on repo swap so flipping the demo toggle swaps
+  // the picker contents immediately.
   useEffect(() => {
+    let cancelled = false;
+
     async function load() {
       setIsLoading(true);
-      const { data, error } = await supabase
-        .from('protocols')
-        .select('id, study_number, title, sponsor, demo_anchor_date, protocol_versions(clinical_trial_phase, status)')
-        .order('created_at', { ascending: true });
-
-      if (error) {
-        console.error('[ProtocolContext] fetch error:', error);
-      } else if (data) {
-        setProtocols((data as unknown as ProtocolRow[]).map(rowToProtocol));
+      const result = await fetchProtocolsApi();
+      if (cancelled) return;
+      if (!result.ok) {
+        console.error('[ProtocolContext] fetch error:', result.error);
+      } else {
+        setProtocols(result.data);
       }
       setIsLoading(false);
     }
 
     load();
+    const unsubRepoSwap = subscribeSiteRepo(load);
 
-    const channel = supabase
-      .channel('protocols-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'protocols' }, () => {
-        load();
-      })
-      .subscribe();
+    // Realtime: Supabase channel in real mode, demoStore subscription in demo.
+    let cleanupChannel: (() => void) | undefined;
+    if (demoActive) {
+      cleanupChannel = getDemoStore().subscribe(load);
+    } else {
+      const channel = supabase
+        .channel('protocols-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'protocols' }, load)
+        .subscribe();
+      cleanupChannel = () => {
+        supabase.removeChannel(channel);
+      };
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      unsubRepoSwap();
+      cleanupChannel?.();
     };
-  }, []);
+  }, [demoActive]);
 
   // If the stored ID is no longer in the list after load, it resolves to null (Home).
   const activeProtocol =

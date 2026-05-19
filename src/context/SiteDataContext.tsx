@@ -2,44 +2,33 @@
 // SiteDataContext — shared in-memory cache for Site Mode data.
 //
 // Holds participants, visits, team, and documents scoped to the active
-// protocol. Re-fetches when activeProtocol.id changes. Subscribes to
-// postgres_changes on each table for realtime updates.
+// protocol. Re-fetches when activeProtocol.id changes or when the underlying
+// SiteRepo swaps (demo toggle). Subscribes to:
+//   - postgres_changes on each table in real mode
+//   - demoStore in demo mode
 //
 // Cross-protocol scope (activeProtocol === null): fetches all rows so the
 // Reports / Today cross-protocol view has data.
-//
-// A "Demo data" toggle preserved for offline screenshots — when on, the
-// `visits` stream is synthesised from MOCK_VISITS. Participants, team, and
-// documents always come from Supabase.
 // =============================================================================
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useProtocol } from './ProtocolContext';
+import { useDemoMode } from './DemoModeContext';
 import {
   fetchParticipants,
   fetchVisitsForProtocol,
   fetchTeamMembers,
   fetchProtocolDocuments,
+  subscribeSiteRepo,
 } from '../lib/site/siteApi';
+import { getDemoStore } from '../lib/demo';
 import type {
   SiteParticipant,
   SiteVisit,
   SiteTeamMember,
   ProtocolDocument,
 } from '../lib/site/types';
-import { MOCK_VISITS } from '../lib/mockCalendarData';
-
-const MOCK_TOGGLE_KEY = 'piq-site-mock-calendar-v1';
-
-// Mock-mode protocol-id mapping. The MOCK_VISITS fixture uses synthetic
-// protocol IDs ("proto-001" etc); we map those back to a live protocol's
-// code so single-protocol scoping still finds rows.
-const MOCK_TO_CODE: Record<string, string> = {
-  'proto-001': 'BRIGHTEN-2',
-  'proto-002': 'CARDIAC-7',
-  'proto-003': 'IMMUNE-14',
-};
 
 interface SiteDataContextValue {
   participants: SiteParticipant[];
@@ -49,11 +38,6 @@ interface SiteDataContextValue {
   loading: boolean;
   error: string | null;
   refresh: () => void;
-  // Demo toggle — controls only the visits stream (calendar / visits list /
-  // reports stat cards). Participants, team, and documents always come from
-  // Supabase.
-  useMockCalendar: boolean;
-  setUseMockCalendar: (v: boolean) => void;
 }
 
 const SiteDataContext = createContext<SiteDataContextValue>({
@@ -64,63 +48,17 @@ const SiteDataContext = createContext<SiteDataContextValue>({
   loading: false,
   error: null,
   refresh: () => {},
-  useMockCalendar: false,
-  setUseMockCalendar: () => {},
 });
 
 export function SiteDataProvider({ children }: { children: React.ReactNode }) {
   const { activeProtocol, protocols } = useProtocol();
+  const { demoActive } = useDemoMode();
   const [participants, setParticipants] = useState<SiteParticipant[]>([]);
-  const [realVisits, setRealVisits] = useState<SiteVisit[]>([]);
+  const [visits, setVisits] = useState<SiteVisit[]>([]);
   const [teamMembers, setTeamMembers] = useState<SiteTeamMember[]>([]);
   const [documents, setDocuments] = useState<ProtocolDocument[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const [useMockCalendar, setUseMockCalendarState] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem(MOCK_TOGGLE_KEY) === '1';
-    } catch {
-      return false;
-    }
-  });
-  const setUseMockCalendar = useCallback((v: boolean) => {
-    setUseMockCalendarState(v);
-    try {
-      localStorage.setItem(MOCK_TOGGLE_KEY, v ? '1' : '0');
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  // When the toggle is ON we synthesise a SiteVisit[] from MOCK_VISITS,
-  // remapping the synthetic mock protocol IDs to whichever live protocol's
-  // code matches so single-protocol scoping still produces rows.
-  const visits: SiteVisit[] = useMemo(() => {
-    if (!useMockCalendar) return realVisits;
-    const codeToId: Record<string, string> = {};
-    for (const p of protocols) {
-      if (p.code) codeToId[p.code] = p.id;
-    }
-    return MOCK_VISITS.map((v) => {
-      const code = MOCK_TO_CODE[v.protocolId];
-      const remappedId = code && codeToId[code] ? codeToId[code] : v.protocolId;
-      return {
-        id: v.id,
-        date: v.date,
-        time: v.time,
-        protocolId: remappedId,
-        participantId: v.participantId,
-        studyDay: v.studyDay,
-        visitName: v.visitName,
-        windowCloses: v.windowCloses,
-        status: v.status,
-        procedures: v.procedures,
-        priorNote: v.priorNote,
-        deviationReason: v.deviationReason,
-      };
-    });
-  }, [useMockCalendar, realVisits, protocols]);
 
   // ---------------------------------------------------------------------------
   // Fetch on activeProtocol change. Use a ref so concurrent fetches don't
@@ -157,7 +95,7 @@ export function SiteDataProvider({ children }: { children: React.ReactNode }) {
         }
         if (token !== fetchTokenRef.current) return;
         setParticipants(allParticipants);
-        setRealVisits(allVisits);
+        setVisits(allVisits);
         setTeamMembers(allTeam);
         setDocuments(allDocs);
         return;
@@ -175,7 +113,7 @@ export function SiteDataProvider({ children }: { children: React.ReactNode }) {
       if (!tr.ok) throw new Error(tr.error);
       if (!dr.ok) throw new Error(dr.error);
       setParticipants(pr.data);
-      setRealVisits(vr.data);
+      setVisits(vr.data);
       setTeamMembers(tr.data);
       setDocuments(dr.data);
     } catch (e) {
@@ -190,8 +128,22 @@ export function SiteDataProvider({ children }: { children: React.ReactNode }) {
     refresh();
   }, [refresh]);
 
-  // Realtime: one channel per active scope. Re-runs when scope changes.
+  // Re-fetch when the active site repo swaps (demo toggle flipped). Without
+  // this, flipping the toggle leaves cached data from the previous repo on
+  // screen until the next protocol switch.
   useEffect(() => {
+    return subscribeSiteRepo(() => refresh());
+  }, [refresh]);
+
+  // Realtime: in real mode, subscribe to Supabase postgres changes per scope.
+  // In demo mode, subscribe to demoStore changes so mutations re-trigger
+  // refresh without going through Supabase realtime (which the demo data
+  // never hits anyway).
+  useEffect(() => {
+    if (demoActive) {
+      return getDemoStore().subscribe(() => refresh());
+    }
+
     const channel = supabase.channel(`site-data-${activeProtocol?.id ?? 'all'}`);
     const pid = activeProtocol?.id ?? null;
 
@@ -230,7 +182,7 @@ export function SiteDataProvider({ children }: { children: React.ReactNode }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [activeProtocol?.id, refresh]);
+  }, [activeProtocol?.id, refresh, demoActive]);
 
   return (
     <SiteDataContext.Provider
@@ -242,8 +194,6 @@ export function SiteDataProvider({ children }: { children: React.ReactNode }) {
         loading,
         error,
         refresh,
-        useMockCalendar,
-        setUseMockCalendar,
       }}
     >
       {children}

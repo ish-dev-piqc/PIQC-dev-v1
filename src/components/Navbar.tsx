@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { Menu, X, Activity, LogOut, ChevronDown, User, Home, Sun, Moon, ClipboardList, Flame, UserCircle2, Shield, CreditCard } from 'lucide-react';
+import { Menu, X, Activity, LogOut, ChevronDown, User, Home, Sun, Moon, ClipboardList, Flame, UserCircle2, Shield, CreditCard, Beaker } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useMode, type DashboardMode } from '../context/ModeContext';
 import { useProtocol } from '../context/ProtocolContext';
 import { useAudit } from '../context/AuditContext';
 import { useHeatmap } from '../context/HeatmapContext';
+import { useDemoMode } from '../context/DemoModeContext';
 import type { AuditStage } from '../types/audit';
 import type { AppView } from '../App';
 import type { SettingsSection } from './dashboard/Dashboard';
@@ -36,6 +37,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
   const { mode, setMode } = useMode();
   const { protocols, isLoading: protocolsLoading, activeProtocol, setActiveProtocol } = useProtocol();
   const { audits, activeAudit, setActiveAudit } = useAudit();
+  const { demoActive, setDemoActive, canUseDemo } = useDemoMode();
 
   const STAGE_LABELS: Record<AuditStage, string> = {
     INTAKE: 'Intake',
@@ -447,6 +449,14 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                   <span className={`text-sm ${isLight ? 'text-[#374152]/60 group-hover:text-[#1a1f28]' : 'text-[#d2d7e0]/60 group-hover:text-white'} transition-colors max-w-[140px] truncate`}>
                     {user?.email ?? 'Account'}
                   </span>
+                  {demoActive && (
+                    <span
+                      className={`text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border ${isLight ? 'bg-amber-500/10 border-amber-500/30 text-amber-700' : 'bg-amber-400/15 border-amber-400/30 text-amber-300'}`}
+                      title="Demo mode active — showing sample data"
+                    >
+                      Demo
+                    </span>
+                  )}
                   <ChevronDown
                     size={13}
                     className={`${isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/40'} transition-transform duration-200 ${userMenuOpen ? 'rotate-180' : ''}`}
@@ -515,6 +525,29 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                           {heatmapEnabled ? 'On' : 'Off'}
                         </span>
                       </button>
+                      {canUseDemo && (
+                        <button
+                          onClick={() => setDemoActive(!demoActive)}
+                          className={`flex items-center justify-between gap-2.5 w-full px-3 py-2 text-sm ${isLight ? 'text-[#374152]/60 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.05]' : 'text-[#d2d7e0]/60 hover:text-white hover:bg-white/[0.05]'} rounded-lg transition-all duration-150`}
+                          title="Show sample data instead of real Supabase rows. For pitches and previews only."
+                        >
+                          <span className="inline-flex items-center gap-2.5">
+                            <Beaker size={14} />
+                            Demo mode
+                          </span>
+                          <span className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
+                            demoActive
+                              ? isLight
+                                ? 'bg-amber-500/10 border-amber-500/30 text-amber-700'
+                                : 'bg-amber-400/15 border-amber-400/30 text-amber-300'
+                              : isLight
+                              ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]/55'
+                              : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]/45'
+                          }`}>
+                            {demoActive ? 'On' : 'Off'}
+                          </span>
+                        </button>
+                      )}
                       <div className={`my-1 h-px ${isLight ? 'bg-[#e2e8ee]' : 'bg-white/[0.05]'}`} />
                       <button
                         onClick={handleSignOut}

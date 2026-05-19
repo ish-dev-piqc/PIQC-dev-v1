@@ -15,11 +15,7 @@ import { useProtocol } from '../../../context/ProtocolContext';
 import { useSiteData } from '../../../context/SiteDataContext';
 import VisitDetailDrawer from './VisitDetailDrawer';
 import { getProtocolColorsById } from '../../../lib/site/protocolColors';
-import MockCalendarToggle, { MockCalendarBanner } from './MockCalendarToggle';
-import {
-  type CalendarVisit,
-  type VisitStatus,
-} from '../../../lib/mockCalendarData';
+import type { SiteVisit, VisitStatus } from '../../../lib/site/types';
 
 // =============================================================================
 // VisitsTab — Site Mode list of visits scoped to the active protocol.
@@ -65,7 +61,7 @@ export default function VisitsTab() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [groupMode, setGroupMode] = useState<GroupMode>('date');
-  const [openVisit, setOpenVisit] = useState<CalendarVisit | null>(null);
+  const [openVisit, setOpenVisit] = useState<SiteVisit | null>(null);
 
   // Scope to the active protocol — empty array when no protocol selected so
   // the hooks below can run unconditionally.
@@ -151,7 +147,7 @@ export default function VisitsTab() {
 
   // Group visits for rendering
   const groups = useMemo(() => {
-    const map = new Map<string, CalendarVisit[]>();
+    const map = new Map<string, SiteVisit[]>();
     for (const v of visible) {
       const key = groupMode === 'date' ? v.date : v.participantId;
       const arr = map.get(key) ?? [];
@@ -181,11 +177,8 @@ export default function VisitsTab() {
           <p className={`${subColor} text-sm`}>
             {scoped.length} total · {counts.UPCOMING} upcoming
           </p>
-          <MockCalendarToggle />
         </div>
       </div>
-
-      <MockCalendarBanner />
 
       {/* Filter row */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -350,7 +343,7 @@ export default function VisitsTab() {
 // ============================================================================
 
 interface VisitRowProps {
-  visit: CalendarVisit;
+  visit: SiteVisit;
   showDate: boolean;
   showParticipant: boolean;
   protocols: { id: string; code: string }[];

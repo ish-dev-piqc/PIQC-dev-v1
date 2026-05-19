@@ -10,10 +10,7 @@ import {
 import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useSiteData } from '../../../context/SiteDataContext';
-import {
-  TEAM_ROLE_LABELS,
-  TEAM_ROLE_SHORT,
-} from '../../../lib/mockSiteData';
+import { TEAM_ROLE_LABELS, TEAM_ROLE_SHORT } from '../../../lib/site/labels';
 import type {
   SiteTeamMember,
   TeamRole,

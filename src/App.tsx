@@ -13,6 +13,7 @@ import ProfileCompletion from './components/auth/ProfileCompletion';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { ModeProvider } from './context/ModeContext';
+import { DemoModeProvider } from './context/DemoModeContext';
 import { ProtocolProvider } from './context/ProtocolContext';
 import { SiteDataProvider } from './context/SiteDataContext';
 import { AuditProvider } from './context/AuditContext';
@@ -146,19 +147,21 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <ModeProvider>
-          <ProtocolProvider>
-            <SiteDataProvider>
-              <AuditProvider>
-                <AuditDataProvider>
-                  <HeatmapProvider>
-                    <AppContent />
-                  </HeatmapProvider>
-                </AuditDataProvider>
-              </AuditProvider>
-            </SiteDataProvider>
-          </ProtocolProvider>
-        </ModeProvider>
+        <DemoModeProvider>
+          <ModeProvider>
+            <ProtocolProvider>
+              <SiteDataProvider>
+                <AuditProvider>
+                  <AuditDataProvider>
+                    <HeatmapProvider>
+                      <AppContent />
+                    </HeatmapProvider>
+                  </AuditDataProvider>
+                </AuditProvider>
+              </SiteDataProvider>
+            </ProtocolProvider>
+          </ModeProvider>
+        </DemoModeProvider>
       </AuthProvider>
     </ThemeProvider>
   );
