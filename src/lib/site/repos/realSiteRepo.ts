@@ -16,9 +16,13 @@ import type {
 import type { Protocol } from '../../../context/ProtocolContext';
 import type {
   NewParticipantInput,
+  NewProtocolInput,
+  NewTeamMemberInput,
+  NewVisitInput,
   ParticipantPatch,
   Result,
   SiteRepo,
+  TeamMemberPatch,
   VisitPatch,
 } from './types';
 
@@ -65,6 +69,74 @@ function rowToProtocol(row: ProtocolRow): Protocol {
     phase: phaseLabel(activeVersion?.clinical_trial_phase),
     demoAnchorDate: row.demo_anchor_date,
   };
+}
+
+async function createProtocol(input: NewProtocolInput): Promise<Result<Protocol>> {
+  try {
+    // Resolve the caller's organization from user_profiles. owner_id is
+    // auth.uid() server-side; owner_org is a free-text mirror so org-mates
+    // can see each other's protocols (per RLS in 20260519000200).
+    const { data: sessionData } = await supabase.auth.getUser();
+    const userId = sessionData?.user?.id;
+    if (!userId) return { ok: false, error: 'Not authenticated.' };
+
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('organization')
+      .eq('id', userId)
+      .maybeSingle();
+    if (profileError) throw profileError;
+    const ownerOrg = profile?.organization ?? '';
+    if (!ownerOrg) {
+      return {
+        ok: false,
+        error: 'Complete your profile (organization) before creating a protocol.',
+      };
+    }
+
+    // Insert the protocol. RLS protocols_owner_modify enforces owner_id = auth.uid().
+    const { data: created, error: insertError } = await supabase
+      .from('protocols')
+      .insert({
+        study_number: input.study_number,
+        title: input.title,
+        sponsor: input.sponsor,
+        owner_id: userId,
+        owner_org: ownerOrg,
+      })
+      .select('id, study_number, title, sponsor, demo_anchor_date')
+      .single();
+    if (insertError) {
+      if (insertError.code === '23505') {
+        return { ok: false, error: `Study number "${input.study_number}" is already in use.` };
+      }
+      throw insertError;
+    }
+
+    // Insert the initial ACTIVE protocol_version. Site Mode only ever consumes
+    // the active version; further amendments are an audit-mode concern.
+    const { error: versionError } = await supabase.from('protocol_versions').insert({
+      protocol_id: created.id,
+      version_number: 1,
+      status: 'ACTIVE',
+      clinical_trial_phase: input.clinical_trial_phase,
+    });
+    if (versionError) throw versionError;
+
+    return {
+      ok: true,
+      data: {
+        id: created.id,
+        code: created.study_number ?? '',
+        name: created.title,
+        sponsor: created.sponsor,
+        phase: phaseLabel(input.clinical_trial_phase),
+        demoAnchorDate: created.demo_anchor_date,
+      },
+    };
+  } catch (e) {
+    return fail('createProtocol', e);
+  }
 }
 
 async function fetchProtocols(): Promise<Result<Protocol[]>> {
@@ -316,6 +388,84 @@ function rowToTeam(row: TeamRow): SiteTeamMember {
   };
 }
 
+const TEAM_COLUMNS =
+  'id, protocol_id, name, role, email, delegated_tasks, certified_through, added_at, status, notes';
+
+async function createTeamMember(input: NewTeamMemberInput): Promise<Result<SiteTeamMember>> {
+  try {
+    const { data, error } = await supabase
+      .from('site_team_members')
+      .insert({
+        protocol_id: input.protocol_id,
+        name: input.name,
+        role: input.role,
+        email: input.email ?? null,
+        delegated_tasks: input.delegated_tasks ?? [],
+        certified_through: input.certified_through ?? null,
+        status: input.status ?? 'ACTIVE',
+        notes: input.notes ?? null,
+      })
+      .select(TEAM_COLUMNS)
+      .single();
+    if (error) throw error;
+    return { ok: true, data: rowToTeam(data as TeamRow) };
+  } catch (e) {
+    return fail('createTeamMember', e);
+  }
+}
+
+async function updateTeamMember(id: string, patch: TeamMemberPatch): Promise<Result<SiteTeamMember>> {
+  try {
+    const { data, error } = await supabase
+      .from('site_team_members')
+      .update(patch)
+      .eq('id', id)
+      .select(TEAM_COLUMNS)
+      .single();
+    if (error) throw error;
+    return { ok: true, data: rowToTeam(data as TeamRow) };
+  } catch (e) {
+    return fail('updateTeamMember', e);
+  }
+}
+
+async function deleteTeamMember(id: string): Promise<Result<void>> {
+  try {
+    const { error } = await supabase.from('site_team_members').delete().eq('id', id);
+    if (error) throw error;
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return fail('deleteTeamMember', e);
+  }
+}
+
+async function createVisit(input: NewVisitInput): Promise<Result<SiteVisit>> {
+  try {
+    const { data, error } = await supabase
+      .from('site_visits')
+      .insert({
+        protocol_id: input.protocol_id,
+        participant_id: input.participant_uuid,
+        date: input.date,
+        study_day: input.study_day,
+        visit_name: input.visit_name,
+        time_of_day: input.time_of_day ?? null,
+        window_closes: input.window_closes ?? null,
+        status: input.status ?? 'scheduled',
+        procedures: input.procedures ?? [],
+        prior_note: input.prior_note ?? null,
+        // template_id and is_seed intentionally omitted — manually-scheduled
+        // visits stay outside the materialize_protocol_visits flow.
+      })
+      .select(VISIT_COLUMNS)
+      .single();
+    if (error) throw error;
+    return { ok: true, data: rowToVisit(data as unknown as VisitRow) };
+  } catch (e) {
+    return fail('createVisit', e);
+  }
+}
+
 async function fetchTeamMembers(protocolId: string): Promise<Result<SiteTeamMember[]>> {
   try {
     const { data, error } = await supabase
@@ -403,13 +553,18 @@ async function materializeVisits(protocolId: string): Promise<Result<Materialize
 
 export const realSiteRepo: SiteRepo = {
   fetchProtocols,
+  createProtocol,
   fetchParticipants,
   createParticipant,
   updateParticipant,
   deleteParticipant,
   fetchVisitsForProtocol,
+  createVisit,
   updateVisit,
   fetchTeamMembers,
+  createTeamMember,
+  updateTeamMember,
+  deleteTeamMember,
   fetchProtocolDocuments,
   fetchVisitTemplates,
   setAnchorDate,

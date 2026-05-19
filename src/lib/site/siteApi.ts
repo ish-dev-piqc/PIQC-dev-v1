@@ -13,9 +13,13 @@
 import { realSiteRepo } from './repos/realSiteRepo';
 import type {
   NewParticipantInput,
+  NewProtocolInput,
+  NewTeamMemberInput,
+  NewVisitInput,
   ParticipantPatch,
   Result,
   SiteRepo,
+  TeamMemberPatch,
   VisitPatch,
 } from './repos/types';
 import type {
@@ -28,7 +32,17 @@ import type {
 } from './types';
 import type { Protocol } from '../../context/ProtocolContext';
 
-export type { Result, NewParticipantInput, ParticipantPatch, VisitPatch, SiteRepo };
+export type {
+  Result,
+  NewParticipantInput,
+  NewProtocolInput,
+  NewTeamMemberInput,
+  NewVisitInput,
+  ParticipantPatch,
+  TeamMemberPatch,
+  VisitPatch,
+  SiteRepo,
+};
 
 let activeRepo: SiteRepo = realSiteRepo;
 const listeners = new Set<() => void>();
@@ -63,6 +77,10 @@ export function fetchProtocols(): Promise<Result<Protocol[]>> {
   return activeRepo.fetchProtocols();
 }
 
+export function createProtocol(input: NewProtocolInput): Promise<Result<Protocol>> {
+  return activeRepo.createProtocol(input);
+}
+
 export function fetchParticipants(protocolId: string): Promise<Result<SiteParticipant[]>> {
   return activeRepo.fetchParticipants(protocolId);
 }
@@ -86,12 +104,28 @@ export function fetchVisitsForProtocol(protocolId: string): Promise<Result<SiteV
   return activeRepo.fetchVisitsForProtocol(protocolId);
 }
 
+export function createVisit(input: NewVisitInput): Promise<Result<SiteVisit>> {
+  return activeRepo.createVisit(input);
+}
+
 export function updateVisit(visitId: string, patch: VisitPatch): Promise<Result<SiteVisit>> {
   return activeRepo.updateVisit(visitId, patch);
 }
 
 export function fetchTeamMembers(protocolId: string): Promise<Result<SiteTeamMember[]>> {
   return activeRepo.fetchTeamMembers(protocolId);
+}
+
+export function createTeamMember(input: NewTeamMemberInput): Promise<Result<SiteTeamMember>> {
+  return activeRepo.createTeamMember(input);
+}
+
+export function updateTeamMember(id: string, patch: TeamMemberPatch): Promise<Result<SiteTeamMember>> {
+  return activeRepo.updateTeamMember(id, patch);
+}
+
+export function deleteTeamMember(id: string): Promise<Result<void>> {
+  return activeRepo.deleteTeamMember(id);
 }
 
 export function fetchProtocolDocuments(

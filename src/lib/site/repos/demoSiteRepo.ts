@@ -17,9 +17,13 @@ import type {
 import type { Protocol } from '../../../context/ProtocolContext';
 import type {
   NewParticipantInput,
+  NewProtocolInput,
+  NewTeamMemberInput,
+  NewVisitInput,
   ParticipantPatch,
   Result,
   SiteRepo,
+  TeamMemberPatch,
   VisitPatch,
 } from './types';
 
@@ -44,6 +48,34 @@ function newUuid(): string {
 
 async function fetchProtocols(): Promise<Result<Protocol[]>> {
   return ok(getDemoStore().getState().protocols);
+}
+
+const PHASE_LABEL_FOR_DEMO: Record<NewProtocolInput['clinical_trial_phase'], string> = {
+  PHASE_1: 'Phase 1',
+  PHASE_1_2: 'Phase 1/2',
+  PHASE_2: 'Phase 2',
+  PHASE_2_3: 'Phase 2/3',
+  PHASE_3: 'Phase 3',
+  PHASE_4: 'Phase 4',
+  NOT_APPLICABLE: 'N/A',
+};
+
+async function createProtocol(input: NewProtocolInput): Promise<Result<Protocol>> {
+  const store = getDemoStore();
+  const dup = store.getState().protocols.find((p) => p.code === input.study_number);
+  if (dup) {
+    return { ok: false, error: `Study number "${input.study_number}" is already in use.` };
+  }
+  const created: Protocol = {
+    id: newUuid(),
+    code: input.study_number,
+    name: input.title,
+    sponsor: input.sponsor,
+    phase: PHASE_LABEL_FOR_DEMO[input.clinical_trial_phase],
+    demoAnchorDate: null,
+  };
+  store.mutate((s) => ({ ...s, protocols: [...s.protocols, created] }));
+  return ok(created);
 }
 
 async function fetchParticipants(protocolId: string): Promise<Result<SiteParticipant[]>> {
@@ -176,6 +208,84 @@ async function updateVisit(visitId: string, patch: VisitPatch): Promise<Result<S
 
 // -----------------------------------------------------------------------------
 
+async function createVisit(input: NewVisitInput): Promise<Result<SiteVisit>> {
+  const store = getDemoStore();
+  // Resolve participant_code from uuid for the camelCase SiteVisit shape.
+  const participant = store.getState().participants.find((p) => p.uuid === input.participant_uuid);
+  if (!participant) return notFound('participant');
+
+  const created: SiteVisit = {
+    id: newUuid(),
+    date: input.date,
+    time: input.time_of_day ?? undefined,
+    protocolId: input.protocol_id,
+    participantId: participant.id,
+    studyDay: input.study_day,
+    visitName: input.visit_name,
+    windowCloses: input.window_closes ?? undefined,
+    status: input.status ?? 'scheduled',
+    procedures: input.procedures && input.procedures.length > 0 ? input.procedures : undefined,
+    priorNote: input.prior_note ?? undefined,
+  };
+  store.mutate((s) => ({ ...s, visits: [...s.visits, created] }));
+  return ok(created);
+}
+
+async function createTeamMember(input: NewTeamMemberInput): Promise<Result<SiteTeamMember>> {
+  const now = new Date();
+  const todayYmd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const created: SiteTeamMember = {
+    id: newUuid(),
+    protocol_id: input.protocol_id,
+    name: input.name,
+    role: input.role,
+    email: input.email ?? '',
+    delegated_tasks: input.delegated_tasks ?? [],
+    certified_through: input.certified_through ?? '',
+    added_at: todayYmd,
+    status: input.status ?? 'ACTIVE',
+    notes: input.notes ?? null,
+  };
+  getDemoStore().mutate((s) => ({ ...s, teamMembers: [...s.teamMembers, created] }));
+  return ok(created);
+}
+
+async function updateTeamMember(
+  id: string,
+  patch: TeamMemberPatch,
+): Promise<Result<SiteTeamMember>> {
+  const store = getDemoStore();
+  const current = store.getState().teamMembers.find((t) => t.id === id);
+  if (!current) return notFound('team member');
+
+  const updated: SiteTeamMember = {
+    ...current,
+    name: patch.name ?? current.name,
+    role: patch.role ?? current.role,
+    email: patch.email === undefined ? current.email : patch.email ?? '',
+    delegated_tasks: patch.delegated_tasks ?? current.delegated_tasks,
+    certified_through:
+      patch.certified_through === undefined
+        ? current.certified_through
+        : patch.certified_through ?? '',
+    status: patch.status ?? current.status,
+    notes: patch.notes === undefined ? current.notes : patch.notes,
+  };
+  store.mutate((s) => ({
+    ...s,
+    teamMembers: s.teamMembers.map((t) => (t.id === id ? updated : t)),
+  }));
+  return ok(updated);
+}
+
+async function deleteTeamMember(id: string): Promise<Result<void>> {
+  getDemoStore().mutate((s) => ({
+    ...s,
+    teamMembers: s.teamMembers.filter((t) => t.id !== id),
+  }));
+  return ok(undefined);
+}
+
 async function fetchTeamMembers(protocolId: string): Promise<Result<SiteTeamMember[]>> {
   const list = getDemoStore()
     .getState()
@@ -233,13 +343,18 @@ async function materializeVisits(protocolId: string): Promise<Result<Materialize
 
 export const demoSiteRepo: SiteRepo = {
   fetchProtocols,
+  createProtocol,
   fetchParticipants,
   createParticipant,
   updateParticipant,
   deleteParticipant,
   fetchVisitsForProtocol,
+  createVisit,
   updateVisit,
   fetchTeamMembers,
+  createTeamMember,
+  updateTeamMember,
+  deleteTeamMember,
   fetchProtocolDocuments,
   fetchVisitTemplates,
   setAnchorDate,
