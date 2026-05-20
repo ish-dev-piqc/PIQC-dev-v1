@@ -27,7 +27,22 @@ export function getDemoVisitTemplates(): ProtocolVisitTemplate[] {
       window_plus_days: 2,
       procedures: ['Vitals', 'Baseline labs', 'Pre-treatment ECG', 'PRO questionnaires'],
       source_document_id: 'demo-doc-001',
-      cross_references: [],
+      cross_references: [
+        {
+          source_section: '7.4 Safety monitoring',
+          snippet:
+            'On Day 1, vital signs must be recorded prior to dosing and again 60 minutes post-dose.',
+          page: 27,
+          document_id: 'demo-doc-001',
+        },
+        {
+          source_section: 'Lab Manual §3.2',
+          snippet:
+            'Baseline chemistry panel must be drawn at fasting; specimen integrity is verified before centrifugation.',
+          page: 14,
+          document_id: 'demo-doc-001-lab',
+        },
+      ],
     },
     {
       id: 'demo-tpl-b-003',
@@ -38,7 +53,15 @@ export function getDemoVisitTemplates(): ProtocolVisitTemplate[] {
       window_plus_days: 2,
       procedures: ['Vitals', 'AE check', 'Labs', 'Study drug dispensation'],
       source_document_id: 'demo-doc-001',
-      cross_references: [],
+      cross_references: [
+        {
+          source_section: 'Pharmacy Manual §5',
+          snippet:
+            'At each scheduled visit through Week 12, dispense the next 7-day study drug supply and reconcile the returned bottle.',
+          page: 9,
+          document_id: 'demo-doc-001-pharm',
+        },
+      ],
     },
     {
       id: 'demo-tpl-b-004',

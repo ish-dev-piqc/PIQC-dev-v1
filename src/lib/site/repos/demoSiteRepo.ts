@@ -177,9 +177,23 @@ async function deleteParticipant(uuid: string): Promise<Result<void>> {
 // -----------------------------------------------------------------------------
 
 async function fetchVisitsForProtocol(protocolId: string): Promise<Result<SiteVisit[]>> {
-  const list = getDemoStore()
-    .getState()
-    .visits.filter((v) => v.protocolId === protocolId)
+  const state = getDemoStore().getState();
+
+  // Join cross-references from visit templates by matching on visit name —
+  // demo visits don't carry a template_id, but visit_name is unique enough
+  // within a protocol's schedule for the demo to feel right.
+  const templatesByName = new Map<string, ProtocolVisitTemplate>();
+  for (const t of state.visitTemplates) {
+    if (t.protocol_id === protocolId) templatesByName.set(t.visit_name, t);
+  }
+
+  const list = state.visits
+    .filter((v) => v.protocolId === protocolId)
+    .map((v) => {
+      const tpl = templatesByName.get(v.visitName);
+      if (!tpl || tpl.cross_references.length === 0) return v;
+      return { ...v, crossReferences: tpl.cross_references };
+    })
     .sort((a, b) => a.date.localeCompare(b.date));
   return ok(list);
 }

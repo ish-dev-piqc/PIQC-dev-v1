@@ -1272,6 +1272,182 @@ echo "[cleanup] PR-2/PR-4/PR-5 SOTR smoke rows deleted (documents + cascade)"
 echo
 
 # ---------------------------------------------------------------------------
+# T41–T48  Site Mode — CRUD + materialize smoke tests
+#
+# Site mode talks to tables directly (REST) plus the materialize_protocol_visits
+# RPC. We create a throw-away protocol owned by the auditor, exercise the
+# participant/visit/team CRUD paths, run materialize, and clean up.
+# ---------------------------------------------------------------------------
+
+echo "════════════════════════════════════════════════════════════════"
+echo "  Site Mode — CRUD + materialize (T41–T48)"
+echo "════════════════════════════════════════════════════════════════"
+echo
+
+SITE_PROTO_CODE="SMOKE-SITE-$RANDOM"
+SITE_PROTO_ID=""
+SITE_PARTICIPANT_ID=""
+SITE_VISIT_ID=""
+SITE_TEAM_ID=""
+SITE_TEMPLATE_ID=""
+
+# --- T41 — create protocol (auditor-owned) --------------------------------
+RESP=$(curl -s -X POST "$REST/protocols" \
+  -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" -H "Prefer: return=representation" \
+  -d "{\"study_number\":\"$SITE_PROTO_CODE\",\"title\":\"Smoke test protocol\",\"sponsor\":\"Smoke Sponsor\"}")
+SITE_PROTO_ID=$(echo "$RESP" | jq -r '.[0].id // empty')
+if [[ -n "$SITE_PROTO_ID" ]]; then
+  # Insert the active version so the protocol shows up in fetchProtocols joins.
+  curl -s -X POST "$REST/protocol_versions" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $ACCESS_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{\"protocol_id\":\"$SITE_PROTO_ID\",\"version_number\":\"1.0\",\"clinical_trial_phase\":\"PHASE_2\",\"status\":\"ACTIVE\"}" >/dev/null
+  pass "T41: protocol created id=$SITE_PROTO_ID"
+else
+  fail "T41: protocol create" "resp=$RESP"
+fi
+echo
+
+# --- T42 — create participant under the new protocol ----------------------
+if [[ -n "$SITE_PROTO_ID" ]]; then
+  RESP=$(curl -s -X POST "$REST/site_participants" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $ACCESS_TOKEN" \
+    -H "Content-Type: application/json" -H "Prefer: return=representation" \
+    -d "{\"protocol_id\":\"$SITE_PROTO_ID\",\"participant_code\":\"SMK-001\",\"status\":\"ACTIVE\"}")
+  SITE_PARTICIPANT_ID=$(echo "$RESP" | jq -r '.[0].id // empty')
+  if [[ -n "$SITE_PARTICIPANT_ID" ]]; then
+    pass "T42: participant created id=$SITE_PARTICIPANT_ID"
+  else
+    fail "T42: participant create" "resp=$RESP"
+  fi
+fi
+echo
+
+# --- T43 — update participant (status → SCREENING) ------------------------
+if [[ -n "$SITE_PARTICIPANT_ID" ]]; then
+  RESP=$(curl -s -X PATCH "$REST/site_participants?id=eq.$SITE_PARTICIPANT_ID" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $ACCESS_TOKEN" \
+    -H "Content-Type: application/json" -H "Prefer: return=representation" \
+    -d "{\"status\":\"SCREENING\"}")
+  NEW_STATUS=$(echo "$RESP" | jq -r '.[0].status // empty')
+  if [[ "$NEW_STATUS" == "SCREENING" ]]; then
+    pass "T43: participant status updated"
+  else
+    fail "T43: participant update" "resp=$RESP"
+  fi
+fi
+echo
+
+# --- T44 — create manual visit (no template_id) ---------------------------
+if [[ -n "$SITE_PROTO_ID" && -n "$SITE_PARTICIPANT_ID" ]]; then
+  RESP=$(curl -s -X POST "$REST/site_visits" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $ACCESS_TOKEN" \
+    -H "Content-Type: application/json" -H "Prefer: return=representation" \
+    -d "{\"protocol_id\":\"$SITE_PROTO_ID\",\"participant_id\":\"$SITE_PARTICIPANT_ID\",\"date\":\"2030-01-15\",\"visit_name\":\"Smoke visit\",\"study_day\":7,\"status\":\"scheduled\"}")
+  SITE_VISIT_ID=$(echo "$RESP" | jq -r '.[0].id // empty')
+  if [[ -n "$SITE_VISIT_ID" ]]; then
+    pass "T44: visit created id=$SITE_VISIT_ID"
+  else
+    fail "T44: visit create" "resp=$RESP"
+  fi
+fi
+echo
+
+# --- T45 — complete the visit (status → completed) ------------------------
+if [[ -n "$SITE_VISIT_ID" ]]; then
+  RESP=$(curl -s -X PATCH "$REST/site_visits?id=eq.$SITE_VISIT_ID" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $ACCESS_TOKEN" \
+    -H "Content-Type: application/json" -H "Prefer: return=representation" \
+    -d "{\"status\":\"completed\"}")
+  NEW=$(echo "$RESP" | jq -r '.[0].status // empty')
+  if [[ "$NEW" == "completed" ]]; then
+    pass "T45: visit marked completed"
+  else
+    fail "T45: visit update" "resp=$RESP"
+  fi
+fi
+echo
+
+# --- T46 — create team member --------------------------------------------
+if [[ -n "$SITE_PROTO_ID" ]]; then
+  RESP=$(curl -s -X POST "$REST/site_team_members" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $ACCESS_TOKEN" \
+    -H "Content-Type: application/json" -H "Prefer: return=representation" \
+    -d "{\"protocol_id\":\"$SITE_PROTO_ID\",\"name\":\"Dr. Smoke\",\"role\":\"PI\",\"status\":\"ACTIVE\",\"certified_through\":\"2030-12-31\"}")
+  SITE_TEAM_ID=$(echo "$RESP" | jq -r '.[0].id // empty')
+  if [[ -n "$SITE_TEAM_ID" ]]; then
+    pass "T46: team member created id=$SITE_TEAM_ID"
+  else
+    fail "T46: team create" "resp=$RESP"
+  fi
+fi
+echo
+
+# --- T47 — set anchor + materialize visits --------------------------------
+# Add one template, set demo_anchor_date, call materialize_protocol_visits.
+# Expect created >= 1 because the template + anchor yields a projection.
+if [[ -n "$SITE_PROTO_ID" && -n "$SITE_PARTICIPANT_ID" ]]; then
+  RESP=$(curl -s -X POST "$REST/protocol_visit_templates" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $ACCESS_TOKEN" \
+    -H "Content-Type: application/json" -H "Prefer: return=representation" \
+    -d "{\"protocol_id\":\"$SITE_PROTO_ID\",\"visit_name\":\"Day 1 baseline\",\"study_day\":1,\"window_minus_days\":0,\"window_plus_days\":2,\"procedures\":[]}")
+  SITE_TEMPLATE_ID=$(echo "$RESP" | jq -r '.[0].id // empty')
+
+  curl -s -X PATCH "$REST/protocols?id=eq.$SITE_PROTO_ID" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $ACCESS_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{\"demo_anchor_date\":\"2030-01-01\"}" >/dev/null
+
+  RESP=$(curl -s -X POST "$REST/rpc/materialize_protocol_visits" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $ACCESS_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_protocol_id\":\"$SITE_PROTO_ID\"}")
+  CREATED=$(echo "$RESP" | jq -r '.created // empty')
+  if [[ -n "$CREATED" && "$CREATED" -ge 1 ]]; then
+    pass "T47: materialize created $CREATED visit(s)"
+  else
+    fail "T47: materialize" "resp=$RESP"
+  fi
+fi
+echo
+
+# --- T48 — re-materialize preserves the completed visit -------------------
+# T45 set our manual visit to completed. The 2026-05-19 RPC patch should
+# only delete `scheduled` rows on re-materialize, so the completed visit
+# must still exist after a second materialize call.
+if [[ -n "$SITE_VISIT_ID" ]]; then
+  curl -s -X POST "$REST/rpc/materialize_protocol_visits" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $ACCESS_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_protocol_id\":\"$SITE_PROTO_ID\"}" >/dev/null
+  STILL=$(curl -s "$REST/site_visits?id=eq.$SITE_VISIT_ID&select=status" \
+    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $ACCESS_TOKEN" \
+    | jq -r '.[0].status // empty')
+  if [[ "$STILL" == "completed" ]]; then
+    pass "T48: re-materialize preserves completed visits"
+  else
+    fail "T48: re-materialize wiped the completed visit" "status=$STILL"
+  fi
+fi
+echo
+
+# --- Cleanup site smoke rows ----------------------------------------------
+for table in site_visits site_team_members site_participants protocol_visit_templates protocol_versions protocols; do
+  if [[ "$table" == "protocols" ]]; then
+    [[ -n "$SITE_PROTO_ID" ]] && curl -s -X DELETE "$REST/$table?id=eq.$SITE_PROTO_ID" \
+      -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+      -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" >/dev/null
+  else
+    [[ -n "$SITE_PROTO_ID" ]] && curl -s -X DELETE "$REST/$table?protocol_id=eq.$SITE_PROTO_ID" \
+      -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+      -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" >/dev/null
+  fi
+done
+echo "[cleanup] site-mode smoke rows deleted"
+echo
+
+# ---------------------------------------------------------------------------
 # Cleanup — delete all smoke-test deltas + the rows we created
 # ---------------------------------------------------------------------------
 

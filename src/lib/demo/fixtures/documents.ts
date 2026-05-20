@@ -21,6 +21,24 @@ export function getDemoDocuments(): ProtocolDocument[] {
           'BRIGHTEN-2: Phase 2 study evaluating investigational therapy in major depressive disorder',
       },
     },
+    // BRIGHTEN-2 supplemental docs — cross-document references in
+    // visit drawer cite these.
+    {
+      id: 'demo-doc-001-lab',
+      title: 'BRIGHTEN-2 — Central Lab Manual v1.3',
+      source: 'Demo supplemental PDF',
+      created_at: addDays(-25),
+      status: 'ready',
+      extracted_fields: { protocol_number: 'BRIGHTEN-2' },
+    },
+    {
+      id: 'demo-doc-001-pharm',
+      title: 'BRIGHTEN-2 — Pharmacy Manual v1.1',
+      source: 'Demo supplemental PDF',
+      created_at: addDays(-25),
+      status: 'ready',
+      extracted_fields: { protocol_number: 'BRIGHTEN-2' },
+    },
     {
       id: 'demo-doc-002',
       title: 'CARDIAC-7 — Protocol v2.1',
@@ -54,7 +72,7 @@ export function getDemoDocuments(): ProtocolDocument[] {
 // to scope documents per protocol the way the documents.protocol_id column does
 // in real mode.
 export const DEMO_DOCS_BY_PROTOCOL: Record<string, string[]> = {
-  [DEMO_PROTOCOL_IDS['BRIGHTEN-2']]: ['demo-doc-001'],
+  [DEMO_PROTOCOL_IDS['BRIGHTEN-2']]: ['demo-doc-001', 'demo-doc-001-lab', 'demo-doc-001-pharm'],
   [DEMO_PROTOCOL_IDS['CARDIAC-7']]: ['demo-doc-002'],
   [DEMO_PROTOCOL_IDS['IMMUNE-14']]: ['demo-doc-003'],
 };

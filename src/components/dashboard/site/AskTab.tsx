@@ -1,19 +1,37 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  Activity,
+  BarChart3,
   Calendar,
-  ShieldCheck,
   ClipboardList,
+  FlaskConical,
   Pill,
+  ShieldCheck,
   Sparkles,
+  Stethoscope,
   Upload,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useSiteData } from '../../../context/SiteDataContext';
 import { useDemoMode } from '../../../context/DemoModeContext';
 import DashboardChat from '../DashboardChat';
 import DemoAskPanel from './DemoAskPanel';
+import { deriveAskPrompts } from '../../../lib/site/askPrompts';
+import { fetchVisitTemplates } from '../../../lib/site/siteApi';
 import type { ChatMessage, RagStatus } from '../../../lib/supabase';
+
+const PROMPT_ICONS: Record<string, LucideIcon> = {
+  Calendar,
+  ShieldCheck,
+  ClipboardList,
+  Pill,
+  FlaskConical,
+  Activity,
+  BarChart3,
+  Stethoscope,
+};
 
 // =============================================================================
 // AskTab — protocol-grounded AI assistant.
@@ -56,9 +74,27 @@ export default function AskTab({
 }: AskTabProps) {
   const { theme } = useTheme();
   const { activeProtocol } = useProtocol();
-  const { documents, loading } = useSiteData();
+  const { documents, teamMembers, loading } = useSiteData();
   const { demoActive } = useDemoMode();
   const isLight = theme === 'light';
+
+  // Visit templates inform the "Schedule of assessments" prompt — if the
+  // protocol's PDF hasn't been parsed yet there's nothing to ask about.
+  const [hasVisitTemplates, setHasVisitTemplates] = useState(false);
+  useEffect(() => {
+    if (!activeProtocol) {
+      setHasVisitTemplates(false);
+      return;
+    }
+    let cancelled = false;
+    fetchVisitTemplates(activeProtocol.id).then((r) => {
+      if (cancelled) return;
+      setHasVisitTemplates(r.ok && r.data.length > 0);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProtocol]);
 
   // Local doc-id list scoped to this protocol's tagged documents. Recomputes
   // when the documents array changes (including realtime updates). Held in
@@ -70,27 +106,25 @@ export default function AskTab({
 
   if (!activeProtocol) return null;
 
-  // Protocol-specific suggested prompts. Phase B: hand-tuned per phase /
-  // therapeutic area would be ideal; for now we offer a useful generic
-  // protocol-anchored set that beats the truly generic suggestions.
-  const protocolSuggestions = [
-    {
-      icon: Calendar,
-      text: `What is the schedule of assessments for ${activeProtocol.code}?`,
-    },
-    {
-      icon: ClipboardList,
-      text: `Summarise the inclusion and exclusion criteria for ${activeProtocol.code}.`,
-    },
-    {
-      icon: ShieldCheck,
-      text: `What safety reporting requirements apply on ${activeProtocol.code}?`,
-    },
-    {
-      icon: Pill,
-      text: `What are the visit windows and key timepoints for ${activeProtocol.code}?`,
-    },
-  ];
+  // Rule-based dynamic prompts (D3a) — see src/lib/site/askPrompts.ts.
+  // Derived from the active protocol's phase, the presence of an extracted
+  // schedule, and the team-member roles staffed on the study.
+  const protocolTeam = useMemo(
+    () => teamMembers.filter((m) => m.protocol_id === activeProtocol.id),
+    [teamMembers, activeProtocol],
+  );
+  const protocolSuggestions = useMemo(
+    () =>
+      deriveAskPrompts({
+        protocol: activeProtocol,
+        team: protocolTeam,
+        hasVisitTemplates,
+      }).map(({ icon, text }) => ({
+        icon: PROMPT_ICONS[icon] ?? Calendar,
+        text,
+      })),
+    [activeProtocol, protocolTeam, hasVisitTemplates],
+  );
 
   // ---------------------------------------------------------------------------
   // Theme tokens

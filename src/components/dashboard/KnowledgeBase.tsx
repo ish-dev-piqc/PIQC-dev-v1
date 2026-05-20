@@ -34,7 +34,18 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export function UploadForm({ onSuccess, isLight }: { onSuccess: () => void; isLight: boolean }) {
+export function UploadForm({
+  onSuccess,
+  isLight,
+  // When set, the form locks the protocol linkage to this id and hides the
+  // picker. Used when UploadForm is embedded inside a protocol-scoped surface
+  // (ProtocolTab) where the picker would only ever re-confirm the obvious.
+  lockedProtocolId,
+}: {
+  onSuccess: () => void;
+  isLight: boolean;
+  lockedProtocolId?: string;
+}) {
   const [mode, setMode] = useState<UploadMode>('pdf');
   const [title, setTitle] = useState('');
   const [source, setSource] = useState('');
@@ -49,11 +60,19 @@ export function UploadForm({ onSuccess, isLight }: { onSuccess: () => void; isLi
   // "" means unlinked — the ingest function falls back to the auto-tag
   // trigger (which reads protocol_number from Reducto's extracted fields).
   const { protocols, activeProtocol } = useProtocol();
-  const [protocolId, setProtocolId] = useState<string>('');
+  const [protocolId, setProtocolId] = useState<string>(lockedProtocolId ?? '');
   useEffect(() => {
+    if (lockedProtocolId) {
+      setProtocolId(lockedProtocolId);
+      return;
+    }
     // Pre-select once protocols load (or when active protocol changes).
     if (activeProtocol && !protocolId) setProtocolId(activeProtocol.id);
-  }, [activeProtocol, protocolId]);
+  }, [activeProtocol, protocolId, lockedProtocolId]);
+
+  const lockedProtocol = lockedProtocolId
+    ? protocols.find((p) => p.id === lockedProtocolId)
+    : null;
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
@@ -206,33 +225,51 @@ export function UploadForm({ onSuccess, isLight }: { onSuccess: () => void; isLi
         </div>
       </div>
 
-      {/* Optional protocol linkage. Defaults to the active protocol; the
-          ingest function honours an explicit protocol_id and skips the
-          extracted_fields.protocol_number auto-tag path when one is set.
-          Critical for Phase B cross-doc fan-out: sibling documents must
-          share a protocol_id for the fan-out scan to find them. */}
-      <div>
-        <label className={`block text-xs mb-1.5 font-medium uppercase tracking-wider ${labelClass}`}>
-          Link to protocol
-        </label>
-        <select
-          value={protocolId}
-          onChange={e => setProtocolId(e.target.value)}
-          className={`w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none transition-colors ${inputClass}`}
-        >
-          <option value="">No protocol — auto-link from extracted fields</option>
-          {protocols.map(p => (
-            <option key={p.id} value={p.id}>
-              {p.code} — {p.name}
-            </option>
-          ))}
-        </select>
-        <p className={`text-[11px] mt-1 ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'}`}>
-          {protocolId
-            ? 'Document will be attached to this protocol regardless of what Reducto extracts.'
-            : 'For protocol PDFs the parser will auto-link via the protocol number. For supplemental docs (IB, lab manual, pharmacy manual) pick the protocol explicitly so Phase B cross-references work.'}
-        </p>
-      </div>
+      {/* Optional protocol linkage. When `lockedProtocolId` is provided
+          (e.g. UploadForm embedded inside ProtocolTab) the picker is hidden
+          and we just show the locked target. Otherwise: defaults to the active
+          protocol; the ingest function honours an explicit protocol_id and
+          skips the extracted_fields.protocol_number auto-tag path. Critical
+          for Phase B cross-doc fan-out — sibling docs must share protocol_id. */}
+      {lockedProtocol ? (
+        <div>
+          <label className={`block text-xs mb-1.5 font-medium uppercase tracking-wider ${labelClass}`}>
+            Linked to
+          </label>
+          <div
+            className={`w-full border rounded-xl px-4 py-2.5 text-sm ${
+              isLight
+                ? 'bg-[#f5f7fa] border-[#e2e8ee] text-[#374152]'
+                : 'bg-[#0d1118] border-white/10 text-[#d2d7e0]'
+            }`}
+          >
+            {lockedProtocol.code} — {lockedProtocol.name}
+          </div>
+        </div>
+      ) : (
+        <div>
+          <label className={`block text-xs mb-1.5 font-medium uppercase tracking-wider ${labelClass}`}>
+            Link to protocol
+          </label>
+          <select
+            value={protocolId}
+            onChange={e => setProtocolId(e.target.value)}
+            className={`w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none transition-colors ${inputClass}`}
+          >
+            <option value="">No protocol — auto-link from extracted fields</option>
+            {protocols.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.code} — {p.name}
+              </option>
+            ))}
+          </select>
+          <p className={`text-[11px] mt-1 ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'}`}>
+            {protocolId
+              ? 'Document will be attached to this protocol regardless of what Reducto extracts.'
+              : 'For protocol PDFs the parser will auto-link via the protocol number. For supplemental docs (IB, lab manual, pharmacy manual) pick the protocol explicitly so Phase B cross-references work.'}
+          </p>
+        </div>
+      )}
 
       {mode === 'pdf' ? (
         <div>

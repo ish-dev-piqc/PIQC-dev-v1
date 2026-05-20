@@ -227,12 +227,15 @@ describe('demoSiteRepo — team + documents + templates', () => {
     expect(dates).toEqual(sorted);
   });
 
-  it('fetchProtocolDocuments returns the demo PDF for that protocol only', async () => {
+  it('fetchProtocolDocuments returns the demo PDFs for that protocol only', async () => {
+    // BRIGHTEN-2's fixture set: 1 protocol PDF + 2 supplemental docs (Lab,
+    // Pharmacy manuals) so cross-document references in the visit drawer
+    // have real sibling docs to resolve.
     const result = await demoSiteRepo.fetchProtocolDocuments(BRIGHTEN);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.data.length).toBe(1);
-    expect(result.data[0].title).toMatch(/BRIGHTEN/i);
+    expect(result.data.length).toBeGreaterThanOrEqual(1);
+    expect(result.data.every((d) => /BRIGHTEN/i.test(d.title))).toBe(true);
   });
 
   it('fetchVisitTemplates scopes to protocol and sorts by study_day', async () => {
