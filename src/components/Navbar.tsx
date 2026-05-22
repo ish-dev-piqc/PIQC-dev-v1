@@ -390,6 +390,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
   const navLinks = [
     { label: 'How It Works', href: '#what-it-does' },
     { label: 'Pricing', href: '#pricing' },
+    { label: 'FAQ', href: '#faq' },
     { label: 'Contact', href: '#contact' },
   ];
 
@@ -624,12 +625,12 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                   >
                     Log In
                   </button>
-                  <a
-                    href="#contact"
+                  <button
+                    onClick={() => onViewChange('login')}
                     className="ml-2 px-4 py-2 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-all duration-150 shadow-btn hover:shadow-btn-hover"
                   >
                     Get Started
-                  </a>
+                  </button>
                 </>
               )}
             </nav>
@@ -727,13 +728,12 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                   >
                     Log In
                   </button>
-                  <a
-                    href="#contact"
-                    onClick={() => setMobileOpen(false)}
-                    className="mt-2 block text-center px-4 py-2.5 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors"
+                  <button
+                    onClick={() => { onViewChange('login'); setMobileOpen(false); }}
+                    className="mt-2 w-full text-center px-4 py-2.5 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors"
                   >
                     Get Started
-                  </a>
+                  </button>
                 </>
               )}
             </>
