@@ -16,6 +16,7 @@ The pre-login landing surface has four loopholes from the recent build-out: (1) 
 
 - `src/components/Contact.tsx`
 - `src/lib/contact/contactApi.ts` (NEW — added post-review, see "Scope expansion" below)
+- `src/lib/contact/__tests__/contactApi.test.ts` (NEW — required sibling test for the new Api file)
 - `src/components/Hero.tsx`
 - `src/components/Navbar.tsx`
 - `src/components/Footer.tsx`
@@ -53,7 +54,7 @@ CI's `piqc-discipline.yml` failed on the "Components must not import supabase" r
 - [ ] adapter (`src/lib/*/*Adapter.ts`) — N/A; no row-shape transformation (Contact.tsx never reads the table)
 - [ ] context (`src/context/`) — N/A
 - [x] component (`src/components/`) — Contact, Hero, Navbar, Footer, Chatbot, ValueProps, FAQ, auth/Login, App
-- [ ] test (`src/**/__tests__/`) — none added; UI changes covered by manual verification + /piqc-review checks. Edge function logic is rate-limit + Resend POST, mirrors patterns already in `chat/index.ts`.
+- [x] test (`src/**/__tests__/`) — `src/lib/contact/__tests__/contactApi.test.ts` smoke-tests the new Api wrapper (6 cases: surface, success, invoke-error, ok=false, malformed response, payload pass-through). UI changes still covered by manual verification.
 
 ## Mock data plan
 
