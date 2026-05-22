@@ -21,8 +21,8 @@ const MESSAGE_MIN = 1;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const RESEND_TO = "contact@piqclinical.com";
-const RESEND_FROM = "PIQClinical <noreply@piqclinical.com>";
+const RESEND_TO = "ishika@piqclinical.com";
+const RESEND_FROM = "PIQClinical <hello@updates.piqclinical.com>";
 
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 
