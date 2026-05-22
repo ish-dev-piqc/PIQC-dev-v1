@@ -1,9 +1,9 @@
 ---
 owner: ish-dev-piqc
 feature: protocol-upload-only
-status: active
+status: in-review
 started: 2026-05-21
-target_pr:
+target_pr: 99
 ---
 
 # Protocol-upload-only ingestion — Site Mode auto-populated by Reducto
