@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Mail, Building, ArrowRight, CheckCircle } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { sendContactMessage } from '../lib/contact/contactApi';
 
 export default function Contact() {
-  const [form, setForm] = useState({ name: '', email: '', company: '', message: '' });
+  const [form, setForm] = useState({ name: '', email: '', company: '', message: '', website: '' });
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { theme } = useTheme();
   const isLight = theme === 'light';
 
@@ -15,9 +17,24 @@ export default function Contact() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 900));
+
+    const result = await sendContactMessage({
+      name: form.name.trim(),
+      email: form.email.trim(),
+      company: form.company.trim(),
+      message: form.message.trim(),
+      website: form.website,
+    });
+
     setLoading(false);
+
+    if (!result.ok) {
+      setError("Couldn't send your message. Please try again, or email contact@piqclinical.com directly.");
+      return;
+    }
+
     setSubmitted(true);
   };
 
@@ -91,6 +108,20 @@ export default function Contact() {
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="relative z-10 space-y-4">
+                {/* Honeypot — hidden from real users; bots fill every field. */}
+                <div aria-hidden="true" style={{ position: 'absolute', left: '-10000px', width: '1px', height: '1px', overflow: 'hidden' }}>
+                  <label htmlFor="website">Website</label>
+                  <input
+                    id="website"
+                    name="website"
+                    type="text"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    value={form.website}
+                    onChange={handleChange}
+                  />
+                </div>
+
                 <div>
                   <label className={`block text-xs font-medium ${labelColor} mb-1.5`} htmlFor="name">
                     Name
@@ -174,6 +205,10 @@ export default function Contact() {
                     </>
                   )}
                 </button>
+
+                {error && (
+                  <p className="text-xs text-red-400 text-center">{error}</p>
+                )}
               </form>
             )}
           </div>

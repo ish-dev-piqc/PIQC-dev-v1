@@ -1,7 +1,12 @@
 import { Activity } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import type { AppView } from '../App';
 
-export default function Footer() {
+interface FooterProps {
+  onViewChange: (view: AppView) => void;
+}
+
+export default function Footer({ onViewChange }: FooterProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
 
@@ -25,7 +30,7 @@ export default function Footer() {
           </a>
 
           <nav className="flex items-center gap-1">
-            {[{ label: 'How It Works', href: '#what-it-does' }, { label: 'Pricing', href: '#pricing' }, { label: 'Contact', href: '#contact' }].map((item) => (
+            {[{ label: 'How It Works', href: '#what-it-does' }, { label: 'Pricing', href: '#pricing' }, { label: 'FAQ', href: '#faq' }, { label: 'Contact', href: '#contact' }].map((item) => (
               <a
                 key={item.label}
                 href={item.href}
@@ -34,12 +39,12 @@ export default function Footer() {
                 {item.label}
               </a>
             ))}
-            <a
-              href="#contact"
+            <button
+              onClick={() => onViewChange('login')}
               className="ml-1 px-3.5 py-1.5 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors shadow-btn"
             >
               Get Started
-            </a>
+            </button>
           </nav>
         </div>
 

@@ -160,8 +160,8 @@ export default function Login({ onViewChange }: LoginProps) {
         </div>
 
         <div className="mb-8">
-          <h1 className={`text-2xl font-bold ${headingColor} mb-1.5`}>Welcome back</h1>
-          <p className={`${subColor} text-sm`}>Sign in to your account to continue</p>
+          <h1 className={`text-2xl font-bold ${headingColor} mb-1.5`}>Sign in or create your account</h1>
+          <p className={`${subColor} text-sm`}>Magic link works for new and returning users — no password required.</p>
         </div>
 
         {!magicOpen && !passwordInUse && (
@@ -327,7 +327,7 @@ export default function Login({ onViewChange }: LoginProps) {
         )}
 
         <p className={`mt-6 text-center text-sm ${footerColor}`}>
-          Don't have a password? Use the magic link option — it works whether you're new or returning.
+          We'll email you a one-time sign-in link. New accounts are created automatically on first use.
         </p>
       </div>
     </div>

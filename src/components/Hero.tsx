@@ -1,6 +1,5 @@
 import { ArrowRight } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
-import { useAuth } from '../context/AuthContext';
 import type { AppView } from '../App';
 
 interface HeroProps {
@@ -9,7 +8,6 @@ interface HeroProps {
 
 export default function Hero({ onViewChange }: HeroProps) {
   const { theme } = useTheme();
-  const { session } = useAuth();
   const isLight = theme === 'light';
 
   return (
@@ -51,26 +49,17 @@ export default function Hero({ onViewChange }: HeroProps) {
           Designed for site managers, auditors, and clinical teams running real trials
         </p>
 
-        <div className="flex flex-col items-center gap-4">
-          <a
-            href="#contact"
+        <div className="flex flex-col items-center gap-3">
+          <button
+            onClick={() => onViewChange('login')}
             className="inline-flex items-center gap-2 px-7 py-3.5 text-sm font-semibold text-white bg-[#4a6fa5] rounded-xl hover:bg-[#5b82b8] transition-all duration-200 shadow-btn hover:shadow-btn-hover group"
           >
             Get Started
             <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-          </a>
-          {!session && (
-            <p className={`text-sm ${isLight ? 'text-[#374152]/50' : 'text-[#d2d7e0]/50'}`}>
-              Already have an account?{' '}
-              <button
-                onClick={() => onViewChange('login')}
-                className={`font-medium transition-colors inline-flex items-center gap-1 group ${isLight ? 'text-[#374152]/70 hover:text-[#1a1f28]' : 'text-[#d2d7e0]/70 hover:text-white'}`}
-              >
-                Log in
-                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-              </button>
-            </p>
-          )}
+          </button>
+          <p className={`text-xs ${isLight ? 'text-[#374152]/50' : 'text-[#d2d7e0]/50'}`}>
+            New or returning — sign in with your email, no password required.
+          </p>
         </div>
       </div>
     </section>
