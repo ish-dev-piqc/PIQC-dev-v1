@@ -15,6 +15,7 @@ The pre-login landing surface has four loopholes from the recent build-out: (1) 
 ## Scope (files allowed)
 
 - `src/components/Contact.tsx`
+- `src/lib/contact/contactApi.ts` (NEW — added post-review, see "Scope expansion" below)
 - `src/components/Hero.tsx`
 - `src/components/Navbar.tsx`
 - `src/components/Footer.tsx`
@@ -29,6 +30,10 @@ The pre-login landing surface has four loopholes from the recent build-out: (1) 
 - `supabase/migrations/<timestamp>_contact_messages.sql` (NEW)
 - `public/screenshots/**` (NEW — demo-data captures, manual step)
 - `plans/ishika/landing-completion.md` — this plan
+
+### Scope expansion (post-CI, 2026-05-21)
+
+CI's `piqc-discipline.yml` failed on the "Components must not import supabase" rule for `Contact.tsx:4`. The workflow comment explicitly states the `KNOWN_COMPONENT_SUPABASE_DEBT` allowlist is grandfathered legacy only — adding new entries is not the intended fix. Added a proper API helper at `src/lib/contact/contactApi.ts` exporting `sendContactMessage(payload) → Result<void>`, mirroring the [orgApi.ts](src/lib/orgs/orgApi.ts) shape. `Contact.tsx` now imports the helper instead of `supabase`. `src/lib/contact/` is a new non-mode lib subdir — no existing codeowner, no additional Approved-by required.
 
 ## Out of scope (files forbidden)
 

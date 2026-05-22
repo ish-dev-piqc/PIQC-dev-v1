@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Mail, Building, ArrowRight, CheckCircle } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
-import { supabase } from '../lib/supabase';
+import { sendContactMessage } from '../lib/contact/contactApi';
 
 export default function Contact() {
   const [form, setForm] = useState({ name: '', email: '', company: '', message: '', website: '' });
@@ -20,19 +20,17 @@ export default function Contact() {
     setError(null);
     setLoading(true);
 
-    const { data, error: invokeError } = await supabase.functions.invoke('contact', {
-      body: {
-        name: form.name.trim(),
-        email: form.email.trim(),
-        company: form.company.trim(),
-        message: form.message.trim(),
-        website: form.website,
-      },
+    const result = await sendContactMessage({
+      name: form.name.trim(),
+      email: form.email.trim(),
+      company: form.company.trim(),
+      message: form.message.trim(),
+      website: form.website,
     });
 
     setLoading(false);
 
-    if (invokeError || !data?.ok) {
+    if (!result.ok) {
       setError("Couldn't send your message. Please try again, or email contact@piqclinical.com directly.");
       return;
     }
