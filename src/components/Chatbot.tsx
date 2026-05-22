@@ -5,7 +5,7 @@ import { useTheme } from '../context/ThemeContext';
 
 const GREETING: ChatMessage = {
   role: 'assistant',
-  content: "Hi there! I'm your PIQClinical care guide. I know healthcare can feel overwhelming at times, so I'm here to make things a little easier. Whether you have questions about our platform, clinical workflows, or just want to understand how we can support your team — I'm all yours. How can I help you today?",
+  content: "Hi — I'm the PIQClinical assistant. I can walk you through how the platform works, what Site Mode and Audit Mode do, how pricing fits, or anything else about PIQClinical. What would you like to know?",
 };
 
 function AssistantAvatar({ size = 'sm' }: { size?: 'sm' | 'md' }) {
