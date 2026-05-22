@@ -8,7 +8,7 @@ import { useAudit } from '../context/AuditContext';
 import { useHeatmap } from '../context/HeatmapContext';
 import { useDemoMode } from '../context/DemoModeContext';
 import OrgSettingsDrawer from './dashboard/site/OrgSettingsDrawer';
-import AddProtocolModal from './dashboard/site/AddProtocolModal';
+import ProtocolUploadModal from './dashboard/site/ProtocolUploadModal';
 import type { AuditStage } from '../types/audit';
 import type { AppView } from '../App';
 import type { SettingsSection } from './dashboard/Dashboard';
@@ -205,7 +205,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
             </div>
           ) : protocols.length === 0 ? (
             <div className={`px-3 py-3 text-[11px] ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/50'}`}>
-              No protocols yet. Add your first one below.
+              No protocols yet. Upload one to get started.
             </div>
           ) : protocols.map((p) => {
             const active = !isHomeScope && p.id === activeProtocol.id;
@@ -262,7 +262,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
               }`}
             >
               <Plus size={13} />
-              <span className="text-xs font-semibold">Add protocol</span>
+              <span className="text-xs font-semibold">Upload protocol</span>
             </button>
           </div>
         </div>
@@ -741,7 +741,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
         </div>
       )}
     </header>
-    {addProtocolOpen && <AddProtocolModal onClose={() => setAddProtocolOpen(false)} />}
+    {addProtocolOpen && <ProtocolUploadModal onClose={() => setAddProtocolOpen(false)} />}
     {orgDrawerOpen && <OrgSettingsDrawer onClose={() => setOrgDrawerOpen(false)} />}
     </>
   );

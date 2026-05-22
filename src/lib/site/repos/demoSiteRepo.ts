@@ -17,7 +17,6 @@ import type {
 import type { Protocol } from '../../../context/ProtocolContext';
 import type {
   NewParticipantInput,
-  NewProtocolInput,
   NewTeamMemberInput,
   NewVisitInput,
   ParticipantPatch,
@@ -48,34 +47,6 @@ function newUuid(): string {
 
 async function fetchProtocols(): Promise<Result<Protocol[]>> {
   return ok(getDemoStore().getState().protocols);
-}
-
-const PHASE_LABEL_FOR_DEMO: Record<NewProtocolInput['clinical_trial_phase'], string> = {
-  PHASE_1: 'Phase 1',
-  PHASE_1_2: 'Phase 1/2',
-  PHASE_2: 'Phase 2',
-  PHASE_2_3: 'Phase 2/3',
-  PHASE_3: 'Phase 3',
-  PHASE_4: 'Phase 4',
-  NOT_APPLICABLE: 'N/A',
-};
-
-async function createProtocol(input: NewProtocolInput): Promise<Result<Protocol>> {
-  const store = getDemoStore();
-  const dup = store.getState().protocols.find((p) => p.code === input.study_number);
-  if (dup) {
-    return { ok: false, error: `Study number "${input.study_number}" is already in use.` };
-  }
-  const created: Protocol = {
-    id: newUuid(),
-    code: input.study_number,
-    name: input.title,
-    sponsor: input.sponsor,
-    phase: PHASE_LABEL_FOR_DEMO[input.clinical_trial_phase],
-    demoAnchorDate: null,
-  };
-  store.mutate((s) => ({ ...s, protocols: [...s.protocols, created] }));
-  return ok(created);
 }
 
 async function fetchParticipants(protocolId: string): Promise<Result<SiteParticipant[]>> {
@@ -357,7 +328,6 @@ async function materializeVisits(protocolId: string): Promise<Result<Materialize
 
 export const demoSiteRepo: SiteRepo = {
   fetchProtocols,
-  createProtocol,
   fetchParticipants,
   createParticipant,
   updateParticipant,

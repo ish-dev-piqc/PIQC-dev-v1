@@ -135,7 +135,7 @@ export default function ProtocolTab() {
             >
               <span className="flex items-center gap-2 text-sm font-medium text-fg-heading">
                 <Upload size={14} />
-                Upload protocol PDF
+                Upload an amendment or supplementary document
               </span>
               <span className={`text-xs ${subColor}`}>{uploadOpen ? 'Hide' : 'Show'}</span>
             </button>
@@ -232,9 +232,9 @@ export default function ProtocolTab() {
               </p>
               {!templatesLoading && (
                 <p className={`${subColor} text-xs mt-1.5 leading-relaxed max-w-md mx-auto`}>
-                  Upload a protocol PDF — Reducto extracts the schedule of events (visit names + study-day
-                  offsets) automatically. Once templates and an anchor date are both present, visits
-                  project onto the calendar for every enrolled participant.
+                  Reducto didn't surface a schedule of events for this protocol. If the visits live in an
+                  amendment or supplementary document, upload it above. Low-confidence extractions can be
+                  reviewed and corrected in the Source of Truth Reviewer.
                 </p>
               )}
             </div>

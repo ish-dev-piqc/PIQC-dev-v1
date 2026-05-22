@@ -13,7 +13,6 @@
 import { realSiteRepo } from './repos/realSiteRepo';
 import type {
   NewParticipantInput,
-  NewProtocolInput,
   NewTeamMemberInput,
   NewVisitInput,
   ParticipantPatch,
@@ -35,7 +34,6 @@ import type { Protocol } from '../../context/ProtocolContext';
 export type {
   Result,
   NewParticipantInput,
-  NewProtocolInput,
   NewTeamMemberInput,
   NewVisitInput,
   ParticipantPatch,
@@ -75,10 +73,6 @@ export function getSiteRepo(): SiteRepo {
 
 export function fetchProtocols(): Promise<Result<Protocol[]>> {
   return activeRepo.fetchProtocols();
-}
-
-export function createProtocol(input: NewProtocolInput): Promise<Result<Protocol>> {
-  return activeRepo.createProtocol(input);
 }
 
 export function fetchParticipants(protocolId: string): Promise<Result<SiteParticipant[]>> {

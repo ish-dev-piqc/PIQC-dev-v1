@@ -19,6 +19,12 @@ Today PIQC has two protocol-ingestion paths: (1) a manual `AddProtocolModal` ope
 - `src/components/dashboard/site/ProtocolTab.tsx`
 - `src/components/dashboard/site/ParticipantsTab.tsx`
 - `src/components/dashboard/site/TeamTab.tsx`
+- `src/components/dashboard/site/SiteWelcomePanel.tsx` — collateral: previously imported the deleted `AddProtocolModal`; updated to point users at the new upload flow
+- `src/components/dashboard/site/ProtocolUploadModal.tsx` (NEW) — replaces AddProtocolModal; wraps the existing UploadForm in a modal shell
+- `src/lib/site/repos/types.ts` — collateral: remove `NewProtocolInput` + `createProtocol` from `SiteRepo` interface
+- `src/lib/site/repos/realSiteRepo.ts` — collateral: remove `createProtocol` impl
+- `src/lib/site/repos/demoSiteRepo.ts` — collateral: remove `createProtocol` impl + PHASE_LABEL_FOR_DEMO
+- `src/lib/site/repos/__tests__/demoSiteRepo.test.ts` — collateral: drop `createProtocol` test cases
 - `src/components/dashboard/KnowledgeBase.tsx`
 - `src/components/dashboard/Dashboard.tsx`
 - `src/components/Navbar.tsx`
