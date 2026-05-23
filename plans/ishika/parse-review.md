@@ -18,7 +18,14 @@ PR #99 made PDF upload the only protocol-creation path. Four real gaps remain in
 - `src/components/dashboard/Dashboard.tsx` — thread `onTabChange` into ProtocolOnboarding, add awaiting-review badge to the Protocol tab in the tab bar
 - `src/components/dashboard/KnowledgeBase.tsx` — change `UploadForm`'s `onSuccess` signature to pass the ingest response (`{ document_id, protocol_id, ... }`) so onboarding can route by extracted protocol_id without an extra DB roundtrip. Already in the SUPABASE_DEBT allowlist — no architecture regression.
 - `supabase/functions/ingest/index.ts` — fallback to email domain / "Personal Workspace" when `user_profiles.organization` is empty; also include `protocol_id` in the response body so the frontend can route by it.
+- `.github/workflows/piqc-discipline.yml` — extend the `ALLOWED_CROSS_MODE` allowlist to include `sourceEvidenceApi`. See "Cross-mode exemption" below for rationale. Owned by @ish-dev-piqc per Discipline-package CODEOWNERS — no external approval.
 - `plans/ishika/parse-review.md` — this plan
+
+### Cross-mode exemption (extending the existing allowlist)
+
+ProtocolOnboarding routes the user to the Protocol tab when SOTR has items awaiting review — that requires reading `countWorksheetItemsForStudy(protocol_id)` from `src/lib/sotr/sourceEvidenceApi.ts`. Same for the Dashboard tab-bar badge. The workflow's existing `ALLOWED_CROSS_MODE` regex names only the four SOTR *widgets* (added in PR #86's `cross-mode-sotr-exemption.md`); the SOTR lib was not yet anticipated as a public surface.
+
+This PR extends the allowlist by appending `sourceEvidenceApi` to the existing SOTR alternation. The integration is intentional — the same precedent the widget allowlist set in PR #86 — and the SOTR lib's count helpers are the canonical, single-source-of-truth path (the inline chip in `WorksheetItemsList` already uses them). The narrower alternative (a Site Mode wrapper file) doesn't work because the cross-mode check is per-directory: the wrapper would still violate the rule itself.
 
 ## Out of scope (files forbidden)
 

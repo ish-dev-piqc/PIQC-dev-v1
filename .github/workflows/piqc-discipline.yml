@@ -23,7 +23,7 @@ jobs:
         # it in plans/ishika/cross-mode-sotr-exemption.md's _archive entry.
         run: |
           set -u
-          ALLOWED_CROSS_MODE='(/sotr/(WorksheetItemsList|WorksheetItemRow|SourceTruthDrawer|SourceTruthListDrawer)|/types/sotr)'
+          ALLOWED_CROSS_MODE='(/sotr/(WorksheetItemsList|WorksheetItemRow|SourceTruthDrawer|SourceTruthListDrawer|sourceEvidenceApi)|/types/sotr)'
           fail=0
           for domain in audit site sotr; do
             others=$(echo "audit site sotr" | tr ' ' '\n' | grep -v "^${domain}$" | tr '\n' '|' | sed 's/|$//')
