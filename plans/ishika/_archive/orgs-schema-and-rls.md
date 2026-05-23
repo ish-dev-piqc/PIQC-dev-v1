@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: orgs-schema-and-rls
-status: in-review
+status: merged
+merged: 2026-05-23
 started: 2026-05-18
-target_pr: 94
+target_pr: #94
 ---
 
 # Orgs FK table + scoped RLS — replace free-text `owner_org` matching

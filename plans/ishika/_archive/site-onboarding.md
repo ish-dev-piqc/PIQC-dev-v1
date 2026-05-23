@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: site-onboarding
-status: in-review
+status: merged
+merged: 2026-05-23
 started: 2026-05-18
-target_pr: 91
+target_pr: #91
 ---
 
 # Site Mode onboarding: Add-protocol form + PDF upload + ingest auto-create + welcome panel

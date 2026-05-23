@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: protocols-ownership-rls
-status: in-review
+status: merged
+merged: 2026-05-23
 started: 2026-05-18
-target_pr: 90
+target_pr: #90
 ---
 
 # Multi-tenancy foundation: delete demo seed + add owner_id/owner_org + scoped RLS
