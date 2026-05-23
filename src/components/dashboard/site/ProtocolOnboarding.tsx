@@ -1,6 +1,8 @@
-import { Activity, FileText, Layers, Workflow } from 'lucide-react';
+import { Activity, FileText, Layers, Workflow, HelpCircle } from 'lucide-react';
 import { UploadForm } from '../KnowledgeBase';
 import { useTheme } from '../../../context/ThemeContext';
+import { countWorksheetItemsForStudy } from '../../../lib/sotr/sourceEvidenceApi';
+import type { DashboardTab } from '../Dashboard';
 
 // =============================================================================
 // ProtocolOnboarding — full-screen wall shown after login when the user has
@@ -9,7 +11,17 @@ import { useTheme } from '../../../context/ThemeContext';
 // edge function auto-creates one from the extracted metadata via B2.4),
 // ProtocolContext realtime + the Dashboard gate re-render the normal site
 // mode UI.
+//
+// On a successful parse, we peek at the worksheet review queue for the new
+// protocol and route the user to the Protocol tab when any items are still
+// awaiting review — that's where WorksheetItemsList lives and the user can
+// verify the parse before relying on it. Clean parses fall through to the
+// default Today tab.
 // =============================================================================
+
+interface ProtocolOnboardingProps {
+  onTabChange?: (tab: DashboardTab) => void;
+}
 
 const STEPS = [
   {
@@ -29,7 +41,7 @@ const STEPS = [
   },
 ];
 
-export default function ProtocolOnboarding() {
+export default function ProtocolOnboarding({ onTabChange }: ProtocolOnboardingProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
 
@@ -83,19 +95,64 @@ export default function ProtocolOnboarding() {
           <div className={`pt-6 border-t ${isLight ? 'border-[#e2e8ee]' : 'border-white/5'}`}>
             <UploadForm
               isLight={isLight}
-              onSuccess={() => {
-                // ProtocolContext realtime picks up the new protocols row and
-                // Dashboard re-renders the normal site-mode UI. No explicit
-                // navigation needed.
+              onSuccess={async (data) => {
+                // If the parse left any worksheet items awaiting review,
+                // route the user to the Protocol tab so they land on the
+                // SourceTruthReviewer (WorksheetItemsList) instead of an
+                // empty Today calendar. Clean parses fall through to Today.
+                //
+                // Best-effort: a count-query failure is silently treated as
+                // "no review needed" since the protocol row + dashboard will
+                // still render correctly via ProtocolContext realtime.
+                if (!data.protocol_id || !onTabChange) return;
+                try {
+                  const count = await countWorksheetItemsForStudy(data.protocol_id);
+                  if (count.awaitingReview > 0) onTabChange('protocol');
+                } catch {
+                  // swallow — defaults to Today, no user impact
+                }
               }}
             />
           </div>
         </div>
 
-        <p className={`${mutedColor} text-xs text-center leading-relaxed max-w-md mx-auto`}>
+        <p className={`${mutedColor} text-xs text-center leading-relaxed max-w-md mx-auto mb-4`}>
           Parse typically takes 30–90 seconds. If extraction has low confidence,
           you'll be routed to the Source of Truth Reviewer to verify the fields.
         </p>
+
+        <details className={`${cardBg} border rounded-xl group`}>
+          <summary
+            className={`flex items-center gap-2 px-5 py-3 cursor-pointer list-none ${
+              isLight ? 'hover:bg-[#f0f4f8]' : 'hover:bg-[#1a2230]'
+            } transition-colors`}
+          >
+            <HelpCircle size={14} className={mutedColor} strokeWidth={1.75} />
+            <span className={`text-[13px] font-medium ${headingColor}`}>
+              Having trouble uploading?
+            </span>
+            <span className={`text-xs ${mutedColor} ml-auto group-open:rotate-180 transition-transform`}>▾</span>
+          </summary>
+          <div className={`px-5 pb-5 pt-1 text-[13px] ${subColor} leading-relaxed space-y-2`}>
+            <p>If the upload fails or the parse errors out, the most common causes are:</p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li><span className={`font-medium ${headingColor}`}>Password-protected PDFs</span> — remove the password and re-upload.</li>
+              <li><span className={`font-medium ${headingColor}`}>Scanned PDFs without OCR</span> — Reducto handles OCR for most documents, but pure-image PDFs without an embedded text layer can fail or extract poorly. Re-export with OCR enabled.</li>
+              <li><span className={`font-medium ${headingColor}`}>Files over 50 MB</span> — split into smaller documents.</li>
+              <li><span className={`font-medium ${headingColor}`}>Transient API issues</span> — wait a minute and try again.</li>
+            </ul>
+            <p className="pt-1">
+              Still stuck? Email{' '}
+              <a
+                href="mailto:contact@piqclinical.com"
+                className="text-[#6e8fb5] hover:text-[#87b5c7] underline underline-offset-2"
+              >
+                contact@piqclinical.com
+              </a>{' '}
+              with the protocol name and we'll help.
+            </p>
+          </div>
+        </details>
       </div>
     </div>
   );

@@ -34,6 +34,16 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+// Shape of the JSON the ingest edge function returns on success. Only the
+// fields the frontend actually reads are typed here; the function returns
+// more telemetry that callers can ignore.
+export interface IngestResponse {
+  success: true;
+  document_id: string;
+  protocol_id: string | null;
+  chunks_created: number;
+}
+
 export function UploadForm({
   onSuccess,
   isLight,
@@ -42,7 +52,7 @@ export function UploadForm({
   // (ProtocolTab) where the picker would only ever re-confirm the obvious.
   lockedProtocolId,
 }: {
-  onSuccess: () => void;
+  onSuccess: (data: IngestResponse) => void;
   isLight: boolean;
   lockedProtocolId?: string;
 }) {
@@ -150,7 +160,7 @@ export function UploadForm({
       setContent('');
       setPdfFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
-      onSuccess();
+      onSuccess(data as IngestResponse);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Upload failed';
       setState({ status: 'error', message: msg });
