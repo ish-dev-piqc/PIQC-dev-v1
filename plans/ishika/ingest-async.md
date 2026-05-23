@@ -22,6 +22,7 @@ The current `/ingest` function holds the HTTP connection open for the entire Red
 - `supabase/functions/_shared/svixVerify.ts` (NEW) — Deno-native HMAC-SHA256 verification of `svix-id` / `svix-timestamp` / `svix-signature` headers, using Web Crypto. ~20 lines.
 - `src/components/dashboard/KnowledgeBase.tsx` — `UploadForm` gains a `'parsing'` state. On 202 from `/ingest`, displays "Parsing your protocol — usually 30–180s. Safe to close the tab." Does NOT reset on pending. On dedup-200 (already ready), calls `onSuccess(data)` immediately.
 - `src/components/dashboard/site/ProtocolOnboarding.tsx` — SOTR-routing decision moves from `UploadForm.onSuccess` (which fires on pending, before `protocol_id` is known) to a `useEffect` keyed on `protocols.length` going 0 → 1.
+- `vitest.config.ts` — broaden the `include` pattern to also pick up `supabase/functions/**/*.test.ts`. Needed so the new `_shared/__tests__/svixVerify.test.ts` actually runs. Not owned by any codeowner per `docs/CODEOWNERS.md` — no additional approval.
 - `plans/ishika/ingest-async.md` — this plan.
 
 ## Out of scope (files forbidden)

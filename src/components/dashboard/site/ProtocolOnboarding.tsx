@@ -1,22 +1,27 @@
+import { useEffect, useRef } from 'react';
 import { Activity, FileText, Layers, Workflow, HelpCircle } from 'lucide-react';
 import { UploadForm } from '../KnowledgeBase';
 import { useTheme } from '../../../context/ThemeContext';
+import { useProtocol } from '../../../context/ProtocolContext';
 import { countWorksheetItemsForStudy } from '../../../lib/sotr/sourceEvidenceApi';
 import type { DashboardTab } from '../Dashboard';
 
 // =============================================================================
 // ProtocolOnboarding — full-screen wall shown after login when the user has
 // zero protocols. Composes the existing UploadForm so we don't duplicate the
-// PDF → Reducto → ingest pipeline. Once a protocol is created (the ingest
-// edge function auto-creates one from the extracted metadata via B2.4),
-// ProtocolContext realtime + the Dashboard gate re-render the normal site
-// mode UI.
+// PDF → Reducto → ingest pipeline.
 //
-// On a successful parse, we peek at the worksheet review queue for the new
-// protocol and route the user to the Protocol tab when any items are still
-// awaiting review — that's where WorksheetItemsList lives and the user can
-// verify the parse before relying on it. Clean parses fall through to the
-// default Today tab.
+// Async ingest contract (PR feature/ish-ingest-async):
+//   The upload's /ingest call returns 202 with status='pending' before Reducto
+//   parse completes. The protocol row doesn't exist yet at that point. The
+//   /reducto-webhook function creates the protocols row later (via B2.4
+//   inline-create) once parse finishes; ProtocolContext realtime fires on the
+//   INSERT, protocols.length flips 0 → 1, and the Dashboard gate unmounts
+//   this wall.
+//
+// The SOTR-routing decision (land on Protocol tab if any items need review)
+// fires from a useEffect keyed on that 0 → 1 transition — NOT from
+// UploadForm.onSuccess, which now resolves on pending (no protocol_id yet).
 // =============================================================================
 
 interface ProtocolOnboardingProps {
@@ -44,6 +49,38 @@ const STEPS = [
 export default function ProtocolOnboarding({ onTabChange }: ProtocolOnboardingProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
+  const { protocols } = useProtocol();
+
+  // SOTR routing — fires exactly once when a new protocol appears (length 0 → 1)
+  // during the user's onboarding session. We watch via a ref so a refresh or
+  // re-render doesn't re-trigger the route, and so the timing is independent
+  // of when the /ingest POST returns (which now resolves on 'pending').
+  const routedRef = useRef(false);
+  const protocolsLen = protocols.length;
+  useEffect(() => {
+    if (routedRef.current) return;
+    if (protocolsLen === 0) return;
+    if (!onTabChange) return;
+    const firstProtocol = protocols[0];
+    if (!firstProtocol?.id) return;
+
+    routedRef.current = true;
+    let cancelled = false;
+    countWorksheetItemsForStudy(firstProtocol.id)
+      .then((count) => {
+        if (cancelled) return;
+        if (count.awaitingReview > 0) onTabChange('protocol');
+      })
+      .catch(() => {
+        // Swallow — defaults to Today, no user impact. The Dashboard gate
+        // unmounts this component as soon as the realtime fires, so any
+        // missed route is just "user lands on Today" rather than broken.
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [protocolsLen]);
 
   const pageBg = isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]';
   const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
@@ -95,22 +132,11 @@ export default function ProtocolOnboarding({ onTabChange }: ProtocolOnboardingPr
           <div className={`pt-6 border-t ${isLight ? 'border-[#e2e8ee]' : 'border-white/5'}`}>
             <UploadForm
               isLight={isLight}
-              onSuccess={async (data) => {
-                // If the parse left any worksheet items awaiting review,
-                // route the user to the Protocol tab so they land on the
-                // SourceTruthReviewer (WorksheetItemsList) instead of an
-                // empty Today calendar. Clean parses fall through to Today.
-                //
-                // Best-effort: a count-query failure is silently treated as
-                // "no review needed" since the protocol row + dashboard will
-                // still render correctly via ProtocolContext realtime.
-                if (!data.protocol_id || !onTabChange) return;
-                try {
-                  const count = await countWorksheetItemsForStudy(data.protocol_id);
-                  if (count.awaitingReview > 0) onTabChange('protocol');
-                } catch {
-                  // swallow — defaults to Today, no user impact
-                }
+              onSuccess={() => {
+                // No-op — the routing decision lives in the useEffect above,
+                // which fires when ProtocolContext realtime brings the new
+                // protocols row into view. The UploadForm itself transitions
+                // to its own 'parsing' state on 202.
               }}
             />
           </div>
