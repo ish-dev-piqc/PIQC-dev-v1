@@ -23,6 +23,7 @@ The current `/ingest` function holds the HTTP connection open for the entire Red
 - `src/components/dashboard/KnowledgeBase.tsx` — `UploadForm` gains a `'parsing'` state. On 202 from `/ingest`, displays "Parsing your protocol — usually 30–180s. Safe to close the tab." Does NOT reset on pending. On dedup-200 (already ready), calls `onSuccess(data)` immediately.
 - `src/components/dashboard/site/ProtocolOnboarding.tsx` — SOTR-routing decision moves from `UploadForm.onSuccess` (which fires on pending, before `protocol_id` is known) to a `useEffect` keyed on `protocols.length` going 0 → 1.
 - `vitest.config.ts` — broaden the `include` pattern to also pick up `supabase/functions/**/*.test.ts`. Needed so the new `_shared/__tests__/svixVerify.test.ts` actually runs. Not owned by any codeowner per `docs/CODEOWNERS.md` — no additional approval.
+- `supabase/config.toml` — add `[functions.reducto-webhook]` block with `verify_jwt = false` (Svix has no Supabase JWT, auth is via signature headers verified inside the function) and `[functions.ingest-recover]` with explicit `verify_jwt = true` for symmetry. Cleaner than passing `--no-verify-jwt` on every deploy.
 - `plans/ishika/ingest-async.md` — this plan.
 
 ## Out of scope (files forbidden)
@@ -57,14 +58,12 @@ None. Real Reducto, real Svix delivery, real prod Supabase project. No localStor
 
 In strict order:
 
-1. `supabase db push` — apply the migration (`content_hash` + `reducto_parse_job_id` columns).
-2. `supabase functions deploy ingest` — JWT verification stays ON (clients send the user's JWT).
-3. `supabase functions deploy reducto-webhook --no-verify-jwt` — **CRITICAL**: this flag is required because Svix's delivery has no Supabase JWT. Without it, every Svix callback returns 401 and silently fails.
-4. `supabase functions deploy ingest-recover` — JWT verification ON (called from authenticated dashboard mounts).
-5. Register webhook endpoint URL in Reducto's Svix portal: `https://<project-ref>.supabase.co/functions/v1/reducto-webhook`. Copy the signing secret.
-6. `supabase secrets set SVIX_WEBHOOK_SECRET=<copied value from step 5>`.
+1. `supabase db push` — apply the migration (`content_hash` column).
+2. `supabase functions deploy ingest reducto-webhook ingest-recover` — single command, all three. The CLI reads `verify_jwt` per-function from `supabase/config.toml`, so reducto-webhook gets JWT-off automatically (no manual `--no-verify-jwt` flag needed).
+3. Register webhook endpoint URL in Reducto's Svix portal: `https://<project-ref>.supabase.co/functions/v1/reducto-webhook`. Copy the signing secret.
+4. `supabase secrets set SVIX_WEBHOOK_SECRET=<copied value from step 3>`.
 
-If steps 1–6 happen out of order or any step is skipped, the system fails open in known ways (504s come back, OR webhooks fail silently). The scratch plan's "Deploy ordering" section spells out the failure modes for each misordering.
+If steps are out of order or skipped, the system fails open in known ways (504s come back, OR webhooks fail silently). The scratch plan's "Deploy ordering" section spells out the failure modes per misordering.
 
 ## Verification
 
