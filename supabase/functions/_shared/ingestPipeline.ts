@@ -268,9 +268,18 @@ export async function kickOffReductoParseAsync(
 }
 
 /**
- * Fetch the result for a completed Reducto parse job. Returns the raw chunks
- * + the job status. Used by /reducto-webhook after Svix tells us the job is
- * done, and by /ingest-recover when polling stuck-pending documents.
+ * Fetch the result for a Reducto parse job by id. Returns the job status +
+ * the parsed chunks (empty when still in progress / failed).
+ *
+ * For async parses, Reducto delivers the actual parsed output via one of:
+ *   (a) synchronous embedded: data.result.chunks  (small docs)
+ *   (b) async, top-level URL: data.url            (legacy)
+ *   (c) async, nested URL:    data.result.url     (typical for large docs)
+ *
+ * (a) is rare on /job since /parse_async is by definition async. (b) and
+ * (c) require a follow-up GET to fetch the actual chunks. We accept all
+ * three shapes so the function works regardless of which path Reducto
+ * takes for a given job.
  */
 export async function fetchReductoJobResult(
   jobId: string,
@@ -292,10 +301,34 @@ export async function fetchReductoJobResult(
     const status = (data.status as string | undefined) ?? "Unknown";
 
     let rawChunks: ReductoChunk[] = [];
+
     if (Array.isArray(data.result?.chunks)) {
+      // Path (a): inline chunks
       rawChunks = data.result.chunks;
     } else if (Array.isArray(data.chunks)) {
+      // Path (a) alternate (top-level)
       rawChunks = data.chunks;
+    } else {
+      // Path (b) / (c): chunks live at a URL — follow it.
+      const asyncUrl = data.result?.url ?? data.url;
+      if (asyncUrl) {
+        try {
+          const urlRes = await fetch(asyncUrl);
+          if (!urlRes.ok) {
+            throw new Error(`Reducto async result fetch error: ${urlRes.status}`);
+          }
+          const urlData = await urlRes.json();
+          if (Array.isArray(urlData.chunks)) {
+            rawChunks = urlData.chunks;
+          } else if (Array.isArray(urlData.result?.chunks)) {
+            rawChunks = urlData.result.chunks;
+          }
+        } catch (urlErr) {
+          throw new Error(
+            `Failed to fetch Reducto async result: ${urlErr instanceof Error ? urlErr.message : String(urlErr)}`,
+          );
+        }
+      }
     }
 
     return { status, chunks: mapRawChunksToChunkData(rawChunks) };
