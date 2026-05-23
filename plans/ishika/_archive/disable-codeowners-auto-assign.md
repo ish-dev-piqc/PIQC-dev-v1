@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: disable-codeowners-auto-assign
-status: active
+status: merged
+merged: 2026-05-23
 started: 2026-05-18
-target_pr:
+target_pr: #100
 ---
 
 # Disable CODEOWNERS auto-assignment
