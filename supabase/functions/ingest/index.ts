@@ -907,13 +907,17 @@ Deno.serve(async (req: Request) => {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-  // Resolve user_id from the caller's JWT so documents are scoped to their owner.
+  // Resolve user_id + email from the caller's JWT so documents are scoped to
+  // their owner. Email is needed for the missing-organization fallback in the
+  // B2.4 inline-protocol-create block below.
   const authHeader = req.headers.get("Authorization");
   const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
   let userId: string | null = null;
+  let userEmail: string | null = null;
   if (userToken) {
     const { data: { user } } = await createClient(supabaseUrl, serviceRoleKey).auth.getUser(userToken);
     userId = user?.id ?? null;
+    userEmail = user?.email ?? null;
   }
   if (!userId) {
     return new Response(
@@ -1178,20 +1182,34 @@ Deno.serve(async (req: Request) => {
             .select("organization")
             .eq("id", userId)
             .maybeSingle();
-          const ownerOrg = typeof profile?.organization === "string" ? profile.organization.trim() : "";
+          const profileOrg = typeof profile?.organization === "string" ? profile.organization.trim() : "";
 
-          if (!ownerOrg) {
-            console.warn("[ingest] protocol_autocreate_skipped", {
+          // Fall back to the email domain ("acme.com") or "Personal Workspace"
+          // so a new user without a completed profile never gets stuck on the
+          // onboarding wall after a successful parse. The owner_org column is
+          // a free-text mirror that's used for RLS scoping with org-mates; the
+          // domain is a sensible default since people at the same org usually
+          // share a domain. The user can update their profile later and we
+          // could backfill owner_org via a migration if needed.
+          const emailDomain =
+            userEmail && userEmail.includes("@")
+              ? userEmail.split("@")[1].trim().toLowerCase()
+              : "";
+          const ownerOrg = profileOrg || emailDomain || "Personal Workspace";
+          if (!profileOrg) {
+            console.warn("[ingest] protocol_autocreate_fallback_owner_org", {
               document_id: docId,
-              reason: "user_profile_missing_organization",
+              fallback: emailDomain ? "email_domain" : "personal_workspace",
+              owner_org: ownerOrg,
             });
-          } else {
-            const protoTitle =
-              (typeof extractedFields.protocol_title === "string" && extractedFields.protocol_title.trim()) ||
-              studyNumber;
-            const sponsorName =
-              (typeof extractedFields.sponsor_name === "string" && extractedFields.sponsor_name.trim()) ||
-              "Unknown sponsor";
+          }
+
+          const protoTitle =
+            (typeof extractedFields.protocol_title === "string" && extractedFields.protocol_title.trim()) ||
+            studyNumber;
+          const sponsorName =
+            (typeof extractedFields.sponsor_name === "string" && extractedFields.sponsor_name.trim()) ||
+            "Unknown sponsor";
 
             // Map Reducto's study_phase to the DB enum.
             const phaseRaw =
@@ -1251,7 +1269,6 @@ Deno.serve(async (req: Request) => {
                 owner_id: userId,
               });
             }
-          }
         }
       }
 
@@ -1502,10 +1519,25 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Re-read documents.protocol_id one more time so the response reflects
+    // whatever the autotag trigger / B2.4 inline-create / cross-doc fan-out
+    // ended up resolving. The frontend uses this to route the user post-upload
+    // (e.g., into the Protocol tab if any items need review).
+    let finalProtocolId: string | null = null;
+    {
+      const { data: docFinal } = await supabase
+        .from("documents")
+        .select("protocol_id")
+        .eq("id", docId)
+        .maybeSingle();
+      finalProtocolId = (docFinal?.protocol_id as string | null) ?? null;
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         document_id: docId,
+        protocol_id: finalProtocolId,
         chunks_created: inserted,
         extracted_fields: extractedFields,
         templates_inserted: templatesInserted,

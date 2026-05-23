@@ -16,7 +16,8 @@ PR #99 made PDF upload the only protocol-creation path. Four real gaps remain in
 
 - `src/components/dashboard/site/ProtocolOnboarding.tsx` — implement `onSuccess` routing + add "What this means" hint on hard failure
 - `src/components/dashboard/Dashboard.tsx` — thread `onTabChange` into ProtocolOnboarding, add awaiting-review badge to the Protocol tab in the tab bar
-- `supabase/functions/ingest/index.ts` — fallback to email domain / "Personal Workspace" when `user_profiles.organization` is empty
+- `src/components/dashboard/KnowledgeBase.tsx` — change `UploadForm`'s `onSuccess` signature to pass the ingest response (`{ document_id, protocol_id, ... }`) so onboarding can route by extracted protocol_id without an extra DB roundtrip. Already in the SUPABASE_DEBT allowlist — no architecture regression.
+- `supabase/functions/ingest/index.ts` — fallback to email domain / "Personal Workspace" when `user_profiles.organization` is empty; also include `protocol_id` in the response body so the frontend can route by it.
 - `plans/ishika/parse-review.md` — this plan
 
 ## Out of scope (files forbidden)

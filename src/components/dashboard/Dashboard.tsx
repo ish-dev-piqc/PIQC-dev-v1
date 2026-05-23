@@ -16,6 +16,7 @@ import AuditWorkspaceShell from './audit/AuditWorkspaceShell';
 import { useTheme } from '../../context/ThemeContext';
 import { useMode } from '../../context/ModeContext';
 import { useProtocol } from '../../context/ProtocolContext';
+import { countWorksheetItemsForStudy } from '../../lib/sotr/sourceEvidenceApi';
 import { supabase, type ChatMessage, type RagStatus } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useSubscription } from '../../hooks/useSubscription';
@@ -481,8 +482,13 @@ export default function Dashboard({
   const [chatSelectedDocIds, setChatSelectedDocIds] = useState<string[]>([]);
   const { theme } = useTheme();
   const { mode } = useMode();
-  const { protocols, isLoading: protocolsLoading } = useProtocol();
+  const { protocols, isLoading: protocolsLoading, activeProtocol } = useProtocol();
   const isLight = theme === 'light';
+
+  // Awaiting-review count for the Protocol-tab badge. Refreshes when the
+  // active protocol changes or the user navigates away from Protocol tab
+  // (after a review session, the count drops and the badge updates).
+  const [awaitingReviewCount, setAwaitingReviewCount] = useState(0);
   const resolvedActiveTab = activeTab ?? internalActiveTab;
   const resolvedSettingsSection = settingsSection ?? internalSettingsSection;
 
@@ -501,6 +507,28 @@ export default function Dashboard({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, resolvedActiveTab]);
+
+  // Fetch the awaiting-review count for the active Site Mode protocol so the
+  // Protocol tab in the bar can show a badge. Re-runs on protocol switch and
+  // when the user navigates away from the Protocol tab (typical scenario:
+  // they reviewed some items, switch to Today, badge updates to the new count).
+  useEffect(() => {
+    if (mode !== 'site' || !activeProtocol) {
+      setAwaitingReviewCount(0);
+      return;
+    }
+    let cancelled = false;
+    countWorksheetItemsForStudy(activeProtocol.id)
+      .then((c) => {
+        if (!cancelled) setAwaitingReviewCount(c.awaitingReview);
+      })
+      .catch(() => {
+        if (!cancelled) setAwaitingReviewCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, activeProtocol, resolvedActiveTab]);
 
   const pageBg = isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]';
   const tabBarBg = isLight ? 'border-[#e2e8ee] bg-[#f5f7fa]/80' : 'border-white/5 bg-[#0d1118]/80';
@@ -625,7 +653,12 @@ export default function Dashboard({
   if (mode === 'site' && !protocolsLoading && protocols.length === 0 && resolvedActiveTab !== 'settings') {
     return (
       <div className={`min-h-screen ${pageBg} pt-16 overflow-y-auto`}>
-        <ProtocolOnboarding />
+        <ProtocolOnboarding
+          onTabChange={(tab) => {
+            onTabChange?.(tab);
+            if (!onTabChange) setInternalActiveTab(tab);
+          }}
+        />
       </div>
     );
   }
@@ -639,6 +672,8 @@ export default function Dashboard({
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = resolvedActiveTab === tab.id;
+              const showAwaitingBadge =
+                mode === 'site' && tab.id === 'protocol' && awaitingReviewCount > 0;
               return (
                 <button
                   key={tab.id}
@@ -652,6 +687,15 @@ export default function Dashboard({
                 >
                   <Icon size={15} className={isActive ? 'text-[#6e8fb5]' : ''} />
                   {tab.label}
+                  {showAwaitingBadge && (
+                    <span
+                      data-testid="protocol-tab-awaiting-badge"
+                      className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-semibold rounded-full border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/[0.08] dark:text-amber-300"
+                      title={`${awaitingReviewCount} parsed item${awaitingReviewCount === 1 ? '' : 's'} awaiting review`}
+                    >
+                      {awaitingReviewCount}
+                    </span>
+                  )}
                 </button>
               );
             })}
