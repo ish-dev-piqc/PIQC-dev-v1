@@ -289,7 +289,9 @@ export default function TeamTab() {
               ? 'Loading team…'
               : search
                 ? 'No team members match your search.'
-                : 'No team members in this view.'}
+                : scoped.length === 0
+                  ? "Team rosters aren't in the protocol PDF — add the people running this trial. Click “Add team member” to start."
+                  : 'No team members in this view.'}
           </p>
         </div>
       ) : (

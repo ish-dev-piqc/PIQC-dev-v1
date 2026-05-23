@@ -218,7 +218,7 @@ export default function ParticipantsTab() {
               : search
                 ? 'No participants match your search.'
                 : scoped.length === 0
-                  ? 'No participants on this protocol yet. Click "New participant" to add one.'
+                  ? "Participants aren't extracted from the protocol PDF — add yours as they enroll. Click “New participant” to start."
                   : 'No participants in this status.'}
           </p>
         </div>

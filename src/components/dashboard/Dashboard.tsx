@@ -11,9 +11,11 @@ import DemoBanner from './site/DemoBanner';
 import ReportsTab from './site/ReportsTab';
 import ProtocolTab from './site/ProtocolTab';
 import ProtocolRequiredGate from './site/ProtocolRequiredGate';
+import ProtocolOnboarding from './site/ProtocolOnboarding';
 import AuditWorkspaceShell from './audit/AuditWorkspaceShell';
 import { useTheme } from '../../context/ThemeContext';
 import { useMode } from '../../context/ModeContext';
+import { useProtocol } from '../../context/ProtocolContext';
 import { supabase, type ChatMessage, type RagStatus } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useSubscription } from '../../hooks/useSubscription';
@@ -479,6 +481,7 @@ export default function Dashboard({
   const [chatSelectedDocIds, setChatSelectedDocIds] = useState<string[]>([]);
   const { theme } = useTheme();
   const { mode } = useMode();
+  const { protocols, isLoading: protocolsLoading } = useProtocol();
   const isLight = theme === 'light';
   const resolvedActiveTab = activeTab ?? internalActiveTab;
   const resolvedSettingsSection = settingsSection ?? internalSettingsSection;
@@ -612,6 +615,17 @@ export default function Dashboard({
         ) : (
           <AuditWorkspaceShell />
         )}
+      </div>
+    );
+  }
+
+  // Site Mode onboarding gate: if the user has zero protocols, replace the
+  // entire tab UI with the full-screen upload wall. Settings stays reachable
+  // via the Navbar dropdown (which renders above this).
+  if (mode === 'site' && !protocolsLoading && protocols.length === 0 && resolvedActiveTab !== 'settings') {
+    return (
+      <div className={`min-h-screen ${pageBg} pt-16 overflow-y-auto`}>
+        <ProtocolOnboarding />
       </div>
     );
   }
