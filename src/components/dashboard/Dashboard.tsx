@@ -512,13 +512,18 @@ export default function Dashboard({
   // Protocol tab in the bar can show a badge. Re-runs on protocol switch and
   // when the user navigates away from the Protocol tab (typical scenario:
   // they reviewed some items, switch to Today, badge updates to the new count).
+  //
+  // Depending on activeProtocol?.id rather than the object itself: ProtocolContext
+  // recomputes the object via protocols.find() each render, so the object identity
+  // changes even when the protocol hasn't — the id is the stable signal.
+  const activeProtocolId = activeProtocol?.id ?? null;
   useEffect(() => {
-    if (mode !== 'site' || !activeProtocol) {
+    if (mode !== 'site' || !activeProtocolId) {
       setAwaitingReviewCount(0);
       return;
     }
     let cancelled = false;
-    countWorksheetItemsForStudy(activeProtocol.id)
+    countWorksheetItemsForStudy(activeProtocolId)
       .then((c) => {
         if (!cancelled) setAwaitingReviewCount(c.awaitingReview);
       })
@@ -528,7 +533,7 @@ export default function Dashboard({
     return () => {
       cancelled = true;
     };
-  }, [mode, activeProtocol, resolvedActiveTab]);
+  }, [mode, activeProtocolId, resolvedActiveTab]);
 
   const pageBg = isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]';
   const tabBarBg = isLight ? 'border-[#e2e8ee] bg-[#f5f7fa]/80' : 'border-white/5 bg-[#0d1118]/80';
