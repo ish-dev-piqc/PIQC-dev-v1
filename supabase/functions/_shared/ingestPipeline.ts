@@ -210,16 +210,18 @@ export async function uploadToReducto(pdfBytes: Uint8Array, reductoKey: string):
 }
 
 /**
- * Kick off a Reducto parse asynchronously with Svix webhook delivery. Returns
- * the job_id immediately; Reducto will POST to our /reducto-webhook when done.
+ * Kick off a Reducto parse asynchronously. Returns the job_id immediately;
+ * the caller polls /job/{job_id} until status is Completed/Failed (see
+ * fetchReductoJobResult below). Frontend polling is driven from
+ * /ingest-status while a document is in status='pending'.
  *
- * The metadata.document_id roundtrips via Svix's webhook payload so our handler
- * knows which document to update.
+ * No webhook config — Reducto's webhook delivery is via Svix which requires
+ * dashboard access PIQC doesn't have today. Polling is the equivalent path
+ * per Reducto's docs (docs.reducto.ai/async-invocation).
  */
 export async function kickOffReductoParseAsync(
   fileId: string,
   reductoKey: string,
-  metadata: Record<string, unknown>,
 ): Promise<string> {
   return withRetry(async () => {
     const res = await fetch(`${REDUCTO_BASE_URL}/parse_async`, {
@@ -230,10 +232,6 @@ export async function kickOffReductoParseAsync(
       },
       body: JSON.stringify({
         input: fileId,
-        async_config: {
-          webhook: { mode: "svix", channels: [] },
-          metadata,
-        },
         retrieval: {
           chunking: { chunk_mode: "variable", chunk_overlap: 50 },
           embedding_optimized: true,

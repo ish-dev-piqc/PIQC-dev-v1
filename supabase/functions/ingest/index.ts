@@ -229,14 +229,11 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // Step 4: Upload PDF to Reducto + kick off async parse with Svix
-      // webhook config. Metadata.document_id roundtrips via the webhook
-      // payload so /reducto-webhook knows which document to complete.
+      // Step 4: Upload PDF to Reducto + kick off async parse. Job runs in
+      // Reducto's cloud (no time pressure on us). Frontend polls
+      // /ingest-status with this job_id to complete the work when done.
       const fileId = await uploadToReducto(pdfBytes, reductoKey);
-      const reductoJobId = await kickOffReductoParseAsync(fileId, reductoKey, {
-        document_id: docId,
-        user_id: userId,
-      });
+      const reductoJobId = await kickOffReductoParseAsync(fileId, reductoKey);
 
       // Step 5: Stash the job_id so /ingest-recover can find this doc if
       // Reducto's webhook delivery fails.
