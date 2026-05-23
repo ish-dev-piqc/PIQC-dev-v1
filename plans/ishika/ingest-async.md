@@ -1,9 +1,9 @@
 ---
 owner: ish-dev-piqc
 feature: ingest-async
-status: active
+status: in-review
 started: 2026-05-23
-target_pr:
+target_pr: 105
 ---
 
 # Async ingest — Reducto Svix webhook + content-hash dedup
