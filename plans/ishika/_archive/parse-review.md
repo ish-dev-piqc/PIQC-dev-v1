@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: parse-review
-status: in-review
+status: merged
+merged: 2026-05-23
 started: 2026-05-23
-target_pr: 103
+target_pr: #103
 ---
 
 # Parse-failure handling — post-upload routing + signals + missing-org fix
