@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { sendResendEmail } from "../_shared/resend.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -89,62 +90,6 @@ function validate(body: unknown): { ok: true; data: Required<Omit<ContactBody, "
     ok: true,
     data: { name, email, company: company || null, message },
   };
-}
-
-async function sendEmail(payload: {
-  name: string;
-  email: string;
-  company: string | null;
-  message: string;
-}, requestId: string): Promise<{ ok: boolean; error?: string }> {
-  const resendKey = Deno.env.get("RESEND_API_KEY");
-  if (!resendKey) {
-    log("warn", "contact.resend.missing_key", { request_id: requestId });
-    return { ok: false, error: "RESEND_API_KEY not configured" };
-  }
-
-  const subject = `New contact: ${payload.name}${payload.company ? ` (${payload.company})` : ""}`;
-  const text = [
-    `From: ${payload.name} <${payload.email}>`,
-    `Company: ${payload.company || "—"}`,
-    "",
-    payload.message,
-  ].join("\n");
-
-  try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${resendKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: RESEND_FROM,
-        to: [RESEND_TO],
-        reply_to: payload.email,
-        subject,
-        text,
-      }),
-    });
-
-    if (!res.ok) {
-      const body = await res.text();
-      log("error", "contact.resend.error", {
-        request_id: requestId,
-        status: res.status,
-        body: body.slice(0, 2000),
-      });
-      return { ok: false, error: "Email send failed" };
-    }
-
-    return { ok: true };
-  } catch (err) {
-    log("error", "contact.resend.fetch_failed", {
-      request_id: requestId,
-      error: String(err),
-    });
-    return { ok: false, error: "Email send failed" };
-  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -253,7 +198,18 @@ Deno.serve(async (req: Request) => {
 
   // Best-effort email. If it fails, the DB row is still there and we surface
   // success to the user — Ishika checks the table if email goes missing.
-  const emailResult = await sendEmail({ name, email, company, message }, requestId);
+  const subject = `New contact: ${name}${company ? ` (${company})` : ""}`;
+  const text = [
+    `From: ${name} <${email}>`,
+    `Company: ${company || "—"}`,
+    "",
+    message,
+  ].join("\n");
+
+  const emailResult = await sendResendEmail(
+    { to: RESEND_TO, from: RESEND_FROM, replyTo: email, subject, text },
+    { requestId, logPrefix: "contact" },
+  );
   if (!emailResult.ok) {
     log("warn", "contact.email_failed_row_kept", { request_id: requestId });
   }
