@@ -86,7 +86,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           branch="archive/pr-${PR_NUM}"
           git checkout -b "$branch"
-          git add "$PLAN" "$NEW_PATH"
+          git add "$NEW_PATH"
           git commit -m "Archive plan: ${FEATURE}
 
           Auto-archive after PR #${PR_NUM} merged."

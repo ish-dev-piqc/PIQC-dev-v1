@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: landing-completion
-status: in-review
+status: merged
+merged: 2026-05-23
 started: 2026-05-20
-target_pr: 98
+target_pr: #98
 ---
 
 # Landing Page Completion — chatbot, contact form, Get Started, polish

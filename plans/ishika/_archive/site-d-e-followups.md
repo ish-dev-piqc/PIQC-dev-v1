@@ -1,7 +1,9 @@
 ---
 feature: site-d-e-followups
 owner: ishika
-status: in-review
+status: merged
+merged: 2026-05-23
+target_pr: #97
 created: 2026-05-19
 ---
 

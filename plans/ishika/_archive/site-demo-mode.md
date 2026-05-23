@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: site-demo-mode
-status: in-review
+status: merged
+merged: 2026-05-23
 started: 2026-05-18
-target_pr: 85
+target_pr: #85
 ---
 
 # Site demo mode — server-gated fixture toggle

@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: cross-mode-sotr-exemption
-status: in-review
+status: merged
+merged: 2026-05-23
 started: 2026-05-18
-target_pr: 86
+target_pr: #86
 ---
 
 # Cross-mode rule: allow public SOTR widgets
