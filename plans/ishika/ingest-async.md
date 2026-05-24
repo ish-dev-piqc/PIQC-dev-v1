@@ -17,6 +17,7 @@ Original plan used Reducto's Svix webhook delivery for completion notification. 
 ## Scope (files allowed)
 
 - `supabase/migrations/<timestamp>_documents_async_ingest.sql` (NEW) — add `content_hash text` + `(user_id, content_hash)` index to `documents`
+- `supabase/migrations/20260523010000_org_rls_break_recursion.sql` (NEW) — pre-existing RLS infinite recursion on `org_members` / `protocol_org_access` surfaced once the auto-created protocol made the policy chain actually evaluate. Fixed via SECURITY DEFINER helpers. Hot-patched in Studio during the end-to-end verify; migration captures the same change for fresh DBs.
 - `supabase/functions/ingest/index.ts` — restructure: hash + dedup-check + INSERT pending + Storage upload + kick off Reducto `/parse_async` + return 202
 - `supabase/functions/ingest-status/index.ts` (NEW) — authenticated per-document poll driver. Looks up the document, asks Reducto for job status, runs `processIngestCompletion` if Reducto reports Completed, marks failed if Reducto reports Failed/Cancelled. Idempotent.
 - `supabase/functions/ingest-recover/index.ts` (NEW) — authenticated safety-net endpoint called on dashboard mount. Scans the caller's documents stuck in `pending` >10min and runs the same completion pipeline.

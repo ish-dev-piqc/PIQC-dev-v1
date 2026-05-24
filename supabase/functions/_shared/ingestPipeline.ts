@@ -300,35 +300,41 @@ export async function fetchReductoJobResult(
     const data = await res.json();
     const status = (data.status as string | undefined) ?? "Unknown";
 
+    // Verified against /job/{id} for a real Completed parse: the response
+    // envelope is `{status, progress, reason, result}` where `result` is a
+    // metadata wrapper (`{duration, job_id, response_type, result, ...}`)
+    // and the actual FullResult / UrlResult sits at `result.result`.
+    //   - FullResult: `{type:"full", chunks:[...]}`         (small docs)
+    //   - UrlResult:  `{type:"url",  url:"...presigned"}`   (large docs)
+    // The presigned URL returns `{type:"full", chunks:[...]}` when fetched.
+    const innerResult = (data.result?.result ?? data.result) as
+      | { type?: string; chunks?: ReductoChunk[]; url?: string }
+      | undefined;
+
     let rawChunks: ReductoChunk[] = [];
 
-    if (Array.isArray(data.result?.chunks)) {
-      // Path (a): inline chunks
-      rawChunks = data.result.chunks;
-    } else if (Array.isArray(data.chunks)) {
-      // Path (a) alternate (top-level)
-      rawChunks = data.chunks;
-    } else {
-      // Path (b) / (c): chunks live at a URL — follow it.
-      const asyncUrl = data.result?.url ?? data.url;
-      if (asyncUrl) {
-        try {
-          const urlRes = await fetch(asyncUrl);
-          if (!urlRes.ok) {
-            throw new Error(`Reducto async result fetch error: ${urlRes.status}`);
-          }
-          const urlData = await urlRes.json();
-          if (Array.isArray(urlData.chunks)) {
-            rawChunks = urlData.chunks;
-          } else if (Array.isArray(urlData.result?.chunks)) {
-            rawChunks = urlData.result.chunks;
-          }
-        } catch (urlErr) {
-          throw new Error(
-            `Failed to fetch Reducto async result: ${urlErr instanceof Error ? urlErr.message : String(urlErr)}`,
-          );
-        }
+    if (Array.isArray(innerResult?.chunks)) {
+      rawChunks = innerResult!.chunks!;
+    } else if (typeof innerResult?.url === "string") {
+      const urlRes = await fetch(innerResult.url);
+      if (!urlRes.ok) {
+        throw new Error(`Reducto async result fetch error: ${urlRes.status}`);
       }
+      const urlData = await urlRes.json();
+      if (Array.isArray(urlData?.chunks)) {
+        rawChunks = urlData.chunks;
+      } else if (Array.isArray(urlData)) {
+        rawChunks = urlData;
+      }
+    }
+
+    if (rawChunks.length === 0 && status === "Completed") {
+      // Unexpected shape — log what we got so future shape drift is debuggable.
+      console.error("[fetchReductoJobResult] empty_chunks", {
+        topKeys: Object.keys(data),
+        innerKeys: innerResult && typeof innerResult === "object" ? Object.keys(innerResult) : null,
+        innerType: typeof innerResult,
+      });
     }
 
     return { status, chunks: mapRawChunksToChunkData(rawChunks) };
@@ -484,7 +490,6 @@ export async function extractClinicalFields(
         },
         settings: {
           citations: { enabled: true, numerical_confidence: false },
-          array_extract: true,
         },
       }),
     });
@@ -1039,12 +1044,28 @@ export async function processIngestCompletion(
               error: insertProtocolError.message,
             });
           } else if (newProtocol) {
-            await supabase.from("protocol_versions").insert({
-              protocol_id: newProtocol.id,
-              version_number: 1,
-              status: "ACTIVE",
-              clinical_trial_phase: phaseEnum,
-            });
+            // protocol_versions has three NOT-NULL columns the original PIQC
+            // ingest flow populates from upstream payloads; for ingest-async
+            // B2.4 we synthesize them from the parse result so the row
+            // satisfies the constraint and downstream JOINs surface phase.
+            const { error: versionInsertError } = await supabase
+              .from("protocol_versions")
+              .insert({
+                protocol_id: newProtocol.id,
+                version_number: 1,
+                status: "ACTIVE",
+                clinical_trial_phase: phaseEnum,
+                piqc_protocol_id: `ingest-async:${docId}`,
+                raw_piqc_payload: extractedFields,
+                received_at: new Date().toISOString(),
+              });
+            if (versionInsertError) {
+              console.warn("[ingest] protocol_version_autocreate_failed", {
+                document_id: docId,
+                protocol_id: newProtocol.id,
+                error: versionInsertError.message,
+              });
+            }
 
             await supabase
               .from("documents")
