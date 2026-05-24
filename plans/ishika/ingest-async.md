@@ -24,6 +24,7 @@ Original plan used Reducto's Svix webhook delivery for completion notification. 
 - `supabase/functions/_shared/ingestPipeline.ts` (NEW) — factored helpers (Reducto `/parse_async` kick-off, `/extract`, `/job/{id}` result fetch, chunks+embed loop, SOTR persist RPC, B2.4 protocol auto-create, visit-template upsert, cross-doc fan-out) + the `processIngestCompletion` orchestrator. Reused by `ingest-status` and `ingest-recover`.
 - `src/components/dashboard/KnowledgeBase.tsx` — `UploadForm` gains a `'parsing'` state on 202 and a `useEffect` poll loop that hits `/ingest-status` every 10s while pending. State flips to `'success'` or `'error'` when the poll reports terminal.
 - `src/components/dashboard/site/ProtocolOnboarding.tsx` — SOTR-routing decision moves from `UploadForm.onSuccess` (which fires on pending, before `protocol_id` is known) to a `useEffect` keyed on `protocols.length` going 0 → 1.
+- `src/components/dashboard/site/AnchorDateModal.tsx` — surface a clear "Anchor date saved. Add a participant to project visits…" message when `materializeVisits` returns `created: 0` instead of closing the modal silently. Caught while verifying the ingest output end-to-end on a fresh protocol with no participants yet.
 - `vitest.config.ts` — broaden the `include` pattern to also pick up `supabase/functions/**/*.test.ts` (no current tests there, but the include is ready for future shared-module tests).
 - `supabase/config.toml` — declare `[functions.ingest-status]` and `[functions.ingest-recover]` blocks with `verify_jwt = true` (both authenticated). `ingest` block already exists.
 - `plans/ishika/ingest-async.md` — this plan.
@@ -53,7 +54,7 @@ None. Real Reducto, real prod Supabase project. No localStorage toggles.
 ## Approved-by
 
 - **@rv61** (Roger) — for all `supabase/functions/**` (ingest, ingest-status, ingest-recover, _shared) and `supabase/migrations/`. Primary reviewer.
-- **@ki-dev-piqc** (Kiara) — for `src/components/dashboard/site/ProtocolOnboarding.tsx` (Site Mode component).
+- **@ki-dev-piqc** (Kiara) — for `src/components/dashboard/site/ProtocolOnboarding.tsx` and `src/components/dashboard/site/AnchorDateModal.tsx` (Site Mode components).
 - `src/components/dashboard/KnowledgeBase.tsx` — Ishika owns (in SUPABASE_DEBT allowlist, no additional approval).
 
 ## External prerequisites (Ishika handles manually post-merge)
