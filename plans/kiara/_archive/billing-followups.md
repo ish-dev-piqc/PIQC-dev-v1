@@ -1,9 +1,10 @@
 ---
 owner: kiara
 feature: billing-followups
-status: active
+status: merged
+merged: 2026-05-25
 started: 2026-05-25
-target_pr:
+target_pr: #113
 ---
 
 # Billing follow-ups (post-PR #109)
