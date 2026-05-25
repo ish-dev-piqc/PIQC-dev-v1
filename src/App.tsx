@@ -20,6 +20,7 @@ import { SiteDataProvider } from './context/SiteDataContext';
 import { AuditProvider } from './context/AuditContext';
 import { AuditDataProvider } from './context/AuditDataContext';
 import { HeatmapProvider } from './context/HeatmapContext';
+import { getPendingCheckout } from './lib/billing/pendingCheckout';
 
 export type AppView = 'landing' | 'dashboard' | 'login' | 'forgot-password';
 
@@ -35,8 +36,22 @@ function AppContent() {
   const needsProfileCompletion = !!session && !profileLoading && !profileComplete;
 
   useEffect(() => {
-    if (!loading && session && (view === 'login' || view === 'landing')) {
-      setView('dashboard');
+    if (!loading && session) {
+      // Pending-checkout redirect runs regardless of which view we landed
+      // on. There's a race: Login.tsx calls onViewChange('dashboard')
+      // synchronously after signInWithPassword resolves, but session may
+      // update via onAuthStateChange either before or after that call.
+      // Whichever order happens, if a pending intent exists we want the
+      // user back on landing so Pricing.tsx's auto-resume effect can fire.
+      // The intent itself is cleared by Pricing.tsx once it resumes.
+      if (getPendingCheckout() && view !== 'landing') {
+        setScrollTarget('pricing');
+        setView('landing');
+        return;
+      }
+      if (view === 'login' || view === 'landing') {
+        setView('dashboard');
+      }
     }
     if (!loading && !session && view === 'dashboard') {
       setView('login');

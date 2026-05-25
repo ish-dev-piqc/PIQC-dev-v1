@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Check, Loader2 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -10,6 +10,11 @@ import {
   ADDON_KINDS,
   type StripeProduct,
 } from '../stripe-config';
+import {
+  clearPendingCheckout,
+  getPendingCheckout,
+  setPendingCheckout,
+} from '../lib/billing/pendingCheckout';
 import type { AppView } from '../App';
 
 // =============================================================================
@@ -76,6 +81,10 @@ export default function Pricing({ onViewChange }: PricingProps) {
   const launchCheckout = async (product: StripeProduct) => {
     if (product.mode === 'none') return;
     if (!session) {
+      // Stash the intent so App.tsx + Pricing's auto-resume effect can pick
+      // it up after the auth round trip and fire the checkout call without
+      // the user having to click the CTA a second time.
+      setPendingCheckout(product.kind);
       onViewChange('login');
       return;
     }
@@ -111,6 +120,32 @@ export default function Pricing({ onViewChange }: PricingProps) {
       setPendingKind(null);
     }
   };
+
+  // Auto-resume a checkout the user started before signing in. Fires at most
+  // once per mount — `resumedRef` guards against re-fire if the effect deps
+  // shift (e.g. `subscription` repopulates after auth). We wait for
+  // `subLoading` to settle so the add-on guard above evaluates against real
+  // subscription state.
+  const resumedRef = useRef(false);
+  useEffect(() => {
+    if (resumedRef.current) return;
+    if (!session || subLoading) return;
+
+    const pendingKindFromStorage = getPendingCheckout();
+    if (!pendingKindFromStorage) return;
+
+    resumedRef.current = true;
+    clearPendingCheckout();
+
+    const product = findProductByKind(pendingKindFromStorage);
+    if (!product || product.mode === 'none') return;
+
+    void launchCheckout(product);
+    // launchCheckout reads `session`, `hasActiveSub`, etc. from closure;
+    // we intentionally exclude it from the dep array — it'd re-create
+    // every render and we only want this to fire once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, subLoading]);
 
   const ctaLabelFor = (product: StripeProduct): string => {
     if (pendingKind === product.kind) return 'Redirecting…';
