@@ -161,6 +161,12 @@ export default function ProtocolTab() {
               </p>
             </div>
             <div>
+              <p className={`${mutedColor} text-[10px] uppercase tracking-wider font-semibold`}>Timezone</p>
+              <p className="text-fg-heading text-sm font-medium">
+                {activeProtocol.timezone ?? 'Browser default'}
+              </p>
+            </div>
+            <div>
               <p className={`${mutedColor} text-[10px] uppercase tracking-wider font-semibold`}>Templates</p>
               <p className="text-fg-heading text-sm font-medium">
                 {templatesLoading ? '…' : `${templates.length} extracted`}
@@ -277,6 +283,7 @@ export default function ProtocolTab() {
           protocolId={activeProtocol.id}
           protocolCode={activeProtocol.code}
           initialDate={activeProtocol.demoAnchorDate}
+          initialTimezone={activeProtocol.timezone}
           onSaved={(r) => {
             const skipped = r.skipped_no_anchor > 0
               ? ` (${r.skipped_no_anchor} skipped — no enrolled_at)`

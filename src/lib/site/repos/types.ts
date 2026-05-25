@@ -97,6 +97,6 @@ export interface SiteRepo {
 
   // Templates + anchor + materialize
   fetchVisitTemplates(protocolId: string): Promise<Result<ProtocolVisitTemplate[]>>;
-  setAnchorDate(protocolId: string, anchorDate: string | null): Promise<Result<void>>;
+  setAnchorDate(protocolId: string, anchorDate: string | null, timezone?: string | null): Promise<Result<void>>;
   materializeVisits(protocolId: string): Promise<Result<MaterializeResult>>;
 }

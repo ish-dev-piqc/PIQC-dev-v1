@@ -13,6 +13,7 @@ export function getDemoProtocols(): Protocol[] {
       sponsor: 'Demo Sponsor A',
       phase: 'Phase 2',
       demoAnchorDate: addDays(-28), // anchor 4 weeks ago so mid-trial visits land "today-ish"
+      timezone: null,
     },
     {
       id: DEMO_PROTOCOL_IDS['CARDIAC-7'],
@@ -21,6 +22,7 @@ export function getDemoProtocols(): Protocol[] {
       sponsor: 'Demo Sponsor B',
       phase: 'Phase 3',
       demoAnchorDate: addDays(-14),
+      timezone: null,
     },
     {
       id: DEMO_PROTOCOL_IDS['IMMUNE-14'],
@@ -29,6 +31,7 @@ export function getDemoProtocols(): Protocol[] {
       sponsor: 'Demo Sponsor C',
       phase: 'Phase 1',
       demoAnchorDate: addDays(-15),
+      timezone: null,
     },
   ];
 }

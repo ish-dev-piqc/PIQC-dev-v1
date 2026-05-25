@@ -590,6 +590,7 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
           protocolId={activeProtocol.id}
           protocolCode={activeProtocol.code}
           initialDate={activeProtocol.demoAnchorDate}
+          initialTimezone={activeProtocol.timezone}
           onSaved={() => refresh()}
           onClose={() => setShowAnchorModal(false)}
         />
