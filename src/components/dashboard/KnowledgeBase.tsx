@@ -15,10 +15,24 @@ interface Document {
 }
 
 interface UploadState {
-  status: 'idle' | 'uploading' | 'success' | 'error';
+  // 'parsing' = ingest returned 202 (PDF in async Reducto pipeline). The
+  // UploadForm polls /ingest-status every POLL_INTERVAL_MS while in this
+  // state until Reducto reports done or failed. The documents realtime
+  // channel in SiteDataContext also catches the eventual status flip; the
+  // polling is the active driver that calls processIngestCompletion when
+  // Reducto reports completion.
+  status: 'idle' | 'uploading' | 'parsing' | 'success' | 'error';
   message: string;
   chunks?: number;
+  // Set while in 'parsing' so the poll loop knows what to check.
+  pendingDocumentId?: string;
 }
+
+// Polling cadence: ~30 polls over a typical 5-minute parse window. Each poll
+// is cheap (Reducto job-status call is sub-second) until the parse actually
+// completes, at which point the SAME function call runs the heavy
+// completion pipeline (~60–120s). One slow tick rather than many.
+const POLL_INTERVAL_MS = 10_000;
 
 type UploadMode = 'pdf' | 'text';
 
@@ -34,14 +48,24 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-// Shape of the JSON the ingest edge function returns on success. Only the
-// fields the frontend actually reads are typed here; the function returns
-// more telemetry that callers can ignore.
+// Shape of the JSON the ingest edge function returns. Three terminal-ish
+// shapes the frontend cares about:
+//
+//   200 + status='ready'                — text upload finished synchronously,
+//                                          or PDF deduped to an existing ready doc
+//   200 + status='ready' + deduped=true — re-upload of an already-completed PDF
+//   202 + status='pending'              — PDF kicked off async; client waits
+//                                          for realtime on documents to flip
+//                                          status to 'ready' or 'failed'
+//
+// chunks_created is only present on the sync text path.
 export interface IngestResponse {
   success: true;
   document_id: string;
-  protocol_id: string | null;
-  chunks_created: number;
+  protocol_id?: string | null;
+  chunks_created?: number;
+  status?: 'pending' | 'ready' | 'failed';
+  deduped?: boolean;
 }
 
 export function UploadForm({
@@ -150,22 +174,97 @@ export function UploadForm({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Upload failed');
 
+      const typed = data as IngestResponse;
+
+      // PDF path: 202 with status='pending' means Reducto's processing
+      // asynchronously. Switch to the parsing state, hand the document_id
+      // off to the poll loop (useEffect below), and notify the parent so
+      // ProtocolOnboarding etc. can wire up their realtime listeners.
+      if (res.status === 202 || typed.status === 'pending') {
+        setState({
+          status: 'parsing',
+          message: 'Parsing your protocol — usually 30–180 seconds. We\'ll keep checking; safe to leave this open.',
+          pendingDocumentId: typed.document_id,
+        });
+        onSuccess(typed);
+        return;
+      }
+
       setState({
         status: 'success',
-        message: `Document ingested successfully`,
-        chunks: data.chunks_created,
+        message: typed.deduped
+          ? 'Already uploaded — opening your dashboard.'
+          : 'Document ingested successfully',
+        chunks: typed.chunks_created,
       });
       setTitle('');
       setSource('');
       setContent('');
       setPdfFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
-      onSuccess(data as IngestResponse);
+      onSuccess(typed);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Upload failed';
       setState({ status: 'error', message: msg });
     }
   }, [mode, pdfFile, content, title, source, supabaseUrl, supabaseAnonKey, onSuccess]);
+
+  // Polling loop while the parse is in flight. Each tick hits /ingest-status
+  // which asks Reducto if the job is done and, if so, runs the completion
+  // pipeline. State flips out of 'parsing' when the tick reports terminal
+  // status (ready/failed). The documents realtime channel in SiteDataContext
+  // is a parallel notifier — the UI listens to both, whichever resolves first.
+  const pendingDocId = state.status === 'parsing' ? state.pendingDocumentId : null;
+  useEffect(() => {
+    if (!pendingDocId) return;
+    let cancelled = false;
+
+    const tick = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token ?? supabaseAnonKey;
+        const res = await fetch(`${supabaseUrl}/functions/v1/ingest-status`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ document_id: pendingDocId }),
+        });
+        if (cancelled) return;
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data) return; // keep polling on transient errors
+
+        if (data.status === 'ready') {
+          setState({
+            status: 'success',
+            message: 'Protocol parsed and ready.',
+          });
+        } else if (data.status === 'failed') {
+          setState({
+            status: 'error',
+            message: data.error_message ?? 'Parse failed. Please try again.',
+          });
+        }
+        // status === 'pending' → keep polling on the next interval tick
+      } catch {
+        // network blip — silent, next tick retries
+      }
+    };
+
+    // Fire immediately, then on interval. The first tick is usually too
+    // early to be ready (Reducto parse takes ~30-90s for a normal protocol)
+    // but it's cheap and confirms the document_id is valid.
+    void tick();
+    const id = window.setInterval(() => {
+      void tick();
+    }, POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [pendingDocId, supabaseUrl, supabaseAnonKey]);
 
   const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
   const estimatedChunks = Math.ceil(Math.max(0, wordCount - 50) / 350) + (wordCount > 0 ? 1 : 0);
@@ -358,7 +457,7 @@ export function UploadForm({
             ? 'bg-red-400/5 border-red-400/20 text-red-500'
             : 'bg-[#4a6fa5]/5 border-[#4a6fa5]/20 text-[#6e8fb5]'
         }`}>
-          {state.status === 'uploading' && <Loader size={16} className="animate-spin flex-shrink-0 mt-0.5" />}
+          {(state.status === 'uploading' || state.status === 'parsing') && <Loader size={16} className="animate-spin flex-shrink-0 mt-0.5" />}
           {state.status === 'success' && <CheckCircle size={16} className="flex-shrink-0 mt-0.5" />}
           {state.status === 'error' && <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />}
           <span>
@@ -373,15 +472,15 @@ export function UploadForm({
       <div className="flex justify-end">
         <button
           type="submit"
-          disabled={!canSubmit || state.status === 'uploading'}
+          disabled={!canSubmit || state.status === 'uploading' || state.status === 'parsing'}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#4a6fa5] hover:bg-[#5b82b8] disabled:opacity-30 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
         >
-          {state.status === 'uploading' ? (
+          {(state.status === 'uploading' || state.status === 'parsing') ? (
             <Loader size={15} className="animate-spin" />
           ) : (
             <Upload size={15} />
           )}
-          {state.status === 'uploading' ? 'Ingesting...' : 'Ingest Document'}
+          {state.status === 'uploading' ? 'Ingesting...' : state.status === 'parsing' ? 'Parsing...' : 'Ingest Document'}
         </button>
       </div>
     </form>

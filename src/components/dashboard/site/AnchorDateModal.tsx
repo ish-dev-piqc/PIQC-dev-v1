@@ -54,6 +54,15 @@ export default function AnchorDateModal({
       setError(matResult.error);
       return;
     }
+    // materializeVisits cross-products participants × templates. With zero
+    // participants we save the anchor but project nothing onto the calendar
+    // — surface that explicitly so the user knows the next step.
+    if (matResult.data.created === 0) {
+      setError(
+        'Anchor date saved. Add a participant on the Participants tab to project visits onto the calendar.',
+      );
+      return;
+    }
     onSaved(matResult.data);
     onClose();
   };

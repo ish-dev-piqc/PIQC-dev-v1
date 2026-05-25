@@ -39,3 +39,15 @@ verify_jwt = false
 
 [functions.ingest]
 verify_jwt = false
+
+# Per-document poll driver. Called by the frontend on a timer while a
+# document is in status='pending'. Asks Reducto for job status and runs
+# processIngestCompletion when Reducto reports Completed. Authenticated.
+[functions.ingest-status]
+verify_jwt = true
+
+# Stuck-pending safety net — called from authenticated dashboard mount.
+# Scans the caller's documents that have been pending >10min and processes
+# any that Reducto reports complete. Authenticated.
+[functions.ingest-recover]
+verify_jwt = true
