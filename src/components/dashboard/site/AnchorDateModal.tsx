@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { X, Calendar, AlertTriangle } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { setAnchorDate, materializeVisits } from '../../../lib/site/siteApi';
+import { TIMEZONE_OPTIONS } from '../../../lib/timezones';
 
 // =============================================================================
 // AnchorDateModal — collects the calendar date for protocol Day 0.
@@ -21,21 +22,8 @@ interface Props {
   onClose: () => void;
 }
 
-// Curated short list of IANA zones for the picker. The full IANA database
-// is ~600 entries — overkill for a clinical site app. Auditors/coordinators
-// in unlisted regions can still operate; UI falls back to browser TZ when
-// `timezone` is null.
-const TIMEZONE_OPTIONS = [
-  { value: '', label: 'Use browser timezone' },
-  { value: 'America/Los_Angeles', label: 'Pacific (PST/PDT)' },
-  { value: 'America/Denver',      label: 'Mountain (MST/MDT)' },
-  { value: 'America/Chicago',     label: 'Central (CST/CDT)' },
-  { value: 'America/New_York',    label: 'Eastern (EST/EDT)' },
-  { value: 'UTC',                 label: 'UTC' },
-  { value: 'Europe/London',       label: 'London (GMT/BST)' },
-  { value: 'Europe/Paris',        label: 'Central Europe (CET/CEST)' },
-  { value: 'Asia/Tokyo',          label: 'Japan (JST)' },
-];
+// Curated IANA zone list lives in src/lib/timezones.ts — shared with the
+// Account settings drawer so both pickers stay in sync.
 
 export default function AnchorDateModal({
   protocolId,

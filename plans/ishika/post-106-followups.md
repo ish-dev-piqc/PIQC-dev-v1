@@ -27,11 +27,16 @@ Small follow-up PR — three targeted changes, no migration, no schema work.
 - `src/components/sotr/ConfidenceBadge.tsx` — delete (no remaining production consumers)
 - `src/components/sotr/__tests__/ConfidenceBadge.test.tsx` — delete (test of deleted component)
 - `src/components/dashboard/site/TeamFormDrawer.tsx` — guard form body + submit on `mode === 'edit'`; `mode === 'create'` shows static "Contact PIQC…" message
+- `src/components/dashboard/Dashboard.tsx` — Account settings rework: split `fullName` into first/last name, add read-only `Organization` (from `user_profiles.organization`), swap timezone free-text for `<select>` over the shared `TIMEZONE_OPTIONS`, remove the Password section + handler + state, remove Security from nav + render
+- `src/components/Navbar.tsx` — remove the Security menu items (desktop + mobile) since the Security section is gone; drop now-unused `Shield` import
+- `src/lib/timezones.ts` (NEW) — extract `TIMEZONE_OPTIONS` so AnchorDateModal + Dashboard share the curated IANA list
+- `src/components/dashboard/site/AnchorDateModal.tsx` — switch to importing the shared `TIMEZONE_OPTIONS`
 
 ## Out of scope (files forbidden)
 
 - The edit path of `TeamFormDrawer` — must keep working.
 - `src/components/sotr/ReviewActionBar.tsx` — Accept-for-Draft copy stays as-is.
+- The `SettingsSection` type's `'security'` enum member — keeping it as a no-op fallback for any stale URLs; deleting it would force the Dashboard switch to be exhaustive, which is more churn than the user asked for.
 - `supabase/migrations/**`, `supabase/functions/**`, Audit Mode files.
 
 ## Architecture layers touched
@@ -49,7 +54,8 @@ None. UI-only render changes on existing real data.
 
 ## Approved-by
 
-- **@ki-dev-piqc** (Kiara) — `src/components/dashboard/site/TeamFormDrawer.tsx` (Site Mode form rework).
+- **@ki-dev-piqc** (Kiara) — `src/components/dashboard/site/TeamFormDrawer.tsx`, `src/components/dashboard/site/AnchorDateModal.tsx` (Site Mode).
+- Shared infra (`src/context/`, `src/components/Navbar.tsx`, `src/components/dashboard/Dashboard.tsx`, `src/lib/timezones.ts`) requires 2 reviewers per CODEOWNERS — Kiara + one other suffices.
 - `src/components/sotr/*` — Ishika owns directly.
 
 ## Verification
@@ -59,5 +65,9 @@ None. UI-only render changes on existing real data.
 - [ ] No `<ConfidenceBadge>` chips visible in either the list row or the drawer.
 - [ ] Team tab → "New team member" → drawer shows the static "Contact PIQC…" message; no form fields.
 - [ ] Team tab → "Edit" on an existing member → full form still renders + submit still works.
+- [ ] Navbar user menu → "Account" → renders first name, last name, title (editable); organization, email (read-only); timezone (dropdown with the curated IANA list). Save updates the user_metadata fields.
+- [ ] Navbar user menu (both desktop dropdown and mobile sheet) does not show a "Security" entry.
+- [ ] Account section does not render the Password form.
+- [ ] AnchorDateModal timezone picker still works (regression check on the shared `TIMEZONE_OPTIONS`).
 - [ ] `npx tsc --noEmit -p .`, `npx vite build`, relevant `vitest run` are clean.
 - [ ] `/piqc-review` locally + CI `piqc-discipline.yml` passes.
