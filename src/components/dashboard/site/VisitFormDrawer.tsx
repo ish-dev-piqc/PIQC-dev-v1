@@ -19,9 +19,13 @@ interface VisitFormDrawerProps {
   protocolId: string;
   defaultParticipantUuid?: string; // pre-select if opened from a participant row
   onClose: () => void;
+  // Fired once after a successful create so the parent can surface a brief
+  // confirmation banner — the freshly-scheduled row is easy to lose among
+  // hundreds of materialized visits.
+  onSaved?: (summary: { visit_name: string; date: string }) => void;
 }
 
-export default function VisitFormDrawer({ protocolId, defaultParticipantUuid, onClose }: VisitFormDrawerProps) {
+export default function VisitFormDrawer({ protocolId, defaultParticipantUuid, onClose, onSaved }: VisitFormDrawerProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
   const overlay = useRef<HTMLDivElement>(null);
@@ -39,7 +43,9 @@ export default function VisitFormDrawer({ protocolId, defaultParticipantUuid, on
   const [participantUuid, setParticipantUuid] = useState(
     defaultParticipantUuid ?? eligibleParticipants[0]?.uuid ?? '',
   );
-  const [date, setDate] = useState('');
+  // Default the date to today (YYYY-MM-DD in local TZ) so the most common
+  // case — scheduling a visit for "soon" — needs minimal typing.
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [time, setTime] = useState('');
   const [visitName, setVisitName] = useState('');
   const [studyDay, setStudyDay] = useState('');
@@ -93,6 +99,7 @@ export default function VisitFormDrawer({ protocolId, defaultParticipantUuid, on
       setError(result.error);
       return;
     }
+    onSaved?.({ visit_name: visitName.trim(), date });
     onClose();
   };
 

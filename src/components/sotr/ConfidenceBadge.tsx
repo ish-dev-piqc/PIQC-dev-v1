@@ -16,6 +16,15 @@ const LABELS: Record<ConfidenceState, string> = {
   needs_review: 'Needs Review',
 };
 
+// Tooltip copy explaining what each confidence level means for the reviewer.
+// Surfaced on hover so the chip isn't an opaque label.
+const TOOLTIPS: Record<ConfidenceState, string> = {
+  high:         'High confidence — Reducto parsed this with strong evidence; no review action required.',
+  medium:       'Medium confidence — value looks reasonable but worth a glance before accepting for the draft.',
+  low:          'Low confidence — ambiguous extraction; please review the source and Accept, Edit, or Reject.',
+  needs_review: 'Needs review — the parser flagged a problem (e.g. missing citation). Open the source to verify.',
+};
+
 const TONES: Record<ConfidenceState, string> = {
   high:         'text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-400/10 dark:border-emerald-400/20',
   medium:       'text-blue-700 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-400/10 dark:border-blue-400/20',
@@ -29,6 +38,7 @@ export default function ConfidenceBadge({ state, size = 'sm' }: Props) {
     <span
       data-testid="sotr-confidence-badge"
       data-state={state}
+      title={TOOLTIPS[state]}
       className={`inline-flex items-center font-semibold uppercase tracking-wider rounded-md border ${sizing} ${TONES[state]}`}
     >
       {LABELS[state]}

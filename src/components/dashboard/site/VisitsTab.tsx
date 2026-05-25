@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import VisitFormDrawer from './VisitFormDrawer';
 import { Plus } from 'lucide-react';
 import {
@@ -65,6 +65,14 @@ export default function VisitsTab() {
   const [groupMode, setGroupMode] = useState<GroupMode>('date');
   const [openVisit, setOpenVisit] = useState<SiteVisit | null>(null);
   const [scheduleFormOpen, setScheduleFormOpen] = useState(false);
+  // Surfaced briefly after a manual "Schedule visit" so the new row doesn't
+  // disappear into the materialized list. Auto-clears after 5s.
+  const [recentSchedule, setRecentSchedule] = useState<{ visit_name: string; date: string } | null>(null);
+  useEffect(() => {
+    if (!recentSchedule) return;
+    const t = setTimeout(() => setRecentSchedule(null), 5000);
+    return () => clearTimeout(t);
+  }, [recentSchedule]);
 
   // Scope to the active protocol — empty array when no protocol selected so
   // the hooks below can run unconditionally.
@@ -194,6 +202,24 @@ export default function VisitsTab() {
           </button>
         </div>
       </div>
+
+      {/* Recently-scheduled banner — keeps the just-created row visible so it
+          doesn't get lost among the auto-materialized visits. */}
+      {recentSchedule && (
+        <div
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-md border text-xs ${
+            isLight
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-emerald-500/[0.08] border-emerald-500/25 text-emerald-300'
+          }`}
+        >
+          <CheckCircle2 size={13} className="flex-shrink-0" />
+          <span>
+            Scheduled <span className="font-semibold">{recentSchedule.visit_name}</span> on{' '}
+            <span className="font-mono">{recentSchedule.date}</span>. Search or sort the list to find it.
+          </span>
+        </div>
+      )}
 
       {/* Filter row */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -353,6 +379,7 @@ export default function VisitsTab() {
         <VisitFormDrawer
           protocolId={activeProtocol.id}
           onClose={() => setScheduleFormOpen(false)}
+          onSaved={(summary) => setRecentSchedule(summary)}
         />
       )}
     </div>

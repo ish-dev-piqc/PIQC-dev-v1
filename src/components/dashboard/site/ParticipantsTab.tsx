@@ -323,11 +323,21 @@ function ParticipantRow({
               {participant.open_deviations} open
             </span>
           )}
-          <HeatIndicator
-            score={scoreParticipant(participant)}
-            variant="chip"
-            hint="cross-study deviation/dropout pattern"
-          />
+          {(() => {
+            // Hide the heat chip for participants with no real risk signal
+            // (default-state active/screening rows). The chip is meaningful
+            // for `moderate`/`high` — open deviations or withdrawn status —
+            // not for "we have nothing on this person."
+            const score = scoreParticipant(participant);
+            if (score !== 'moderate' && score !== 'high') return null;
+            return (
+              <HeatIndicator
+                score={score}
+                variant="chip"
+                hint="cross-study deviation/dropout pattern"
+              />
+            );
+          })()}
         </div>
         {participant.next_visit_date && (
           <div className={`flex items-center gap-1.5 mt-1 text-xs ${subColor}`}>

@@ -24,8 +24,8 @@ Tier 1 gaps and the components they live in:
 - `src/components/dashboard/site/VisitFormDrawer.tsx` — G4b (default date to today on open)
 - `src/components/dashboard/site/VisitsTab.tsx` — G4e (highlight just-created visit / scroll-into-view)
 - `src/components/dashboard/site/ParticipantsTab.tsx` — G15 (hide HeatIndicator when no signal yet)
-- `src/components/sotr/WorksheetItemsList.tsx` — G5b/c/d (confidence-chip legend; "Accept for draft" explanatory copy)
-- `src/components/sotr/WorksheetItemRow.tsx` — G5b (confidence-chip tooltip)
+- `src/components/sotr/ConfidenceBadge.tsx` — G5b (title-attr tooltip on the chip with per-state copy)
+- `src/components/sotr/ReviewActionBar.tsx` — G5c (explanatory blurb above the action buttons)
 
 ## Out of scope (files forbidden)
 
@@ -55,10 +55,10 @@ None. All edits are conditional UI rendering on existing real data.
 
 ## Verification
 
-- [ ] Protocol tab: amendment/supplementary upload section is gone.
-- [ ] Today tab w/o participant filter: calendar renders empty with prompt instead of block.
-- [ ] Visits drawer: opens with today's date pre-filled.
-- [ ] Visits tab: after scheduling a new visit, the new row is briefly highlighted / scrolled into view.
-- [ ] Participants tab: HeatIndicator chip hidden when participant has no deviation/dropout history.
-- [ ] SOTR worksheet: confidence chip has a tooltip; "Accept for draft" has explanatory copy above the action bar.
+- [x] Protocol tab: amendment/supplementary upload section is gone (G18).
+- [x] Today tab: even with zero visible visits, the week/month grid still renders; empty-state copy moves into a compact banner above the grid (G14).
+- [x] Visits drawer: date input pre-fills to today's local date on open (G4b).
+- [x] Visits tab: after a successful manual schedule, a green confirmation banner shows the new visit name + date for 5s (G4e).
+- [x] Participants tab: HeatIndicator chip only renders for `moderate` / `high` scores; suppressed on default-state rows (G15).
+- [x] SOTR worksheet: ConfidenceBadge has a `title=`-attribute tooltip per state explaining what the level means (G5b); ReviewActionBar shows an explanatory paragraph above the action row clarifying what Accept/Edit/Reject/Flag do (G5c). G5d is documented inside the same blurb.
 - [ ] `/piqc-review` passes locally; CI `piqc-discipline.yml` passes.
