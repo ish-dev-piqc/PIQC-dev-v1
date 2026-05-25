@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: post-106-followups
-status: in-review
+status: merged
+merged: 2026-05-25
 started: 2026-05-25
-target_pr: 110
+target_pr: #110
 ---
 
 # Post-#106 follow-ups — drawer-header visit render, team-form gut, drop confidence chip
