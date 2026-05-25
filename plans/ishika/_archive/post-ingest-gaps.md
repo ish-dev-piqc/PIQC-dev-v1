@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: post-ingest-gaps
-status: active
+status: merged
+merged: 2026-05-25
 started: 2026-05-25
-target_pr: 106
+target_pr: #106
 ---
 
 # Post-ingest dashboard gap fixes — Tiers 1–4 (bundled)
