@@ -1,9 +1,10 @@
 ---
 owner: kiara
 feature: post-login-redirect-to-checkout
-status: in-review
+status: merged
+merged: 2026-05-25
 started: 2026-05-24
-target_pr:
+target_pr: #109
 ---
 
 # Post-login redirect to checkout (Stripe Track D #11)
