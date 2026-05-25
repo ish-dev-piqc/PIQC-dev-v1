@@ -98,6 +98,15 @@ export default function ReviewActionBar({ studyId, data, onCompleted }: Props) {
 
   return (
     <div data-testid="sotr-review-action-bar" className="space-y-2">
+      <p className="text-[11px] leading-relaxed text-fg-sub">
+        Your decision here lands in the protocol draft that Audit Mode and Reports read from.
+        <strong className="font-semibold text-fg-heading"> Accept</strong> keeps the value as-is,
+        {' '}<strong className="font-semibold text-fg-heading">Edit</strong> rewrites it,
+        {' '}<strong className="font-semibold text-fg-heading">Reject</strong> excludes it, and
+        {' '}<strong className="font-semibold text-fg-heading">Flag</strong> queues it for a
+        teammate to revisit.
+      </p>
+
       {mode.kind === 'error' && (
         <div
           data-testid="sotr-review-action-error"

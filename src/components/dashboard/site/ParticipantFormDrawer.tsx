@@ -105,6 +105,13 @@ export default function ParticipantFormDrawer({
     if (!form.participant_code.trim()) return 'Participant code is required.';
     if (!/^[A-Za-z0-9-]+$/.test(form.participant_code.trim()))
       return 'Participant code must contain only letters, numbers, or "-".';
+    // enrolled_at is required on create so the participant's day-0 reference
+    // is well-defined for visit projection (materialize_protocol_visits uses
+    // COALESCE(enrolled_at, demo_anchor_date)). Edits keep the legacy null
+    // path for now to avoid blocking saves on historical rows.
+    if (mode === 'create' && !form.enrolled_at) {
+      return 'Enrolled date is required so the visit schedule projects correctly.';
+    }
     if (form.current_study_day && Number.isNaN(Number(form.current_study_day)))
       return 'Current study day must be a number.';
     if (Number(form.open_deviations) < 0) return 'Open deviations cannot be negative.';
@@ -232,7 +239,10 @@ export default function ParticipantFormDrawer({
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Enrolled date" labelColor={labelColor}>
+            <Field
+              label={mode === 'create' ? 'Enrolled date *' : 'Enrolled date'}
+              labelColor={labelColor}
+            >
               <input
                 type="date"
                 value={form.enrolled_at}

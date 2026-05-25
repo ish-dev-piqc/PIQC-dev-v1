@@ -520,20 +520,20 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
           onClose={() => setFilterPanelOpen(false)}
         />
 
-        {/* Calendar */}
+        {/* Calendar — always render the grid so the user can see the
+            week/month structure; surface empty/filtered states as a compact
+            banner above it instead of replacing the calendar. */}
         <div className={`flex-1 min-w-0 ${cardBg} border rounded-xl overflow-hidden flex flex-col`}>
-          {isEmptyRange ? (
-            <CalendarEmptyState
+          {isEmptyRange && (
+            <CalendarEmptyBanner
               isLight={isLight}
               view={view}
-              rangeLabel={view === 'week' ? formatWeekRange(startOfWeek(anchorDate)) : formatMonth(anchorDate)}
               filtered={isFilteredEmpty}
               hiddenCount={scopedInRange.length}
               onClearFilters={clearFilters}
-              onJumpToToday={handleToday}
-              isToday={isSameDay(anchorDate, today)}
             />
-          ) : view === 'week' ? (
+          )}
+          {view === 'week' ? (
             <WeekView
               isLight={isLight}
               isHome={isHome}
@@ -590,6 +590,7 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
           protocolId={activeProtocol.id}
           protocolCode={activeProtocol.code}
           initialDate={activeProtocol.demoAnchorDate}
+          initialTimezone={activeProtocol.timezone}
           onSaved={() => refresh()}
           onClose={() => setShowAnchorModal(false)}
         />
@@ -1494,84 +1495,60 @@ function DayDetailDrawer({ isLight, isHome, day, today, visits, protocols, onClo
 // Calendar empty state
 // ────────────────────────────────────────────────────────────────────────────
 
-interface CalendarEmptyStateProps {
+interface CalendarEmptyBannerProps {
   isLight: boolean;
   view: ViewMode;
-  rangeLabel: string;
   filtered: boolean;
   hiddenCount: number;
   onClearFilters: () => void;
-  onJumpToToday: () => void;
-  isToday: boolean;
 }
 
-function CalendarEmptyState({
+// Compact banner that sits above the still-rendered calendar grid when there
+// are no visible visits in the current range. Distinguishes between "nothing
+// scheduled at all" and "everything hidden by filters" so the user can
+// either pick a participant or clear filters without losing the grid view.
+function CalendarEmptyBanner({
   isLight,
   view,
-  rangeLabel,
   filtered,
   hiddenCount,
   onClearFilters,
-  onJumpToToday,
-  isToday,
-}: CalendarEmptyStateProps) {
-  const headingColor = 'text-fg-heading';
+}: CalendarEmptyBannerProps) {
   const subColor = 'text-fg-sub';
-  const mutedColor = 'text-fg-muted';
-  const iconBg = isLight
-    ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/20 text-[#4a6fa5]'
-    : 'bg-[#6e8fb5]/15 border-[#6e8fb5]/25 text-[#6e8fb5]';
-  const buttonPrimary = isLight
-    ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
-    : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]';
-  const buttonSecondary = isLight
-    ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-    : 'bg-[#131a22] border border-white/5 text-[#d2d7e0] hover:bg-white/[0.04]';
 
   return (
-    <div className="flex-1 flex items-center justify-center p-8">
-      <div className="max-w-sm text-center">
-        <div className={`inline-flex items-center justify-center w-14 h-14 rounded-2xl border mb-4 ${iconBg}`}>
-          {filtered ? <Filter size={22} /> : <CalendarDays size={22} />}
-        </div>
+    <div
+      className={`flex items-center justify-between gap-3 px-4 py-2.5 border-b text-xs ${
+        isLight
+          ? 'bg-[#f5f7fa] border-[#e2e8ee]'
+          : 'bg-white/[0.02] border-white/5'
+      }`}
+    >
+      <div className="flex items-center gap-2 min-w-0">
         {filtered ? (
-          <>
-            <h3 className={`${headingColor} font-semibold text-base mb-1.5`}>
-              All visits hidden by filters
-            </h3>
-            <p className={`${subColor} text-sm mb-5`}>
-              {hiddenCount} {hiddenCount === 1 ? 'visit is' : 'visits are'} scheduled this {view} but
-              hidden by your active filters.
-            </p>
-            <button
-              type="button"
-              onClick={onClearFilters}
-              className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium ${buttonPrimary}`}
-            >
-              Clear filters
-            </button>
-          </>
+          <Filter size={13} className="flex-shrink-0 text-fg-muted" />
         ) : (
-          <>
-            <h3 className={`${headingColor} font-semibold text-base mb-1.5`}>
-              Nothing scheduled this {view}
-            </h3>
-            <p className={`${subColor} text-sm mb-1`}>{rangeLabel}</p>
-            <p className={`${mutedColor} text-xs mb-5`}>
-              No participant visits are scheduled in this range.
-            </p>
-            {!isToday && (
-              <button
-                type="button"
-                onClick={onJumpToToday}
-                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium ${buttonSecondary}`}
-              >
-                Jump to today
-              </button>
-            )}
-          </>
+          <CalendarDays size={13} className="flex-shrink-0 text-fg-muted" />
         )}
+        <span className={`${subColor} truncate`}>
+          {filtered
+            ? `${hiddenCount} ${hiddenCount === 1 ? 'visit is' : 'visits are'} hidden this ${view} — pick a participant in the filter panel to see their visits.`
+            : `No visits scheduled this ${view}. Add a participant or schedule a visit to populate the calendar.`}
+        </span>
       </div>
+      {filtered && (
+        <button
+          type="button"
+          onClick={onClearFilters}
+          className={`flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border ${
+            isLight
+              ? 'bg-white border-[#e2e8ee] text-[#374152] hover:bg-[#eef2f6]'
+              : 'bg-[#131a22] border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]'
+          }`}
+        >
+          Clear filters
+        </button>
+      )}
     </div>
   );
 }

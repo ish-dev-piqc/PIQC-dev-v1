@@ -11,6 +11,7 @@ export interface Protocol {
   sponsor: string;
   phase: string;
   demoAnchorDate: string | null;  // protocols.demo_anchor_date — for visit projection
+  timezone: string | null;        // protocols.timezone — IANA name. null = browser TZ fallback
 }
 
 interface ProtocolContextValue {

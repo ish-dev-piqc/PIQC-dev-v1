@@ -16,14 +16,32 @@ interface Props {
   protocolId: string;
   protocolCode: string;
   initialDate: string | null;
+  initialTimezone: string | null;
   onSaved: (result: { created: number; skipped_no_anchor: number }) => void;
   onClose: () => void;
 }
+
+// Curated short list of IANA zones for the picker. The full IANA database
+// is ~600 entries — overkill for a clinical site app. Auditors/coordinators
+// in unlisted regions can still operate; UI falls back to browser TZ when
+// `timezone` is null.
+const TIMEZONE_OPTIONS = [
+  { value: '', label: 'Use browser timezone' },
+  { value: 'America/Los_Angeles', label: 'Pacific (PST/PDT)' },
+  { value: 'America/Denver',      label: 'Mountain (MST/MDT)' },
+  { value: 'America/Chicago',     label: 'Central (CST/CDT)' },
+  { value: 'America/New_York',    label: 'Eastern (EST/EDT)' },
+  { value: 'UTC',                 label: 'UTC' },
+  { value: 'Europe/London',       label: 'London (GMT/BST)' },
+  { value: 'Europe/Paris',        label: 'Central Europe (CET/CEST)' },
+  { value: 'Asia/Tokyo',          label: 'Japan (JST)' },
+];
 
 export default function AnchorDateModal({
   protocolId,
   protocolCode,
   initialDate,
+  initialTimezone,
   onSaved,
   onClose,
 }: Props) {
@@ -31,6 +49,7 @@ export default function AnchorDateModal({
   const isLight = theme === 'light';
 
   const [date, setDate] = useState<string>(initialDate ?? new Date().toISOString().slice(0, 10));
+  const [timezone, setTimezone] = useState<string>(initialTimezone ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,7 +61,7 @@ export default function AnchorDateModal({
     setSubmitting(true);
     setError(null);
 
-    const setResult = await setAnchorDate(protocolId, date);
+    const setResult = await setAnchorDate(protocolId, date, timezone || null);
     if (!setResult.ok) {
       setError(setResult.error);
       setSubmitting(false);
@@ -52,6 +71,15 @@ export default function AnchorDateModal({
     setSubmitting(false);
     if (!matResult.ok) {
       setError(matResult.error);
+      return;
+    }
+    // materializeVisits cross-products participants × templates. With zero
+    // participants we save the anchor but project nothing onto the calendar
+    // — surface that explicitly so the user knows the next step.
+    if (matResult.data.created === 0) {
+      setError(
+        'Anchor date saved. Add a participant on the Participants tab to project visits onto the calendar.',
+      );
       return;
     }
     onSaved(matResult.data);
@@ -132,10 +160,42 @@ export default function AnchorDateModal({
             />
           </label>
 
-          <p className={`${subColor} text-xs leading-relaxed`}>
-            Each participant's visits are computed from <span className="font-mono">enrolled_at + study_day</span>.
-            For participants without an enrolled_at yet, this anchor date is used as a fallback.
-          </p>
+          <label className="block">
+            <span className={`${labelColor} text-[11px] uppercase tracking-wider font-semibold block mb-1.5`}>
+              Protocol timezone
+            </span>
+            <select
+              value={timezone}
+              onChange={(e) => setTimezone(e.target.value)}
+              className={`w-full rounded-md border px-3 py-2 text-sm ${inputBg} ${inputBorder} ${headingColor} focus:outline-none transition-colors`}
+            >
+              {TIMEZONE_OPTIONS.map((tz) => (
+                <option key={tz.value || 'browser'} value={tz.value}>
+                  {tz.label}
+                </option>
+              ))}
+            </select>
+            <span className={`${subColor} text-xs mt-1 block`}>
+              Defines the wall-clock interpretation for visit dates and times — pick the site's local zone so coordinators see consistent times across machines.
+            </span>
+          </label>
+
+          <div
+            className={`text-xs leading-relaxed border rounded-md px-3 py-2 ${
+              isLight ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-amber-500/[0.06] border-amber-500/20 text-amber-300'
+            }`}
+          >
+            <p className="font-semibold mb-1">How the anchor is used</p>
+            <p>
+              Each participant's visits are computed from
+              {' '}<span className="font-mono">enrolled_at + study_day</span>. This anchor is
+              only the fallback for participants <strong>without</strong> an
+              {' '}<span className="font-mono">enrolled_at</span> set. Participants who already have
+              an enrolled date keep using <em>their</em> date — changing this anchor won't shift
+              their schedule. To shift those participants too, edit their enrolled date on the
+              Participants tab.
+            </p>
+          </div>
         </div>
 
         {/* Footer */}

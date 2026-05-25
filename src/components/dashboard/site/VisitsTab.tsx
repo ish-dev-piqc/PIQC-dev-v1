@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import VisitFormDrawer from './VisitFormDrawer';
 import { Plus } from 'lucide-react';
 import {
@@ -57,14 +57,26 @@ const STATUS_FILTERS: StatusFilter[] = [
 export default function VisitsTab() {
   const { theme } = useTheme();
   const { activeProtocol, protocols } = useProtocol();
-  const { visits, loading, error } = useSiteData();
+  const { visits, participants, loading, error, refresh } = useSiteData();
   const isLight = theme === 'light';
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [groupMode, setGroupMode] = useState<GroupMode>('date');
+  // When grouping by participant, optionally pin the view to a single
+  // participant's visits — picker dropdown becomes visible. 'ALL' shows the
+  // multi-group view (every participant on this protocol).
+  const [participantFilter, setParticipantFilter] = useState<string>('ALL');
   const [openVisit, setOpenVisit] = useState<SiteVisit | null>(null);
   const [scheduleFormOpen, setScheduleFormOpen] = useState(false);
+  // Surfaced briefly after a manual "Schedule visit" so the new row doesn't
+  // disappear into the materialized list. Auto-clears after 5s.
+  const [recentSchedule, setRecentSchedule] = useState<{ visit_name: string; date: string } | null>(null);
+  useEffect(() => {
+    if (!recentSchedule) return;
+    const t = setTimeout(() => setRecentSchedule(null), 5000);
+    return () => clearTimeout(t);
+  }, [recentSchedule]);
 
   // Scope to the active protocol — empty array when no protocol selected so
   // the hooks below can run unconditionally.
@@ -93,6 +105,11 @@ export default function VisitsTab() {
         return v.status === statusFilter;
       })
       .filter((v) =>
+        groupMode === 'participant' && participantFilter !== 'ALL'
+          ? v.participantId === participantFilter
+          : true,
+      )
+      .filter((v) =>
         q
           ? v.participantId.toLowerCase().includes(q) ||
             v.visitName.toLowerCase().includes(q)
@@ -107,7 +124,7 @@ export default function VisitsTab() {
           return a.participantId.localeCompare(b.participantId);
         return a.date.localeCompare(b.date);
       });
-  }, [scoped, statusFilter, search, groupMode, today]);
+  }, [scoped, statusFilter, search, groupMode, participantFilter, today]);
 
   // Counts for the filter row
   const counts = useMemo(() => {
@@ -195,6 +212,24 @@ export default function VisitsTab() {
         </div>
       </div>
 
+      {/* Recently-scheduled banner — keeps the just-created row visible so it
+          doesn't get lost among the auto-materialized visits. */}
+      {recentSchedule && (
+        <div
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-md border text-xs ${
+            isLight
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-emerald-500/[0.08] border-emerald-500/25 text-emerald-300'
+          }`}
+        >
+          <CheckCircle2 size={13} className="flex-shrink-0" />
+          <span>
+            Scheduled <span className="font-semibold">{recentSchedule.visit_name}</span> on{' '}
+            <span className="font-mono">{recentSchedule.date}</span>. Search or sort the list to find it.
+          </span>
+        </div>
+      )}
+
       {/* Filter row */}
       <div className="flex items-center gap-2 flex-wrap">
         {STATUS_FILTERS.map((s) => {
@@ -252,32 +287,56 @@ export default function VisitsTab() {
             </button>
           )}
         </div>
-        <div
-          className={`inline-flex items-center rounded-md border p-0.5 ${
-            isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5'
-          }`}
-        >
-          {(['date', 'participant'] as GroupMode[]).map((g) => {
-            const active = groupMode === g;
-            return (
-              <button
-                key={g}
-                type="button"
-                onClick={() => setGroupMode(g)}
-                className={`px-3 h-7 rounded text-xs font-medium capitalize transition-colors ${
-                  active
-                    ? isLight
-                      ? 'bg-[#eef2f6] text-[#1a1f28]'
-                      : 'bg-white/[0.06] text-white'
-                    : isLight
-                    ? 'text-[#374152]/65 hover:text-[#1a1f28]'
-                    : 'text-[#d2d7e0]/55 hover:text-white'
-                }`}
-              >
-                Group by {g}
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div
+            className={`inline-flex items-center rounded-md border p-0.5 ${
+              isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5'
+            }`}
+          >
+            {(['date', 'participant'] as GroupMode[]).map((g) => {
+              const active = groupMode === g;
+              return (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => setGroupMode(g)}
+                  className={`px-3 h-7 rounded text-xs font-medium capitalize transition-colors ${
+                    active
+                      ? isLight
+                        ? 'bg-[#eef2f6] text-[#1a1f28]'
+                        : 'bg-white/[0.06] text-white'
+                      : isLight
+                      ? 'text-[#374152]/65 hover:text-[#1a1f28]'
+                      : 'text-[#d2d7e0]/55 hover:text-white'
+                  }`}
+                >
+                  Group by {g}
+                </button>
+              );
+            })}
+          </div>
+          {/* When grouping by participant, let the user narrow to a single
+              one. Defaults to 'All' so the multi-group view is unchanged. */}
+          {groupMode === 'participant' && (
+            <select
+              value={participantFilter}
+              onChange={(e) => setParticipantFilter(e.target.value)}
+              className={`px-2 h-7 rounded-md border text-xs ${
+                isLight
+                  ? 'bg-white border-[#e2e8ee] text-[#1a1f28]'
+                  : 'bg-[#131a22] border-white/5 text-white'
+              }`}
+            >
+              <option value="ALL">All participants</option>
+              {participants
+                .filter((p) => p.protocol_id === activeProtocol.id)
+                .map((p) => (
+                  <option key={p.uuid} value={p.id}>
+                    {p.id}
+                  </option>
+                ))}
+            </select>
+          )}
         </div>
       </div>
 
@@ -353,6 +412,10 @@ export default function VisitsTab() {
         <VisitFormDrawer
           protocolId={activeProtocol.id}
           onClose={() => setScheduleFormOpen(false)}
+          onSaved={(summary) => {
+            setRecentSchedule(summary);
+            refresh();
+          }}
         />
       )}
     </div>

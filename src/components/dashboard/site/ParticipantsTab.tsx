@@ -37,7 +37,7 @@ type StatusFilter = ParticipantStatus | 'ALL';
 export default function ParticipantsTab() {
   const { theme } = useTheme();
   const { activeProtocol, protocols } = useProtocol();
-  const { participants, loading, error } = useSiteData();
+  const { participants, loading, error, refresh } = useSiteData();
   const isLight = theme === 'light';
 
   const [search, setSearch] = useState('');
@@ -269,7 +269,12 @@ export default function ParticipantsTab() {
           protocolId={activeProtocol.id}
           protocolCode={activeProtocol.code}
           onSaved={() => {
-            // Realtime subscription will refresh the list; no extra work needed.
+            // Refetch directly instead of relying on the postgres_changes
+            // subscription. The realtime channel has been intermittently
+            // not firing for INSERTs on site_participants in prod; an
+            // explicit refresh guarantees the new row shows up immediately
+            // rather than waiting for the user to refresh the page.
+            refresh();
           }}
           onClose={() => setFormMode(null)}
         />
@@ -323,11 +328,21 @@ function ParticipantRow({
               {participant.open_deviations} open
             </span>
           )}
-          <HeatIndicator
-            score={scoreParticipant(participant)}
-            variant="chip"
-            hint="cross-study deviation/dropout pattern"
-          />
+          {(() => {
+            // Hide the heat chip for participants with no real risk signal
+            // (default-state active/screening rows). The chip is meaningful
+            // for `moderate`/`high` — open deviations or withdrawn status —
+            // not for "we have nothing on this person."
+            const score = scoreParticipant(participant);
+            if (score !== 'moderate' && score !== 'high') return null;
+            return (
+              <HeatIndicator
+                score={score}
+                variant="chip"
+                hint="cross-study deviation/dropout pattern"
+              />
+            );
+          })()}
         </div>
         {participant.next_visit_date && (
           <div className={`flex items-center gap-1.5 mt-1 text-xs ${subColor}`}>
@@ -349,6 +364,8 @@ function ParticipantRow({
               {participant.current_study_day}
             </span>
           </>
+        ) : participant.enrolled_at === null ? (
+          <span className={mutedColor}>Not enrolled</span>
         ) : (
           <span className={mutedColor}>—</span>
         )}
