@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: ingest-async
-status: in-review
+status: merged
+merged: 2026-05-25
 started: 2026-05-23
-target_pr: 105
+target_pr: #105
 ---
 
 # Async ingest — Reducto polling + content-hash dedup
