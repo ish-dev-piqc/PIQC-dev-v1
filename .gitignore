@@ -32,3 +32,6 @@ supabase/.temp/
 
 # Vitest config reload artifacts
 vitest.config.ts.timestamp-*.mjs
+
+# Vite config reload artifacts
+vite.config.ts.timestamp-*.mjs
