@@ -31,13 +31,15 @@ auto-resume on Pricing can run.
 - src/App.tsx
 - src/lib/billing/pendingCheckout.ts
 - src/lib/billing/pendingCheckout.test.ts
+- .gitignore (added `vite.config.ts.timestamp-*.mjs` glob alongside the existing `vitest.config.ts.timestamp-*.mjs` entry)
+- supabase/.temp/** (untrack CLI cache files that were accidentally committed; folder was already in `.gitignore` but the entries pre-dated the ignore rule)
 
 ## Out of scope (files forbidden)
 
 - src/stripe-config.ts (no priceId or catalog change)
 - src/hooks/useCheckout.ts (no API change)
 - src/components/auth/Login.tsx (login UI unchanged; redirect-on-success is centralized in App.tsx)
-- supabase/** (pure frontend change)
+- supabase/** **except** `supabase/.temp/**` (no schema, function, or migration changes in this PR; the `.temp/` cleanup is purely untracking metadata that should never have been committed)
 
 ## Architecture layers touched
 
@@ -54,11 +56,12 @@ None.
 
 ## Approved-by
 
-All files in Scope are shared infra / Kiara-owned per `docs/CODEOWNERS.md`:
+Most files in Scope are shared infra / Kiara-owned per `docs/CODEOWNERS.md`:
 - `src/components/Pricing.tsx` — landing UI, no specific mode owner
-- `src/App.tsx` — root shell
-- `src/lib/billing/` — new directory under shared infra; flag in PR for the
-  second reviewer required for shared infra changes.
+- `src/App.tsx` — shared infra; second reviewer required (tag on PR)
+- `src/lib/billing/` — new directory under shared infra; second reviewer required (tag on PR)
+- `.gitignore` — shared infra; review covered by the shared-infra reviewer above
+- `supabase/.temp/**` — Roger's domain (`supabase/`); change is metadata-only (`git rm --cached`, no SQL or function impact). Tag @roger on the PR for sign-off.
 
 ## Verification
 
