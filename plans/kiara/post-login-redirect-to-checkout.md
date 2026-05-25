@@ -1,7 +1,7 @@
 ---
 owner: kiara
 feature: post-login-redirect-to-checkout
-status: active
+status: in-review
 started: 2026-05-24
 target_pr:
 ---
