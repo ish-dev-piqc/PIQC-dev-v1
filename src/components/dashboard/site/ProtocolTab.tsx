@@ -7,8 +7,6 @@ import { fetchVisitTemplates, materializeVisits } from '../../../lib/site/siteAp
 import type { ProtocolVisitTemplate } from '../../../lib/site/types';
 import AnchorDateModal from './AnchorDateModal';
 import WorksheetItemsList from '../../sotr/WorksheetItemsList';
-import { UploadForm } from '../KnowledgeBase';
-import { useDemoMode } from '../../../context/DemoModeContext';
 
 // =============================================================================
 // ProtocolTab — Protocol metadata + documents tagged to this protocol.
@@ -25,19 +23,11 @@ export default function ProtocolTab() {
   const { theme } = useTheme();
   const isLight = theme === 'light';
 
-  const { demoActive } = useDemoMode();
   const [templates, setTemplates] = useState<ProtocolVisitTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [showAnchorModal, setShowAnchorModal] = useState(false);
   const [materializing, setMaterializing] = useState(false);
   const [statusToast, setStatusToast] = useState<string | null>(null);
-  // Auto-expand the upload panel when there's no parsed schedule yet — the
-  // primary action a new protocol owner needs to take. Collapse once templates
-  // exist; users can re-expand if they want to upload an amendment / second doc.
-  const [uploadOpen, setUploadOpen] = useState(false);
-  useEffect(() => {
-    if (!templatesLoading && templates.length === 0) setUploadOpen(true);
-  }, [templates.length, templatesLoading]);
 
   const pageBg = isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]';
   const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
@@ -121,44 +111,6 @@ export default function ProtocolTab() {
           ))}
         </div>
 
-        {/* Upload PDF (Path B onboarding — embedded inline so the Protocol tab
-            is the one-stop place to feed a new protocol's source-of-truth). */}
-        {!demoActive && (
-          <div className={`${cardBg} border rounded-xl overflow-hidden`}>
-            <button
-              type="button"
-              onClick={() => setUploadOpen((v) => !v)}
-              className={`w-full px-5 py-3.5 border-b flex items-center justify-between gap-3 ${
-                isLight ? 'border-[#f0f3f6] hover:bg-[#f5f7fa]' : 'border-white/[0.04] hover:bg-white/[0.02]'
-              } transition-colors`}
-              aria-expanded={uploadOpen}
-            >
-              <span className="flex items-center gap-2 text-sm font-medium text-fg-heading">
-                <Upload size={14} />
-                Upload an amendment or supplementary document
-              </span>
-              <span className={`text-xs ${subColor}`}>{uploadOpen ? 'Hide' : 'Show'}</span>
-            </button>
-            {uploadOpen && (
-              <div className="p-5">
-                <UploadForm
-                  onSuccess={() => {
-                    // After successful ingest, refresh the templates list.
-                    if (!activeProtocol) return;
-                    setTemplatesLoading(true);
-                    fetchVisitTemplates(activeProtocol.id).then((r) => {
-                      if (r.ok) setTemplates(r.data);
-                      setTemplatesLoading(false);
-                    });
-                  }}
-                  isLight={isLight}
-                  lockedProtocolId={activeProtocol?.id}
-                />
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Schedule (Phase E) */}
         <div className={`${cardBg} border rounded-xl overflow-hidden`}>
           <div
@@ -209,6 +161,12 @@ export default function ProtocolTab() {
               </p>
             </div>
             <div>
+              <p className={`${mutedColor} text-[10px] uppercase tracking-wider font-semibold`}>Timezone</p>
+              <p className="text-fg-heading text-sm font-medium">
+                {activeProtocol.timezone ?? 'Browser default'}
+              </p>
+            </div>
+            <div>
               <p className={`${mutedColor} text-[10px] uppercase tracking-wider font-semibold`}>Templates</p>
               <p className="text-fg-heading text-sm font-medium">
                 {templatesLoading ? '…' : `${templates.length} extracted`}
@@ -232,9 +190,8 @@ export default function ProtocolTab() {
               </p>
               {!templatesLoading && (
                 <p className={`${subColor} text-xs mt-1.5 leading-relaxed max-w-md mx-auto`}>
-                  Reducto didn't surface a schedule of events for this protocol. If the visits live in an
-                  amendment or supplementary document, upload it above. Low-confidence extractions can be
-                  reviewed and corrected in the Source of Truth Reviewer.
+                  Reducto didn't surface a schedule of events for this protocol. Low-confidence
+                  extractions can be reviewed and corrected in the Source of Truth Reviewer.
                 </p>
               )}
             </div>
@@ -326,6 +283,7 @@ export default function ProtocolTab() {
           protocolId={activeProtocol.id}
           protocolCode={activeProtocol.code}
           initialDate={activeProtocol.demoAnchorDate}
+          initialTimezone={activeProtocol.timezone}
           onSaved={(r) => {
             const skipped = r.skipped_no_anchor > 0
               ? ` (${r.skipped_no_anchor} skipped — no enrolled_at)`

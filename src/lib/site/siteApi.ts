@@ -137,8 +137,9 @@ export function fetchVisitTemplates(
 export function setAnchorDate(
   protocolId: string,
   anchorDate: string | null,
+  timezone?: string | null,
 ): Promise<Result<void>> {
-  return activeRepo.setAnchorDate(protocolId, anchorDate);
+  return activeRepo.setAnchorDate(protocolId, anchorDate, timezone);
 }
 
 export function materializeVisits(

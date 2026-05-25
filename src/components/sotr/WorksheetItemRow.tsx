@@ -20,7 +20,12 @@ interface Props {
 
 export default function WorksheetItemRow({ item, onViewSource, onPick }: Props) {
   // Edited current_text takes precedence over the parser output for display.
-  const display = item.current_text ?? formatExtractedValue(item.extracted_value);
+  // Visit field_type carries a structured object (visit_name + study_day +
+  // window + procedures); render it semantically instead of as a JSON blob.
+  const display = item.current_text
+    ?? (item.field_type === 'visit'
+      ? formatVisit(item.extracted_value)
+      : formatExtractedValue(item.extracted_value));
   return (
     <div
       data-testid="sotr-worksheet-item-row"
@@ -90,4 +95,42 @@ export function formatExtractedValue(value: unknown): string {
   } catch {
     return String(value);
   }
+}
+
+// Semantic render for the visit object shape Reducto returns in
+// schedule_of_events entries: { visit_name, study_day, window_minus_days,
+// window_plus_days, procedures, cross_references, schedule_variant }.
+// Produces something like:
+//   "Randomization — Day 0 (±0d) · 2 procedures"
+// Falls back to JSON.stringify when the shape doesn't match.
+export function formatVisit(value: unknown): string {
+  if (value === null || value === undefined) return '—';
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    return formatExtractedValue(value);
+  }
+  const v = value as Record<string, unknown>;
+  const name = typeof v.visit_name === 'string' ? v.visit_name.trim() : '';
+  const day = typeof v.study_day === 'number' ? v.study_day : null;
+  const minus = typeof v.window_minus_days === 'number' ? v.window_minus_days : 0;
+  const plus = typeof v.window_plus_days === 'number' ? v.window_plus_days : 0;
+  const procs = Array.isArray(v.procedures) ? v.procedures.length : 0;
+  const variant = typeof v.schedule_variant === 'string' ? v.schedule_variant.trim() : '';
+
+  // If neither name nor day is present, the row is structurally broken —
+  // fall back to JSON so the reader can still see what came through.
+  if (!name && day === null) return formatExtractedValue(value);
+
+  const parts: string[] = [];
+  if (name) parts.push(name);
+  if (day !== null) parts.push(`Day ${day}`);
+  const window = minus !== 0 || plus !== 0
+    ? `±${Math.max(Math.abs(minus), plus)}d`
+    : null;
+  const tail: string[] = [];
+  if (window) tail.push(window);
+  if (procs > 0) tail.push(`${procs} procedure${procs === 1 ? '' : 's'}`);
+  if (variant) tail.push(variant);
+
+  const head = parts.join(' — ');
+  return tail.length > 0 ? `${head} (${tail.join(' · ')})` : head;
 }

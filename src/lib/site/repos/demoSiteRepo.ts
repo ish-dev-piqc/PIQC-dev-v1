@@ -304,11 +304,18 @@ async function fetchVisitTemplates(
 async function setAnchorDate(
   protocolId: string,
   anchorDate: string | null,
+  timezone?: string | null,
 ): Promise<Result<void>> {
   getDemoStore().mutate((s) => ({
     ...s,
     protocols: s.protocols.map((p) =>
-      p.id === protocolId ? { ...p, demoAnchorDate: anchorDate } : p,
+      p.id === protocolId
+        ? {
+            ...p,
+            demoAnchorDate: anchorDate,
+            ...(timezone !== undefined ? { timezone } : {}),
+          }
+        : p,
     ),
   }));
   return ok(undefined);

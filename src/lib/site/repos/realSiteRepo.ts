@@ -41,6 +41,7 @@ interface ProtocolRow {
   title: string;
   sponsor: string;
   demo_anchor_date: string | null;
+  timezone: string | null;
   protocol_versions: { clinical_trial_phase: string; status: string }[];
 }
 
@@ -67,6 +68,7 @@ function rowToProtocol(row: ProtocolRow): Protocol {
     sponsor: row.sponsor,
     phase: phaseLabel(activeVersion?.clinical_trial_phase),
     demoAnchorDate: row.demo_anchor_date,
+    timezone: row.timezone,
   };
 }
 
@@ -75,7 +77,7 @@ async function fetchProtocols(): Promise<Result<Protocol[]>> {
     const { data, error } = await supabase
       .from('protocols')
       .select(
-        'id, study_number, title, sponsor, demo_anchor_date, protocol_versions(clinical_trial_phase, status)',
+        'id, study_number, title, sponsor, demo_anchor_date, timezone, protocol_versions(clinical_trial_phase, status)',
       )
       .order('created_at', { ascending: true });
     if (error) throw error;
@@ -457,11 +459,14 @@ async function fetchVisitTemplates(
 async function setAnchorDate(
   protocolId: string,
   anchorDate: string | null,
+  timezone?: string | null,
 ): Promise<Result<void>> {
   try {
+    const patch: Record<string, unknown> = { demo_anchor_date: anchorDate };
+    if (timezone !== undefined) patch.timezone = timezone;
     const { error } = await supabase
       .from('protocols')
-      .update({ demo_anchor_date: anchorDate })
+      .update(patch)
       .eq('id', protocolId);
     if (error) throw error;
     return { ok: true, data: undefined };
