@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight, FileSearch, AlertTriangle, MapPinOff } from 'lucide-react';
-import ConfidenceBadge from './ConfidenceBadge';
 import ReviewStatusBadge from './ReviewStatusBadge';
 import ViewCitedPageButton from './ViewCitedPageButton';
 import ReviewActionBar from './ReviewActionBar';
@@ -88,7 +87,6 @@ export default function SourceTruthPanel({
           </p>
         )}
         <div className="mt-2 flex items-center gap-2 flex-wrap">
-          <ConfidenceBadge state={data.confidence_state} size="md" />
           <ReviewStatusBadge status={data.review_status} />
           {typeof data.confidence_score === 'number' && (
             <span className="text-fg-muted text-[11px]">

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { MessageSquare, LayoutDashboard, Activity, FileText, Database, UserCircle2, KeyRound, Shield, Users, CalendarCheck, UserCog, CreditCard, Loader2, CheckCircle2, AlertCircle, type LucideIcon } from 'lucide-react';
+import { MessageSquare, LayoutDashboard, Activity, FileText, Database, UserCircle2, Users, CalendarCheck, UserCog, CreditCard, Loader2, CheckCircle2, AlertCircle, type LucideIcon } from 'lucide-react';
 import DashboardChat from './DashboardChat';
 import KnowledgeBase from './KnowledgeBase';
 import TodayTab from './site/TodayTab';
@@ -18,6 +18,7 @@ import { useMode } from '../../context/ModeContext';
 import { useProtocol } from '../../context/ProtocolContext';
 import { countWorksheetItemsForStudy } from '../../lib/sotr/sourceEvidenceApi';
 import { supabase, type ChatMessage, type RagStatus } from '../../lib/supabase';
+import { TIMEZONE_OPTIONS } from '../../lib/timezones';
 import { useAuth } from '../../context/AuthContext';
 import { useSubscription } from '../../hooks/useSubscription';
 import { usePortal } from '../../hooks/usePortal';
@@ -89,31 +90,48 @@ interface SettingsTabProps {
 
 function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
   const { theme } = useTheme();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const isLight = theme === 'light';
   const cardClass = isLight ? 'bg-[#f5f7fa] border-[#e2e8ee]' : 'bg-[#0d1118] border-white/8';
   const inputClass = isLight
     ? 'bg-white border-[#d8dfe8] text-[#1a1f28] placeholder-[#374152]/25 focus:border-[#4a6fa5]/60'
     : 'bg-[#131a22] border-white/[0.08] text-white placeholder-[#d2d7e0]/25 focus:border-[#4a6fa5]/60';
 
-  const [fullName, setFullName] = useState('');
+  // First/last split so each is its own field. Initial population reads
+  // `user_metadata.first_name` / `user_metadata.last_name` when set, then
+  // falls back to splitting the legacy `full_name` field on the first
+  // whitespace so existing accounts don't appear empty.
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [title, setTitle] = useState('');
   const [timezone, setTimezone] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState('');
   const [profileError, setProfileError] = useState('');
-
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [passwordSaving, setPasswordSaving] = useState(false);
-  const [passwordMessage, setPasswordMessage] = useState('');
-  const [passwordError, setPasswordError] = useState('');
+  // organization is read-only; comes from AuthContext.profile (single
+  // source of truth for user_profiles state). Empty-string fallback so
+  // the disabled input always renders.
+  const organization = profile?.organization ?? '';
 
   useEffect(() => {
     if (!user) return;
     const metadata = user.user_metadata ?? {};
-    setFullName((metadata.full_name as string) ?? '');
+    const explicitFirst = (metadata.first_name as string) ?? '';
+    const explicitLast = (metadata.last_name as string) ?? '';
+    if (explicitFirst || explicitLast) {
+      setFirstName(explicitFirst);
+      setLastName(explicitLast);
+    } else {
+      const legacyFull = ((metadata.full_name as string) ?? '').trim();
+      const spaceIdx = legacyFull.indexOf(' ');
+      if (spaceIdx === -1) {
+        setFirstName(legacyFull);
+        setLastName('');
+      } else {
+        setFirstName(legacyFull.slice(0, spaceIdx));
+        setLastName(legacyFull.slice(spaceIdx + 1));
+      }
+    }
     setTitle((metadata.title as string) ?? '');
     setTimezone((metadata.timezone as string) ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
   }, [user]);
@@ -124,9 +142,18 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
     setProfileMessage('');
     setProfileSaving(true);
 
+    const trimmedFirst = firstName.trim();
+    const trimmedLast = lastName.trim();
+    // Keep the legacy full_name field populated so anything else in the app
+    // that reads user_metadata.full_name (badges, signatures) doesn't go
+    // blank after this save.
+    const fullName = [trimmedFirst, trimmedLast].filter(Boolean).join(' ');
+
     const { error } = await supabase.auth.updateUser({
       data: {
-        full_name: fullName.trim(),
+        first_name: trimmedFirst,
+        last_name: trimmedLast,
+        full_name: fullName,
         title: title.trim(),
         timezone: timezone.trim(),
       },
@@ -138,52 +165,6 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
       return;
     }
     setProfileMessage('Profile updated.');
-  };
-
-  const handlePasswordSave = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setPasswordError('');
-    setPasswordMessage('');
-
-    if (!user?.email) {
-      setPasswordError('No account email found for this user.');
-      return;
-    }
-    if (newPassword.length < 8) {
-      setPasswordError('New password must be at least 8 characters.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setPasswordError('New password and confirmation do not match.');
-      return;
-    }
-
-    setPasswordSaving(true);
-
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: user.email,
-      password: currentPassword,
-    });
-    if (signInError) {
-      setPasswordSaving(false);
-      setPasswordError('Current password is incorrect.');
-      return;
-    }
-
-    const { error: updateError } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
-    setPasswordSaving(false);
-
-    if (updateError) {
-      setPasswordError(updateError.message);
-      return;
-    }
-
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    setPasswordMessage('Password updated.');
   };
 
   const { subscription, loading: subLoading } = useSubscription();
@@ -205,7 +186,6 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
 
   const navItems: Array<{ id: SettingsSection; label: string; icon: LucideIcon }> = [
     { id: 'account', label: 'Account', icon: UserCircle2 },
-    { id: 'security', label: 'Security', icon: Shield },
     { id: 'billing', label: 'Billing', icon: CreditCard },
   ];
 
@@ -294,20 +274,21 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
             <form className="space-y-4" onSubmit={handleProfileSave}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className={`${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'} text-xs block mb-1.5`}>Full name</label>
+                  <label className={`${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'} text-xs block mb-1.5`}>First name</label>
                   <input
-                    value={fullName}
-                    onChange={(event) => setFullName(event.target.value)}
+                    value={firstName}
+                    onChange={(event) => setFirstName(event.target.value)}
                     className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none transition-colors ${inputClass}`}
-                    placeholder="Your name"
+                    placeholder="First name"
                   />
                 </div>
                 <div>
-                  <label className={`${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'} text-xs block mb-1.5`}>Work email</label>
+                  <label className={`${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'} text-xs block mb-1.5`}>Last name</label>
                   <input
-                    value={user?.email ?? ''}
-                    disabled
-                    className={`w-full px-3 py-2.5 border rounded-lg text-sm opacity-70 cursor-not-allowed ${inputClass}`}
+                    value={lastName}
+                    onChange={(event) => setLastName(event.target.value)}
+                    className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none transition-colors ${inputClass}`}
+                    placeholder="Last name"
                   />
                 </div>
                 <div>
@@ -321,11 +302,38 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                 </div>
                 <div>
                   <label className={`${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'} text-xs block mb-1.5`}>Timezone</label>
-                  <input
+                  <select
                     value={timezone}
                     onChange={(event) => setTimezone(event.target.value)}
                     className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none transition-colors ${inputClass}`}
-                    placeholder="America/Phoenix"
+                  >
+                    {/* Preserve whatever the user already had (could be an IANA
+                        name we don't list) by injecting it as an extra option
+                        when it doesn't match a curated entry. */}
+                    {timezone && !TIMEZONE_OPTIONS.some((tz) => tz.value === timezone) && (
+                      <option value={timezone}>{timezone} (current)</option>
+                    )}
+                    {TIMEZONE_OPTIONS.map((tz) => (
+                      <option key={tz.value || 'browser'} value={tz.value}>
+                        {tz.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={`${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'} text-xs block mb-1.5`}>Organization</label>
+                  <input
+                    value={organization || '—'}
+                    disabled
+                    className={`w-full px-3 py-2.5 border rounded-lg text-sm opacity-70 cursor-not-allowed ${inputClass}`}
+                  />
+                </div>
+                <div>
+                  <label className={`${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'} text-xs block mb-1.5`}>Work email</label>
+                  <input
+                    value={user?.email ?? ''}
+                    disabled
+                    className={`w-full px-3 py-2.5 border rounded-lg text-sm opacity-70 cursor-not-allowed ${inputClass}`}
                   />
                 </div>
               </div>
@@ -342,68 +350,14 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
               </button>
             </form>
           </section>
-
-          <section className={`${cardClass} border rounded-xl p-5`}>
-            <div className="flex items-center gap-2 mb-4">
-              <KeyRound size={16} className="text-[#6e8fb5]" />
-              <h3 className={`${isLight ? 'text-[#1a1f28]' : 'text-white'} font-medium text-sm`}>Password</h3>
-            </div>
-
-            <form className="space-y-4" onSubmit={handlePasswordSave}>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <input
-                  type="password"
-                  value={currentPassword}
-                  onChange={(event) => setCurrentPassword(event.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none transition-colors ${inputClass}`}
-                  placeholder="Current password"
-                  required
-                />
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none transition-colors ${inputClass}`}
-                  placeholder="New password"
-                  required
-                />
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none transition-colors ${inputClass}`}
-                  placeholder="Confirm new password"
-                  required
-                />
-              </div>
-
-              {passwordError && <p className="text-sm text-red-500">{passwordError}</p>}
-              {passwordMessage && <p className="text-sm text-blue-500">{passwordMessage}</p>}
-
-              <button
-                type="submit"
-                disabled={passwordSaving}
-                className="px-4 py-2 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors disabled:opacity-50"
-              >
-                {passwordSaving ? 'Updating...' : 'Change password'}
-              </button>
-            </form>
-          </section>
         </div>
       );
     }
 
-    return (
-      <section className={`${cardClass} border rounded-xl p-5`}>
-        <div className="flex items-center gap-2 mb-2">
-          <Shield size={16} className="text-[#6e8fb5]" />
-          <h3 className={`${isLight ? 'text-[#1a1f28]' : 'text-white'} font-medium text-sm`}>Security</h3>
-        </div>
-        <p className={`${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'} text-sm`}>
-          Security controls are being rolled out in phases. Next up: active sessions, sign-out-all-devices, and audit history.
-        </p>
-      </section>
-    );
+    // Security section was removed — only 'account' and 'billing' are
+    // navigable now. This branch is unreachable from the UI but kept as a
+    // graceful fallback if a stale URL fragment lands here.
+    return null;
   };
 
   return (
