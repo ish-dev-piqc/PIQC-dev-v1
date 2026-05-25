@@ -1,11 +1,10 @@
 import { FileSearch, Link2 } from 'lucide-react';
-import ConfidenceBadge from './ConfidenceBadge';
 import ReviewStatusBadge from './ReviewStatusBadge';
 import type { ExtractedItemRecord } from '../../types/sotr';
 
 // One row in the worksheet items list. Renders the extracted value, the
-// confidence badge + reason (if any), and a "View Source" action that
-// opens the SOTR drawer for this item.
+// review-status badge, and a "View Source" action that opens the SOTR
+// drawer for this item.
 //
 // When `onPick` is provided (picker workflows — e.g. Stage 1 risk → source
 // link), an additional "Attach" affordance appears next to View Source.
@@ -19,13 +18,7 @@ interface Props {
 }
 
 export default function WorksheetItemRow({ item, onViewSource, onPick }: Props) {
-  // Edited current_text takes precedence over the parser output for display.
-  // Visit field_type carries a structured object (visit_name + study_day +
-  // window + procedures); render it semantically instead of as a JSON blob.
-  const display = item.current_text
-    ?? (item.field_type === 'visit'
-      ? formatVisit(item.extracted_value)
-      : formatExtractedValue(item.extracted_value));
+  const display = getItemDisplayLabel(item);
   return (
     <div
       data-testid="sotr-worksheet-item-row"
@@ -40,7 +33,6 @@ export default function WorksheetItemRow({ item, onViewSource, onPick }: Props) 
           {display}
         </p>
         <div className="mt-1.5 flex items-center gap-2 flex-wrap">
-          <ConfidenceBadge state={item.confidence_state} />
           <ReviewStatusBadge status={item.review_status} />
           <span className="text-fg-muted text-[10px] uppercase tracking-wider font-semibold">
             {item.field_type}
@@ -80,6 +72,16 @@ export default function WorksheetItemRow({ item, onViewSource, onPick }: Props) 
       </div>
     </div>
   );
+}
+
+// Single source of truth for "what string should the user see for this
+// extracted item" — used by both the worksheet list row AND the SOTR
+// drawer header (via WorksheetItemsList). Keeps the visit/non-visit
+// branching in one place so they never drift apart again.
+export function getItemDisplayLabel(item: ExtractedItemRecord): string {
+  if (item.current_text) return item.current_text;
+  if (item.field_type === 'visit') return formatVisit(item.extracted_value);
+  return formatExtractedValue(item.extracted_value);
 }
 
 // Best-effort label for the JSONB extracted_value. Strings + numbers render

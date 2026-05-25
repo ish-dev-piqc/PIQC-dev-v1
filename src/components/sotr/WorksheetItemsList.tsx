@@ -5,7 +5,7 @@ import type { ExtractedItemRecord } from '../../types/sotr';
 import WorksheetItemRow from './WorksheetItemRow';
 import SourceTruthDrawer from './SourceTruthDrawer';
 import DownloadDraftPacketButton from './DownloadDraftPacketButton';
-import { formatExtractedValue } from './WorksheetItemRow';
+import { getItemDisplayLabel } from './WorksheetItemRow';
 
 // Fetches worksheet items for a study, groups by field_type, and renders
 // each row with a confidence badge + "View Source" action that opens
@@ -132,7 +132,7 @@ export default function WorksheetItemsList({ studyId, studyCode, onPick }: Props
         <SourceTruthDrawer
           studyId={studyId}
           worksheetItemId={active.id}
-          itemLabel={formatExtractedValue(active.extracted_value)}
+          itemLabel={getItemDisplayLabel(active)}
           onClose={() => setActive(null)}
           onReviewActionCompleted={() => setRefreshToken((n) => n + 1)}
         />

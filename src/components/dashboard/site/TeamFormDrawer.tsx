@@ -1,18 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, AlertTriangle } from 'lucide-react';
+import { X, AlertTriangle, Mail } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useOverlay } from '../../../hooks/useOverlay';
 import { useSwipeDismiss } from '../../../hooks/useSwipeDismiss';
-import { createTeamMember, updateTeamMember } from '../../../lib/site/siteApi';
+import { updateTeamMember } from '../../../lib/site/siteApi';
 import type { SiteTeamMember, TeamRole, TeamMemberStatus } from '../../../lib/site/types';
 import { TEAM_ROLE_LABELS } from '../../../lib/site/labels';
 
 // =============================================================================
-// TeamFormDrawer — create or edit a site_team_members row.
+// TeamFormDrawer — edit a site_team_members row (legacy create path stubbed).
 //
-// Mirrors ParticipantFormDrawer's structure: same overlay/swipe-dismiss
-// pattern, same Result<T> error handling, same realtime-sync model
-// (mutation goes to repo, SiteDataContext refreshes via subscribe).
+// Edit mode renders the full form so existing members can still get their
+// cert dates, role, etc. updated. Create mode renders a static message
+// directing the user to contact PIQC or have the teammate sign in directly
+// — self-service add isn't a supported flow right now and we don't want a
+// form that silently fails to onboard people who don't have accounts yet.
 // =============================================================================
 
 const ROLE_OPTIONS: TeamRole[] = ['PI', 'SUB_I', 'COORDINATOR', 'NURSE', 'PHARMACIST', 'MONITOR'];
@@ -60,6 +62,10 @@ export default function TeamFormDrawer({ mode, protocolId, initial, onClose }: T
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Create mode renders a static "Contact PIQC" panel — no form submit
+    // path. Guarding here is defence-in-depth in case a stray enter-press
+    // bubbles up.
+    if (mode === 'create') return;
     if (submitting) return;
     const v = validate();
     if (v) {
@@ -84,10 +90,7 @@ export default function TeamFormDrawer({ mode, protocolId, initial, onClose }: T
       notes: notes.trim() || null,
     };
 
-    const result =
-      mode === 'create'
-        ? await createTeamMember({ protocol_id: protocolId, ...payload })
-        : await updateTeamMember(initial!.id, payload);
+    const result = await updateTeamMember(initial!.id, payload);
 
     setSubmitting(false);
     if (!result.ok) {
@@ -133,6 +136,39 @@ export default function TeamFormDrawer({ mode, protocolId, initial, onClose }: T
             </button>
           </div>
 
+          {mode === 'create' ? (
+            <>
+              <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                <div
+                  className={`flex items-start gap-3 px-4 py-3.5 rounded-md border ${
+                    isLight
+                      ? 'bg-[#f5f7fa] border-[#e2e8ee] text-[#374152]'
+                      : 'bg-white/[0.02] border-white/5 text-[#d2d7e0]'
+                  }`}
+                >
+                  <Mail size={16} className={`mt-0.5 flex-shrink-0 ${subColor}`} />
+                  <div className="text-sm leading-relaxed">
+                    <p className={`${headingColor} font-semibold mb-1`}>Self-serve add isn't available yet</p>
+                    <p>
+                      To add a new team member, contact PIQC and we'll provision the account, or have
+                      the teammate sign in directly at this protocol's URL — they'll be added automatically
+                      after their first sign-in.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className={`flex items-center justify-end gap-2 px-5 py-3.5 border-t ${border}`}>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${buttonPrimary}`}
+                >
+                  Got it
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
           <div className="flex-1 overflow-y-auto p-5 space-y-4">
             <div>
               <label className={`block ${labelColor} text-xs font-semibold uppercase tracking-wider mb-1.5`}>
@@ -261,9 +297,11 @@ export default function TeamFormDrawer({ mode, protocolId, initial, onClose }: T
               Cancel
             </button>
             <button type="submit" disabled={submitting} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${buttonPrimary}`}>
-              {submitting ? 'Saving…' : mode === 'create' ? 'Add team member' : 'Save changes'}
+              {submitting ? 'Saving…' : 'Save changes'}
             </button>
           </div>
+            </>
+          )}
         </form>
       </div>
     </div>
