@@ -37,16 +37,23 @@ function AppContent() {
 
   useEffect(() => {
     if (!loading && session) {
-      // Pending-checkout redirect runs regardless of which view we landed
-      // on. There's a race: Login.tsx calls onViewChange('dashboard')
-      // synchronously after signInWithPassword resolves, but session may
-      // update via onAuthStateChange either before or after that call.
-      // Whichever order happens, if a pending intent exists we want the
-      // user back on landing so Pricing.tsx's auto-resume effect can fire.
-      // The intent itself is cleared by Pricing.tsx once it resumes.
-      if (getPendingCheckout() && view !== 'landing') {
-        setScrollTarget('pricing');
-        setView('landing');
+      // Pending-checkout flow: when a Pricing CTA was clicked while signed
+      // out, we stash a `pendingCheckout` intent in localStorage before
+      // bouncing the user to login. On the way back, we want them on the
+      // pricing section so Pricing.tsx's auto-resume effect fires the
+      // checkout call. Pricing.tsx clears the intent the moment it resumes.
+      //
+      // We return EARLY whenever pending exists — otherwise the second
+      // effect run (triggered when view flips to 'landing') would fall
+      // through to the `view === 'landing'` branch below and bounce the
+      // user back to dashboard before Pricing has a chance to mount and
+      // run its resume effect. That was the "splash glitching in then
+      // dashboard" bug.
+      if (getPendingCheckout()) {
+        if (view !== 'landing') {
+          setScrollTarget('pricing');
+          setView('landing');
+        }
         return;
       }
       if (view === 'login' || view === 'landing') {

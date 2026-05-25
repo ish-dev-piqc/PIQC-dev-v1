@@ -21,6 +21,10 @@ import { supabase, type ChatMessage, type RagStatus } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useSubscription } from '../../hooks/useSubscription';
 import { usePortal } from '../../hooks/usePortal';
+import { useCheckout } from '../../hooks/useCheckout';
+import { findProductByKind } from '../../stripe-config';
+import { pilotStatus, pilotDaysRemaining } from '../../lib/entitlements';
+import PilotCountdownBanner from '../billing/PilotCountdownBanner';
 
 type ExtendedMessage = ChatMessage & { streaming?: boolean; ragStatus?: RagStatus; ragError?: string };
 
@@ -188,8 +192,11 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
 
   const { subscription, loading: subLoading } = useSubscription();
   const { openPortal } = usePortal();
+  const { createCheckoutSession } = useCheckout();
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalError, setPortalError] = useState('');
+  const [upgradeLoading, setUpgradeLoading] = useState(false);
+  const [upgradeError, setUpgradeError] = useState('');
 
   const handleManageBilling = async () => {
     setPortalError('');
@@ -203,6 +210,33 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
     }
   };
 
+  // Used by the pilot status panel below. Same flow as PilotCountdownBanner —
+  // launches a Stripe Checkout subscription session for the Workspace
+  // monthly plan. window.location.href round trips back to the same page.
+  const handleUpgradeFromPilot = async () => {
+    const workspace = findProductByKind('workspace_monthly');
+    if (!workspace) return;
+    setUpgradeError('');
+    setUpgradeLoading(true);
+    try {
+      await createCheckoutSession(
+        workspace.priceId,
+        window.location.href,
+        window.location.href,
+        'subscription',
+      );
+    } catch (err) {
+      setUpgradeError(err instanceof Error ? err.message : 'Could not start checkout.');
+      setUpgradeLoading(false);
+    }
+  };
+
+  // Send a no-plan user to the landing pricing section. window.location is a
+  // full reload, which is fine — they're going to a marketing page.
+  const handleViewPricing = () => {
+    window.location.href = `${window.location.origin}/#pricing`;
+  };
+
   const navItems: Array<{ id: SettingsSection; label: string; icon: LucideIcon }> = [
     { id: 'account', label: 'Account', icon: UserCircle2 },
     { id: 'security', label: 'Security', icon: Shield },
@@ -212,6 +246,43 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
   const renderSectionContent = () => {
     if (activeSection === 'billing') {
       const hasActiveSub = subscription?.status === 'active' || subscription?.status === 'trialing';
+      const pilotState = pilotStatus(subscription);
+      const isPilot = pilotState !== 'none';
+      const isWorkspace =
+        subscription?.kind === 'workspace_monthly' ||
+        subscription?.kind === 'workspace_annual';
+      const isNoPlan = !subLoading && !isPilot && !isWorkspace;
+
+      const pilotDaysLeft = pilotDaysRemaining(subscription);
+      const pilotExpiresFmt = subscription?.pilotExpiresAt
+        ? new Date(subscription.pilotExpiresAt).toLocaleDateString()
+        : null;
+
+      // Tone for the pilot status chip — green while active, amber as the
+      // countdown approaches, rose once expired. Mirrors the heuristics used
+      // by PilotCountdownBanner so the two surfaces don't contradict.
+      const pilotChipClasses =
+        pilotState === 'expired'
+          ? isLight
+            ? 'bg-rose-50 border-rose-200 text-rose-700'
+            : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+          : pilotState === 'expiring_soon'
+          ? isLight
+            ? 'bg-amber-50 border-amber-200 text-amber-700'
+            : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+          : isLight
+          ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+          : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300';
+
+      const pilotChipLabel =
+        pilotState === 'expired'
+          ? 'expired'
+          : pilotDaysLeft === 0
+          ? 'expires today'
+          : pilotDaysLeft === 1
+          ? '1 day left'
+          : `${pilotDaysLeft} days left`;
+
       return (
         <section className={`${cardClass} border rounded-xl p-5`}>
           <div className="flex items-center gap-2 mb-4">
@@ -223,14 +294,63 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
             <p className={`text-sm ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'}`}>
               Loading subscription info…
             </p>
-          ) : subscription ? (
+          ) : isPilot ? (
+            // Pilot users: one-time payment, no Stripe Subscription to
+            // manage. Show the pilot expiry and a clear path to upgrade to
+            // a Workspace. We deliberately do NOT show the "Manage billing"
+            // button because the Stripe Customer Portal has nothing useful
+            // for one-time Orders.
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div>
                   <p className={`text-sm font-medium ${isLight ? 'text-[#1a1f28]' : 'text-white'}`}>
-                    {subscription.planName}
+                    {subscription?.planName ?? 'Protocol Clarity Pilot'}
                   </p>
-                  {subscription.currentPeriodEnd && (
+                  {pilotExpiresFmt && (
+                    <p className={`text-xs mt-0.5 ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'}`}>
+                      {pilotState === 'expired' ? 'Expired ' : 'Access through '}
+                      {pilotExpiresFmt}
+                    </p>
+                  )}
+                </div>
+                <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${pilotChipClasses}`}>
+                  {pilotState === 'expired' ? <AlertCircle size={11} /> : <CheckCircle2 size={11} />}
+                  {pilotChipLabel}
+                </span>
+              </div>
+
+              <p className={`text-xs ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'} leading-relaxed`}>
+                {pilotState === 'expired'
+                  ? 'Your Pilot has ended. Upgrade to a Workspace to keep your protocols and worksheets and unlock ongoing access.'
+                  : 'Your Pilot includes 30 days of access with one protocol and up to three users. Upgrade to a Workspace any time to keep going beyond your pilot.'}
+              </p>
+
+              {upgradeError && <p className="text-sm text-red-500">{upgradeError}</p>}
+
+              <button
+                type="button"
+                onClick={handleUpgradeFromPilot}
+                disabled={upgradeLoading}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors disabled:opacity-50"
+              >
+                {upgradeLoading ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    Opening checkout…
+                  </>
+                ) : (
+                  'Upgrade to Workspace — $59 / month'
+                )}
+              </button>
+            </div>
+          ) : isWorkspace ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <p className={`text-sm font-medium ${isLight ? 'text-[#1a1f28]' : 'text-white'}`}>
+                    {subscription?.planName}
+                  </p>
+                  {subscription?.currentPeriodEnd && (
                     <p className={`text-xs mt-0.5 ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'}`}>
                       Renews {subscription.currentPeriodEnd}
                     </p>
@@ -246,7 +366,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                       : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
                 }`}>
                   {hasActiveSub ? <CheckCircle2 size={11} /> : <AlertCircle size={11} />}
-                  {subscription.status}
+                  {subscription?.status}
                 </span>
               </div>
 
@@ -271,13 +391,29 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                 Update payment method, download invoices, or cancel your subscription.
               </p>
             </div>
-          ) : (
-            <div className="space-y-3">
-              <p className={`text-sm ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'}`}>
-                No active subscription found.
-              </p>
+          ) : isNoPlan ? (
+            // True "no plan" — no pilot Order, no Workspace Subscription.
+            // Surface the path to Pricing instead of leaving the user
+            // staring at "No active subscription found."
+            <div className="space-y-4">
+              <div>
+                <p className={`text-sm font-medium ${isLight ? 'text-[#1a1f28]' : 'text-white'}`}>
+                  No active plan
+                </p>
+                <p className={`text-xs mt-1 ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'} leading-relaxed`}>
+                  Start with the Protocol Clarity Pilot ($25 for 30 days) or jump straight to a Workspace.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleViewPricing}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors"
+              >
+                View pricing
+              </button>
             </div>
-          )}
+          ) : null}
         </section>
       );
     }
@@ -671,6 +807,11 @@ export default function Dashboard({
   return (
     <div className={`h-screen ${pageBg} pt-16 flex flex-col overflow-hidden`}>
       <DemoBanner />
+      {/* Self-hides when pilotStatus === 'none'. Surfaces "N days left" and an
+          upgrade-to-Workspace CTA for pilot users; renders nothing otherwise. */}
+      <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 pt-3">
+        <PilotCountdownBanner />
+      </div>
       <div className={`flex-shrink-0 border-b ${tabBarBg} backdrop-blur-sm`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide py-1">
