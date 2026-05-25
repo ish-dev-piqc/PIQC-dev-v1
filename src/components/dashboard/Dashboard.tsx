@@ -90,7 +90,7 @@ interface SettingsTabProps {
 
 function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
   const { theme } = useTheme();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const isLight = theme === 'light';
   const cardClass = isLight ? 'bg-[#f5f7fa] border-[#e2e8ee]' : 'bg-[#0d1118] border-white/8';
   const inputClass = isLight
@@ -105,10 +105,13 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
   const [lastName, setLastName] = useState('');
   const [title, setTitle] = useState('');
   const [timezone, setTimezone] = useState('');
-  const [organization, setOrganization] = useState<string>('');
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState('');
   const [profileError, setProfileError] = useState('');
+  // organization is read-only; comes from AuthContext.profile (single
+  // source of truth for user_profiles state). Empty-string fallback so
+  // the disabled input always renders.
+  const organization = profile?.organization ?? '';
 
   useEffect(() => {
     if (!user) return;
@@ -132,24 +135,6 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
     setTitle((metadata.title as string) ?? '');
     setTimezone((metadata.timezone as string) ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
   }, [user]);
-
-  // Organization comes from user_profiles (not auth metadata) — same row
-  // the RLS policies on protocols / site_participants key off of. Read-only
-  // in this drawer; org changes go through a separate admin flow.
-  useEffect(() => {
-    if (!user?.id) return;
-    let cancelled = false;
-    supabase
-      .from('user_profiles')
-      .select('organization')
-      .eq('id', user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (cancelled) return;
-        setOrganization((data?.organization as string | null) ?? '');
-      });
-    return () => { cancelled = true; };
-  }, [user?.id]);
 
   const handleProfileSave = async (event: React.FormEvent) => {
     event.preventDefault();
