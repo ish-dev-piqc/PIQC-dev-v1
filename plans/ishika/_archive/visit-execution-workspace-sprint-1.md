@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: visit-execution-workspace-sprint-1
-status: in-review
+status: merged
+merged: 2026-05-26
 started: 2026-05-26
-target_pr: 119
+target_pr: #119
 ---
 
 # Visit Execution Workspace — Sprint 1 Shell
