@@ -20,6 +20,11 @@
 /src/components/dashboard/sotr/   @ish-dev-piqc
 /src/types/sotr/                  @ish-dev-piqc
 
+# Visit Execution Workspace — Ishika
+/src/lib/visit-execution/                          @ish-dev-piqc
+/src/components/dashboard/visit-execution/         @ish-dev-piqc
+/src/types/visit-execution/                        @ish-dev-piqc
+
 # Site Mode — Kiara
 /src/lib/site/                    @ki-dev-piqc
 /src/components/dashboard/site/   @ki-dev-piqc
