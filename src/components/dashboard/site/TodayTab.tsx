@@ -1198,6 +1198,7 @@ function WeekView({ isLight, isHome, anchorDate, today, visitsByDate, protocols,
                       past={past}
                       protocols={protocols}
                       onClick={() => onVisitClick(v)}
+                      compact
                     />
                   ))}
                   {dayVisits.length > 3 && (
@@ -1226,9 +1227,24 @@ interface WeekVisitRowProps {
   past: boolean;
   protocols: { id: string; code: string }[];
   onClick: () => void;
+  // `compact` suppresses the protocol-code text chip when this row is
+  // rendered inside a narrow container (e.g. the 7-column week grid).
+  // The colored left stripe already identifies the protocol visually, and
+  // the chip's variable width was pushing participant ID + visit name past
+  // the truncate cutoff in split-screen viewports. Defaults to false so
+  // wider call sites (the mobile day stack) still show the chip.
+  compact?: boolean;
 }
 
-function WeekVisitRow({ visit, isLight, isHome, past, protocols, onClick }: WeekVisitRowProps) {
+function WeekVisitRow({
+  visit,
+  isLight,
+  isHome,
+  past,
+  protocols,
+  onClick,
+  compact = false,
+}: WeekVisitRowProps) {
   const colors = getProtocolColorsById(visit.protocolId, protocols);
   const accent = isLight ? colors.accentLight : colors.accentDark;
   const chip = isLight ? colors.chipLight : colors.chipDark;
@@ -1255,7 +1271,7 @@ function WeekVisitRow({ visit, isLight, isHome, past, protocols, onClick }: Week
               {visit.time.replace(':00', '')}
             </span>
           )}
-          {isHome && (
+          {isHome && !compact && (
             <span className={`inline-block text-[9px] font-semibold px-1 py-[1px] rounded border ${chip}`}>
               {protoCode(visit.protocolId, protocols)}
             </span>
