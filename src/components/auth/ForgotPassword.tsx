@@ -18,8 +18,11 @@ export default function ForgotPassword({ onViewChange }: ForgotPasswordProps) {
     setError('');
     setLoading(true);
 
+    // The deployed app sits under a Vite base path (`/PIQC-dev-v1/` on
+    // GitHub Pages). Bare window.location.origin would 404 — append BASE_URL
+    // so the reset-password link in the email lands at the real app URL.
     const { error: authError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin,
+      redirectTo: window.location.origin + import.meta.env.BASE_URL,
     });
 
     if (authError) {

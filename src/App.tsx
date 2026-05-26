@@ -20,7 +20,10 @@ import { SiteDataProvider } from './context/SiteDataContext';
 import { AuditProvider } from './context/AuditContext';
 import { AuditDataProvider } from './context/AuditDataContext';
 import { HeatmapProvider } from './context/HeatmapContext';
+import { CheckoutRedirectProvider, useCheckoutRedirect } from './context/CheckoutRedirectContext';
 import { getPendingCheckout } from './lib/billing/pendingCheckout';
+import RedirectingToCheckout from './components/billing/RedirectingToCheckout';
+import CheckoutResumer from './components/billing/CheckoutResumer';
 
 export type AppView = 'landing' | 'dashboard' | 'login' | 'forgot-password';
 
@@ -31,34 +34,14 @@ function AppContent() {
   const [scrollTarget, setScrollTarget] = useState<string | null>(null);
   const { session, loading, profile, profileLoading } = useAuth();
   const { theme } = useTheme();
+  const { isRedirecting } = useCheckoutRedirect();
 
   const profileComplete = !!profile?.profile_completed_at;
   const needsProfileCompletion = !!session && !profileLoading && !profileComplete;
 
   useEffect(() => {
-    if (!loading && session) {
-      // Pending-checkout flow: when a Pricing CTA was clicked while signed
-      // out, we stash a `pendingCheckout` intent in localStorage before
-      // bouncing the user to login. On the way back, we want them on the
-      // pricing section so Pricing.tsx's auto-resume effect fires the
-      // checkout call. Pricing.tsx clears the intent the moment it resumes.
-      //
-      // We return EARLY whenever pending exists — otherwise the second
-      // effect run (triggered when view flips to 'landing') would fall
-      // through to the `view === 'landing'` branch below and bounce the
-      // user back to dashboard before Pricing has a chance to mount and
-      // run its resume effect. That was the "splash glitching in then
-      // dashboard" bug.
-      if (getPendingCheckout()) {
-        if (view !== 'landing') {
-          setScrollTarget('pricing');
-          setView('landing');
-        }
-        return;
-      }
-      if (view === 'login' || view === 'landing') {
-        setView('dashboard');
-      }
+    if (!loading && session && (view === 'login' || view === 'landing')) {
+      setView('dashboard');
     }
     if (!loading && !session && view === 'dashboard') {
       setView('login');
@@ -145,6 +128,22 @@ function AppContent() {
     );
   }
 
+  // Short-circuit to the full-screen Stripe-redirect view whenever we're in
+  // the middle of bouncing the user to Stripe — either via auto-resume on
+  // the way back from login (session + pendingCheckout still in storage)
+  // or because a button somewhere set isRedirecting via context.
+  // Renders <CheckoutResumer /> alongside the loader only in the auto-resume
+  // case; it fires the checkout call and unmounts on success (navigation).
+  const hasPendingCheckoutIntent = !!session && !!getPendingCheckout();
+  if (isRedirecting || hasPendingCheckoutIntent) {
+    return (
+      <>
+        <RedirectingToCheckout />
+        {hasPendingCheckoutIntent && <CheckoutResumer />}
+      </>
+    );
+  }
+
   if (view === 'login') {
     return <Login onViewChange={handleViewChange} />;
   }
@@ -201,6 +200,7 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
+        <CheckoutRedirectProvider>
         <DemoModeProvider>
           <ModeProvider>
             <ProtocolProvider>
@@ -216,6 +216,7 @@ export default function App() {
             </ProtocolProvider>
           </ModeProvider>
         </DemoModeProvider>
+        </CheckoutRedirectProvider>
       </AuthProvider>
     </ThemeProvider>
   );
