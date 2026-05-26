@@ -16,6 +16,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useCheckout } from '../../hooks/useCheckout';
 import { useAuth } from '../../context/AuthContext';
 import { useSubscription } from '../../hooks/useSubscription';
+import { useCheckoutRedirect } from '../../context/CheckoutRedirectContext';
 import { pilotStatus, pilotDaysRemaining } from '../../lib/entitlements';
 import { findProductByKind } from '../../stripe-config';
 
@@ -25,6 +26,7 @@ export default function PilotCountdownBanner() {
   const { subscription } = useSubscription();
   const { createCheckoutSession } = useCheckout();
   const { session } = useAuth();
+  const { setRedirecting } = useCheckoutRedirect();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,6 +40,7 @@ export default function PilotCountdownBanner() {
     if (!upgrade || !session) return;
     setError(null);
     setPending(true);
+    setRedirecting(true, 'Opening checkout…');
     try {
       await createCheckoutSession(
         upgrade.priceId,
@@ -48,6 +51,7 @@ export default function PilotCountdownBanner() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not start checkout.');
       setPending(false);
+      setRedirecting(false);
     }
   };
 

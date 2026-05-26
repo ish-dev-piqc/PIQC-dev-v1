@@ -1,20 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Check, Loader2 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useCheckout } from '../hooks/useCheckout';
 import { useSubscription } from '../hooks/useSubscription';
+import { useCheckoutRedirect } from '../context/CheckoutRedirectContext';
 import {
   findProductByKind,
   PRIMARY_PLAN_KINDS,
   ADDON_KINDS,
   type StripeProduct,
 } from '../stripe-config';
-import {
-  clearPendingCheckout,
-  getPendingCheckout,
-  setPendingCheckout,
-} from '../lib/billing/pendingCheckout';
+import { setPendingCheckout } from '../lib/billing/pendingCheckout';
 import type { AppView } from '../App';
 
 // =============================================================================
@@ -53,6 +50,7 @@ export default function Pricing({ onViewChange }: PricingProps) {
   const { session } = useAuth();
   const { createCheckoutSession } = useCheckout();
   const { subscription, loading: subLoading } = useSubscription();
+  const { setRedirecting } = useCheckoutRedirect();
   const isLight = theme === 'light';
 
   const [pendingKind, setPendingKind] = useState<string | null>(null);
@@ -100,11 +98,22 @@ export default function Pricing({ onViewChange }: PricingProps) {
 
     setError(null);
     setPendingKind(product.kind);
+    // Add-ons append to the active subscription without a Stripe redirect,
+    // so we leave the full-screen loader off for those. Pilot + Workspace
+    // both redirect to Stripe Checkout, so we flip the global flag and
+    // App.tsx swaps the entire UI for <RedirectingToCheckout />.
+    if (!isAddon) setRedirecting(true, 'Opening checkout…');
     try {
+      // Vite serves this app under a base path (`/PIQC-dev-v1/` on GitHub
+      // Pages). `window.location.origin` alone would point Stripe at the
+      // GitHub Pages user-root and 404 on return. `import.meta.env.BASE_URL`
+      // is the configured base ending in `/`, so origin + base = the app's
+      // real public URL.
+      const appUrl = window.location.origin + import.meta.env.BASE_URL;
       await createCheckoutSession(
         product.priceId,
-        window.location.origin,
-        `${window.location.origin}/#pricing`,
+        appUrl,
+        `${appUrl}#pricing`,
         product.mode,
         { appendToSubscription: isAddon },
       );
@@ -118,34 +127,9 @@ export default function Pricing({ onViewChange }: PricingProps) {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
       setPendingKind(null);
+      if (!isAddon) setRedirecting(false);
     }
   };
-
-  // Auto-resume a checkout the user started before signing in. Fires at most
-  // once per mount — `resumedRef` guards against re-fire if the effect deps
-  // shift (e.g. `subscription` repopulates after auth). We wait for
-  // `subLoading` to settle so the add-on guard above evaluates against real
-  // subscription state.
-  const resumedRef = useRef(false);
-  useEffect(() => {
-    if (resumedRef.current) return;
-    if (!session || subLoading) return;
-
-    const pendingKindFromStorage = getPendingCheckout();
-    if (!pendingKindFromStorage) return;
-
-    resumedRef.current = true;
-    clearPendingCheckout();
-
-    const product = findProductByKind(pendingKindFromStorage);
-    if (!product || product.mode === 'none') return;
-
-    void launchCheckout(product);
-    // launchCheckout reads `session`, `hasActiveSub`, etc. from closure;
-    // we intentionally exclude it from the dep array — it'd re-create
-    // every render and we only want this to fire once.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, subLoading]);
 
   const ctaLabelFor = (product: StripeProduct): string => {
     if (pendingKind === product.kind) return 'Redirecting…';

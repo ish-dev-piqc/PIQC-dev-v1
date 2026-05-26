@@ -23,6 +23,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useSubscription } from '../../hooks/useSubscription';
 import { usePortal } from '../../hooks/usePortal';
 import { useCheckout } from '../../hooks/useCheckout';
+import { useCheckoutRedirect } from '../../context/CheckoutRedirectContext';
 import { findProductByKind } from '../../stripe-config';
 import { pilotStatus, pilotDaysRemaining } from '../../lib/entitlements';
 import PilotCountdownBanner from '../billing/PilotCountdownBanner';
@@ -174,6 +175,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
   const { subscription, loading: subLoading } = useSubscription();
   const { openPortal } = usePortal();
   const { createCheckoutSession } = useCheckout();
+  const { setRedirecting } = useCheckoutRedirect();
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalError, setPortalError] = useState('');
   const [upgradeLoading, setUpgradeLoading] = useState(false);
@@ -182,10 +184,12 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
   const handleManageBilling = async () => {
     setPortalError('');
     setPortalLoading(true);
+    setRedirecting(true, 'Opening billing portal…');
     try {
       await openPortal(window.location.href);
     } catch {
       setPortalError('Could not open billing portal. Please try again.');
+      setRedirecting(false);
     } finally {
       setPortalLoading(false);
     }
@@ -199,6 +203,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
     if (!workspace) return;
     setUpgradeError('');
     setUpgradeLoading(true);
+    setRedirecting(true, 'Opening checkout…');
     try {
       await createCheckoutSession(
         workspace.priceId,
@@ -209,13 +214,18 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
     } catch (err) {
       setUpgradeError(err instanceof Error ? err.message : 'Could not start checkout.');
       setUpgradeLoading(false);
+      setRedirecting(false);
     }
   };
 
   // Send a no-plan user to the landing pricing section. window.location is a
-  // full reload, which is fine — they're going to a marketing page.
+  // full reload, which is fine — they're going to a marketing page. We
+  // include Vite's BASE_URL because the deployed app sits under a subpath
+  // (e.g. `/PIQC-dev-v1/` on GitHub Pages); `window.location.origin` alone
+  // would 404 on GitHub Pages.
   const handleViewPricing = () => {
-    window.location.href = `${window.location.origin}/#pricing`;
+    window.location.href =
+      `${window.location.origin}${import.meta.env.BASE_URL}#pricing`;
   };
 
   const navItems: Array<{ id: SettingsSection; label: string; icon: LucideIcon }> = [
