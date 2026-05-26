@@ -1,9 +1,10 @@
 ---
 owner: kiara
 feature: checkout-loading-screen
-status: active
+status: merged
+merged: 2026-05-26
 started: 2026-05-25
-target_pr:
+target_pr: #115
 ---
 
 # Shared full-screen "Opening checkout…" loading state
