@@ -29,7 +29,7 @@ const LABELS: Record<ItemClassification, string> = {
 const TONES: Record<ItemClassification, string> = {
   required:           'text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-400/10 dark:border-emerald-400/20',
   conditional:        'text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-400/10 dark:border-amber-400/20',
-  if_applicable:      'text-slate-700 bg-slate-50 border-slate-200 dark:text-slate-300 dark:bg-slate-400/10 dark:border-slate-400/20',
+  if_applicable:      'text-fg-muted bg-transparent border-transparent',
   primary_endpoint:   'text-rose-700 bg-rose-50 border-rose-200 dark:text-rose-400 dark:bg-rose-400/10 dark:border-rose-400/20',
   secondary_endpoint: 'text-orange-700 bg-orange-50 border-orange-200 dark:text-orange-400 dark:bg-orange-400/10 dark:border-orange-400/20',
   safety_critical:    'text-rose-800 bg-rose-100 border-rose-300 dark:text-rose-300 dark:bg-rose-500/15 dark:border-rose-400/30 font-bold',

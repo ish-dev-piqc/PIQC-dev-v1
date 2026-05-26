@@ -19,6 +19,8 @@ Clinical trial sites receive a protocol weeks before the first participant is sc
 - `src/lib/visit-execution/visitExecutionApi.ts`
 - `src/lib/visit-execution/visitExecutionAdapter.ts`
 - `src/lib/visit-execution/mockVisitWorkspace.ts`
+- `src/lib/visit-execution/__tests__/visitExecutionAdapter.test.ts`
+- `src/lib/visit-execution/__tests__/visitExecutionApi.test.ts`
 - `src/components/dashboard/visit-execution/VisitExecutionTab.tsx`
 - `src/components/dashboard/visit-execution/VisitNavigator.tsx`
 - `src/components/dashboard/visit-execution/VisitSnapshotCard.tsx`
@@ -52,7 +54,7 @@ Clinical trial sites receive a protocol weeks before the first participant is sc
 - [x] adapter (`src/lib/visit-execution/visitExecutionAdapter.ts`)
 - [ ] context (`src/context/`)
 - [x] component (`src/components/dashboard/visit-execution/`)
-- [ ] test (`src/**/__tests__/`)
+- [x] test (`src/lib/visit-execution/__tests__/`)
 
 ## Mock data plan
 
