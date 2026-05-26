@@ -1,9 +1,9 @@
 ---
 owner: ish-dev-piqc
 feature: visit-execution-workspace-sprint-2-5-migrations
-status: active
+status: in-review
 started: 2026-05-26
-target_pr:
+target_pr: 123
 ---
 
 # Visit Execution Workspace — Sprint 2.5: Migrations
