@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { MessageSquare, LayoutDashboard, Activity, FileText, Database, UserCircle2, Users, CalendarCheck, UserCog, CreditCard, Loader2, CheckCircle2, AlertCircle, type LucideIcon } from 'lucide-react';
+import { MessageSquare, LayoutDashboard, Activity, FileText, Database, UserCircle2, Users, CalendarCheck, UserCog, CreditCard, Loader2, CheckCircle2, AlertCircle, ClipboardList, type LucideIcon } from 'lucide-react';
 import DashboardChat from './DashboardChat';
 import KnowledgeBase from './KnowledgeBase';
 import TodayTab from './site/TodayTab';
@@ -12,6 +12,7 @@ import ReportsTab from './site/ReportsTab';
 import ProtocolTab from './site/ProtocolTab';
 import ProtocolRequiredGate from './site/ProtocolRequiredGate';
 import ProtocolOnboarding from './site/ProtocolOnboarding';
+import VisitExecutionTab from './visit-execution/VisitExecutionTab';
 import AuditWorkspaceShell from './audit/AuditWorkspaceShell';
 import { useTheme } from '../../context/ThemeContext';
 import { useMode } from '../../context/ModeContext';
@@ -37,7 +38,9 @@ export type DashboardTab =
   | 'knowledge'
   | 'workflows'
   // Site Mode tabs
-  | 'overview'
+  | 'visit-execution'
+  | 'today'
+  | 'overview'           // legacy alias; redirects to 'visit-execution' via the fallback effect
   | 'participants'
   | 'visits'
   | 'protocol'
@@ -55,7 +58,11 @@ interface TabConfig {
 }
 
 const SITE_TABS: TabConfig[] = [
-  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  // Visit Prep is the primary Site Mode landing surface — protocol-level
+  // execution workspace, available before any participants are enrolled.
+  // Today moves to the second slot for participant-day operations.
+  { id: 'visit-execution', label: 'Visit Prep', icon: ClipboardList },
+  { id: 'today', label: 'Today', icon: LayoutDashboard },
   { id: 'participants', label: 'Participants', icon: Users },
   { id: 'visits', label: 'Visits', icon: CalendarCheck },
   { id: 'protocol', label: 'Protocol', icon: Database },
@@ -661,7 +668,14 @@ export default function Dashboard({
       case 'workflows':
         return <PlaceholderTab label="Workflows" />;
       // Site Mode tabs
-      case 'overview':
+      case 'visit-execution':
+      case 'overview': // legacy alias — fallback effect redirects; render defensively in the meantime
+        return (
+          <ProtocolRequiredGate label="Visit Prep">
+            <VisitExecutionTab />
+          </ProtocolRequiredGate>
+        );
+      case 'today':
         return (
           <TodayTab
             onNavigateToVisits={() => {
