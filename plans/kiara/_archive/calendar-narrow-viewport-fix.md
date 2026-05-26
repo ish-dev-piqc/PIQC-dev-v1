@@ -1,9 +1,10 @@
 ---
 owner: kiara
 feature: calendar-narrow-viewport-fix
-status: active
+status: merged
+merged: 2026-05-26
 started: 2026-05-25
-target_pr:
+target_pr: #117
 ---
 
 # Calendar week-view: hide redundant protocol chip in compact day columns
