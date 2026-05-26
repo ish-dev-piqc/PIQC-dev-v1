@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: visit-execution-workspace-sprint-2-canonical-schema
-status: active
+status: merged
+merged: 2026-05-26
 started: 2026-05-26
-target_pr:
+target_pr: #121
 ---
 
 # Visit Execution Workspace — Sprint 2: Canonical Protocol Logic Data Model (design doc)
