@@ -86,6 +86,65 @@ export type VisitConfidenceState = 'high' | 'medium' | 'low' | 'needs_review';
 
 
 /**
+ * Sprint 6 — canonical role enum for the role-filtered view lens.
+ *
+ * Five values, lowercase singular. Deliberately small to keep the chip
+ * strip readable on the workspace surface and the role-aware PDF filename
+ * short. If coordinator feedback surfaces a missing role (e.g. "data
+ * manager", "lab coordinator"), extend this union — do NOT fork the data
+ * model. The founder roadmap rule is "one workspace, five views" — same
+ * canonical packet, different presentation lenses.
+ *
+ * Parser-emitted `role_hint` strings are free text (`"Coordinator"`,
+ * `"Phlebotomy nurse"`, `"Pharmacist + Coordinator"`, etc.). The
+ * `parseRoleHint` helper in src/lib/visit-execution/parseRoleHint.ts
+ * maps free text → ExecutionRole[] (multi-role supported).
+ */
+export type ExecutionRole =
+  | 'coordinator'
+  | 'nurse'
+  | 'investigator'
+  | 'lab'
+  | 'pharmacy';
+
+/**
+ * Role filter state for the workspace. `'all'` is the default — full
+ * canonical checklist, no filtering. Selecting any specific role narrows
+ * the checklist + the export to items relevant to that role.
+ */
+export type RoleFilter = ExecutionRole | 'all';
+
+/**
+ * Display labels for the role chip strip + the PDF subtitle when exporting
+ * a filtered view. Sentence case (the chip strip and the PDF subtitle both
+ * read as "Coordinator", "Nurse" — not "COORDINATOR").
+ */
+export const ROLE_LABELS: Record<ExecutionRole, string> = {
+  coordinator:  'Coordinator',
+  nurse:        'Nurse',
+  investigator: 'Investigator',
+  lab:          'Lab',
+  pharmacy:     'Pharmacy',
+};
+
+/**
+ * Chip-strip render order for the RoleFilterBar. `'all'` always comes first
+ * (default selected state); the five roles follow in the order they were
+ * defined in `ExecutionRole`. Iterating this constant rather than
+ * `Object.keys(ROLE_LABELS)` guarantees deterministic order across browsers
+ * and keeps "All" pinned left.
+ */
+export const ROLE_FILTER_OPTIONS: RoleFilter[] = [
+  'all',
+  'coordinator',
+  'nurse',
+  'investigator',
+  'lab',
+  'pharmacy',
+];
+
+
+/**
  * Resolution state of a `visit_completeness_signals` row. Mirrors the
  * `visit_signal_resolution` Postgres enum (Sprint 3.5a migration
  * 20260615000100_visit_signal_resolution_enum.sql).

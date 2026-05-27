@@ -16,9 +16,11 @@ import {
   defaultExpandedPhases,
   type ExecutionPhase,
   type ExecutionReviewStatus,
+  type RoleFilter,
   type VisitExecutionItem,
   type VisitExecutionWorkspace,
 } from '../../../types/visit-execution';
+import { itemMatchesRoleFilter } from '../../../lib/visit-execution/parseRoleHint';
 import ExecutionItemClassificationBadge from './ExecutionItemClassificationBadge';
 import ExecutionReviewStatusBadge from './ExecutionReviewStatusBadge';
 
@@ -62,6 +64,14 @@ interface Props {
    * matching mutation API call or drawer-open handler. */
   onItemAction: (item: VisitExecutionItem, action: ChecklistItemAction) => void;
   onOpenTraceability: (item: VisitExecutionItem) => void;
+  /**
+   * Sprint 6: role-filter lens. `'all'` is the no-op default; selecting a
+   * specific role narrows the visible checklist to items matching that role
+   * (or unscoped — see itemMatchesRoleFilter for the safety default).
+   * Defaults to `'all'` so existing callers without role-awareness keep
+   * their current behavior.
+   */
+  roleFilter?: RoleFilter;
 }
 
 export default function ExecutionChecklist({
@@ -70,6 +80,7 @@ export default function ExecutionChecklist({
   onToggleReviewed,
   onItemAction,
   onOpenTraceability,
+  roleFilter = 'all',
 }: Props) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
@@ -78,15 +89,19 @@ export default function ExecutionChecklist({
     ? PHASE_LABELS_DOSING
     : PHASE_LABELS_NON_DOSING;
 
-  // Group items by phase once per workspace.
+  // Group items by phase once per workspace (and per role filter). Filter
+  // applied BEFORE grouping so phases with no role-relevant items don't
+  // render an empty phase card — same hide-empty-phases behavior as
+  // before, just downstream of the role lens.
   const itemsByPhase = useMemo(() => {
     const map = new Map<ExecutionPhase, VisitExecutionItem[]>();
     for (const phase of EXECUTION_PHASE_ORDER) map.set(phase, []);
     for (const item of workspace.items) {
+      if (!itemMatchesRoleFilter(item.role_hint, roleFilter)) continue;
       map.get(item.phase)?.push(item);
     }
     return map;
-  }, [workspace]);
+  }, [workspace, roleFilter]);
 
   const [expandedPhases, setExpandedPhases] = useState<Set<ExecutionPhase>>(
     () => new Set(defaultExpandedPhases(workspace.snapshot)),
@@ -101,6 +116,16 @@ export default function ExecutionChecklist({
     });
   };
 
+  // Sprint 6: if the role filter zeroed out every phase, surface a soft
+  // empty state rather than rendering nothing. Coordinator dropping into
+  // an empty filtered view shouldn't see a blank workspace and wonder if
+  // it broke.
+  const filteredTotal = Array.from(itemsByPhase.values()).reduce(
+    (sum, items) => sum + items.length,
+    0,
+  );
+  const showEmptyFilteredState = roleFilter !== 'all' && filteredTotal === 0;
+
   return (
     <section
       data-testid="vew-checklist"
@@ -111,6 +136,23 @@ export default function ExecutionChecklist({
           — the section itself IS the workflow-ordered list and the heading
           was restating the obvious. The aria-label on <section> preserves
           screen-reader context. */}
+      {showEmptyFilteredState && (
+        <div
+          data-testid="vew-checklist-empty-for-role"
+          className={`rounded-xl border px-4 py-6 text-center ${
+            isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5'
+          }`}
+        >
+          <p className="text-fg-body text-sm">
+            No requirements scoped to this role for this visit.
+          </p>
+          <p className="text-fg-sub text-[11px] mt-1 leading-relaxed">
+            Switch back to <span className="font-semibold">All</span> to see every
+            requirement, or try a different role.
+          </p>
+        </div>
+      )}
+
       {EXECUTION_PHASE_ORDER.map((phase) => {
         const phaseItems = itemsByPhase.get(phase) ?? [];
         if (phaseItems.length === 0) return null;

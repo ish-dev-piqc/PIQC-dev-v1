@@ -15,10 +15,12 @@ import {
 } from '../../../lib/visit-execution/visitExecutionMutationsApi';
 import type {
   ExecutionReviewStatus,
+  RoleFilter,
   VisitCompletenessSignal,
   VisitExecutionItem,
   VisitExecutionWorkspace,
 } from '../../../types/visit-execution';
+import { itemMatchesRoleFilter } from '../../../lib/visit-execution/parseRoleHint';
 import VisitNavigator from './VisitNavigator';
 import VisitSnapshotCard from './VisitSnapshotCard';
 import ExecutionChecklist, { type ChecklistItemAction } from './ExecutionChecklist';
@@ -30,6 +32,7 @@ import RequirementTextDrawer, {
 } from './RequirementTextDrawer';
 import CompletenessSignalsPanel from './CompletenessSignalsPanel';
 import EditLogDrawer from './EditLogDrawer';
+import RoleFilterBar from './RoleFilterBar';
 
 // =============================================================================
 // VisitExecutionTab — root component for the new primary Site Mode surface.
@@ -110,6 +113,17 @@ export default function VisitExecutionTab() {
     | null
   >(null);
   const [traceabilityItem, setTraceabilityItem] = useState<VisitExecutionItem | null>(null);
+
+  // Sprint 6: role-filter lens. `'all'` default — current behavior, no
+  // filtering. Selecting a specific role narrows the checklist + the
+  // export to items matching that role (or unscoped — see
+  // itemMatchesRoleFilter for the safety default).
+  //
+  // Resets to `'all'` when the active protocol or selected visit changes:
+  // a coordinator switching from a "Nurse view" of Visit 1 to Visit 4
+  // shouldn't silently carry the filter into a visit where it might
+  // produce an empty checklist by surprise.
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
 
   // Sprint 4b: RequirementTextDrawer state. Sprint 4c extends to three modes.
   // textDrawerSubject is the generic display payload (title + initial draft
@@ -210,6 +224,11 @@ export default function VisitExecutionTab() {
       setEditLogItem(null);
       setMutationError(null);
       setInFlightSignalIds(new Set());
+      // Sprint 6: reset role filter on protocol change. Carrying a Nurse
+      // filter from BRIGHTEN-2 into CARDIAC-7 could surprise the user with
+      // an empty checklist if CARDIAC-7's parser output uses different
+      // role_hint phrasing.
+      setRoleFilter('all');
       mutationGenRef.current = new Map();
     });
     return () => {
@@ -224,9 +243,11 @@ export default function VisitExecutionTab() {
 
   // Clear any lingering mutation error when the user changes visits — the
   // error refers to a specific item; banner is contextless once the user
-  // navigates away.
+  // navigates away. Also reset the role filter (Sprint 6) — see protocol-
+  // change reset comment above for the same rationale at visit scope.
   useEffect(() => {
     setMutationError(null);
+    setRoleFilter('all');
   }, [selectedId]);
 
   const reviewedCountForSelected = useMemo(() => {
@@ -235,6 +256,18 @@ export default function VisitExecutionTab() {
       (i) => (reviewStatus.get(i.id) ?? i.review_status) === 'reviewed',
     ).length;
   }, [selectedWorkspace, reviewStatus]);
+
+  // Sprint 6: count of items visible under the active role filter. Memoized
+  // because it's consumed by BOTH the RoleFilterBar (scope hint) and the
+  // ExportWorksheetButton (zero-item-export guard) — same number, computed
+  // once.
+  const roleFilteredCount = useMemo(() => {
+    if (!selectedWorkspace) return 0;
+    if (roleFilter === 'all') return selectedWorkspace.items.length;
+    return selectedWorkspace.items.filter((i) =>
+      itemMatchesRoleFilter(i.role_hint, roleFilter),
+    ).length;
+  }, [selectedWorkspace, roleFilter]);
 
   // Helper: read the effective current status for an item (optimistic
   // override OR persisted value). Used to compute the "what to revert to"
@@ -781,6 +814,19 @@ export default function VisitExecutionTab() {
                 />
               )}
 
+              {/* Sprint 6: role-filter lens. Sits between the snapshot/signals
+                  area (workspace overview) and the checklist (narrowed view).
+                  Filtering signals + edit-log is intentionally NOT in scope —
+                  signals are visit-level + audit-log is role-agnostic.
+                  filteredCount computed once; also fed downstream to the
+                  ExportWorksheetButton (zero-item-export guard). */}
+              <RoleFilterBar
+                filter={roleFilter}
+                onSelect={setRoleFilter}
+                totalCount={selectedWorkspace.items.length}
+                filteredCount={roleFilteredCount}
+              />
+
               {mutationError && (
                 <div
                   role="alert"
@@ -826,6 +872,7 @@ export default function VisitExecutionTab() {
                 onToggleReviewed={handleToggleReviewed}
                 onItemAction={handleItemAction}
                 onOpenTraceability={setTraceabilityItem}
+                roleFilter={roleFilter}
               />
 
               {/* Polish-v2 follow-up (Sprint 5 design-critique): the
@@ -841,6 +888,8 @@ export default function VisitExecutionTab() {
                 <ExportWorksheetButton
                   visitTemplateId={selectedWorkspace.visit_template_id}
                   visitName={selectedWorkspace.snapshot.visit_name}
+                  roleFilter={roleFilter}
+                  filteredCount={roleFilteredCount}
                 />
               </div>
             </>

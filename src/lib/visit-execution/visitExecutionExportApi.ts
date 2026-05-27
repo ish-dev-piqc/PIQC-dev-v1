@@ -45,10 +45,16 @@ import type {
   ExecutionPhase,
   ItemClassification,
   ExecutionReviewStatus,
+  RoleFilter,
   VisitWorksheetExportPacket,
   VisitWorksheetExportRow,
 } from '../../types/visit-execution';
-import { PHASE_LABELS_DOSING, PHASE_LABELS_NON_DOSING } from '../../types/visit-execution';
+import {
+  PHASE_LABELS_DOSING,
+  PHASE_LABELS_NON_DOSING,
+  ROLE_LABELS,
+} from '../../types/visit-execution';
+import { itemMatchesRoleFilter } from './parseRoleHint';
 import { isMockEnabled } from './visitExecutionApi';
 import { getMockVisitExecutionWorkspaces } from './mockVisitWorkspace';
 import { DEMO_PROTOCOL_IDS } from '../demo/ids';
@@ -127,20 +133,28 @@ export function isoDateForFilename(iso: string): string {
 
 /**
  * Build the filename for an exported worksheet.
- * Format: `<protocol_code>_<visit_name>_worksheet_draft_<YYYY-MM-DD>.pdf`
+ * Format (canonical / all roles):
+ *   `<protocol_code>_<visit_name>_worksheet_draft_<YYYY-MM-DD>.pdf`
+ * Format (Sprint 6 — role-scoped):
+ *   `<protocol_code>_<visit_name>_<role>_worksheet_draft_<YYYY-MM-DD>.pdf`
  *
  * Protocol code falls back to a short id prefix when null (e.g. `protocol_8f3a`).
  * Date comes from `packet.generated_at` (the server-stamped lock-in time)
  * NOT the browser clock — filename and footer timestamp must agree.
+ *
+ * `roleFilter` defaults to `'all'` so existing callers without role-awareness
+ * keep their pre-Sprint-6 filename shape.
  */
 export function buildWorksheetFilename(
   packet: Pick<VisitWorksheetExportPacket, 'protocol_code' | 'protocol_id' | 'snapshot' | 'generated_at'>,
+  roleFilter: RoleFilter = 'all',
 ): string {
   const code = packet.protocol_code
     ? slugifyForFilename(packet.protocol_code)
     : `protocol_${packet.protocol_id.slice(0, 4)}`;
   const visit = slugifyForFilename(packet.snapshot.visit_name);
-  return `${code}_${visit}_worksheet_draft_${isoDateForFilename(packet.generated_at)}.pdf`;
+  const roleSegment = roleFilter === 'all' ? '' : `_${roleFilter}`;
+  return `${code}_${visit}${roleSegment}_worksheet_draft_${isoDateForFilename(packet.generated_at)}.pdf`;
 }
 
 // ---------------------------------------------------------------------------
@@ -415,10 +429,20 @@ function formatGeneratedAt(iso: string): string {
  *   - Body: one autotable per non-empty phase
  *   - Last: traceability appendix (per-item protocol section + page)
  *
+ * Sprint 6 — when `roleFilter` is non-`'all'`:
+ *   - Items filtered (in-place packet not mutated; filtered local view used)
+ *   - Title block gets a "Filtered view: <Role>" subtitle line
+ *   - Stats line scopes to filtered counts
+ *   - Open-items warning banner scopes to filtered counts
+ *   - Traceability appendix scopes to filtered items
+ *
  * Returns the jsPDF instance so callers can .save() / .output() / inspect
  * in tests.
  */
-export function buildVisitWorksheetPdf(packet: VisitWorksheetExportPacket): jsPDF {
+export function buildVisitWorksheetPdf(
+  packet: VisitWorksheetExportPacket,
+  roleFilter: RoleFilter = 'all',
+): jsPDF {
   const doc = new jsPDF({ unit: 'pt', format: 'letter', orientation: 'portrait' });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -427,6 +451,28 @@ export function buildVisitWorksheetPdf(packet: VisitWorksheetExportPacket): jsPD
   const phaseLabels = packet.snapshot.is_dosing_visit
     ? PHASE_LABELS_DOSING
     : PHASE_LABELS_NON_DOSING;
+
+  // Sprint 6: apply the role lens. Filter the items list and recompute
+  // the snapshot counts so the title block + banner + stats line
+  // reflect what's actually on the page. The packet is NOT mutated; the
+  // original totals stay accessible for tests / future re-renders.
+  //
+  // VisitWorksheetExportRow exposes role_hint directly (see types file),
+  // so the filter is a simple substring match via the canonical
+  // itemMatchesRoleFilter helper. Unscoped rows (null role_hint / "Site
+  // staff" / etc.) appear under every role — clinical-default safety.
+  const isFiltered = roleFilter !== 'all';
+  const filteredItems = isFiltered
+    ? packet.items.filter((i) => itemMatchesRoleFilter(i.role_hint, roleFilter))
+    : packet.items;
+  const filteredReviewedCount = isFiltered
+    ? filteredItems.filter((i) => i.review_status === 'reviewed').length
+    : packet.snapshot.reviewed_count;
+  const filteredNeedsReviewCount = isFiltered
+    ? filteredItems.filter(
+        (i) => i.review_status === 'not_reviewed' || i.review_status === 'needs_review',
+      ).length
+    : packet.snapshot.needs_review_count;
 
   // ---- Title block (first page) -------------------------------------------
   let cursorY = margin + 28;
@@ -454,7 +500,32 @@ export function buildVisitWorksheetPdf(packet: VisitWorksheetExportPacket): jsPD
     ? `${packet.protocol_title} · ${packet.protocol_code}`
     : packet.protocol_title;
   doc.text(codeLabel, margin, cursorY);
-  cursorY += 20;
+  cursorY += 16;
+
+  // Sprint 6: filtered-view subtitle. Only renders when a role lens is
+  // active. Sits between the protocol-code line and the purpose section
+  // so a coordinator scanning the page knows immediately "this is the
+  // <Role> view of the worksheet, not the full visit."
+  // `isFiltered` already implies `roleFilter !== 'all'`; second check
+  // would be redundant. The inner narrow uses a type-only guard cast
+  // because TypeScript can't trace the equivalence across the variable.
+  if (isFiltered) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    // Blue-800 (approx 30, 64, 175) — matches the existing TimingBanner
+    // informational accent. Avoids introducing a NEW color (indigo would
+    // have) for a label that serves the same "informational, not
+    // warning" semantic role.
+    doc.setTextColor(30, 64, 175);
+    doc.text(
+      `Filtered view: ${ROLE_LABELS[roleFilter as Exclude<RoleFilter, 'all'>]}`,
+      margin,
+      cursorY,
+    );
+    doc.setFont('helvetica', 'normal');
+    cursorY += 14;
+  }
+  cursorY += 4;
 
   // Purpose section — placeholder-aware. When the RPC returned the canonical
   // fallback string (parser hasn't extracted a real purpose yet), we frame
@@ -486,34 +557,40 @@ export function buildVisitWorksheetPdf(packet: VisitWorksheetExportPacket): jsPD
 
   // Stats line. The "to review" count is colored amber when non-zero so a
   // coordinator scanning the stats line sees open work at a glance.
+  // Sprint 6: when filtered, counts scope to the visible item set so the
+  // numbers describe what's actually on the page below them.
+  const statsItemCount = isFiltered ? filteredItems.length : packet.snapshot.item_count;
+  const statsReviewedCount = filteredReviewedCount;
+  const statsNeedsReviewCount = filteredNeedsReviewCount;
+
   doc.setFontSize(9);
   doc.setTextColor(60);
-  const baseStatsLine = `${packet.snapshot.item_count} requirements · ${packet.snapshot.reviewed_count} reviewed · `;
+  const baseStatsLine = `${statsItemCount} requirements · ${statsReviewedCount} reviewed · `;
   doc.text(baseStatsLine, margin, cursorY);
   const baseWidth = doc.getTextWidth(baseStatsLine);
 
-  if (packet.snapshot.needs_review_count > 0) {
+  if (statsNeedsReviewCount > 0) {
     // Approximate Tailwind amber-700 (#B45309) — RGB tuned for print
     // contrast on white paper. Exact match isn't required since the PDF
     // viewer's rendering already shifts gamma; this reads clearly amber.
     doc.setTextColor(180, 83, 9);
     doc.setFont('helvetica', 'bold');
   }
-  doc.text(`${packet.snapshot.needs_review_count} to review`, margin + baseWidth, cursorY);
+  doc.text(`${statsNeedsReviewCount} to review`, margin + baseWidth, cursorY);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(60);
 
   if (packet.snapshot.amendment_version) {
-    const widthSoFar = baseWidth + doc.getTextWidth(`${packet.snapshot.needs_review_count} to review`);
+    const widthSoFar = baseWidth + doc.getTextWidth(`${statsNeedsReviewCount} to review`);
     doc.text(` · ${packet.snapshot.amendment_version}`, margin + widthSoFar, cursorY);
   }
   cursorY += 18;
 
   // Open-items warning banner. When N requirements still need review, the
   // coordinator must not mistake this artifact for a complete deliverable.
-  // The banner doesn't gate the export — it's a non-blocking honesty signal.
-  // Skipped when all requirements are reviewed (no false alarms).
-  if (packet.snapshot.needs_review_count > 0) {
+  // Sprint 6: scoped to filtered counts so a filtered view doesn't shout
+  // about open items the role-view doesn't show.
+  if (statsNeedsReviewCount > 0) {
     const bannerHeight = 28;
     const bannerY = cursorY;
     // Amber fill + border, matching the workspace's hard-constraint timing tone.
@@ -529,7 +606,7 @@ export function buildVisitWorksheetPdf(packet: VisitWorksheetExportPacket): jsPD
     doc.text('⚠', bannerLeadingX, bannerY + 12);
     doc.setFont('helvetica', 'normal');
     const bannerMessage =
-      `${packet.snapshot.needs_review_count} requirement${packet.snapshot.needs_review_count === 1 ? '' : 's'} not yet reviewed. ` +
+      `${statsNeedsReviewCount} requirement${statsNeedsReviewCount === 1 ? '' : 's'} not yet reviewed. ` +
       'Continue reviewing in PIQC before relying on this draft.';
     const bannerLines = doc.splitTextToSize(
       bannerMessage,
@@ -546,7 +623,10 @@ export function buildVisitWorksheetPdf(packet: VisitWorksheetExportPacket): jsPD
 
   // ---- Per-phase autotables ----------------------------------------------
   for (const phase of PHASE_ORDER) {
-    const phaseItems = packet.items.filter((i) => i.phase === phase);
+    // Sprint 6: phase grouping operates on the role-filtered view when a
+    // role lens is active. Same hide-empty-phases behavior as before; just
+    // downstream of the filter.
+    const phaseItems = filteredItems.filter((i) => i.phase === phase);
     if (phaseItems.length === 0) continue;
 
     // Phase title
@@ -608,7 +688,9 @@ export function buildVisitWorksheetPdf(packet: VisitWorksheetExportPacket): jsPD
   // ---- Traceability appendix ---------------------------------------------
   // One row per item with protocol_section + protocol_page. Keeps the audit
   // chain on the worksheet itself so the print artifact is self-contained.
-  const traceableItems = packet.items.filter(
+  // Sprint 6: traceability appendix scopes to the filtered view so the
+  // appendix doesn't reference rows the body of the worksheet doesn't show.
+  const traceableItems = filteredItems.filter(
     (i) => i.traceability.protocol_section || i.traceability.protocol_page !== null,
   );
   if (traceableItems.length > 0) {
@@ -752,20 +834,27 @@ function defaultDownload(filename: string, doc: jsPDF) {
 /**
  * Orchestrates fetch + build + Blob/click for one-visit worksheet export.
  *
+ * `roleFilter` defaults to `'all'` (Sprint 5 behavior, no filtering). When
+ * non-`'all'`: items are filtered in the build step; filename + PDF header
+ * + stats + banner all scope to the role.
+ *
  * Returns a Result<{filename, itemCount}> — on success, the filename
  * delivered to the browser; on failure, a human-friendly error message
- * the caller can show in a banner.
+ * the caller can show in a banner. `itemCount` reflects the FILTERED
+ * count when a role filter is active (matches what the PDF actually
+ * contains).
  */
 export async function downloadVisitWorksheet(
   visitTemplateId: string,
   opts: DownloadOptions = {},
+  roleFilter: RoleFilter = 'all',
 ): Promise<Result<{ filename: string; itemCount: number }>> {
   const fetchResult = await fetchVisitWorksheetPacket(visitTemplateId);
   if (!fetchResult.ok) return fetchResult;
 
   const packet = fetchResult.data;
-  const doc = buildVisitWorksheetPdf(packet);
-  const filename = buildWorksheetFilename(packet);
+  const doc = buildVisitWorksheetPdf(packet, roleFilter);
+  const filename = buildWorksheetFilename(packet, roleFilter);
 
   try {
     (opts.triggerDownload ?? defaultDownload)(filename, doc);
@@ -776,12 +865,19 @@ export async function downloadVisitWorksheet(
     };
   }
 
-  // Counts-only log — no row content goes to the console.
+  // Counts-only log — no row content goes to the console. `itemCount`
+  // here is the count actually delivered to the user (filtered when a
+  // role lens is active), not the canonical visit total.
+  const deliveredItemCount =
+    roleFilter === 'all'
+      ? packet.items.length
+      : packet.items.filter((i) => itemMatchesRoleFilter(i.role_hint, roleFilter)).length;
   console.info('[vew] worksheet exported', {
     visitTemplateId,
-    itemCount: packet.items.length,
+    itemCount: deliveredItemCount,
+    roleFilter,
     filename,
   });
 
-  return { ok: true, data: { filename, itemCount: packet.items.length } };
+  return { ok: true, data: { filename, itemCount: deliveredItemCount } };
 }
