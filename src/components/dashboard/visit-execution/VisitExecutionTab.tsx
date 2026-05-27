@@ -92,6 +92,12 @@ export default function VisitExecutionTab() {
   const [textDrawerItem, setTextDrawerItem] = useState<VisitExecutionItem | null>(null);
   const [textDrawerMode, setTextDrawerMode] = useState<RequirementTextDrawerMode>('edit');
 
+  // Stable close callback — passed to the drawer's useOverlay which has
+  // onClose in its effect deps. An inline arrow would change identity every
+  // render and re-fire the effect (focus-trap teardown + setup churn during
+  // unrelated parent re-renders, including the saving=true transition).
+  const closeTextDrawer = useCallback(() => setTextDrawerItem(null), []);
+
   // Per-item generation counter for race-guarding rapid clicks. Each click
   // increments the item's generation; the in-flight RPC captures the gen at
   // dispatch time. On response, we compare — if the captured gen no longer
@@ -506,7 +512,7 @@ export default function VisitExecutionTab() {
       <RequirementTextDrawer
         item={textDrawerItem}
         mode={textDrawerMode}
-        onClose={() => setTextDrawerItem(null)}
+        onClose={closeTextDrawer}
         onSave={textDrawerMode === 'edit' ? handleEditSave : handleNoteSave}
       />
     </div>

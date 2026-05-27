@@ -306,8 +306,10 @@ function ChecklistItemRow({
                       : 'bg-white/[0.03] border-white/15 text-fg-sub'
                   }`}
                 >
+                  {/* Kept in sync with RequirementTextDrawer's drift block —
+                      both surfaces say "Original parser output". */}
                   <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold mb-0.5">
-                    Original
+                    Original parser output
                   </p>
                   <p className="whitespace-pre-wrap">{item.derived_text}</p>
                 </div>

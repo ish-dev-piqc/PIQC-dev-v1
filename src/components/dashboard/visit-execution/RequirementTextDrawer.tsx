@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, AlertTriangle, Loader2, FileText, MessageSquare } from 'lucide-react';
 import { useOverlay } from '../../../hooks/useOverlay';
 import { useSwipeDismiss } from '../../../hooks/useSwipeDismiss';
@@ -57,8 +57,10 @@ const COPY: Record<RequirementTextDrawerMode, {
   edit: {
     headerLabel: 'Edit requirement',
     headerTitle: (item) => item.label,
+    // Drift block below self-explains the parser-original preservation;
+    // description stays focused on what the user does here.
     description:
-      'Rewrite this requirement to match site-specific wording or clarify intent. The parser\'s original text is preserved below for reference.',
+      'Rewrite this requirement to match site-specific wording or clarify intent.',
     icon: FileText,
     textareaLabel: 'Requirement text',
     placeholder: 'Rewrite the requirement…',
@@ -93,6 +95,16 @@ export default function RequirementTextDrawer({
   const [saving, setSaving] = useState(false);
   const [inlineError, setInlineError] = useState<string | null>(null);
 
+  // Mirror `saving` into a ref so the close-guard callback can read the
+  // latest value without changing its own identity each render. Keeps the
+  // `useOverlay` effect deps stable (it has onClose in deps; an unstable
+  // onClose would re-fire the effect on every render and thrash the
+  // focus-trap setup).
+  const savingRef = useRef(saving);
+  useEffect(() => {
+    savingRef.current = saving;
+  }, [saving]);
+
   // Seed the textarea on open. For 'edit', use the current label. For 'note',
   // start blank (existing review_note isn't pre-filled — coordinators write
   // new notes, not edit prior ones; Sprint 4c may revisit).
@@ -106,15 +118,22 @@ export default function RequirementTextDrawer({
     return () => clearTimeout(t);
   }, [item, mode]);
 
-  // Don't subscribe ESC/backdrop unless the drawer is actually open. When
-  // saving, ignore close attempts (mid-RPC); otherwise user can lose the
-  // in-flight result.
+  // Saving-gated close callback. Stable reference — only changes when the
+  // parent's onClose changes (which is itself memoized in VisitExecutionTab
+  // via useCallback). Lets useOverlay's effect deps stay stable across the
+  // saving=false→true transition.
+  const guardedClose = useCallback(() => {
+    if (savingRef.current) return;
+    onClose();
+  }, [onClose]);
+
+  // Don't subscribe ESC/backdrop unless the drawer is actually open.
   useOverlay({
     isOpen: item !== null,
-    onClose: saving ? () => {} : onClose,
+    onClose: guardedClose,
     containerRef: panelRef,
   });
-  const swipe = useSwipeDismiss({ onClose: saving ? () => {} : onClose });
+  const swipe = useSwipeDismiss({ onClose: guardedClose });
 
   if (!item) return null;
 
@@ -161,7 +180,7 @@ export default function RequirementTextDrawer({
       <div
         data-testid="vew-text-drawer-backdrop"
         className="absolute inset-0 bg-black/40"
-        onClick={saving ? undefined : onClose}
+        onClick={saving ? undefined : guardedClose}
       />
 
       <div
@@ -190,7 +209,7 @@ export default function RequirementTextDrawer({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={guardedClose}
             disabled={saving}
             aria-label="Close drawer"
             className={`flex items-center justify-center w-7 h-7 rounded-md flex-shrink-0 ${
@@ -209,7 +228,9 @@ export default function RequirementTextDrawer({
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           <p className="text-fg-sub text-xs leading-relaxed">{copy.description}</p>
 
-          {/* Drift block — only when editing AND a parser-different derived_text exists */}
+          {/* Drift block — only when editing AND a parser-different derived_text exists.
+              Phrasing kept in sync with the row's drift hint chip (ExecutionChecklist):
+              both surfaces refer to the parser's frozen text as "parser output". */}
           {showDriftBlock && (
             <div
               data-testid="vew-drift-original-block"
@@ -218,7 +239,7 @@ export default function RequirementTextDrawer({
               }`}
             >
               <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold mb-1">
-                Original (from parser)
+                Original parser output
               </p>
               <p className="text-fg-body text-xs leading-relaxed whitespace-pre-wrap">
                 {item.derived_text}
@@ -288,7 +309,7 @@ export default function RequirementTextDrawer({
         >
           <button
             type="button"
-            onClick={onClose}
+            onClick={guardedClose}
             disabled={saving}
             className={`px-3 py-1.5 rounded-md text-xs font-medium ${
               saving
@@ -316,7 +337,7 @@ export default function RequirementTextDrawer({
             }`}
           >
             {saving && <Loader2 size={11} className="animate-spin" aria-hidden />}
-            {copy.saveLabel}
+            {saving ? 'Saving…' : copy.saveLabel}
           </button>
         </div>
       </div>
