@@ -109,6 +109,18 @@ BEGIN
     -- NULL (UI then shows gap_text as the label).
     v_override_text := NULLIF(btrim(COALESCE(p_new_text, '')), '');
 
+    -- Serialize concurrent promotes against the SAME visit. Without this,
+    -- two different signals being promoted in parallel both read the same
+    -- MAX(ordinal)=N and both attempt INSERT ordinal=N+1, which violates
+    -- the UNIQUE(visit_template_id, ordinal) constraint and surfaces a
+    -- raw "duplicate key" error to the coordinator. The signal-row lock
+    -- above only serializes the SAME signal — different signals targeting
+    -- the same visit need this parent-row lock to be ordinal-safe.
+    PERFORM 1
+      FROM protocol_visit_templates
+     WHERE id = v_signal.visit_template_id
+     FOR UPDATE;
+
     SELECT COALESCE(MAX(ordinal), 0)
       INTO v_max_ordinal
       FROM visit_requirements

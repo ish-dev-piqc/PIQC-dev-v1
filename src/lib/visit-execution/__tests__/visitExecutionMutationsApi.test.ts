@@ -322,6 +322,20 @@ describe('resolveSignal — mock mode on', () => {
       expect(r.data.requirement_id).toBeNull();
     }
   });
+
+  it('mock-mode always synthesizes already_resolved=false (no persisted state to race against)', async () => {
+    // Documents the mock contract: even if the same signal is "resolved"
+    // twice, the mock returns false each time because there's no DB to
+    // track prior resolution. Real-mode tests cover the true branch.
+    const r1 = await resolveSignal('sig-1', 'dismissed_not_real');
+    const r2 = await resolveSignal('sig-1', 'dismissed_not_real');
+    expect(r1.ok).toBe(true);
+    expect(r2.ok).toBe(true);
+    if (r1.ok && r2.ok) {
+      expect(r1.data.already_resolved).toBe(false);
+      expect(r2.data.already_resolved).toBe(false);
+    }
+  });
 });
 
 describe('resolveSignal — real (mock off) RPC dispatch', () => {

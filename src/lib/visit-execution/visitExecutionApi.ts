@@ -112,10 +112,37 @@ export async function fetchHumanEditLog(
   requirementId: string,
 ): Promise<Result<VisitRequirementHumanEditEvent[]>> {
   if (isMockEnabled()) {
+    // Seed three events covering edit_text + add_site_note + mark_reviewed so
+    // the drawer demo exercises all three rendering branches (before/after
+    // diff, reviewer-note body, single-line status change). Ordered newest
+    // first to match the real RPC's `ORDER BY created_at DESC` contract.
     const now = Date.now();
     return {
       ok: true,
       data: [
+        {
+          id: `mock-event-${requirementId}-3`,
+          action: 'edit_text',
+          reviewer_id: 'mock-reviewer-1',
+          previous_text: 'Body weight measurement',
+          new_text: 'Body weight measurement (use site scale; calibrate weekly)',
+          reviewer_note: null,
+          requirement_version: 2,
+          amendment_version: null,
+          created_at: new Date(now - 1000 * 60 * 15).toISOString(),
+        },
+        {
+          id: `mock-event-${requirementId}-2`,
+          action: 'add_site_note',
+          reviewer_id: 'mock-reviewer-1',
+          previous_text: null,
+          new_text: null,
+          reviewer_note:
+            'Heparin lock in place per site SOP; coordinator confirms with charge nurse before each visit.',
+          requirement_version: 1,
+          amendment_version: null,
+          created_at: new Date(now - 1000 * 60 * 45).toISOString(),
+        },
         {
           id: `mock-event-${requirementId}-1`,
           action: 'mark_reviewed',
@@ -125,7 +152,7 @@ export async function fetchHumanEditLog(
           reviewer_note: null,
           requirement_version: 1,
           amendment_version: null,
-          created_at: new Date(now - 1000 * 60 * 30).toISOString(),
+          created_at: new Date(now - 1000 * 60 * 90).toISOString(),
         },
       ],
     };

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, FlaskConical, X, AlertTriangle } from 'lucide-react';
+import { useAuth } from '../../../context/AuthContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useTheme } from '../../../context/ThemeContext';
 import { fetchVisitExecutionWorkspaces, isMockEnabled } from '../../../lib/visit-execution/visitExecutionApi';
@@ -88,6 +89,8 @@ function humanizeRpcError(raw: string): string {
 export default function VisitExecutionTab() {
   const { activeProtocol } = useProtocol();
   const { theme } = useTheme();
+  const { user } = useAuth();
+  const currentUserId = user?.id ?? null;
   const isLight = theme === 'light';
 
   const [workspaces, setWorkspaces] = useState<VisitExecutionWorkspace[]>([]);
@@ -95,7 +98,17 @@ export default function VisitExecutionTab() {
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reviewStatus, setReviewStatus] = useState<Map<string, ExecutionReviewStatus>>(new Map());
-  const [mutationError, setMutationError] = useState<{ message: string; itemLabel: string } | null>(null);
+  // Tagged-union banner state. `kind` discriminates between requirement-row
+  // mutations (the optimistic toggles + drawer saves, where "your previous
+  // state was restored" applies) and signal-resolution failures (where there
+  // is no optimistic state to revert — the signal just stayed visible).
+  // Sprint 4c added the 'signal' variant; before that, every banner was
+  // implicitly 'item'.
+  const [mutationError, setMutationError] = useState<
+    | { kind: 'item'; message: string; itemLabel: string }
+    | { kind: 'signal'; message: string; gapText: string }
+    | null
+  >(null);
   const [traceabilityItem, setTraceabilityItem] = useState<VisitExecutionItem | null>(null);
 
   // Sprint 4b: RequirementTextDrawer state. Sprint 4c extends to three modes.
@@ -117,6 +130,31 @@ export default function VisitExecutionTab() {
   // CompletenessSignalsPanel's per-row spinner. Set, not Map — we don't need
   // per-signal data, just presence.
   const [inFlightSignalIds, setInFlightSignalIds] = useState<Set<string>>(new Set());
+
+  // Wrap an async signal-resolution call in the in-flight Set so the panel
+  // can render the row spinner for the duration. Exception-safe via try/finally
+  // — guarantees the Set is trimmed even if the wrapped fn throws or rejects.
+  // The wrapped fn returns whatever it returns; this helper passes that
+  // through unchanged.
+  const withInFlightSignal = useCallback(
+    async <T,>(signalId: string, fn: () => Promise<T>): Promise<T> => {
+      setInFlightSignalIds((prev) => {
+        const next = new Set(prev);
+        next.add(signalId);
+        return next;
+      });
+      try {
+        return await fn();
+      } finally {
+        setInFlightSignalIds((prev) => {
+          const next = new Set(prev);
+          next.delete(signalId);
+          return next;
+        });
+      }
+    },
+    [],
+  );
 
   // Stable close callback — passed to the drawer's useOverlay which has
   // onClose in its effect deps. An inline arrow would change identity every
@@ -257,7 +295,11 @@ export default function VisitExecutionTab() {
         // Surface a humanized message; keep the raw RPC error in the console
         // for developer debugging.
         console.error('[vew] mutation_failed', { itemId, error: result.error });
-        setMutationError({ message: humanizeRpcError(result.error), itemLabel });
+        setMutationError({
+          kind: 'item',
+          message: humanizeRpcError(result.error),
+          itemLabel,
+        });
         return;
       }
       // Server-authoritative final state. Usually matches optimisticNext,
@@ -405,6 +447,14 @@ export default function VisitExecutionTab() {
    * On the next protocol refresh / page reload, the v3 RPC will return the
    * same row with the canonical derived values — this synthetic row stays
    * consistent because we mirror the same defaults.
+   *
+   * IMPORTANT — snapshot counts we patch (item_count, needs_review_count)
+   * assume the row's classification is 'required' (not endpoint/safety) and
+   * phase is 'assessment'. If the resolve-signal RPC is ever changed to
+   * accept a classification/phase override from the caller, this helper
+   * must update has_primary_endpoint / has_safety_critical /
+   * endpoint_critical_count / is_dosing_visit too. Until then, the
+   * coupling is documented + locked at the migration layer.
    */
   const appendRequirementFromSignal = useCallback(
     (
@@ -547,27 +597,13 @@ export default function VisitExecutionTab() {
       // drawer is also displaying its own spinner. Belt-and-suspenders so a
       // user dismissing the drawer mid-flight still sees the right state on
       // the row beneath.
-      setInFlightSignalIds((prev) => {
-        const next = new Set(prev);
-        next.add(textDrawerSignal.id);
-        return next;
-      });
 
       const trimmed = newText.trim();
       const override = trimmed === textDrawerSignal.gap_text ? undefined : trimmed;
 
-      const result = await resolveSignal(
-        textDrawerSignal.id,
-        'added_as_requirement',
-        override,
+      const result = await withInFlightSignal(textDrawerSignal.id, () =>
+        resolveSignal(textDrawerSignal.id, 'added_as_requirement', override),
       );
-
-      // Clear in-flight regardless of outcome.
-      setInFlightSignalIds((prev) => {
-        const next = new Set(prev);
-        next.delete(textDrawerSignal.id);
-        return next;
-      });
 
       if (!result.ok) {
         console.error('[vew] resolve_signal_failed', {
@@ -604,6 +640,7 @@ export default function VisitExecutionTab() {
       appendRequirementFromSignal,
       dropSignal,
       closeTextDrawer,
+      withInFlightSignal,
     ],
   );
 
@@ -629,31 +666,21 @@ export default function VisitExecutionTab() {
     async (signal: VisitCompletenessSignal) => {
       if (!selectedWorkspace) return;
 
-      setInFlightSignalIds((prev) => {
-        const next = new Set(prev);
-        next.add(signal.id);
-        return next;
-      });
       setMutationError(null);
 
-      const result = await resolveSignal(signal.id, 'dismissed_not_real');
-
-      setInFlightSignalIds((prev) => {
-        const next = new Set(prev);
-        next.delete(signal.id);
-        return next;
-      });
+      const result = await withInFlightSignal(signal.id, () =>
+        resolveSignal(signal.id, 'dismissed_not_real'),
+      );
 
       if (!result.ok) {
         console.error('[vew] dismiss_signal_failed', {
           signalId: signal.id,
           error: result.error,
         });
-        // Banner uses "itemLabel" terminology — for signals we pass the
-        // gap_text since that's the user-facing handle.
         setMutationError({
+          kind: 'signal',
           message: humanizeRpcError(result.error),
-          itemLabel: signal.gap_text,
+          gapText: signal.gap_text,
         });
         return;
       }
@@ -661,7 +688,7 @@ export default function VisitExecutionTab() {
       // already-resolved race; either way it's no longer pending.
       dropSignal(selectedWorkspace.visit_template_id, signal.id);
     },
-    [selectedWorkspace, dropSignal],
+    [selectedWorkspace, dropSignal, withInFlightSignal],
   );
 
   // Pick the right save handler based on mode. Memoized so the drawer's
@@ -758,6 +785,7 @@ export default function VisitExecutionTab() {
                 <div
                   role="alert"
                   data-testid="vew-mutation-error-banner"
+                  data-kind={mutationError.kind}
                   className={`flex items-start gap-2 px-3 py-2 rounded-md border text-xs ${
                     isLight
                       ? 'bg-[#fdecec] border-[#f3c7c7] text-[#742a2a]'
@@ -766,8 +794,18 @@ export default function VisitExecutionTab() {
                 >
                   <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" aria-hidden />
                   <span className="flex-1 leading-relaxed">
-                    Couldn't save change to <strong>{mutationError.itemLabel}</strong>:{' '}
-                    {mutationError.message} Your previous state was restored.
+                    {mutationError.kind === 'item' ? (
+                      <>
+                        Couldn't save change to <strong>{mutationError.itemLabel}</strong>:{' '}
+                        {mutationError.message} Your previous state was restored.
+                      </>
+                    ) : (
+                      <>
+                        Couldn't update <strong>{mutationError.gapText}</strong>:{' '}
+                        {mutationError.message} The suggestion is still pending — try again
+                        or reload the page.
+                      </>
+                    )}
                   </span>
                   <button
                     type="button"
@@ -816,7 +854,11 @@ export default function VisitExecutionTab() {
         onSave={drawerOnSave}
       />
 
-      <EditLogDrawer item={editLogItem} onClose={closeEditLog} />
+      <EditLogDrawer
+        item={editLogItem}
+        currentUserId={currentUserId}
+        onClose={closeEditLog}
+      />
     </div>
   );
 }

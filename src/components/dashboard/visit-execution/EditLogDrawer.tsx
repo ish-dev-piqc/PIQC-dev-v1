@@ -38,6 +38,14 @@ import type {
 
 interface Props {
   item: VisitExecutionItem | null;
+  /**
+   * The currently-authenticated user's id. Used solely to render "You" on
+   * an event's reviewer line instead of the raw UUID. Null is acceptable
+   * (e.g. demo / signed-out states) — the reviewer line is omitted in that
+   * case rather than showing a meaningless hex. Display-name lookup for
+   * non-self reviewers is a future enhancement.
+   */
+  currentUserId: string | null;
   onClose: () => void;
 }
 
@@ -55,6 +63,7 @@ function actionLabel(a: VisitRequirementHumanEditAction): string {
 function formatTimestamp(iso: string): string {
   try {
     const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '—';
     return d.toLocaleString(undefined, {
       year: 'numeric',
       month: 'short',
@@ -63,23 +72,13 @@ function formatTimestamp(iso: string): string {
       minute: '2-digit',
     });
   } catch {
-    return iso;
+    // Catch is the belt-and-suspenders fallback; the NaN check above is the
+    // primary guard. Either way, don't surface a raw broken ISO to the user.
+    return '—';
   }
 }
 
-/**
- * Truncate a UUID for display alongside an event. We don't have user-name
- * lookup yet (Sprint 4+ work to join auth.users + profile), so a short hash
- * is the most honest thing to show right now: it lets coordinators tell
- * "same person did these 3 edits" without claiming to identify the human
- * behind the UUID.
- */
-function formatReviewerId(id: string): string {
-  if (id.length <= 8) return id;
-  return id.slice(0, 8);
-}
-
-export default function EditLogDrawer({ item, onClose }: Props) {
+export default function EditLogDrawer({ item, currentUserId, onClose }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
   const { theme } = useTheme();
   const isLight = theme === 'light';
@@ -216,7 +215,20 @@ export default function EditLogDrawer({ item, onClose }: Props) {
 
           {events.length > 0 && (
             <ol className="space-y-3" role="list">
-              {events.map((event) => (
+              {events.map((event) => {
+                // 'You' tag — only when the current user matches. We deliberately
+                // do NOT show truncated UUIDs for other reviewers: a hex hash
+                // tells coordinators nothing they can act on, and reads as a
+                // leak of an internal token. Display-name lookup is a future
+                // follow-up that joins auth.users + a profile table.
+                const isSelf =
+                  currentUserId !== null && event.reviewer_id === currentUserId;
+                // Version is only meaningful on edit_text — the column increments
+                // on that action only, so rendering "v1" on a mark_reviewed row
+                // is misleading noise.
+                const showVersion = event.action === 'edit_text';
+
+                return (
                 <li
                   key={event.id}
                   data-testid="vew-edit-log-event"
@@ -231,12 +243,23 @@ export default function EditLogDrawer({ item, onClose }: Props) {
                     <p className="text-fg-heading text-xs font-semibold leading-tight">
                       {actionLabel(event.action)}
                     </p>
-                    <span className="text-fg-muted text-[10px] flex-shrink-0">
-                      v{event.requirement_version}
-                    </span>
+                    {showVersion && (
+                      <span
+                        className="text-fg-muted text-[10px] flex-shrink-0"
+                        data-testid="vew-edit-log-version"
+                      >
+                        v{event.requirement_version}
+                      </span>
+                    )}
                   </div>
                   <p className="text-fg-muted text-[10px] mt-0.5">
-                    {formatTimestamp(event.created_at)} · reviewer {formatReviewerId(event.reviewer_id)}
+                    {formatTimestamp(event.created_at)}
+                    {isSelf && (
+                      <>
+                        {' · '}
+                        <span data-testid="vew-edit-log-self">You</span>
+                      </>
+                    )}
                   </p>
 
                   {event.action === 'edit_text' &&
@@ -288,7 +311,8 @@ export default function EditLogDrawer({ item, onClose }: Props) {
                     </p>
                   )}
                 </li>
-              ))}
+                );
+              })}
             </ol>
           )}
         </div>

@@ -146,25 +146,31 @@ export default function CompletenessSignalsPanel({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {/* Primary button styling matches RequirementTextDrawer's
+                      Save button (the canonical primary style in VEW): dark
+                      neutral in light theme, white in dark theme. Keeps the
+                      whole namespace using one primary-button system. */}
                   <button
                     type="button"
                     onClick={() => onPromote(signal)}
                     disabled={inFlight}
                     data-testid="vew-signal-promote"
                     aria-label={`Add as requirement: ${signal.gap_text}`}
-                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold ${
+                    className={`inline-flex items-center gap-1 px-2.5 py-1.5 min-h-[28px] rounded-md text-[11px] font-semibold ${
                       inFlight
-                        ? 'opacity-50 cursor-not-allowed'
+                        ? isLight
+                          ? 'bg-[#cbd2db] text-white cursor-not-allowed'
+                          : 'bg-white/10 text-fg-muted cursor-not-allowed'
                         : isLight
-                        ? 'bg-blue-700 text-white hover:bg-blue-800'
-                        : 'bg-blue-500 text-white hover:bg-blue-400'
+                        ? 'bg-[#1f2937] text-white hover:bg-[#111827]'
+                        : 'bg-white text-[#0d1118] hover:bg-[#e5e7eb]'
                     }`}
                   >
                     {inFlight ? (
-                      <Loader2 size={10} className="animate-spin" aria-hidden />
+                      <Loader2 size={11} className="animate-spin" aria-hidden />
                     ) : (
-                      <Plus size={10} aria-hidden />
+                      <Plus size={11} aria-hidden />
                     )}
                     <span>Add</span>
                   </button>
@@ -174,7 +180,7 @@ export default function CompletenessSignalsPanel({
                     disabled={inFlight}
                     data-testid="vew-signal-dismiss"
                     aria-label={`Dismiss as not real: ${signal.gap_text}`}
-                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium ${
+                    className={`inline-flex items-center gap-1 px-2.5 py-1.5 min-h-[28px] rounded-md text-[11px] font-medium ${
                       inFlight
                         ? 'opacity-50 cursor-not-allowed'
                         : isLight
@@ -182,7 +188,7 @@ export default function CompletenessSignalsPanel({
                         : 'text-fg-sub hover:bg-white/[0.06]'
                     }`}
                   >
-                    <X size={10} aria-hidden />
+                    <X size={11} aria-hidden />
                     <span>Dismiss</span>
                   </button>
                 </div>
