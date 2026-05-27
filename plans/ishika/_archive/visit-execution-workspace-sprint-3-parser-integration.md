@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: visit-execution-workspace-sprint-3-parser-integration
-status: in-review
+status: merged
+merged: 2026-05-27
 started: 2026-05-26
-target_pr: 124
+target_pr: #124
 ---
 
 # Visit Execution Workspace — Sprint 3: Parser Integration (design doc)
