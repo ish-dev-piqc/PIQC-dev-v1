@@ -12,6 +12,7 @@ import {
   type StripeProduct,
 } from '../stripe-config';
 import { setPendingCheckout } from '../lib/billing/pendingCheckout';
+import { pilotStatus } from '../lib/entitlements';
 import type { AppView } from '../App';
 
 // =============================================================================
@@ -58,6 +59,14 @@ export default function Pricing({ onViewChange }: PricingProps) {
 
   const hasActiveSub =
     subscription?.status === 'active' || subscription?.status === 'trialing';
+  // Block double-purchase of the Pilot. `pilotStatus` returns 'none' for
+  // users with no pilot, otherwise 'active' / 'expiring_soon' / 'expired'.
+  // We treat anything other than 'none' as "already has a pilot" — so the
+  // CTA navigates to the dashboard instead of opening a second Checkout.
+  // We deliberately include 'expired' in the block: a user who let their
+  // pilot lapse shouldn't be sold ANOTHER $25 pilot; they should be funneled
+  // to a Workspace upgrade instead.
+  const hasPilot = pilotStatus(subscription) !== 'none';
 
   const primaryProducts = PRIMARY_PLAN_KINDS
     .map(findProductByKind)
@@ -139,6 +148,11 @@ export default function Pricing({ onViewChange }: PricingProps) {
     if (hasActiveSub && (product.kind === 'workspace_monthly' || product.kind === 'workspace_annual')) {
       return 'Go to dashboard';
     }
+    // Already-piloting users see a dashboard-redirect label on the Pilot
+    // card instead of "Start Pilot" so they don't accidentally re-charge.
+    if (hasPilot && product.kind === 'pilot') {
+      return 'Go to dashboard';
+    }
     return product.ctaLabel;
   };
 
@@ -150,6 +164,11 @@ export default function Pricing({ onViewChange }: PricingProps) {
       return;
     }
     if (hasActiveSub && (product.kind === 'workspace_monthly' || product.kind === 'workspace_annual')) {
+      onViewChange('dashboard');
+      return;
+    }
+    // Block second-purchase of the Pilot — see hasPilot comment above.
+    if (hasPilot && product.kind === 'pilot') {
       onViewChange('dashboard');
       return;
     }

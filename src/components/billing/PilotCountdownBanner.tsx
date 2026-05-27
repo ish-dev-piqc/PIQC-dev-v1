@@ -55,7 +55,11 @@ export default function PilotCountdownBanner() {
     }
   };
 
-  // Tone scales with urgency
+  // Tone scales with urgency. Active state was previously too subtle on the
+  // light-mode page background (bg-[#f5f7fa]) — the 8% opacity background
+  // visually blended in. Bumped to 18% bg + 50% border so the banner reads
+  // as a clear notification without escalating to the amber 'warning' or
+  // rose 'urgent' tones, which are reserved for expiring_soon and expired.
   const toneClass =
     status === 'expired'
       ? isLight
@@ -66,8 +70,8 @@ export default function PilotCountdownBanner() {
         ? 'bg-amber-50 border-amber-200 text-amber-700'
         : 'bg-amber-500/[0.06] border-amber-500/20 text-amber-300'
       : isLight
-      ? 'bg-[#4a6fa5]/8 border-[#4a6fa5]/20 text-[#4a6fa5]'
-      : 'bg-[#6e8fb5]/[0.08] border-[#6e8fb5]/20 text-[#a8c0d8]';
+      ? 'bg-[#4a6fa5]/[0.18] border-[#4a6fa5]/50 text-[#1a3d6f]'
+      : 'bg-[#6e8fb5]/20 border-[#6e8fb5]/40 text-[#c8d8eb]';
 
   const label =
     status === 'expired'
