@@ -23,6 +23,7 @@ import {
 import { itemMatchesRoleFilter } from '../../../lib/visit-execution/parseRoleHint';
 import ExecutionItemClassificationBadge from './ExecutionItemClassificationBadge';
 import ExecutionReviewStatusBadge from './ExecutionReviewStatusBadge';
+import VisitConfidenceBadge from './VisitConfidenceBadge';
 
 // =============================================================================
 // ExecutionChecklist — the main surface. Renders all items grouped by
@@ -326,6 +327,24 @@ function ChecklistItemRow({
             <p className="text-fg-body text-sm font-medium flex-1 min-w-0">{item.label}</p>
             <ExecutionItemClassificationBadge classification={item.classification} />
             <ExecutionReviewStatusBadge status={status} />
+            {/* Sprint 7: per-item confidence flag. Renders ONLY for 'low' /
+                'needs_review' states (polish-v2 rare-loud discipline) — the
+                expected 'high' / 'medium' baseline gets no chip. Tooltip
+                copy is scoped to the per-requirement perspective (vs the
+                visit-level tooltip on the snapshot chip). */}
+            {item.confidence_state &&
+              (item.confidence_state === 'low' ||
+                item.confidence_state === 'needs_review') && (
+                <VisitConfidenceBadge
+                  confidence={item.confidence_state}
+                  variant="inline"
+                  titleOverride={
+                    item.confidence_state === 'low'
+                      ? "PIQC has low confidence in THIS requirement's extracted text. Verify against the protocol source before relying on it."
+                      : "PIQC couldn't establish confidence on THIS requirement. Verify against the protocol source and edit liberally."
+                  }
+                />
+              )}
           </div>
 
           {item.description && (
