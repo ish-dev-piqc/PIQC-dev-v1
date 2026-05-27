@@ -85,6 +85,49 @@ export type ExecutionReviewStatus =
 export type VisitConfidenceState = 'high' | 'medium' | 'low' | 'needs_review';
 
 
+/**
+ * Resolution state of a `visit_completeness_signals` row. Mirrors the
+ * `visit_signal_resolution` Postgres enum (Sprint 3.5a migration
+ * 20260615000100_visit_signal_resolution_enum.sql).
+ *
+ * `pending` is the only state the parser writes. Sprint 4c's
+ * resolveSignal mutation transitions a row to one of the two human-chosen
+ * terminal states.
+ */
+export type VisitSignalResolution =
+  | 'pending'
+  | 'added_as_requirement'
+  | 'dismissed_not_real';
+
+/**
+ * The two human-driven resolutions resolveSignal accepts. The DB-level
+ * enum includes 'pending' as a third value but it's never a valid input —
+ * the RPC rejects it. Modeling that constraint at the type layer prevents
+ * a class of UI bugs (e.g. a default `resolution: 'pending'` slipping
+ * through from a stale state).
+ */
+export type VisitSignalHumanResolution = Exclude<VisitSignalResolution, 'pending'>;
+
+
+/**
+ * Action enum mirroring the DB-level `visit_requirement_edit_action` enum
+ * (Sprint 2.5 migration 20260601000500_visit_requirement_human_edits_table.sql).
+ * Each value corresponds to a row in `visit_requirement_human_edits.action`.
+ *
+ * Used by the Sprint 4c EditLogDrawer to drive event-row rendering:
+ *   - edit_text uses previous_text/new_text for a before/after diff
+ *   - add_site_note shows reviewer_note as the body
+ *   - All others render as a single-line status change
+ */
+export type VisitRequirementHumanEditAction =
+  | 'mark_reviewed'
+  | 'unmark_reviewed'
+  | 'edit_text'
+  | 'add_site_note'
+  | 'flag_for_review'
+  | 'mark_needs_clarification';
+
+
 // ---------------------------------------------------------------------------
 // Phase label maps — visit-type-aware so non-dosing visits don't show
 // "Pre-Dose" sections. The component picks the right map based on
@@ -347,6 +390,49 @@ export interface VisitExecutionWorkspace {
 // "collapse cognitive load" promise: 7 phases collapsed by default, 1-2
 // auto-opened based on visit type.
 // ---------------------------------------------------------------------------
+
+/**
+ * One row in `visit_requirement_human_edits` as surfaced by
+ * `visit_execution_get_human_edit_log`. The RPC returns events newest-first.
+ *
+ * `previous_text` / `new_text` are only populated when `action === 'edit_text'`;
+ * `reviewer_note` may be populated on any action (the audit pattern allows
+ * a coordinator to attach a note to a flag, clarification request, etc.).
+ *
+ * `reviewer_id` is the raw `auth.users.id` UUID — Sprint 4c renders it
+ * as-is (no display-name lookup yet; that's a follow-up that may join
+ * to a `user_profiles` table).
+ */
+export interface VisitRequirementHumanEditEvent {
+  id: string;
+  action: VisitRequirementHumanEditAction;
+  reviewer_id: string;
+  previous_text: string | null;
+  new_text: string | null;
+  reviewer_note: string | null;
+  requirement_version: number;
+  amendment_version: string | null;
+  /** ISO 8601 timestamp from the server. */
+  created_at: string;
+}
+
+
+/**
+ * Return shape of `visit_execution_resolve_completeness_signal`.
+ *
+ * `requirement_id` is non-null only for the `added_as_requirement`
+ * resolution. `already_resolved` is `true` when the RPC observed the
+ * signal was no longer pending (idempotency guard against double-click
+ * races) — in that case the surfaced `resolution` reflects whatever
+ * terminal state the signal was already in.
+ */
+export interface VisitSignalResolutionResult {
+  signal_id: string;
+  resolution: VisitSignalResolution;
+  requirement_id: string | null;
+  already_resolved: boolean;
+}
+
 
 export function defaultExpandedPhases(snapshot: VisitSnapshot): ExecutionPhase[] {
   if (snapshot.is_dosing_visit) {

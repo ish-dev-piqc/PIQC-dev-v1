@@ -17,7 +17,10 @@
 import { supabase } from '../supabase';
 import type { Result } from '../site/siteApi';
 import { getMockVisitExecutionWorkspaces } from './mockVisitWorkspace';
-import type { VisitExecutionWorkspace } from '../../types/visit-execution';
+import type {
+  VisitExecutionWorkspace,
+  VisitRequirementHumanEditEvent,
+} from '../../types/visit-execution';
 
 /**
  * localStorage key that gates the Sprint 1 mock fixture. Default off.
@@ -78,4 +81,122 @@ export async function fetchVisitExecutionWorkspaces(
     ? (payload!.workspaces as VisitExecutionWorkspace[])
     : [];
   return { ok: true, data: workspaces };
+}
+
+
+// ===========================================================================
+// Edit-log timeline (Sprint 4c)
+//
+// `visit_execution_get_human_edit_log` exists since Sprint 2.5 (migration
+// 20260601000600_visit_execution_rpcs.sql). Sprint 4c wires the first
+// frontend consumer: the EditLogDrawer.
+//
+// Defensive shape check on each event row — the RPC returns whatever
+// json_agg builds, so a schema drift wouldn't reach typescript-time
+// validation. We narrow at the boundary and drop malformed rows rather
+// than crash the drawer.
+// ===========================================================================
+
+/**
+ * Fetch the human-edit timeline for one requirement, newest first.
+ *
+ * Mock-mode short-circuits with a small synthetic timeline so the drawer
+ * has something to render in demos. Real-mode wraps the
+ * `visit_execution_get_human_edit_log` RPC.
+ *
+ * Error surface mirrors fetchVisitExecutionWorkspaces:
+ *   - RPC error → { ok: false, error }
+ *   - Empty / missing events → { ok: true, data: [] }
+ */
+export async function fetchHumanEditLog(
+  requirementId: string,
+): Promise<Result<VisitRequirementHumanEditEvent[]>> {
+  if (isMockEnabled()) {
+    // Seed three events covering edit_text + add_site_note + mark_reviewed so
+    // the drawer demo exercises all three rendering branches (before/after
+    // diff, reviewer-note body, single-line status change). Ordered newest
+    // first to match the real RPC's `ORDER BY created_at DESC` contract.
+    const now = Date.now();
+    return {
+      ok: true,
+      data: [
+        {
+          id: `mock-event-${requirementId}-3`,
+          action: 'edit_text',
+          reviewer_id: 'mock-reviewer-1',
+          previous_text: 'Body weight measurement',
+          new_text: 'Body weight measurement (use site scale; calibrate weekly)',
+          reviewer_note: null,
+          requirement_version: 2,
+          amendment_version: null,
+          created_at: new Date(now - 1000 * 60 * 15).toISOString(),
+        },
+        {
+          id: `mock-event-${requirementId}-2`,
+          action: 'add_site_note',
+          reviewer_id: 'mock-reviewer-1',
+          previous_text: null,
+          new_text: null,
+          reviewer_note:
+            'Heparin lock in place per site SOP; coordinator confirms with charge nurse before each visit.',
+          requirement_version: 1,
+          amendment_version: null,
+          created_at: new Date(now - 1000 * 60 * 45).toISOString(),
+        },
+        {
+          id: `mock-event-${requirementId}-1`,
+          action: 'mark_reviewed',
+          reviewer_id: 'mock-reviewer-1',
+          previous_text: null,
+          new_text: null,
+          reviewer_note: null,
+          requirement_version: 1,
+          amendment_version: null,
+          created_at: new Date(now - 1000 * 60 * 90).toISOString(),
+        },
+      ],
+    };
+  }
+
+  const { data, error } = await supabase.rpc('visit_execution_get_human_edit_log', {
+    p_requirement_id: requirementId,
+  });
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  const payload = data as { events?: unknown } | null;
+  if (!payload || !Array.isArray(payload.events)) {
+    return { ok: true, data: [] };
+  }
+
+  // Per-row narrowing — drop anything that doesn't have the minimum shape.
+  // Order is preserved (RPC returns DESC by created_at).
+  const events: VisitRequirementHumanEditEvent[] = [];
+  for (const raw of payload.events as unknown[]) {
+    if (!raw || typeof raw !== 'object') continue;
+    const r = raw as Partial<VisitRequirementHumanEditEvent>;
+    if (
+      typeof r.id !== 'string' ||
+      typeof r.action !== 'string' ||
+      typeof r.reviewer_id !== 'string' ||
+      typeof r.created_at !== 'string'
+    ) {
+      continue;
+    }
+    events.push({
+      id: r.id,
+      action: r.action as VisitRequirementHumanEditEvent['action'],
+      reviewer_id: r.reviewer_id,
+      previous_text: typeof r.previous_text === 'string' ? r.previous_text : null,
+      new_text: typeof r.new_text === 'string' ? r.new_text : null,
+      reviewer_note: typeof r.reviewer_note === 'string' ? r.reviewer_note : null,
+      requirement_version:
+        typeof r.requirement_version === 'number' ? r.requirement_version : 0,
+      amendment_version: typeof r.amendment_version === 'string' ? r.amendment_version : null,
+      created_at: r.created_at,
+    });
+  }
+  return { ok: true, data: events };
 }

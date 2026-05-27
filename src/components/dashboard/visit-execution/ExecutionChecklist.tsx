@@ -48,7 +48,9 @@ export type ChecklistItemAction =
   | 'flag_for_review'
   | 'mark_needs_clarification'
   | 'open_edit'
-  | 'open_note';
+  | 'open_note'
+  /** Sprint 4c: opens the read-only edit-log timeline drawer for the row. */
+  | 'view_history';
 
 interface Props {
   workspace: VisitExecutionWorkspace;
@@ -471,6 +473,10 @@ function ChecklistItemRow({
                     { label: 'Add site note',            action: 'open_note'                as ChecklistItemAction },
                     { label: 'Flag for review',          action: 'flag_for_review'          as ChecklistItemAction },
                     { label: 'Mark needs clarification', action: 'mark_needs_clarification' as ChecklistItemAction },
+                    // Sprint 4c: read-only audit-log drawer. Last in the list
+                    // since it's a "view" action, distinct from the four
+                    // "do something" actions above.
+                    { label: 'View edit history',        action: 'view_history'             as ChecklistItemAction },
                   ]).map((opt) => (
                     <button
                       key={opt.label}

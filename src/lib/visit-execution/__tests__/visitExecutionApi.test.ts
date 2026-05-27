@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   MOCK_TOGGLE_KEY,
+  fetchHumanEditLog,
   fetchVisitExecutionWorkspaces,
   isMockEnabled,
 } from '../visitExecutionApi';
@@ -202,5 +203,143 @@ describe('fetchVisitExecutionWorkspaces — mock off (Sprint 3.5b RPC path)', ()
     if (result.ok) {
       expect(result.data).toEqual([]);
     }
+  });
+});
+
+
+// =============================================================================
+// fetchHumanEditLog — Sprint 4c. Wraps visit_execution_get_human_edit_log.
+// =============================================================================
+
+describe('fetchHumanEditLog — mock on', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    window.localStorage.setItem(MOCK_TOGGLE_KEY, '1');
+  });
+  afterEach(() => {
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it('returns a synthetic event list without calling supabase.rpc', async () => {
+    const spy = vi.spyOn(supabase, 'rpc');
+    const r = await fetchHumanEditLog('req-1');
+    expect(spy).not.toHaveBeenCalled();
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data.length).toBeGreaterThan(0);
+      expect(r.data[0].action).toBeTruthy();
+      expect(Date.parse(r.data[0].created_at)).not.toBeNaN();
+    }
+  });
+});
+
+describe('fetchHumanEditLog — mock off RPC dispatch', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+  afterEach(() => {
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it('calls visit_execution_get_human_edit_log with p_requirement_id', async () => {
+    const spy = vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: { events: [] }, error: null,
+    } as any);
+    await fetchHumanEditLog('req-7');
+    expect(spy).toHaveBeenCalledWith('visit_execution_get_human_edit_log', {
+      p_requirement_id: 'req-7',
+    });
+  });
+
+  it('narrows events array to typed VisitRequirementHumanEditEvent shape', async () => {
+    vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: {
+        events: [
+          {
+            id: 'evt-1',
+            action: 'edit_text',
+            reviewer_id: 'u-1',
+            previous_text: 'old',
+            new_text: 'new',
+            reviewer_note: null,
+            requirement_version: 2,
+            amendment_version: null,
+            created_at: '2026-05-27T10:00:00Z',
+          },
+        ],
+      }, error: null,
+    } as any);
+
+    const r = await fetchHumanEditLog('req-1');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data).toHaveLength(1);
+      expect(r.data[0].action).toBe('edit_text');
+      expect(r.data[0].previous_text).toBe('old');
+      expect(r.data[0].new_text).toBe('new');
+    }
+  });
+
+  it('drops malformed event rows without crashing', async () => {
+    vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: {
+        events: [
+          // Valid
+          {
+            id: 'evt-1', action: 'mark_reviewed', reviewer_id: 'u-1',
+            previous_text: null, new_text: null, reviewer_note: null,
+            requirement_version: 1, amendment_version: null,
+            created_at: '2026-05-27T09:00:00Z',
+          },
+          // Missing required fields — should be dropped
+          { id: 'evt-bad', action: 'mark_reviewed' },
+          null,
+          { some: 'garbage' },
+        ],
+      }, error: null,
+    } as any);
+
+    const r = await fetchHumanEditLog('req-1');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data).toHaveLength(1);
+      expect(r.data[0].id).toBe('evt-1');
+    }
+  });
+
+  it('returns empty array when RPC returns null payload', async () => {
+    vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: null, error: null,
+    } as any);
+    const r = await fetchHumanEditLog('req-1');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data).toEqual([]);
+  });
+
+  it('surfaces RPC errors as ok:false', async () => {
+    vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      data: null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      error: { message: 'not authenticated' } as any,
+    } as any);
+    const r = await fetchHumanEditLog('req-1');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('not authenticated');
+  });
+
+  it('returns empty array when events field is absent (server schema drift fallback)', async () => {
+    vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: { other: 'shape' } as any, error: null,
+    } as any);
+    const r = await fetchHumanEditLog('req-1');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data).toEqual([]);
   });
 });

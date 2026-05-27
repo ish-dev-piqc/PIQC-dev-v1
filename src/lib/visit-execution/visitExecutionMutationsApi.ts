@@ -18,7 +18,11 @@
 
 import { supabase } from '../supabase';
 import type { Result } from '../site/siteApi';
-import type { ExecutionReviewStatus } from '../../types/visit-execution';
+import type {
+  ExecutionReviewStatus,
+  VisitSignalHumanResolution,
+  VisitSignalResolutionResult,
+} from '../../types/visit-execution';
 import { isMockEnabled } from './visitExecutionApi';
 
 /**
@@ -249,6 +253,88 @@ export async function editText(
       version: typeof payload.version === 'number' ? payload.version : 0,
       current_text: payload.current_text,
       event_id: typeof payload.event_id === 'string' ? payload.event_id : '',
+    },
+  };
+}
+
+
+// ===========================================================================
+// resolveSignal — Sprint 4c.
+//
+// Wraps `visit_execution_resolve_completeness_signal`. Two valid resolutions
+// (the RPC rejects 'pending', and the TS type also forbids it — defense in
+// depth).
+//
+//   'added_as_requirement' — RPC inserts a new visit_requirements row.
+//                            `newText` (when non-empty) overrides
+//                            current_text; derived_text is always the
+//                            signal's gap_text for audit-trail integrity.
+//   'dismissed_not_real'   — RPC just marks the signal resolved.
+//
+// Mock-mode synthesizes a success without DB contact. The synthesized
+// requirement_id is a deterministic 'mock-req-from-signal-<signalId>'
+// string so the optimistic-state mapping in VisitExecutionTab has a
+// stable key for the new local row.
+// ===========================================================================
+
+export async function resolveSignal(
+  signalId: string,
+  resolution: VisitSignalHumanResolution,
+  newText?: string,
+): Promise<Result<VisitSignalResolutionResult>> {
+  if (isMockEnabled()) {
+    return {
+      ok: true,
+      data: {
+        signal_id: signalId,
+        resolution,
+        requirement_id:
+          resolution === 'added_as_requirement'
+            ? `mock-req-from-signal-${signalId}`
+            : null,
+        already_resolved: false,
+      },
+    };
+  }
+
+  // For dismiss path, p_new_text must be NULL regardless of caller — the
+  // RPC will silently ignore it but we keep the wire payload clean.
+  const trimmedOverride =
+    resolution === 'added_as_requirement' && typeof newText === 'string'
+      ? newText.trim()
+      : '';
+  const payloadOverride = trimmedOverride.length > 0 ? trimmedOverride : null;
+
+  const { data, error } = await supabase.rpc(
+    'visit_execution_resolve_completeness_signal',
+    {
+      p_signal_id: signalId,
+      p_resolution: resolution,
+      p_new_text: payloadOverride,
+    },
+  );
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  const payload = data as Partial<VisitSignalResolutionResult> | null;
+  if (
+    !payload ||
+    typeof payload.signal_id !== 'string' ||
+    typeof payload.resolution !== 'string'
+  ) {
+    return { ok: false, error: 'malformed RPC response' };
+  }
+
+  return {
+    ok: true,
+    data: {
+      signal_id: payload.signal_id,
+      resolution: payload.resolution as VisitSignalResolutionResult['resolution'],
+      requirement_id:
+        typeof payload.requirement_id === 'string' ? payload.requirement_id : null,
+      already_resolved: payload.already_resolved === true,
     },
   };
 }
