@@ -9,10 +9,12 @@ import {
   flagForReview,
   markNeedsClarification,
   markReviewed,
+  resolveSignal,
   unmarkReviewed,
 } from '../../../lib/visit-execution/visitExecutionMutationsApi';
 import type {
   ExecutionReviewStatus,
+  VisitCompletenessSignal,
   VisitExecutionItem,
   VisitExecutionWorkspace,
 } from '../../../types/visit-execution';
@@ -23,31 +25,36 @@ import TraceabilityDrawer from './TraceabilityDrawer';
 import ExportPlaceholderButton from './ExportPlaceholderButton';
 import RequirementTextDrawer, {
   type RequirementTextDrawerMode,
+  type RequirementTextDrawerSubject,
 } from './RequirementTextDrawer';
+import CompletenessSignalsPanel from './CompletenessSignalsPanel';
+import EditLogDrawer from './EditLogDrawer';
 
 // =============================================================================
 // VisitExecutionTab — root component for the new primary Site Mode surface.
 //
 // Layout:
 //   - Left rail: VisitNavigator (visit list with indicator chips)
-//   - Right pane: VisitSnapshotCard (above-fold summary + timing) +
-//                 ExecutionChecklist (workflow-ordered grouped items) +
-//                 ExportPlaceholderButton at the bottom
-//   - Drawer overlay: TraceabilityDrawer (one instance, item-scoped)
+//   - Right pane: VisitSnapshotCard + (Sprint 4c) CompletenessSignalsPanel +
+//                 ExecutionChecklist + ExportPlaceholderButton
+//   - Drawer overlays:
+//       - TraceabilityDrawer (item-scoped)
+//       - RequirementTextDrawer (modes: edit / note / promote_signal)
+//       - EditLogDrawer (Sprint 4c, read-only history for one item)
 //
 // State owned here:
-//   - workspaces[]   — loaded once per active protocol
+//   - workspaces[]                  — loaded once per active protocol
 //   - selectedVisitTemplateId
-//   - reviewStatus Map<itemId, ExecutionReviewStatus> — optimistic-update
-//     override on top of each item's persisted review_status. Seeded empty
-//     on workspace load; populated on each successful mutation. Sprint 4a
-//     wires this Map to real RPC writes (visit_execution_set_review_status)
-//     via visitExecutionMutationsApi.
-//   - mutationError: string | null — most-recent mutation failure, shown as
-//     a dismissable banner above the checklist
-//   - traceabilityItem (VisitExecutionItem | null)
-//
-// No context promotion yet — single consumer of this data so far.
+//   - reviewStatus Map<itemId, status> — optimistic-update overrides
+//   - mutationError                 — most recent mutation failure for banner
+//   - traceabilityItem
+//   - textDrawerSubject + mode      — generic drawer subject; mode discriminator
+//   - textDrawerSignal              — the in-flight signal when mode='promote_signal'
+//                                      (null otherwise; lets handleEditSave route
+//                                      saves to the right mutation API)
+//   - editLogItem                   — Sprint 4c, the item whose history drawer is open
+//   - inFlightSignalIds             — Sprint 4c, signals with a pending resolveSignal
+//                                      RPC; used by the panel for per-row spinners.
 // =============================================================================
 
 /**
@@ -62,6 +69,9 @@ function humanizeRpcError(raw: string): string {
   }
   if (r.includes('not authenticated') || r.includes('jwt')) {
     return 'Your session expired. Sign in again to save changes.';
+  }
+  if (r.includes('signal not found')) {
+    return 'This suggestion is no longer available — refresh the page.';
   }
   if (r.includes('not found') || r.includes('requirement not found')) {
     return 'This requirement no longer exists — refresh the page.';
@@ -88,15 +98,37 @@ export default function VisitExecutionTab() {
   const [mutationError, setMutationError] = useState<{ message: string; itemLabel: string } | null>(null);
   const [traceabilityItem, setTraceabilityItem] = useState<VisitExecutionItem | null>(null);
 
-  // Sprint 4b: RequirementTextDrawer state. One drawer instance, two modes.
-  const [textDrawerItem, setTextDrawerItem] = useState<VisitExecutionItem | null>(null);
+  // Sprint 4b: RequirementTextDrawer state. Sprint 4c extends to three modes.
+  // textDrawerSubject is the generic display payload (title + initial draft
+  // + drift-from text). textDrawerMode discriminates which RPC the save
+  // handler dispatches to. textDrawerSignal/Item remember the underlying
+  // domain object so we know what to update on success.
+  const [textDrawerSubject, setTextDrawerSubject] =
+    useState<RequirementTextDrawerSubject | null>(null);
   const [textDrawerMode, setTextDrawerMode] = useState<RequirementTextDrawerMode>('edit');
+  const [textDrawerItem, setTextDrawerItem] = useState<VisitExecutionItem | null>(null);
+  const [textDrawerSignal, setTextDrawerSignal] =
+    useState<VisitCompletenessSignal | null>(null);
+
+  // Sprint 4c: read-only edit-log drawer state.
+  const [editLogItem, setEditLogItem] = useState<VisitExecutionItem | null>(null);
+
+  // Sprint 4c: signals with an in-flight resolveSignal RPC. Drives the
+  // CompletenessSignalsPanel's per-row spinner. Set, not Map — we don't need
+  // per-signal data, just presence.
+  const [inFlightSignalIds, setInFlightSignalIds] = useState<Set<string>>(new Set());
 
   // Stable close callback — passed to the drawer's useOverlay which has
   // onClose in its effect deps. An inline arrow would change identity every
   // render and re-fire the effect (focus-trap teardown + setup churn during
   // unrelated parent re-renders, including the saving=true transition).
-  const closeTextDrawer = useCallback(() => setTextDrawerItem(null), []);
+  const closeTextDrawer = useCallback(() => {
+    setTextDrawerSubject(null);
+    setTextDrawerItem(null);
+    setTextDrawerSignal(null);
+  }, []);
+
+  const closeEditLog = useCallback(() => setEditLogItem(null), []);
 
   // Per-item generation counter for race-guarding rapid clicks. Each click
   // increments the item's generation; the in-flight RPC captures the gen at
@@ -137,7 +169,9 @@ export default function VisitExecutionTab() {
       // race-guard generations (they're scoped to the prior protocol).
       setReviewStatus(new Map());
       setTraceabilityItem(null);
+      setEditLogItem(null);
       setMutationError(null);
+      setInFlightSignalIds(new Set());
       mutationGenRef.current = new Map();
     });
     return () => {
@@ -266,13 +300,14 @@ export default function VisitExecutionTab() {
   );
 
   /**
-   * Sprint 4b dispatcher. Routes each menu action to the right mutation API
-   * call or drawer-open handler.
+   * Sprint 4b dispatcher (extended Sprint 4c). Routes each menu action to
+   * the right mutation API call or drawer-open handler.
    *
-   * - flag_for_review          → flagForReview RPC (sets review_status='needs_review')
-   * - mark_needs_clarification → markNeedsClarification RPC (same end state, distinct audit-log action)
-   * - open_edit                → opens RequirementTextDrawer in 'edit' mode
-   * - open_note                → opens RequirementTextDrawer in 'note' mode
+   * - flag_for_review          → flagForReview RPC
+   * - mark_needs_clarification → markNeedsClarification RPC
+   * - open_edit                → opens text drawer in 'edit' mode
+   * - open_note                → opens text drawer in 'note' mode
+   * - view_history             → opens read-only EditLogDrawer
    */
   const handleItemAction = useCallback(
     (item: VisitExecutionItem, action: ChecklistItemAction) => {
@@ -289,11 +324,29 @@ export default function VisitExecutionTab() {
           return;
         case 'open_edit':
           setTextDrawerItem(item);
+          setTextDrawerSignal(null);
           setTextDrawerMode('edit');
+          setTextDrawerSubject({
+            title: item.label,
+            initialDraft: item.label,
+            // The drift block is only meaningful when current label is
+            // already a human edit (label !== derived_text). When they match,
+            // passing null keeps the block hidden.
+            driftFromText: item.derived_text,
+          });
           return;
         case 'open_note':
           setTextDrawerItem(item);
+          setTextDrawerSignal(null);
           setTextDrawerMode('note');
+          setTextDrawerSubject({
+            title: item.label,
+            initialDraft: '',
+            driftFromText: null,
+          });
+          return;
+        case 'view_history':
+          setEditLogItem(item);
           return;
         default: {
           // Exhaustive-check helper. If a new ChecklistItemAction is added
@@ -318,8 +371,7 @@ export default function VisitExecutionTab() {
   const updateItemFromMutation = useCallback(
     (itemId: string, patch: Partial<VisitExecutionItem>) => {
       // Splice the updated row into local workspace state so the UI reflects
-      // the persisted value without a full re-fetch. Future Sprint 4c may
-      // refresh via the v3 RPC to also pick up new audit-log signals.
+      // the persisted value without a full re-fetch.
       setWorkspaces((prev) =>
         prev.map((ws) => ({
           ...ws,
@@ -339,6 +391,106 @@ export default function VisitExecutionTab() {
     [],
   );
 
+  /**
+   * Sprint 4c. Splice a brand-new visit_requirements row into local state
+   * after a successful 'added_as_requirement' signal resolution.
+   *
+   * The RPC returns the new requirement_id but no other fields, so we
+   * synthesize the row from the signal (gap_text + optional override text)
+   * and append it to the parent visit. The row appears at the end of the
+   * checklist (max ordinal + 1, same as the RPC's INSERT). Defaults match
+   * the migration's INSERT: phase='assessment', classification='required',
+   * review_status='not_reviewed'.
+   *
+   * On the next protocol refresh / page reload, the v3 RPC will return the
+   * same row with the canonical derived values — this synthetic row stays
+   * consistent because we mirror the same defaults.
+   */
+  const appendRequirementFromSignal = useCallback(
+    (
+      visitTemplateId: string,
+      newRequirementId: string,
+      signal: VisitCompletenessSignal,
+      currentText: string | null,
+    ) => {
+      const newItem: VisitExecutionItem = {
+        id: newRequirementId,
+        extracted_item_id: null,
+        label: currentText ?? signal.gap_text,
+        derived_text: signal.gap_text,
+        description: null,
+        phase: 'assessment',
+        classification: 'required',
+        conditions: [],
+        timing: null,
+        source_fields: [],
+        traceability: {
+          soa_column: null,
+          protocol_section: signal.source_section,
+          protocol_page: signal.source_page,
+          amendment_version: null,
+          source_evidence_id: null,
+          cross_reference_source_section: null,
+          cross_reference_page: null,
+          cross_reference_snippet: null,
+        },
+        role_hint: null,
+        review_status: 'not_reviewed',
+        review_note: null,
+        confidence_state: null,
+      };
+
+      setWorkspaces((prev) =>
+        prev.map((ws) => {
+          if (ws.visit_template_id !== visitTemplateId) return ws;
+          // Drop the resolved signal from snapshot + append the new item.
+          const remainingSignals = ws.snapshot.completeness_signals.filter(
+            (s) => s.id !== signal.id,
+          );
+          return {
+            ...ws,
+            snapshot: {
+              ...ws.snapshot,
+              completeness_signals: remainingSignals,
+              completeness_signal_count: remainingSignals.length,
+              item_count: ws.snapshot.item_count + 1,
+              needs_review_count: ws.snapshot.needs_review_count + 1,
+            },
+            items: [...ws.items, newItem],
+          };
+        }),
+      );
+    },
+    [],
+  );
+
+  /**
+   * Sprint 4c. Drop a resolved signal from snapshot without creating a
+   * requirement (dismiss_not_real path). Mirrors the snapshot trim half of
+   * appendRequirementFromSignal.
+   */
+  const dropSignal = useCallback(
+    (visitTemplateId: string, signalId: string) => {
+      setWorkspaces((prev) =>
+        prev.map((ws) => {
+          if (ws.visit_template_id !== visitTemplateId) return ws;
+          const remainingSignals = ws.snapshot.completeness_signals.filter(
+            (s) => s.id !== signalId,
+          );
+          return {
+            ...ws,
+            snapshot: {
+              ...ws.snapshot,
+              completeness_signals: remainingSignals,
+              completeness_signal_count: remainingSignals.length,
+            },
+          };
+        }),
+      );
+    },
+    [],
+  );
+
   const handleEditSave = useCallback(
     async (newText: string): Promise<{ ok: true } | { ok: false; error: string }> => {
       if (!textDrawerItem) return { ok: false, error: 'no item open' };
@@ -354,10 +506,10 @@ export default function VisitExecutionTab() {
         label: result.data.current_text,
         review_status: result.data.review_status,
       });
-      setTextDrawerItem(null);
+      closeTextDrawer();
       return { ok: true };
     },
-    [textDrawerItem, updateItemFromMutation],
+    [textDrawerItem, updateItemFromMutation, closeTextDrawer],
   );
 
   const handleNoteSave = useCallback(
@@ -375,11 +527,152 @@ export default function VisitExecutionTab() {
         review_status: result.data.review_status,
         review_note: note.trim(),
       });
-      setTextDrawerItem(null);
+      closeTextDrawer();
       return { ok: true };
     },
-    [textDrawerItem, updateItemFromMutation],
+    [textDrawerItem, updateItemFromMutation, closeTextDrawer],
   );
+
+  /**
+   * Sprint 4c. Promote-mode save: caller supplied refined text (or kept
+   * gap_text); we resolve the signal as 'added_as_requirement' and splice
+   * the new row into local state.
+   */
+  const handlePromoteSignalSave = useCallback(
+    async (newText: string): Promise<{ ok: true } | { ok: false; error: string }> => {
+      if (!textDrawerSignal || !selectedWorkspace) {
+        return { ok: false, error: 'no signal in flight' };
+      }
+      // Mark in-flight so the panel's per-row spinner shows even though the
+      // drawer is also displaying its own spinner. Belt-and-suspenders so a
+      // user dismissing the drawer mid-flight still sees the right state on
+      // the row beneath.
+      setInFlightSignalIds((prev) => {
+        const next = new Set(prev);
+        next.add(textDrawerSignal.id);
+        return next;
+      });
+
+      const trimmed = newText.trim();
+      const override = trimmed === textDrawerSignal.gap_text ? undefined : trimmed;
+
+      const result = await resolveSignal(
+        textDrawerSignal.id,
+        'added_as_requirement',
+        override,
+      );
+
+      // Clear in-flight regardless of outcome.
+      setInFlightSignalIds((prev) => {
+        const next = new Set(prev);
+        next.delete(textDrawerSignal.id);
+        return next;
+      });
+
+      if (!result.ok) {
+        console.error('[vew] resolve_signal_failed', {
+          signalId: textDrawerSignal.id,
+          error: result.error,
+        });
+        return { ok: false, error: humanizeRpcError(result.error) };
+      }
+
+      // Already-resolved race: signal was dismissed/promoted in another tab
+      // or by another tab. Drop the signal locally; don't surface as an error
+      // (the user's intent was either way to stop seeing the signal).
+      if (result.data.already_resolved) {
+        dropSignal(selectedWorkspace.visit_template_id, textDrawerSignal.id);
+        closeTextDrawer();
+        return { ok: true };
+      }
+
+      // Server returned the new requirement_id. Splice it in.
+      if (result.data.requirement_id) {
+        appendRequirementFromSignal(
+          selectedWorkspace.visit_template_id,
+          result.data.requirement_id,
+          textDrawerSignal,
+          override ?? null,
+        );
+      }
+      closeTextDrawer();
+      return { ok: true };
+    },
+    [
+      textDrawerSignal,
+      selectedWorkspace,
+      appendRequirementFromSignal,
+      dropSignal,
+      closeTextDrawer,
+    ],
+  );
+
+  // Sprint 4c. Panel handlers. Promote routes through the drawer for text
+  // confirmation; dismiss fires immediately.
+
+  const handlePromoteSignal = useCallback(
+    (signal: VisitCompletenessSignal) => {
+      setTextDrawerItem(null);
+      setTextDrawerSignal(signal);
+      setTextDrawerMode('promote_signal');
+      setTextDrawerSubject({
+        title: signal.gap_text,
+        initialDraft: signal.gap_text,
+        // No drift block for promote — the gap_text IS the parser output.
+        driftFromText: null,
+      });
+    },
+    [],
+  );
+
+  const handleDismissSignal = useCallback(
+    async (signal: VisitCompletenessSignal) => {
+      if (!selectedWorkspace) return;
+
+      setInFlightSignalIds((prev) => {
+        const next = new Set(prev);
+        next.add(signal.id);
+        return next;
+      });
+      setMutationError(null);
+
+      const result = await resolveSignal(signal.id, 'dismissed_not_real');
+
+      setInFlightSignalIds((prev) => {
+        const next = new Set(prev);
+        next.delete(signal.id);
+        return next;
+      });
+
+      if (!result.ok) {
+        console.error('[vew] dismiss_signal_failed', {
+          signalId: signal.id,
+          error: result.error,
+        });
+        // Banner uses "itemLabel" terminology — for signals we pass the
+        // gap_text since that's the user-facing handle.
+        setMutationError({
+          message: humanizeRpcError(result.error),
+          itemLabel: signal.gap_text,
+        });
+        return;
+      }
+      // Drop the row whether the server actually wrote or saw an
+      // already-resolved race; either way it's no longer pending.
+      dropSignal(selectedWorkspace.visit_template_id, signal.id);
+    },
+    [selectedWorkspace, dropSignal],
+  );
+
+  // Pick the right save handler based on mode. Memoized so the drawer's
+  // prop identity stays stable across unrelated parent re-renders.
+  const drawerOnSave = useMemo(() => {
+    switch (textDrawerMode) {
+      case 'edit':           return handleEditSave;
+      case 'note':           return handleNoteSave;
+      case 'promote_signal': return handlePromoteSignalSave;
+    }
+  }, [textDrawerMode, handleEditSave, handleNoteSave, handlePromoteSignalSave]);
 
 
   if (loading) {
@@ -452,6 +745,15 @@ export default function VisitExecutionTab() {
                 totalItems={selectedWorkspace.items.length}
               />
 
+              {selectedWorkspace.snapshot.completeness_signals.length > 0 && (
+                <CompletenessSignalsPanel
+                  signals={selectedWorkspace.snapshot.completeness_signals}
+                  inFlightSignalIds={inFlightSignalIds}
+                  onPromote={handlePromoteSignal}
+                  onDismiss={handleDismissSignal}
+                />
+              )}
+
               {mutationError && (
                 <div
                   role="alert"
@@ -462,8 +764,6 @@ export default function VisitExecutionTab() {
                       : 'bg-[#3b1f1f] border-[#5a2e2e] text-[#f5b8b8]'
                   }`}
                 >
-                  {/* Icon for non-color signaling — color-blind users need a
-                      non-hue cue that this is an alert. */}
                   <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" aria-hidden />
                   <span className="flex-1 leading-relaxed">
                     Couldn't save change to <strong>{mutationError.itemLabel}</strong>:{' '}
@@ -510,11 +810,13 @@ export default function VisitExecutionTab() {
       />
 
       <RequirementTextDrawer
-        item={textDrawerItem}
+        subject={textDrawerSubject}
         mode={textDrawerMode}
         onClose={closeTextDrawer}
-        onSave={textDrawerMode === 'edit' ? handleEditSave : handleNoteSave}
+        onSave={drawerOnSave}
       />
+
+      <EditLogDrawer item={editLogItem} onClose={closeEditLog} />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import {
   flagForReview,
   markNeedsClarification,
   markReviewed,
+  resolveSignal,
   unmarkReviewed,
 } from '../visitExecutionMutationsApi';
 import { MOCK_TOGGLE_KEY } from '../visitExecutionApi';
@@ -282,5 +283,167 @@ describe('editText — real (mock off) RPC dispatch', () => {
     const r = await editText('req-1', 'New text');
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('malformed RPC response');
+  });
+});
+
+
+// =============================================================================
+// resolveSignal — Sprint 4c. Wraps visit_execution_resolve_completeness_signal.
+// =============================================================================
+
+describe('resolveSignal — mock mode on', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    window.localStorage.setItem(MOCK_TOGGLE_KEY, '1');
+  });
+  afterEach(() => {
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it('added_as_requirement synthesizes a stable requirement_id without RPC', async () => {
+    const spy = vi.spyOn(supabase, 'rpc');
+    const r = await resolveSignal('sig-1', 'added_as_requirement');
+    expect(spy).not.toHaveBeenCalled();
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data.signal_id).toBe('sig-1');
+      expect(r.data.resolution).toBe('added_as_requirement');
+      expect(r.data.requirement_id).toBe('mock-req-from-signal-sig-1');
+      expect(r.data.already_resolved).toBe(false);
+    }
+  });
+
+  it('dismissed_not_real leaves requirement_id null', async () => {
+    const r = await resolveSignal('sig-2', 'dismissed_not_real');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data.resolution).toBe('dismissed_not_real');
+      expect(r.data.requirement_id).toBeNull();
+    }
+  });
+});
+
+describe('resolveSignal — real (mock off) RPC dispatch', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+  afterEach(() => {
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it('calls visit_execution_resolve_completeness_signal with p_new_text null for dismiss', async () => {
+    const spy = vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: {
+        signal_id: 'sig-1',
+        resolution: 'dismissed_not_real',
+        requirement_id: null,
+        already_resolved: false,
+      }, error: null,
+    } as any);
+
+    await resolveSignal('sig-1', 'dismissed_not_real');
+    expect(spy).toHaveBeenCalledWith('visit_execution_resolve_completeness_signal', {
+      p_signal_id: 'sig-1',
+      p_resolution: 'dismissed_not_real',
+      p_new_text: null,
+    });
+  });
+
+  it('forwards trimmed override text on added_as_requirement', async () => {
+    const spy = vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: {
+        signal_id: 'sig-1',
+        resolution: 'added_as_requirement',
+        requirement_id: 'new-req-id',
+        already_resolved: false,
+      }, error: null,
+    } as any);
+
+    await resolveSignal('sig-1', 'added_as_requirement', '  Body weight measurement  ');
+    expect(spy).toHaveBeenCalledWith('visit_execution_resolve_completeness_signal', {
+      p_signal_id: 'sig-1',
+      p_resolution: 'added_as_requirement',
+      p_new_text: 'Body weight measurement',
+    });
+  });
+
+  it('drops whitespace-only override text to null (DB will use gap_text)', async () => {
+    const spy = vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: {
+        signal_id: 'sig-1', resolution: 'added_as_requirement',
+        requirement_id: 'new-req-id', already_resolved: false,
+      }, error: null,
+    } as any);
+
+    await resolveSignal('sig-1', 'added_as_requirement', '   \n  ');
+    expect(spy).toHaveBeenCalledWith('visit_execution_resolve_completeness_signal', {
+      p_signal_id: 'sig-1',
+      p_resolution: 'added_as_requirement',
+      p_new_text: null,
+    });
+  });
+
+  it('always sends p_new_text=null when resolution is dismiss, even if caller passed text', async () => {
+    // Defense-in-depth: dismiss path should never carry override text. The RPC
+    // would silently ignore it but the wire payload stays clean.
+    const spy = vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: {
+        signal_id: 'sig-1', resolution: 'dismissed_not_real',
+        requirement_id: null, already_resolved: false,
+      }, error: null,
+    } as any);
+
+    await resolveSignal('sig-1', 'dismissed_not_real', 'ignored override');
+    expect(spy).toHaveBeenCalledWith('visit_execution_resolve_completeness_signal', {
+      p_signal_id: 'sig-1',
+      p_resolution: 'dismissed_not_real',
+      p_new_text: null,
+    });
+  });
+
+  it('surfaces RPC errors as ok:false (no throw)', async () => {
+    vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      data: null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      error: { message: 'signal not found or access denied' } as any,
+    } as any);
+
+    const r = await resolveSignal('sig-nope', 'dismissed_not_real');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('signal not found or access denied');
+  });
+
+  it('returns malformed payload as ok:false rather than crashing', async () => {
+    vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: { some_other_shape: true } as any,
+      error: null,
+    } as any);
+
+    const r = await resolveSignal('sig-1', 'dismissed_not_real');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('malformed RPC response');
+  });
+
+  it('surfaces already_resolved flag from server', async () => {
+    vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: {
+        signal_id: 'sig-1',
+        resolution: 'dismissed_not_real',
+        requirement_id: null,
+        already_resolved: true,
+      }, error: null,
+    } as any);
+
+    const r = await resolveSignal('sig-1', 'dismissed_not_real');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data.already_resolved).toBe(true);
   });
 });
