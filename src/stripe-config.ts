@@ -64,8 +64,8 @@ export const stripeProducts: StripeProduct[] = [
   // 1. Pilot — one-time, 30 days
   {
     kind: 'pilot',
-    productId: 'prod_UV4xYcJcekXXyU',
-    priceId: 'price_1TW4njQsn1qRMC48ROlFWEpO',
+    productId: 'prod_Ub0PtgN0rTMNlp',
+    priceId: 'price_1TboP7Hd6djFjQOntbFB08uv',
     name: 'Protocol Clarity Pilot',
     description: 'Try PIQC with one protocol.',
     priceDisplay: '$25',
@@ -89,8 +89,8 @@ export const stripeProducts: StripeProduct[] = [
   // 2. Workspace monthly
   {
     kind: 'workspace_monthly',
-    productId: 'prod_UV4zd7rvs4T44X',
-    priceId: 'price_1TW4pPQsn1qRMC48Zu1jBn1N',
+    productId: 'prod_Ub0RyaWwB6PbU0',
+    priceId: 'price_1TboQqHd6djFjQOnBBESXkbA',
     name: 'Founding Site Workspace',
     description: 'For small clinical research site teams.',
     priceDisplay: '$59',
@@ -115,8 +115,8 @@ export const stripeProducts: StripeProduct[] = [
   // 3. Workspace annual
   {
     kind: 'workspace_annual',
-    productId: 'prod_UV50HkyT6SuzpU',
-    priceId: 'price_1TW4qnQsn1qRMC48auUAZElg',
+    productId: 'prod_Ub0ScZs5vLRxkY',
+    priceId: 'price_1TboRXHd6djFjQOnztu3rjTb',
     name: 'Founding Site Annual',
     description: 'For teams that want simple annual access.',
     priceDisplay: '$599',
@@ -138,8 +138,8 @@ export const stripeProducts: StripeProduct[] = [
   // 4. Add-on — additional protocol (recurring; quantity multiplies)
   {
     kind: 'addon_protocol',
-    productId: 'prod_UV518DhAXOhPL0',
-    priceId: 'price_1TW4rjQsn1qRMC48O9wJxqUd',
+    productId: 'prod_Ub0URXGSNWS7L2',
+    priceId: 'price_1TboTWHd6djFjQOn30w5RRte',
     name: 'Additional Protocol',
     description: 'Add another active protocol to your workspace.',
     priceDisplay: '$29',
@@ -160,8 +160,8 @@ export const stripeProducts: StripeProduct[] = [
   // 5. Add-on — seat pack (recurring; quantity multiplies)
   {
     kind: 'addon_seats',
-    productId: 'prod_UV53Q3e1m865L0',
-    priceId: 'price_1TW4t2Qsn1qRMC48PM9rHGb5',
+    productId: 'prod_Ub0VAQT9ww5XhJ',
+    priceId: 'price_1TboUgHd6djFjQOnqwSCpMcw',
     name: 'Additional Seat Pack',
     description: 'Invite more coordinators, reviewers, or operations users.',
     priceDisplay: '$19',
