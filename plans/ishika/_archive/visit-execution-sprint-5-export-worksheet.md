@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: visit-execution-sprint-5-export-worksheet
-status: active
+status: merged
+merged: 2026-05-27
 started: 2026-05-27
-target_pr:
+target_pr: #141
 ---
 
 # Visit Execution Workspace — Sprint 5: Export pipeline ("worksheet" deliverable)
