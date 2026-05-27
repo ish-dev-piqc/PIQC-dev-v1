@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: visit-execution-sprint-4a-review-state-actions
-status: in-review
+status: merged
+merged: 2026-05-27
 started: 2026-05-26
-target_pr:
+target_pr: #133
 ---
 
 # Visit Execution — Sprint 4a: Persist review-state actions
