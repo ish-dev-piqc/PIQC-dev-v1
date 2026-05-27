@@ -1,9 +1,10 @@
 ---
 owner: kiara
 feature: inline-plan-choices-no-plan-state
-status: active
+status: merged
+merged: 2026-05-27
 started: 2026-05-25
-target_pr:
+target_pr: #153
 ---
 
 # Inline plan choices in Settings → Billing for no-plan users
