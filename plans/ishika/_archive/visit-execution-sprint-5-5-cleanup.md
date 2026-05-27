@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: visit-execution-sprint-5-5-cleanup
-status: active
+status: merged
+merged: 2026-05-27
 started: 2026-05-27
-target_pr:
+target_pr: #143
 ---
 
 # VEW Sprint 5.5 — cleanup PR (watermark soften + doc sync)
