@@ -7,9 +7,10 @@ import TimingBanner from './TimingBanner';
 // VisitSnapshotCard — above-the-fold summary for the selected visit.
 //
 // Polish-v2 (2026-05-27) per feedback_vew_cognitive_load_test.md:
-//   1. Drop the "PIQC drafted ·" decorative prefix on purpose prose — the
-//      provenance is conveyed by the Sparkles icon + the workspace context.
-//      The prefix added pixels without changing what the user does.
+//   1. Keep "PIQC drafted ·" prefix on purpose prose. Founder confirmed:
+//      the agentic attribution gives the human-in-loop their purpose —
+//      this is PIQC's draft, you (the coordinator) ensure accuracy +
+//      compliance. Removing it would dilute that contract.
 //   2. Replace the cramped "12 requirements · 4 reviewed" footer caption
 //      with a Linear-style 3-cell stat grid (total / reviewed / open) so
 //      progress is glanceable.
@@ -127,9 +128,14 @@ export default function VisitSnapshotCard({ snapshot, reviewedCount, totalItems 
               </span>
             )}
           </div>
-          {/* Polish-v2: dropped "PIQC drafted ·" decorative prefix. Provenance
-              is conveyed by the Sparkles icon above + the workspace context. */}
+          {/* Polish-v2: kept "PIQC drafted ·" per founder direction. The
+              attribution carries product meaning — it makes the human-in-loop
+              contract explicit ("PIQC drafted this; you ensure accuracy and
+              compliance"). Dropping it would dilute the agentic relationship. */}
           <p className="text-fg-body text-sm leading-relaxed mt-2">
+            <span className="text-fg-label text-[10px] uppercase tracking-wider font-semibold mr-2">
+              PIQC drafted ·
+            </span>
             {snapshot.purpose}
           </p>
         </div>
