@@ -3,7 +3,6 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
-  ClipboardList,
   FileText,
   GitFork,
   MoreHorizontal,
@@ -106,13 +105,10 @@ export default function ExecutionChecklist({
       aria-label="Workflow-ordered execution checklist"
       className="space-y-3"
     >
-      <div className="flex items-center gap-2 px-1">
-        <ClipboardList size={14} className="text-fg-label" aria-hidden />
-        <h3 className="text-fg-label text-[10px] uppercase tracking-wider font-semibold">
-          Workflow-ordered checklist
-        </h3>
-      </div>
-
+      {/* Polish-v2: dropped the "Workflow-ordered checklist" visible caption
+          — the section itself IS the workflow-ordered list and the heading
+          was restating the obvious. The aria-label on <section> preserves
+          screen-reader context. */}
       {EXECUTION_PHASE_ORDER.map((phase) => {
         const phaseItems = itemsByPhase.get(phase) ?? [];
         if (phaseItems.length === 0) return null;
@@ -137,7 +133,7 @@ export default function ExecutionChecklist({
               onClick={() => togglePhase(phase)}
               aria-expanded={isOpen}
               aria-controls={`vew-phase-items-${phase}`}
-              className={`w-full flex items-center justify-between gap-3 px-4 py-3 text-left ${
+              className={`w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left ${
                 isLight ? 'hover:bg-[#f5f7fa]' : 'hover:bg-white/[0.02]'
               }`}
             >
@@ -147,12 +143,23 @@ export default function ExecutionChecklist({
                 ) : (
                   <ChevronRight size={14} className="text-fg-sub flex-shrink-0" aria-hidden />
                 )}
-                <span className="text-fg-heading text-sm font-semibold truncate">
+                {/* Polish-v2: stronger phase-title weight — earns the
+                    "section title" role rather than reading at the same
+                    weight as the item labels below. */}
+                <span className="text-fg-heading text-[15px] font-semibold tracking-tight truncate">
                   {phaseLabels[phase]}
                 </span>
               </div>
-              <span className="text-fg-sub text-xs font-medium flex-shrink-0">
-                {reviewedInPhase} / {phaseItems.length} reviewed
+              {/* Polish-v2: counter restyled as "<reviewed>/<total>" with the
+                  total quieted — the eye reads progress fraction without
+                  the verbal redundancy of the word "reviewed". */}
+              <span className="text-fg-sub text-xs font-medium tabular-nums flex-shrink-0">
+                <span className={reviewedInPhase === phaseItems.length && phaseItems.length > 0
+                  ? 'text-emerald-700 dark:text-emerald-400'
+                  : 'text-fg-body'}>
+                  {reviewedInPhase}
+                </span>
+                <span className="text-fg-muted"> / {phaseItems.length}</span>
               </span>
             </button>
 
@@ -227,7 +234,7 @@ function ChecklistItemRow({
       data-testid="vew-checklist-item"
       data-item-id={item.id}
       data-status={status}
-      className={`px-4 py-3 ${
+      className={`px-4 py-3.5 ${
         isReviewed
           ? isLight
             ? 'bg-emerald-50/30'
@@ -282,32 +289,38 @@ function ChecklistItemRow({
           )}
 
           {hasDrift && item.derived_text && (
-            <div className="mt-1.5">
+            <div className="mt-2">
+              {/* Polish-v2: drift chip shape aligned with conditional chip
+                  below — same px-1.5 py-0.5 + uppercase tracking-wider
+                  treatment, just different semantic tone (neutral vs amber).
+                  Gives the row a consistent chip vocabulary. Label shortened
+                  to "Edited" since the longer phrase made the chip nearly
+                  as wide as the row.
+                  Kept in sync with RequirementTextDrawer's drift block. */}
               <button
                 type="button"
                 onClick={() => setDriftOpen((p) => !p)}
                 aria-expanded={driftOpen}
                 data-testid="vew-drift-toggle"
-                className={`inline-flex items-center gap-1 text-[11px] rounded-md border px-1.5 py-0.5 ${
+                title="Edited from parser output"
+                className={`inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider rounded-md border px-1.5 py-0.5 ${
                   isLight
                     ? 'text-fg-sub bg-[#eef2f6] border-[#dde3ea] hover:bg-[#e2e8ee]'
                     : 'text-fg-sub bg-white/[0.03] border-white/10 hover:bg-white/[0.06]'
                 }`}
               >
                 <FileText size={10} aria-hidden />
-                Edited from parser output
+                Edited
               </button>
               {driftOpen && (
                 <div
                   data-testid="vew-drift-original"
-                  className={`mt-1.5 rounded-md border-l-2 px-3 py-1.5 text-xs leading-relaxed ${
+                  className={`mt-2 rounded-md border-l-2 px-3 py-1.5 text-xs leading-relaxed ${
                     isLight
                       ? 'bg-[#eef2f6] border-[#9aa6b5] text-fg-sub'
                       : 'bg-white/[0.03] border-white/15 text-fg-sub'
                   }`}
                 >
-                  {/* Kept in sync with RequirementTextDrawer's drift block —
-                      both surfaces say "Original parser output". */}
                   <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold mb-0.5">
                     Original parser output
                   </p>
@@ -317,7 +330,10 @@ function ChecklistItemRow({
             </div>
           )}
 
-          <div className="flex items-center gap-3 flex-wrap mt-1.5 text-xs">
+          {/* Polish-v2: metadata row uses gap-x-4 (was gap-3) for clearer
+              separation between role / timing / source-field-count, and
+              mt-2 for breathing after the title + drift row. */}
+          <div className="flex items-center gap-x-4 gap-y-1 flex-wrap mt-2 text-xs">
             {item.role_hint && (
               <span className="inline-flex items-center gap-1 text-fg-sub">
                 <User size={11} aria-hidden />

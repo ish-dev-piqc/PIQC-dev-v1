@@ -1,4 +1,4 @@
-import { Clock, GitFork, Target, ClipboardCheck, AlertOctagon } from 'lucide-react';
+import { GitFork, Target, AlertOctagon } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import type {
   ExecutionReviewStatus,
@@ -7,18 +7,25 @@ import type {
 
 // =============================================================================
 // VisitNavigator — left rail of the workspace. Lists every visit in the
-// protocol (sorted by study_day), shows per-visit indicator chips so the
-// coordinator can triage WHICH visit to open before opening any of them.
+// protocol (sorted by study_day).
 //
-// Indicators (only shown if non-zero / true):
-//   - Endpoint-critical count
-//   - Safety-critical flag
-//   - Conditional rule count
-//   - Timing complexity (window = 0 days = strict; rendered as Clock chip)
-//   - Needs-review count (computed from local review state map)
+// Polish-v2 (2026-05-27) per feedback_vew_cognitive_load_test.md:
+//   The earlier version surfaced up to 5 chips per visit at 9px text —
+//   dense to the point of unreadable. Polish consolidates:
 //
-// Structurally inspired by StageNav, but data shape is per-visit not
-// per-stage, so it's a fresh component rather than a reuse.
+//   1. Two attention chips only: endpoint-critical count, safety dot.
+//      Conditional / tight-window / needs-review get folded into a single
+//      "open items" counter pinned right, which the coordinator already
+//      cares about most ("which visits still have work to do?").
+//
+//   2. Stronger selected state — the 2px left border was too quiet against
+//      the row hover treatment. Now selected uses a filled left rail + a
+//      stronger background lift so the eye lands on the active visit
+//      immediately when sweeping the list.
+//
+//   3. Day badge moved from right-of-name to a labeled sub-line — frees
+//      the right side for the open-items counter and stops competing with
+//      the visit name for hierarchy.
 // =============================================================================
 
 interface Props {
@@ -62,9 +69,11 @@ export default function VisitNavigator({
           const reviewedCount = ws.items.filter(
             (i) => (reviewStatusByItemId.get(i.id) ?? i.review_status) === 'reviewed',
           ).length;
-          const needsReviewCount = Math.max(0, ws.items.length - reviewedCount);
-          const isTightWindow =
-            ws.snapshot.window_minus_days === 0 && ws.snapshot.window_plus_days === 0;
+          const openCount = Math.max(0, ws.items.length - reviewedCount);
+          const dayLabel =
+            ws.snapshot.study_day >= 0
+              ? `Day +${ws.snapshot.study_day}`
+              : `Day ${ws.snapshot.study_day}`;
 
           return (
             <li key={ws.visit_template_id}>
@@ -74,76 +83,82 @@ export default function VisitNavigator({
                 aria-current={isSelected ? 'true' : undefined}
                 data-testid="vew-navigator-item"
                 data-selected={isSelected}
-                className={`w-full text-left px-4 py-3 border-l-2 transition-colors ${
+                className={`w-full text-left px-4 py-3 border-l-[3px] transition-colors ${
                   isSelected
                     ? isLight
-                      ? 'bg-white border-[#4a6fa5]'
-                      : 'bg-white/[0.04] border-[#6e8fb5]'
+                      ? 'bg-white border-[#1f2937]'
+                      : 'bg-white/[0.06] border-white'
                     : isLight
                       ? 'border-transparent hover:bg-[#f0f3f6]'
                       : 'border-transparent hover:bg-white/[0.02]'
                 }`}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <span
-                    className={`text-sm font-semibold truncate ${
-                      isSelected ? 'text-fg-heading' : 'text-fg-body'
-                    }`}
-                  >
-                    {ws.snapshot.visit_name}
-                  </span>
-                  <span className="text-fg-sub text-[10px] font-medium flex-shrink-0">
-                    Day {ws.snapshot.study_day >= 0 ? `+${ws.snapshot.study_day}` : ws.snapshot.study_day}
-                  </span>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className={`text-sm font-semibold truncate ${
+                        isSelected ? 'text-fg-heading' : 'text-fg-body'
+                      }`}
+                    >
+                      {ws.snapshot.visit_name}
+                    </p>
+                    <p className="text-fg-muted text-[11px] mt-0.5">{dayLabel}</p>
+                  </div>
+
+                  {/* Open-items counter pinned right. Quiet by default; amber
+                      when non-zero so the visits-with-work jump out on a
+                      sweep. Zero-state shows nothing rather than "0 open" —
+                      hides done visits gracefully. */}
+                  {openCount > 0 && (
+                    <span
+                      className={`text-[11px] font-semibold tabular-nums flex-shrink-0 ${
+                        isLight
+                          ? 'text-amber-700'
+                          : 'text-amber-400'
+                      }`}
+                      title={`${openCount} requirement${openCount === 1 ? '' : 's'} not yet reviewed`}
+                    >
+                      {openCount} open
+                    </span>
+                  )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-1 mt-1.5">
-                  {ws.snapshot.endpoint_critical_count > 0 && (
-                    <NavChip
-                      icon={<Target size={9} aria-hidden />}
-                      label={`${ws.snapshot.endpoint_critical_count}`}
-                      title={`${ws.snapshot.endpoint_critical_count} endpoint-critical item${ws.snapshot.endpoint_critical_count === 1 ? '' : 's'}`}
-                      tone="rose"
-                      isLight={isLight}
-                    />
-                  )}
-                  {ws.snapshot.has_safety_critical && (
-                    <NavChip
-                      icon={<AlertOctagon size={9} aria-hidden />}
-                      label="Safety"
-                      title="Safety-critical items at this visit"
-                      tone="rose-bold"
-                      isLight={isLight}
-                    />
-                  )}
-                  {ws.snapshot.conditional_item_count > 0 && (
-                    <NavChip
-                      icon={<GitFork size={9} aria-hidden />}
-                      label={`${ws.snapshot.conditional_item_count}`}
-                      title={`${ws.snapshot.conditional_item_count} conditional rule${ws.snapshot.conditional_item_count === 1 ? '' : 's'}`}
-                      tone="amber"
-                      isLight={isLight}
-                    />
-                  )}
-                  {isTightWindow && (
-                    <NavChip
-                      icon={<Clock size={9} aria-hidden />}
-                      label="Fixed"
-                      title="Fixed timing — no permissible window"
-                      tone="blue"
-                      isLight={isLight}
-                    />
-                  )}
-                  {needsReviewCount > 0 && (
-                    <NavChip
-                      icon={<ClipboardCheck size={9} aria-hidden />}
-                      label={`${needsReviewCount}`}
-                      title={`${needsReviewCount} requirement${needsReviewCount === 1 ? '' : 's'} not yet reviewed`}
-                      tone="muted"
-                      isLight={isLight}
-                    />
-                  )}
-                </div>
+                {/* Attention chips — only the rare-but-loud signals.
+                    Endpoint-critical: shows count.
+                    Safety-critical: presence-only (a single dot is enough). */}
+                {(ws.snapshot.endpoint_critical_count > 0 ||
+                  ws.snapshot.has_safety_critical ||
+                  ws.snapshot.conditional_item_count > 0) && (
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                    {ws.snapshot.has_safety_critical && (
+                      <NavChip
+                        icon={<AlertOctagon size={9} aria-hidden />}
+                        label="Safety"
+                        title="Safety-critical items at this visit"
+                        tone="rose-bold"
+                        isLight={isLight}
+                      />
+                    )}
+                    {ws.snapshot.endpoint_critical_count > 0 && (
+                      <NavChip
+                        icon={<Target size={9} aria-hidden />}
+                        label={`${ws.snapshot.endpoint_critical_count}`}
+                        title={`${ws.snapshot.endpoint_critical_count} endpoint-critical item${ws.snapshot.endpoint_critical_count === 1 ? '' : 's'}`}
+                        tone="rose"
+                        isLight={isLight}
+                      />
+                    )}
+                    {ws.snapshot.conditional_item_count > 0 && (
+                      <NavChip
+                        icon={<GitFork size={9} aria-hidden />}
+                        label={`${ws.snapshot.conditional_item_count}`}
+                        title={`${ws.snapshot.conditional_item_count} conditional rule${ws.snapshot.conditional_item_count === 1 ? '' : 's'}`}
+                        tone="amber"
+                        isLight={isLight}
+                      />
+                    )}
+                  </div>
+                )}
               </button>
             </li>
           );
@@ -164,7 +179,7 @@ function NavChip({
   icon: React.ReactNode;
   label: string;
   title: string;
-  tone: 'rose' | 'rose-bold' | 'amber' | 'blue' | 'muted';
+  tone: 'rose' | 'rose-bold' | 'amber';
   isLight: boolean;
 }) {
   const toneClass = (() => {
@@ -181,15 +196,6 @@ function NavChip({
         return isLight
           ? 'text-amber-700 bg-amber-50 border-amber-200'
           : 'text-amber-400 bg-amber-400/10 border-amber-400/20';
-      case 'blue':
-        return isLight
-          ? 'text-blue-700 bg-blue-50 border-blue-200'
-          : 'text-blue-400 bg-blue-400/10 border-blue-400/20';
-      case 'muted':
-      default:
-        return isLight
-          ? 'text-fg-sub bg-[#eef2f6] border-[#e2e8ee]'
-          : 'text-fg-sub bg-white/[0.04] border-white/10';
     }
   })();
   return (
