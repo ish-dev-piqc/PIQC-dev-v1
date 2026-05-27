@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: visit-execution-sprint-4c-signal-resolution-and-edit-log
-status: active
+status: merged
+merged: 2026-05-27
 started: 2026-05-27
-target_pr:
+target_pr: #137
 ---
 
 # Visit Execution Workspace — Sprint 4c: Completeness signal resolution + edit-log timeline
