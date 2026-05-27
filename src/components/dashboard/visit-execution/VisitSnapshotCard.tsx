@@ -6,13 +6,22 @@ import TimingBanner from './TimingBanner';
 // =============================================================================
 // VisitSnapshotCard — above-the-fold summary for the selected visit.
 //
-// Design rules baked in:
-//   1. Only NON-ZERO critical indicators render as chips. Zero counts hide.
-//   2. Cap at 3 visible chips above the snapshot line.
-//   3. The "PIQC drafted this" signal is in the card header — NOT a
-//      dismissable banner — because it's permanent context for the surface.
-//   4. The TimingBanner sits below the snapshot stat row so the visit
-//      window is always visible without the user scrolling.
+// Polish-v2 (2026-05-27) per feedback_vew_cognitive_load_test.md:
+//   1. Keep "PIQC drafted ·" prefix on purpose prose. Founder confirmed:
+//      the agentic attribution gives the human-in-loop their purpose —
+//      this is PIQC's draft, you (the coordinator) ensure accuracy +
+//      compliance. Removing it would dilute that contract.
+//   2. Replace the cramped "12 requirements · 4 reviewed" footer caption
+//      with a Linear-style 3-cell stat grid (total / reviewed / open) so
+//      progress is glanceable.
+//   3. Soften the "Dosing visit" chip — it's a static fact for the visit,
+//      not an alert; doesn't need an outlined badge competing with
+//      attention chips.
+//   4. Cap attention chips at 3 (rule kept from earlier polish).
+//
+// Information density unchanged — every signal still surfaced. Failure mode
+// guarded against: "PIQC re-renders protocol complexity in card form with
+// no presentation gain."
 // =============================================================================
 
 interface Props {
@@ -109,21 +118,29 @@ export default function VisitSnapshotCard({ snapshot, reviewedCount, totalItems 
               Study Day {snapshot.study_day >= 0 ? `+${snapshot.study_day}` : snapshot.study_day}
             </span>
             {snapshot.is_dosing_visit && (
+              // Polish-v2: dosing-visit is a static type label, not an
+              // alert — softened to text-only indigo so it doesn't compete
+              // for attention with the chip row below.
               <span
-                className={`inline-flex items-center text-[10px] font-semibold uppercase tracking-wider rounded-md border px-1.5 py-0.5 ${
-                  isLight
-                    ? 'text-indigo-700 bg-indigo-50 border-indigo-200'
-                    : 'text-indigo-400 bg-indigo-400/10 border-indigo-400/20'
-                }`}
+                className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider text-indigo-700 dark:text-indigo-400"
               >
-                Dosing visit
+                · Dosing visit
               </span>
             )}
           </div>
-          <p className="text-fg-body text-sm leading-relaxed mt-1.5">
-            <span className="text-fg-label text-[10px] uppercase tracking-wider font-semibold mr-2">
-              PIQC drafted ·
-            </span>
+          {/* Polish-v2 (post-critique): "PIQC DRAFTED" is now a labeled
+              header line above the prose rather than inline-with-mr-2. The
+              attribution stays product-bearing (per
+              product_vew_workspace_vs_worksheet_model.md) — same words,
+              just designed position instead of feeling grafted onto the
+              start of the sentence. Reads as section-label → body. */}
+          <p
+            className="text-fg-label text-[10px] uppercase tracking-wider font-semibold mt-2"
+            data-testid="vew-snapshot-attribution"
+          >
+            PIQC drafted
+          </p>
+          <p className="text-fg-body text-sm leading-relaxed mt-1">
             {snapshot.purpose}
           </p>
         </div>
@@ -148,16 +165,70 @@ export default function VisitSnapshotCard({ snapshot, reviewedCount, totalItems 
 
       <TimingBanner snapshot={snapshot} />
 
-      <div className={`pt-3 border-t flex items-center justify-between text-xs ${
-        isLight ? 'border-[#eef2f6]' : 'border-white/[0.04]'
-      }`}>
-        <span className="text-fg-sub">
-          {snapshot.item_count} requirement{snapshot.item_count === 1 ? '' : 's'} · {reviewedCount} reviewed
-        </span>
+      {/* Polish-v2: Linear-style 3-cell stat grid replaces the cramped
+          single-line footer caption. Each cell teaches one fact about the
+          coordinator's progress on this visit. Amendment row pinned right
+          stays subtle — non-zero amendment is informational, not action. */}
+      <div
+        className={`pt-3 border-t ${isLight ? 'border-[#eef2f6]' : 'border-white/[0.04]'}`}
+        data-testid="vew-snapshot-stats"
+      >
+        <div className="grid grid-cols-3 gap-2">
+          <Stat
+            label="Requirements"
+            value={snapshot.item_count}
+            valueClass="text-fg-heading"
+          />
+          <Stat
+            label="Reviewed"
+            value={reviewedCount}
+            valueClass={
+              reviewedCount > 0
+                ? 'text-emerald-700 dark:text-emerald-400'
+                : 'text-fg-heading'
+            }
+          />
+          {/* "To review" (not "Open") — verb-aligned per the mastery-
+              teaching pattern. Tells the coordinator what they DO with
+              this count, not just that it exists. */}
+          <Stat
+            label="To review"
+            value={needsReviewCount}
+            valueClass={
+              needsReviewCount > 0
+                ? 'text-amber-700 dark:text-amber-400'
+                : 'text-fg-heading'
+            }
+          />
+        </div>
         {snapshot.amendment_version && (
-          <span className="text-fg-muted">{snapshot.amendment_version}</span>
+          <p className="text-fg-muted text-[11px] mt-2.5">
+            Reflects {snapshot.amendment_version}
+          </p>
         )}
       </div>
     </section>
+  );
+}
+
+
+function Stat({
+  label,
+  value,
+  valueClass,
+}: {
+  label: string;
+  value: number;
+  valueClass: string;
+}) {
+  return (
+    <div>
+      <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold">
+        {label}
+      </p>
+      <p className={`text-xl font-semibold mt-0.5 tabular-nums ${valueClass}`}>
+        {value}
+      </p>
+    </div>
   );
 }

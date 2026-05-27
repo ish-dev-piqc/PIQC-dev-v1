@@ -6,6 +6,11 @@ import { useTheme } from '../../../context/ThemeContext';
 // PIQC's draft-only stance honest. No export logic runs. The button exists
 // so the workflow shape is visible; the copy makes it clear that final
 // approval lives outside PIQC.
+//
+// Polish-v2 (2026-05-27): aligned to the canonical primary-button disabled
+// state shared by RequirementTextDrawer's save button and (post-#137)
+// CompletenessSignalsPanel's Add button — one button-system across the
+// whole workspace so the workflow shape reads as designed rather than ad-hoc.
 // =============================================================================
 
 export default function ExportPlaceholderButton() {
@@ -19,10 +24,10 @@ export default function ExportPlaceholderButton() {
         disabled
         aria-disabled="true"
         data-testid="vew-export-placeholder"
-        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold border cursor-not-allowed opacity-60 ${
+        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold cursor-not-allowed ${
           isLight
-            ? 'text-[#374152] border-[#cbd2db] bg-white'
-            : 'text-[#d2d7e0] border-white/10 bg-[#131a22]'
+            ? 'bg-[#cbd2db] text-white'
+            : 'bg-white/10 text-fg-muted'
         }`}
       >
         <Download size={12} aria-hidden />

@@ -16,6 +16,12 @@ import type { VisitExecutionItem } from '../../../types/visit-execution';
 // protocol section, protocol page, amendment version, and any cross-reference
 // snippet derived from protocol_visit_templates.cross_references. No
 // network fetch needed; the trace data ships inside the workspace.
+//
+// Polish-v2 (2026-05-27): tighter section label spacing, lighter footer
+// disclaimer, page-citation line uses tabular-nums + better alignment with
+// the section-name. Goal per feedback_vew_cognitive_load_test.md: each
+// section reads as a single visual unit rather than label-plus-body-plus-
+// gap-plus-label.
 // =============================================================================
 
 interface Props {
@@ -132,8 +138,10 @@ export default function TraceabilityDrawer({ item, onClose }: Props) {
           {(t.cross_reference_source_section || t.cross_reference_snippet) && (
             <Section icon={<Quote size={13} />} label="From the protocol documents">
               {t.cross_reference_source_section && (
-                <p className="text-fg-label text-[11px] uppercase tracking-wider mb-1">
-                  {t.cross_reference_source_section}
+                <p className="text-fg-sub text-[11px] mb-1.5 tabular-nums">
+                  <span className="text-fg-label uppercase tracking-wider font-semibold">
+                    {t.cross_reference_source_section}
+                  </span>
                   {t.cross_reference_page !== null && (
                     <span className="ml-1 text-fg-muted">· p.{t.cross_reference_page}</span>
                   )}
@@ -151,14 +159,13 @@ export default function TraceabilityDrawer({ item, onClose }: Props) {
             </Section>
           )}
 
-          <div
-            className={`mt-6 pt-4 border-t text-fg-muted text-[11px] ${
+          <p
+            className={`mt-6 pt-4 border-t text-fg-muted text-[11px] leading-relaxed ${
               isLight ? 'border-[#e2e8ee]' : 'border-white/5'
             }`}
           >
-            All references shown are draft-ready. Final source-document
-            verification is performed outside PIQC.
-          </div>
+            Final source-document verification is performed outside PIQC.
+          </p>
         </div>
       </div>
     </div>
@@ -176,7 +183,9 @@ function Section({
 }) {
   return (
     <section>
-      <div className="flex items-center gap-1.5 mb-1.5 text-fg-label">
+      {/* Polish-v2: label gap tightened (mb-1.5 → mb-1) so the label reads
+          as belonging-to its body rather than floating above it. */}
+      <div className="flex items-center gap-1.5 mb-1 text-fg-label">
         {icon}
         <h3 className="text-[10px] uppercase tracking-wider font-semibold">
           {label}
