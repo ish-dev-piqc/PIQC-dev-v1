@@ -1,7 +1,7 @@
 ---
 owner: kiara
 feature: stripe-config-new-account
-status: active
+status: in-review
 started: 2026-05-25
 target_pr:
 ---
