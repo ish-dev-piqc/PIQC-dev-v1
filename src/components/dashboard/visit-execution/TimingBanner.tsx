@@ -13,9 +13,17 @@ import type { VisitSnapshot } from '../../../types/visit-execution';
 //   dropped (the "windows are confirmed at execution" reality is implicit
 //   in the planning context).
 //
-// Tone selection:
-//   - Tight window (0/0) or safety-critical present → amber accent
-//   - Otherwise                                       → quiet info accent
+// Three-tier severity ladder (the more urgent classification dominates the
+// whole surface; no mixing of warning colors on one banner):
+//   - has_safety_critical              → rose  (highest urgency)
+//   - tight window (0/0) only          → amber (medium)
+//   - otherwise                        → blue  (informational default)
+//
+// data-testid history: the per-banner ids `vew-timing-banner-window` +
+// `vew-timing-banner-safety` were collapsed into a single root id
+// `vew-timing-banner` (Polish-v2) since the two surfaces are now one DOM
+// container. The safety sub-row keeps its own id for tests that need to
+// assert presence of the sub-row specifically.
 //
 // Per-assessment timing (AssessmentTimingConstraint) is rendered inline
 // on the checklist row, not here.
@@ -46,30 +54,50 @@ export default function TimingBanner({ snapshot }: Props) {
   const isLight = theme === 'light';
 
   const isTight = snapshot.window_minus_days === 0 && snapshot.window_plus_days === 0;
-  const isWarning = snapshot.has_safety_critical || isTight;
+  const isSafety = snapshot.has_safety_critical;
 
-  // Polish-v2: a single consolidated surface. Tone shifts when warning;
-  // safety sub-row appears nested rather than as a separate banner so the
-  // user reads "this visit's timing" as one thing, with sub-detail.
-  const accentClass = isWarning
-    ? isLight
-      ? 'bg-amber-50 border-amber-200'
-      : 'bg-amber-400/10 border-amber-400/20'
-    : isLight
+  // Three-tier severity (see header doc): rose wins on safety; amber for
+  // tight-window-only; blue otherwise. The more urgent classification
+  // dominates the whole surface — no mixed warning colors.
+  const tone: 'blue' | 'amber' | 'rose' = isSafety ? 'rose' : isTight ? 'amber' : 'blue';
+
+  const accentClass = (() => {
+    if (tone === 'rose') {
+      return isLight
+        ? 'bg-rose-50 border-rose-200'
+        : 'bg-rose-400/10 border-rose-400/20';
+    }
+    if (tone === 'amber') {
+      return isLight
+        ? 'bg-amber-50 border-amber-200'
+        : 'bg-amber-400/10 border-amber-400/20';
+    }
+    return isLight
       ? 'bg-blue-50 border-blue-200'
       : 'bg-blue-400/10 border-blue-400/20';
+  })();
 
-  const iconTone = isWarning
-    ? 'text-amber-700 dark:text-amber-400'
-    : 'text-blue-700 dark:text-blue-400';
+  const iconTone = (() => {
+    if (tone === 'rose') return 'text-rose-700 dark:text-rose-400';
+    if (tone === 'amber') return 'text-amber-700 dark:text-amber-400';
+    return 'text-blue-700 dark:text-blue-400';
+  })();
 
-  const labelTone = isWarning
-    ? 'text-amber-800 dark:text-amber-300'
-    : 'text-blue-800 dark:text-blue-300';
+  const labelTone = (() => {
+    if (tone === 'rose') return 'text-rose-800 dark:text-rose-300';
+    if (tone === 'amber') return 'text-amber-800 dark:text-amber-300';
+    return 'text-blue-800 dark:text-blue-300';
+  })();
 
-  const valueTone = isWarning
-    ? 'text-amber-900 dark:text-amber-200'
-    : 'text-blue-900 dark:text-blue-200';
+  const valueTone = (() => {
+    if (tone === 'rose') return 'text-rose-900 dark:text-rose-200';
+    if (tone === 'amber') return 'text-amber-900 dark:text-amber-200';
+    return 'text-blue-900 dark:text-blue-200';
+  })();
+
+  const subRowBorder = tone === 'rose'
+    ? 'border-rose-300/40 dark:border-rose-400/20'
+    : 'border-amber-300/40 dark:border-amber-400/20';
 
   return (
     <div
@@ -89,17 +117,17 @@ export default function TimingBanner({ snapshot }: Props) {
         </div>
       </div>
 
-      {snapshot.has_safety_critical && (
+      {isSafety && (
         <div
           data-testid="vew-timing-banner-safety"
-          className="flex items-start gap-3 mt-2.5 pt-2.5 border-t border-amber-300/40 dark:border-amber-400/20"
+          className={`flex items-start gap-3 mt-2.5 pt-2.5 border-t ${subRowBorder}`}
         >
           <AlertTriangle
             size={13}
-            className="mt-0.5 flex-shrink-0 text-rose-700 dark:text-rose-400"
+            className={`mt-0.5 flex-shrink-0 ${iconTone}`}
             aria-hidden
           />
-          <p className="text-rose-900 dark:text-rose-200 text-xs leading-relaxed">
+          <p className={`text-xs leading-relaxed ${valueTone}`}>
             Safety-critical items at this visit. Vital sign and AE timing
             windows must be met — see item-level timing on the checklist.
           </p>

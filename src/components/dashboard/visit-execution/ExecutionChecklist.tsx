@@ -293,16 +293,17 @@ function ChecklistItemRow({
               {/* Polish-v2: drift chip shape aligned with conditional chip
                   below — same px-1.5 py-0.5 + uppercase tracking-wider
                   treatment, just different semantic tone (neutral vs amber).
-                  Gives the row a consistent chip vocabulary. Label shortened
-                  to "Edited" since the longer phrase made the chip nearly
-                  as wide as the row.
+                  Label = "Edited from PIQC" — keeps the agentic attribution
+                  (per product_vew_workspace_vs_worksheet_model.md: "PIQC
+                  ___" voice is product-bearing, never polish-strip). The
+                  reveal block below shows the parser-original text in full.
                   Kept in sync with RequirementTextDrawer's drift block. */}
               <button
                 type="button"
                 onClick={() => setDriftOpen((p) => !p)}
                 aria-expanded={driftOpen}
                 data-testid="vew-drift-toggle"
-                title="Edited from parser output"
+                title="This requirement has been edited from PIQC's draft text"
                 className={`inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider rounded-md border px-1.5 py-0.5 ${
                   isLight
                     ? 'text-fg-sub bg-[#eef2f6] border-[#dde3ea] hover:bg-[#e2e8ee]'
@@ -310,7 +311,7 @@ function ChecklistItemRow({
                 }`}
               >
                 <FileText size={10} aria-hidden />
-                Edited
+                Edited from PIQC
               </button>
               {driftOpen && (
                 <div

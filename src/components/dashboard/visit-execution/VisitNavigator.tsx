@@ -105,10 +105,11 @@ export default function VisitNavigator({
                     <p className="text-fg-muted text-[11px] mt-0.5">{dayLabel}</p>
                   </div>
 
-                  {/* Open-items counter pinned right. Quiet by default; amber
-                      when non-zero so the visits-with-work jump out on a
-                      sweep. Zero-state shows nothing rather than "0 open" —
-                      hides done visits gracefully. */}
+                  {/* Counter pinned right. Verb-aligned label ("to review"
+                      not "open") tells the coordinator what they DO with
+                      this count. Quiet by default; amber when non-zero so
+                      the visits-with-work jump out on a sweep. Zero-state
+                      shows nothing — hides done visits gracefully. */}
                   {openCount > 0 && (
                     <span
                       className={`text-[11px] font-semibold tabular-nums flex-shrink-0 ${
@@ -118,7 +119,7 @@ export default function VisitNavigator({
                       }`}
                       title={`${openCount} requirement${openCount === 1 ? '' : 's'} not yet reviewed`}
                     >
-                      {openCount} open
+                      {openCount} to review
                     </span>
                   )}
                 </div>

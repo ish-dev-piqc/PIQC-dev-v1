@@ -128,14 +128,19 @@ export default function VisitSnapshotCard({ snapshot, reviewedCount, totalItems 
               </span>
             )}
           </div>
-          {/* Polish-v2: kept "PIQC drafted ·" per founder direction. The
-              attribution carries product meaning — it makes the human-in-loop
-              contract explicit ("PIQC drafted this; you ensure accuracy and
-              compliance"). Dropping it would dilute the agentic relationship. */}
-          <p className="text-fg-body text-sm leading-relaxed mt-2">
-            <span className="text-fg-label text-[10px] uppercase tracking-wider font-semibold mr-2">
-              PIQC drafted ·
-            </span>
+          {/* Polish-v2 (post-critique): "PIQC DRAFTED" is now a labeled
+              header line above the prose rather than inline-with-mr-2. The
+              attribution stays product-bearing (per
+              product_vew_workspace_vs_worksheet_model.md) — same words,
+              just designed position instead of feeling grafted onto the
+              start of the sentence. Reads as section-label → body. */}
+          <p
+            className="text-fg-label text-[10px] uppercase tracking-wider font-semibold mt-2"
+            data-testid="vew-snapshot-attribution"
+          >
+            PIQC drafted
+          </p>
+          <p className="text-fg-body text-sm leading-relaxed mt-1">
             {snapshot.purpose}
           </p>
         </div>
@@ -183,8 +188,11 @@ export default function VisitSnapshotCard({ snapshot, reviewedCount, totalItems 
                 : 'text-fg-heading'
             }
           />
+          {/* "To review" (not "Open") — verb-aligned per the mastery-
+              teaching pattern. Tells the coordinator what they DO with
+              this count, not just that it exists. */}
           <Stat
-            label="Open"
+            label="To review"
             value={needsReviewCount}
             valueClass={
               needsReviewCount > 0
