@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: visit-execution-sprint-6-role-filtered-views
-status: active
+status: merged
+merged: 2026-05-27
 started: 2026-05-27
-target_pr:
+target_pr: #145
 ---
 
 # Visit Execution Workspace — Sprint 6: Role-Filtered Views
