@@ -255,7 +255,7 @@ The existing `protocol_extracted_items.confidence_state` enum is already populat
 If Reducto's Extract call returns malformed `procedures_structured` (missing required fields, wrong types):
 - Adapter logs the malformed payload to a debugging table (or just stderr — depends on Roger's preference)
 - Falls back to the existing flat `procedures: string[]` for that visit — Sprint 1's adapter handles this case already
-- Marks the affected `protocol_visit_templates` row's `parser_confidence = 'needs_review'` (new column from Sprint 3.5)
+- Marks the affected `protocol_visit_templates` row's `confidence_state = 'needs_review'` (new column from Sprint 3.5; named `confidence_state` to match the existing SOTR enum on `protocol_extracted_items` — this doc previously called it `parser_confidence` before implementation in PR #127 landed)
 - The workspace loads with the thin-passthrough representation rather than failing entirely
 
 ### 6.3 DB-write failure mode (was missing from prior draft)
@@ -325,7 +325,7 @@ supabase/migrations/
 ```sql
 ALTER TABLE protocol_visit_templates
   ADD COLUMN purpose TEXT,
-  ADD COLUMN parser_confidence confidence_state;
+  ADD COLUMN confidence_state confidence_state;
 
 COMMENT ON COLUMN protocol_visit_templates.purpose IS
   'LLM-generated 1-3 sentence visit purpose statement. NULL means '
@@ -429,7 +429,7 @@ Sprint 3.5 adds these fields:
 ```typescript
 interface VisitSnapshot {
   // ... existing fields
-  parser_confidence: VisitConfidenceState | null;
+  confidence_state: VisitConfidenceState | null;
   completeness_signals: VisitCompletenessSignal[];
 }
 
@@ -501,7 +501,7 @@ Each visit costs three LLM calls. A 30-visit protocol = 90 calls. The pipeline i
 |---|---|
 | Batch purpose-prose into a single multi-visit call | If post-Sprint-3.5 cost per protocol exceeds the audit-summary budget. |
 | Cache by `(document_id, visit_name, study_day)` fingerprint — re-ingest with no protocol change reuses prior LLM output | Cheap to implement; do it. |
-| Skip missing-req pass for visits with parser_confidence='high' and no 'low' items | Optimization; introduces a trust gap. Don't do this without coordinator-feedback validation. |
+| Skip missing-req pass for visits with confidence_state='high' and no 'low' items | Optimization; introduces a trust gap. Don't do this without coordinator-feedback validation. |
 
 These are tunable knobs, not blockers. The doc doesn't commit to any.
 

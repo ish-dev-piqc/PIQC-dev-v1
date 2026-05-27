@@ -670,17 +670,29 @@ export function buildVisitWorksheetPdf(packet: VisitWorksheetExportPacket): jsPD
 
     // Watermark — 45° diagonal "DRAFT" centered. NOTE: jsPDF has no
     // background-layer primitive, so the watermark is technically a
-    // foreground layer drawn LAST. The 0.12 GState opacity makes it read
-    // visually as a background (standard jsPDF watermark convention used
-    // across the ecosystem). The compliance-critical signal isn't impaired:
-    // even at low opacity, the diagonal "DRAFT" remains readable mid-stack.
-    // GState reset to 1 after the watermark so subsequent header/footer
-    // text renders fully opaque.
-    const watermarkGState = doc.GState({ opacity: 0.12 });
+    // foreground layer drawn LAST. GState opacity makes it read visually
+    // as a background (standard jsPDF watermark convention).
+    //
+    // Watermark visual weight (founder direction post-#141): kept quiet
+    // so the coordinator's relationship with their freshly-exported
+    // worksheet isn't undermined by an anxiety-inducing alarm. The
+    // compliance signal is carried in depth by the corner label, footer
+    // disclaimer, server-stamped timestamp, and open-items amber banner —
+    // the watermark just needs to be present, not foreground-competing.
+    //
+    // Three compounding levers tune this:
+    //   - Opacity 0.06  (half of Sprint 5's initial 0.12) — barely-there
+    //   - Color (180,180,180) — light gray, washes further at low opacity
+    //   - 90pt (down from 110pt) — diagonal still legible, less page-eating
+    //
+    // Result: discernible on purpose if you look for it; ignorable while
+    // reading body content. GState reset to 1 after so subsequent
+    // header/footer text renders fully opaque.
+    const watermarkGState = doc.GState({ opacity: 0.06 });
     doc.setGState(watermarkGState);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(110);
-    doc.setTextColor(120, 120, 120);
+    doc.setFontSize(90);
+    doc.setTextColor(180, 180, 180);
     doc.text('DRAFT', pageWidth / 2, pageHeight / 2, {
       align: 'center',
       angle: 45,
