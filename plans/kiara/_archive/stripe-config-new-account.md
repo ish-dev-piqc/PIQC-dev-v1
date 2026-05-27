@@ -1,9 +1,10 @@
 ---
 owner: kiara
 feature: stripe-config-new-account
-status: in-review
+status: merged
+merged: 2026-05-27
 started: 2026-05-25
-target_pr:
+target_pr: #149
 ---
 
 # Refresh Stripe priceIds + productIds for new test account
