@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: bump-actions-node-24
-status: in-review
+status: merged
+merged: 2026-05-27
 started: 2026-05-26
-target_pr:
+target_pr: #129
 ---
 
 # Bump GitHub Actions to Node 24-compatible major versions
