@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   addSiteNote,
+  editText,
   flagForReview,
   markNeedsClarification,
   markReviewed,
@@ -160,5 +161,126 @@ describe('mutations — real (mock off) RPC dispatch', () => {
       p_action: 'add_site_note',
       p_note: 'IV line was non-compliant per site SOP',
     });
+  });
+});
+
+// =============================================================================
+// editText — Sprint 4b — routes through a DIFFERENT RPC
+// (visit_execution_edit_text) than the set_review_status family.
+// =============================================================================
+
+describe('editText — programmer-error guard', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('rejects empty newText before hitting RPC', async () => {
+    const spy = vi.spyOn(supabase, 'rpc');
+    const r = await editText('req-1', '');
+    expect(spy).not.toHaveBeenCalled();
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/non-empty/);
+  });
+
+  it('rejects whitespace-only newText before hitting RPC', async () => {
+    const spy = vi.spyOn(supabase, 'rpc');
+    const r = await editText('req-1', '   \n\t  ');
+    expect(spy).not.toHaveBeenCalled();
+    expect(r.ok).toBe(false);
+  });
+});
+
+describe('editText — mock mode on', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    window.localStorage.setItem(MOCK_TOGGLE_KEY, '1');
+  });
+  afterEach(() => {
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it('synthesizes success with review_status edited + version bumped + current_text trimmed', async () => {
+    const spy = vi.spyOn(supabase, 'rpc');
+    const r = await editText('req-1', '  Pre-dose vitals (site-specific tweak)  ');
+    expect(spy).not.toHaveBeenCalled();
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data.review_status).toBe('edited');
+      expect(r.data.current_text).toBe('Pre-dose vitals (site-specific tweak)');
+      expect(r.data.version).toBeGreaterThan(1);
+    }
+  });
+});
+
+describe('editText — real (mock off) RPC dispatch', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+  afterEach(() => {
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it('calls visit_execution_edit_text with p_new_text trimmed + optional p_note', async () => {
+    const spy = vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: {
+        requirement_id: 'req-1', review_status: 'edited', version: 3,
+        current_text: 'New text', event_id: 'evt-edit',
+      }, error: null,
+    } as any);
+
+    await editText('req-1', '  New text  ', 'rephrased for site clarity');
+    expect(spy).toHaveBeenCalledWith('visit_execution_edit_text', {
+      p_requirement_id: 'req-1',
+      p_new_text: 'New text',
+      p_note: 'rephrased for site clarity',
+    });
+  });
+
+  it('omits note as null when not provided', async () => {
+    const spy = vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: {
+        requirement_id: 'req-1', review_status: 'edited', version: 2,
+        current_text: 'X', event_id: 'evt-edit',
+      }, error: null,
+    } as any);
+
+    await editText('req-1', 'X');
+    expect(spy).toHaveBeenCalledWith('visit_execution_edit_text', {
+      p_requirement_id: 'req-1',
+      p_new_text: 'X',
+      p_note: null,
+    });
+  });
+
+  it('surfaces RPC errors as ok:false (no throw)', async () => {
+    vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      data: null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      error: { message: 'requirement not found' } as any,
+    } as any);
+
+    const r = await editText('req-nope', 'whatever');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('requirement not found');
+  });
+
+  it('returns malformed RPC payload (missing current_text) as ok:false', async () => {
+    vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      // current_text is required in the response — missing it = malformed.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: { requirement_id: 'req-1', review_status: 'edited', version: 2 } as any,
+      error: null,
+    } as any);
+
+    const r = await editText('req-1', 'New text');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('malformed RPC response');
   });
 });

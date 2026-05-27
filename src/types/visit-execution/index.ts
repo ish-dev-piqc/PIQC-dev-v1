@@ -238,7 +238,23 @@ export interface VisitExecutionItem {
   id: string;
   /** FK to protocol_extracted_items.id. null in Sprint 1 (mock). */
   extracted_item_id: string | null;
+  /**
+   * The row's display text: COALESCE(current_text, derived_text). Always
+   * populated. When `current_text` exists and differs from `derived_text`,
+   * this is the human-edited version.
+   */
   label: string;
+  /**
+   * Sprint 4b addition. The parser's frozen `derived_text` — distinct from
+   * `label` (which may be the human-edited current_text). UI uses
+   * derived_text to render the drift hint when label !== derived_text.
+   *
+   * Null in mock-mode rows from before Sprint 4b's fixture update, and
+   * null on rows where the RPC didn't surface the field (defensive — the
+   * v3 RPC always populates it, but front-end shouldn't crash on legacy
+   * payloads).
+   */
+  derived_text: string | null;
   description: string | null;
   phase: ExecutionPhase;
   classification: ItemClassification;

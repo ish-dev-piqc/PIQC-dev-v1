@@ -1,7 +1,7 @@
 ---
 owner: ish-dev-piqc
 feature: visit-execution-sprint-4b-edit-text-and-notes
-status: active
+status: in-review
 started: 2026-05-27
 target_pr:
 ---
