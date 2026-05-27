@@ -65,6 +65,25 @@ export type ExecutionReviewStatus =
   | 'edited'
   | 'site_note_added';
 
+/**
+ * Parser/LLM confidence for an extracted artifact ("how sure is the parser
+ * that this thing is correct"). Same string values as SOTR's ConfidenceState
+ * but DUPLICATED here rather than imported — per CLAUDE.md mode-isolation
+ * rule, the visit-execution namespace doesn't import from sotr/. Keep these
+ * in sync by convention.
+ *
+ * Used by:
+ *   - VisitSnapshot.confidence_state    (visit-level extraction)
+ *   - VisitExecutionItem.confidence_state (per-requirement extraction)
+ *   - VisitCompletenessSignal.detection_confidence (DIFFERENT semantic —
+ *     answers "is this detected gap real?" not "is this correct?". Same enum
+ *     values for now; kept under a distinct field name to avoid confusion.)
+ *
+ * Sprint 3.5a: NULL on the wire is allowed (pre-Sprint-3.5b rows have no
+ * confidence yet). Callers handle the nullable case.
+ */
+export type VisitConfidenceState = 'high' | 'medium' | 'low' | 'needs_review';
+
 
 // ---------------------------------------------------------------------------
 // Phase label maps — visit-type-aware so non-dosing visits don't show
@@ -162,6 +181,29 @@ export interface SourceFieldScaffold {
  * existing extracted_item_id → protocol_item_evidence_links →
  * protocol_source_evidence chain.
  */
+/**
+ * A gap flagged by the Sprint 3.5b missing-requirement detection pass — a
+ * requirement the second-pass LLM believes the protocol mandates for this
+ * visit but the first-pass extract didn't surface.
+ *
+ * Sprint 3.5a: the RPC returns an empty array on every visit until 3.5b's
+ * ingest pipeline writes to visit_completeness_signals. Frontend renders
+ * nothing when empty.
+ *
+ * PIQC never auto-promotes a signal to a real requirement — that's a
+ * future Sprint 4 human action.
+ */
+export interface VisitCompletenessSignal {
+  id: string;
+  gap_text: string;
+  source_section: string | null;
+  source_page: number | null;
+  detection_confidence: VisitConfidenceState;
+  detection_reason: string | null;
+  /** ISO 8601 timestamp from the server. */
+  detected_at: string;
+}
+
 export interface VisitItemTraceability {
   /** Column in the Schedule of Assessments table (e.g. "V3"). */
   soa_column: string | null;
@@ -210,6 +252,12 @@ export interface VisitExecutionItem {
   role_hint: string | null;
   review_status: ExecutionReviewStatus;
   review_note: string | null;
+  /**
+   * Parser/LLM confidence in this item's extraction. NULL when no extracted
+   * item is linked (e.g. mock-mode rows or human-promoted from a signal).
+   * Surfaced on the row by Sprint 4 — Sprint 3.5a is type-only.
+   */
+  confidence_state: VisitConfidenceState | null;
 }
 
 /**
@@ -236,6 +284,29 @@ export interface VisitSnapshot {
   reviewed_count: number;
   flagged_count: number;
   amendment_version: string | null;
+  /**
+   * Parser/LLM confidence in this visit's structured extraction
+   * (procedures_structured, window, purpose). NULL until Sprint 3.5b populates
+   * the column. Surfaced on the snapshot card by Sprint 4 — 3.5a is type-only.
+   *
+   * Same SOTR enum as `VisitExecutionItem.confidence_state` and the existing
+   * `protocol_extracted_items.confidence_state`. Visit-level reflects pipeline
+   * confidence; item-level reflects extracted_item confidence. When they
+   * disagree, the snapshot card shows this one (visit-level rollup).
+   */
+  confidence_state: VisitConfidenceState | null;
+  /**
+   * Count rollup of pending completeness signals — saves consumers from
+   * filtering the array for chip badges and navigator counters. Same
+   * count-then-array pattern as `conditional_item_count`.
+   */
+  completeness_signal_count: number;
+  /**
+   * Detected gaps for this visit that haven't been resolved yet. Empty array
+   * until Sprint 3.5b's missing-requirement detection pass writes rows.
+   * Surfaced on the snapshot by Sprint 4.
+   */
+  completeness_signals: VisitCompletenessSignal[];
 }
 
 /**

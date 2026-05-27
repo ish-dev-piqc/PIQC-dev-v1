@@ -22,6 +22,8 @@ import type {
   ItemClassification,
   SourceFieldScaffold,
   AssessmentTimingConstraint,
+  VisitCompletenessSignal,
+  VisitConfidenceState,
   VisitExecutionItem,
   VisitExecutionWorkspace,
   VisitItemTraceability,
@@ -43,6 +45,13 @@ interface MockItemSeed {
   source_fields?: SourceFieldScaffold[];
   role_hint?: string | null;
   traceability: Partial<VisitItemTraceability>;
+  /**
+   * Sprint 3.5a addition. When omitted, defaults to 'high' for the mock
+   * fixture (the BRIGHTEN-2 demo is curated, not parser-derived). Real
+   * production rows get this from protocol_extracted_items.confidence_state
+   * via the v2 RPC.
+   */
+  confidence_state?: VisitConfidenceState;
 }
 
 function buildItem(
@@ -76,6 +85,7 @@ function buildItem(
     traceability,
     review_status: 'not_reviewed',
     review_note: null,
+    confidence_state: seed.confidence_state ?? 'high',
   };
 }
 
@@ -86,6 +96,8 @@ function deriveSnapshot(
   window_plus_days: number,
   purpose: string,
   items: VisitExecutionItem[],
+  completeness_signals: VisitCompletenessSignal[] = [],
+  confidence_state: VisitConfidenceState | null = 'high',
 ): VisitSnapshot {
   const is_dosing_visit = items.some(
     (i) => i.phase === 'dosing' || /dos|imp|infusion|administration/i.test(i.label),
@@ -113,6 +125,9 @@ function deriveSnapshot(
     reviewed_count: 0,
     flagged_count: 0,
     amendment_version: 'Original (v1.0)',
+    confidence_state,
+    completeness_signal_count: completeness_signals.length,
+    completeness_signals,
   };
 }
 
@@ -620,6 +635,51 @@ const BRIGHTEN2_PURPOSES: Record<string, string> = {
 // Build all BRIGHTEN-2 workspaces.
 // ---------------------------------------------------------------------------
 
+/**
+ * Sprint 3.5a fixture seed: one pending completeness signal on the Week 6
+ * visit. Exercises the new VisitCompletenessSignal type through the mock
+ * path so UI work can build against realistic shapes before 3.5b ingest
+ * starts populating real signals. Other visits ship with empty arrays —
+ * not every visit has a detected gap.
+ */
+function brighten2CompletenessSignalsFor(
+  visitName: string,
+): VisitCompletenessSignal[] {
+  if (visitName !== 'Week 6 visit') {
+    return [];
+  }
+  // Relative-to-now so the fixture doesn't go stale as time passes. ~7 days
+  // ago gives the gap a realistic "recently detected, not yet acted on" feel.
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  return [
+    {
+      id: 'mock-signal-week6-bodyweight',
+      gap_text:
+        'Body weight measurement appears required at mid-treatment efficacy visits ' +
+        'but no procedure was extracted for this visit.',
+      source_section: '7.4.1 Vital signs',
+      source_page: 32,
+      detection_confidence: 'medium',
+      detection_reason:
+        'Section 7.4.1 lists weight under "ongoing vital-sign assessments" but ' +
+        'this visit has no matching procedures_structured row.',
+      detected_at: sevenDaysAgo,
+    },
+  ];
+}
+
+/**
+ * Sprint 3.5a fixture seed: confidence_state varies a bit so the snapshot
+ * card has something to render when the field is wired up. Defaults to
+ * 'high' for clinic-curated visits, lower for visits where the LLM would
+ * realistically have to interpret more loosely-structured protocol prose.
+ */
+function brighten2ConfidenceFor(visitName: string): VisitConfidenceState {
+  if (visitName === 'Week 6 visit') return 'medium';
+  if (visitName === 'End of study') return 'medium';
+  return 'high';
+}
+
 function buildBrighten2Workspaces(): VisitExecutionWorkspace[] {
   const protocolId = DEMO_PROTOCOL_IDS['BRIGHTEN-2'];
   const templates = getDemoVisitTemplates().filter((t) => t.protocol_id === protocolId);
@@ -650,6 +710,8 @@ function buildBrighten2Workspaces(): VisitExecutionWorkspace[] {
       BRIGHTEN2_PURPOSES[tpl.visit_name] ??
         'Per-protocol visit with assessments per Schedule of Events.',
       items,
+      brighten2CompletenessSignalsFor(tpl.visit_name),
+      brighten2ConfidenceFor(tpl.visit_name),
     );
 
     return {
