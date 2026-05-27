@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: visit-execution-visual-polish-v2
-status: active
+status: merged
+merged: 2026-05-27
 started: 2026-05-27
-target_pr:
+target_pr: #138
 ---
 
 # VEW visual polish v2 — fresh, clear, intuitive
