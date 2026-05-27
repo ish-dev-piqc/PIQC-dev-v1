@@ -71,15 +71,20 @@ describe('fetchVisitExecutionWorkspaces — mock on', () => {
     }
   });
 
-  it('mock fixture surfaces Sprint 3.5a fields: parser_confidence + completeness_signals + per-item confidence_state', async () => {
+  it('mock fixture surfaces Sprint 3.5a fields: snapshot.confidence_state + signal_count + per-item confidence_state', async () => {
     const result = await fetchVisitExecutionWorkspaces(DEMO_PROTOCOL_IDS['BRIGHTEN-2']);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    // Every workspace's snapshot has a parser_confidence (high|medium|low|needs_review).
+    // Every workspace's snapshot has a confidence_state (high|medium|low|needs_review).
     for (const ws of result.data) {
-      expect(ws.snapshot.parser_confidence).toMatch(/^(high|medium|low|needs_review)$/);
+      expect(ws.snapshot.confidence_state).toMatch(/^(high|medium|low|needs_review)$/);
       expect(Array.isArray(ws.snapshot.completeness_signals)).toBe(true);
+      // Count rollup must equal array length — the RPC computes it independently
+      // in production, but the contract is that they always agree.
+      expect(ws.snapshot.completeness_signal_count).toBe(
+        ws.snapshot.completeness_signals.length,
+      );
       for (const item of ws.items) {
         // Curated fixture items default confidence_state to a string (not null).
         expect(item.confidence_state).toMatch(/^(high|medium|low|needs_review)$/);
@@ -91,10 +96,13 @@ describe('fetchVisitExecutionWorkspaces — mock on', () => {
     const weekSix = result.data.find((w) => w.snapshot.visit_name === 'Week 6 visit');
     expect(weekSix).toBeDefined();
     if (weekSix) {
+      expect(weekSix.snapshot.completeness_signal_count).toBeGreaterThan(0);
       expect(weekSix.snapshot.completeness_signals.length).toBeGreaterThan(0);
       const signal = weekSix.snapshot.completeness_signals[0];
       expect(signal.gap_text).toBeTruthy();
       expect(signal.detection_confidence).toMatch(/^(high|medium|low|needs_review)$/);
+      // detected_at is a real ISO string, not the hard-coded 2026-05-26 placeholder.
+      expect(Date.parse(signal.detected_at)).not.toBeNaN();
     }
   });
 

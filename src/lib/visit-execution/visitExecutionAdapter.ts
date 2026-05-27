@@ -125,7 +125,8 @@ export function adaptVisitTemplate(template: ProtocolVisitTemplate): VisitExecut
     // Sprint 3.5a additions. The thin adapter has no parser confidence to
     // report and no detected gaps — those come from the v2 RPC once
     // Sprint 3.5b ingest populates the new tables.
-    parser_confidence: null,
+    confidence_state: null,
+    completeness_signal_count: 0,
     completeness_signals: [],
   };
 

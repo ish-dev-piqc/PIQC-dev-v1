@@ -66,10 +66,18 @@ export type ExecutionReviewStatus =
   | 'site_note_added';
 
 /**
- * Parser/LLM confidence for an extracted artifact. Same string values as
- * SOTR's ConfidenceState but DUPLICATED here rather than imported — per
- * CLAUDE.md mode-isolation rule, the visit-execution namespace doesn't
- * import from sotr/. Keep these in sync by convention.
+ * Parser/LLM confidence for an extracted artifact ("how sure is the parser
+ * that this thing is correct"). Same string values as SOTR's ConfidenceState
+ * but DUPLICATED here rather than imported — per CLAUDE.md mode-isolation
+ * rule, the visit-execution namespace doesn't import from sotr/. Keep these
+ * in sync by convention.
+ *
+ * Used by:
+ *   - VisitSnapshot.confidence_state    (visit-level extraction)
+ *   - VisitExecutionItem.confidence_state (per-requirement extraction)
+ *   - VisitCompletenessSignal.detection_confidence (DIFFERENT semantic —
+ *     answers "is this detected gap real?" not "is this correct?". Same enum
+ *     values for now; kept under a distinct field name to avoid confusion.)
  *
  * Sprint 3.5a: NULL on the wire is allowed (pre-Sprint-3.5b rows have no
  * confidence yet). Callers handle the nullable case.
@@ -280,8 +288,19 @@ export interface VisitSnapshot {
    * Parser/LLM confidence in this visit's structured extraction
    * (procedures_structured, window, purpose). NULL until Sprint 3.5b populates
    * the column. Surfaced on the snapshot card by Sprint 4 — 3.5a is type-only.
+   *
+   * Same SOTR enum as `VisitExecutionItem.confidence_state` and the existing
+   * `protocol_extracted_items.confidence_state`. Visit-level reflects pipeline
+   * confidence; item-level reflects extracted_item confidence. When they
+   * disagree, the snapshot card shows this one (visit-level rollup).
    */
-  parser_confidence: VisitConfidenceState | null;
+  confidence_state: VisitConfidenceState | null;
+  /**
+   * Count rollup of pending completeness signals — saves consumers from
+   * filtering the array for chip badges and navigator counters. Same
+   * count-then-array pattern as `conditional_item_count`.
+   */
+  completeness_signal_count: number;
   /**
    * Detected gaps for this visit that haven't been resolved yet. Empty array
    * until Sprint 3.5b's missing-requirement detection pass writes rows.

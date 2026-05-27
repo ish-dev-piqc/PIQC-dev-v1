@@ -10,8 +10,7 @@
 // delegates to the active SiteRepo — real or demo) and runs the result
 // through visitExecutionAdapter.adaptVisitTemplates().
 //
-// No throw outside programmer-error guards. No Supabase imports here; the
-// real fetch is delegated to siteApi.
+// No throw outside programmer-error guards.
 //
 // Sprint 3.5a note: the parser-integration design doc §9.1 proposes
 // switching the real path to call the visit_execution_get_workspace RPC
@@ -20,7 +19,8 @@
 // signals (Sprint 3.5b work), the RPC returns empty arrays for every
 // protocol. The current adapter path produces a flat-but-non-empty
 // workspace from procedures TEXT[], which is more useful UX-wise as a
-// bridge. 3.5b flips this in one coordinated change.
+// bridge. 3.5b flips this — at that point this module will import supabase
+// directly. Until then, no Supabase imports here.
 // =============================================================================
 
 import { fetchVisitTemplates } from '../site/siteApi';

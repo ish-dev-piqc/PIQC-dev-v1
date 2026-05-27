@@ -53,7 +53,9 @@ Plus types (`src/types/visit-execution/index.ts`).
 
 ## Mock data plan
 
-No new mock surface. Existing `piq-visit-execution-mock-v1` localStorage toggle (defined in `visitExecutionApi.ts`) continues to drive demo data. The mock fixture in `mockVisitWorkspace.ts` is extended with the new fields (`purpose`, `parser_confidence`, per-item `confidence_state`, an example `completeness_signals` array on at least one visit) so the UI has something to render in mock mode.
+No new mock surface. Existing `piq-visit-execution-mock-v1` localStorage toggle (defined in `visitExecutionApi.ts`) continues to drive demo data. The mock fixture in `mockVisitWorkspace.ts` is extended with the new fields (`purpose`, `confidence_state` at both snapshot and item level, `completeness_signal_count`, an example `completeness_signals` array on at least one visit) so the UI has something to render in mock mode.
+
+> Note: design doc §8.1 (PR #124) proposed `parser_confidence` as the column name. Implementation diverged to `confidence_state` to match the existing `protocol_extracted_items.confidence_state` precedent — same SOTR enum, same "how confident is the parser in this thing's correctness" semantic. `visit_completeness_signals.detection_confidence` keeps its distinct name because it answers a different question ("is this detected gap real?"). Doc sync deferred to a follow-up.
 
 ## Approved-by
 
@@ -62,10 +64,10 @@ No new mock surface. Existing `piq-visit-execution-mock-v1` localStorage toggle 
 ## Verification
 
 - [ ] `supabase db reset` applies all 5 migrations cleanly on a fresh DB
-- [ ] `protocol_visit_templates.purpose` and `protocol_visit_templates.parser_confidence` exist and accept NULL (pre-Sprint-3.5b rows are unaffected)
+- [ ] `protocol_visit_templates.purpose` and `protocol_visit_templates.confidence_state` exist and accept NULL (pre-Sprint-3.5b rows are unaffected)
 - [ ] `visit_signal_resolution` enum exists with values `pending`, `added_as_requirement`, `dismissed_not_real`
 - [ ] `visit_completeness_signals` and `visit_requirement_drift_log` tables exist with RLS predicates that follow the same `protocol → owner_id / owner_org_id` chain as `visit_requirements`
-- [ ] `visit_execution_get_workspace` RPC returns the new `purpose`, `parser_confidence`, per-item `confidence_state`, and `completeness_signals` fields (empty / NULL on real data, populated from fixture in mock mode)
+- [ ] `visit_execution_get_workspace` RPC returns the new `purpose`, snapshot-level `confidence_state`, per-item `confidence_state`, `completeness_signal_count`, and `completeness_signals` fields (empty / NULL on real data, populated from fixture in mock mode)
 - [ ] `npm run build` passes (strict TypeScript)
 - [ ] `npm run test -- visit-execution` — adapter + api tests pass, including new cases for the new fields
 - [ ] `npx tsc --noEmit` — zero unused-import / type warnings

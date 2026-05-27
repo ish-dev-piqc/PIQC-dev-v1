@@ -1,13 +1,13 @@
 -- =============================================================================
 -- Visit Execution Workspace — Sprint 3.5a (1 of 5):
--- Add purpose + parser_confidence columns to protocol_visit_templates.
+-- Add purpose + confidence_state columns to protocol_visit_templates.
 --
 -- Per parser-integration.md §8.1:
 --   purpose             — LLM-generated 1-3 sentence visit purpose statement.
 --                         Populated by Sprint 3.5b's purpose-prose extraction
 --                         LLM pass. NULL on pre-Sprint-3.5b rows.
---   parser_confidence   — Reducto/LLM confidence in the structured extraction
---                         for this visit. Surfaces in the snapshot card so the
+--   confidence_state    — Reducto/LLM confidence in the structured extraction
+--                         for this visit. Surfaces on the snapshot card so the
 --                         user knows when to look closer. NULL until 3.5b.
 --
 -- Both columns are nullable + additive — no impact on existing readers.
@@ -16,14 +16,20 @@
 -- (20260615000400_visit_execution_get_workspace_v2.sql) updates that RPC to
 -- read this column once it exists.
 --
--- confidence_state enum was created in 20260508000000_sotr_schema.sql. Cross-
--- namespace reuse of a primitive Postgres type is acceptable (it's not a code
--- import — no mode-isolation concern).
+-- Naming: protocol_extracted_items.confidence_state already exists with the
+-- same SOTR enum; same semantic ("how confident is the parser in this thing").
+-- Reusing the column name keeps the cross-domain mental model consistent.
+-- Cross-namespace SQL enum reuse is acceptable — it's a primitive Postgres
+-- type, not a code import (no mode-isolation concern).
+--
+-- NOT the same as visit_completeness_signals.detection_confidence — that one
+-- answers "is this detected gap real?" rather than "is this extraction
+-- correct?". Different semantic, kept under a different name to avoid drift.
 -- =============================================================================
 
 ALTER TABLE protocol_visit_templates
   ADD COLUMN purpose             TEXT,
-  ADD COLUMN parser_confidence   confidence_state;
+  ADD COLUMN confidence_state    confidence_state;
 
 
 COMMENT ON COLUMN protocol_visit_templates.purpose IS
@@ -31,6 +37,7 @@ COMMENT ON COLUMN protocol_visit_templates.purpose IS
   'Sprint 3.5b''s purpose-prose extraction pass. NULL means extraction failed '
   'or the row predates Sprint 3.5b.';
 
-COMMENT ON COLUMN protocol_visit_templates.parser_confidence IS
+COMMENT ON COLUMN protocol_visit_templates.confidence_state IS
   'Confidence in the structured extraction for this visit (procedures_structured, '
-  'window, purpose). NULL until Sprint 3.5b ingest pipeline writes it.';
+  'window, purpose). Same SOTR enum semantic as protocol_extracted_items.confidence_state. '
+  'NULL until Sprint 3.5b ingest pipeline writes it.';

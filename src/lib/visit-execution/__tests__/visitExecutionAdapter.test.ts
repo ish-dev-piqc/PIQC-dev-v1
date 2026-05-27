@@ -147,19 +147,21 @@ describe('adaptVisitTemplate', () => {
   // fields. The thin adapter has no parser confidence or detected gaps to
   // report (those come from the v2 RPC once 3.5b ingest writes the new tables).
   // The adapter MUST default them honestly:
-  //   parser_confidence       → null
-  //   completeness_signals    → []
-  //   item.confidence_state   → null
+  //   snapshot.confidence_state         → null
+  //   snapshot.completeness_signal_count → 0
+  //   snapshot.completeness_signals      → []
+  //   item.confidence_state              → null
   // ---------------------------------------------------------------------------
 
-  it('defaults parser_confidence to null in the thin Sprint 1 mapping', () => {
+  it('defaults snapshot.confidence_state to null in the thin Sprint 1 mapping', () => {
     const ws = adaptVisitTemplate(makeTemplate({ procedures: ['Vitals'] }));
-    expect(ws.snapshot.parser_confidence).toBeNull();
+    expect(ws.snapshot.confidence_state).toBeNull();
   });
 
-  it('defaults completeness_signals to an empty array', () => {
+  it('defaults completeness_signals to an empty array (count 0)', () => {
     const ws = adaptVisitTemplate(makeTemplate({ procedures: ['Vitals'] }));
     expect(ws.snapshot.completeness_signals).toEqual([]);
+    expect(ws.snapshot.completeness_signal_count).toBe(0);
   });
 
   it('defaults each item.confidence_state to null (no extracted_item linked)', () => {

@@ -8,8 +8,12 @@
 --                                     (falls back to the same honest
 --                                      "pending structured extraction"
 --                                      placeholder when NULL)
---   snapshot.parser_confidence      ← protocol_visit_templates.parser_confidence
+--   snapshot.confidence_state      ← protocol_visit_templates.confidence_state
 --                                     (NULL on pre-Sprint-3.5b rows)
+--   snapshot.completeness_signal_count
+--                                   ← count rollup of pending signals; saves
+--                                     UI consumers from filtering the array
+--                                     for chip badges + navigator counters.
 --   snapshot.completeness_signals   ← JSON array from visit_completeness_signals,
 --                                     pending-only (resolved signals don't
 --                                     pollute the UI), ordered by detected_at
@@ -80,7 +84,7 @@ BEGIN
                     'Per-protocol visit. Detailed execution requirements pending structured ingest extraction.'
                   ),
                   -- v2: NEW field.
-                  'parser_confidence',       t.parser_confidence,
+                  'confidence_state',       t.confidence_state,
                   'is_dosing_visit',         EXISTS (
                     SELECT 1 FROM visit_requirements r
                      WHERE r.visit_template_id = t.id
@@ -126,6 +130,15 @@ BEGIN
                   'amendment_version',       (
                     SELECT MAX(r.amendment_version) FROM visit_requirements r
                      WHERE r.visit_template_id = t.id
+                  ),
+                  -- v2: NEW field. Count rollup of pending completeness
+                  -- signals — saves downstream UI consumers from filtering
+                  -- the array (chip badges, navigator counters, etc.). Same
+                  -- count-then-array pattern as conditional_item_count above.
+                  'completeness_signal_count', (
+                    SELECT COUNT(*) FROM visit_completeness_signals s
+                     WHERE s.visit_template_id = t.id
+                       AND s.resolution = 'pending'
                   ),
                   -- v2: NEW field. Pending completeness signals for the visit,
                   -- ordered oldest-first so stale gaps surface at the top of
@@ -253,5 +266,6 @@ $$;
 COMMENT ON FUNCTION visit_execution_get_workspace IS
   'Read RPC (v2 — Sprint 3.5a). Returns the full VisitExecutionWorkspace shape '
   '(matches the TypeScript type in src/types/visit-execution/index.ts) for all '
-  'visit templates in a protocol. Now surfaces purpose + parser_confidence + '
-  'completeness_signals[] on the snapshot, and confidence_state on each item.';
+  'visit templates in a protocol. Now surfaces purpose + confidence_state + '
+  'completeness_signal_count + completeness_signals[] on the snapshot, and '
+  'confidence_state on each item.';

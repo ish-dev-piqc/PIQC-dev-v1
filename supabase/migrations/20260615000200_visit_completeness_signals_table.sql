@@ -46,6 +46,13 @@ CREATE TABLE visit_completeness_signals (
   -- Idempotency guard: if the same gap_text is detected again on re-ingest,
   -- the upsert path (Sprint 3.5b) keys on this pair. Prevents duplicate
   -- signals across re-ingests of the same protocol version.
+  --
+  -- Caveat: this constraint matches gap_text BYTE-FOR-BYTE. Non-deterministic
+  -- LLM output (a comma change, a synonym swap) bypasses idempotency and
+  -- creates a new row. Sprint 3.5b's upsert MUST normalize gap_text before
+  -- INSERT (lowercase + collapse whitespace + trim) to maximize match rate.
+  -- The DB-level constraint is the floor, not the ceiling — a content hash
+  -- column may be added in a follow-up if drift becomes a real problem.
   UNIQUE (visit_template_id, gap_text)
 );
 
