@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: visit-execution-workspace-sprint-3-5b-parser-ingest
-status: in-review
+status: merged
+merged: 2026-05-27
 started: 2026-05-26
-target_pr:
+target_pr: #131
 ---
 
 # Visit Execution Workspace — Sprint 3.5b: Parser Ingest Implementation
