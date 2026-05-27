@@ -75,6 +75,9 @@ function buildItem(
     id: `${visitTemplateId}-item-${index.toString().padStart(2, '0')}`,
     extracted_item_id: null,
     label: seed.label,
+    // Sprint 4b: mock items have no drift — derived_text mirrors label.
+    // (Real-data rows from the v3 RPC carry the parser's frozen text.)
+    derived_text: seed.label,
     description: seed.description ?? null,
     phase: seed.phase,
     classification: seed.classification,

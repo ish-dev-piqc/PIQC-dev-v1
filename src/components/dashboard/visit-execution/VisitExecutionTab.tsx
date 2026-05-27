@@ -4,7 +4,10 @@ import { useProtocol } from '../../../context/ProtocolContext';
 import { useTheme } from '../../../context/ThemeContext';
 import { fetchVisitExecutionWorkspaces, isMockEnabled } from '../../../lib/visit-execution/visitExecutionApi';
 import {
+  addSiteNote,
+  editText,
   flagForReview,
+  markNeedsClarification,
   markReviewed,
   unmarkReviewed,
 } from '../../../lib/visit-execution/visitExecutionMutationsApi';
@@ -15,9 +18,12 @@ import type {
 } from '../../../types/visit-execution';
 import VisitNavigator from './VisitNavigator';
 import VisitSnapshotCard from './VisitSnapshotCard';
-import ExecutionChecklist from './ExecutionChecklist';
+import ExecutionChecklist, { type ChecklistItemAction } from './ExecutionChecklist';
 import TraceabilityDrawer from './TraceabilityDrawer';
 import ExportPlaceholderButton from './ExportPlaceholderButton';
+import RequirementTextDrawer, {
+  type RequirementTextDrawerMode,
+} from './RequirementTextDrawer';
 
 // =============================================================================
 // VisitExecutionTab — root component for the new primary Site Mode surface.
@@ -81,6 +87,16 @@ export default function VisitExecutionTab() {
   const [reviewStatus, setReviewStatus] = useState<Map<string, ExecutionReviewStatus>>(new Map());
   const [mutationError, setMutationError] = useState<{ message: string; itemLabel: string } | null>(null);
   const [traceabilityItem, setTraceabilityItem] = useState<VisitExecutionItem | null>(null);
+
+  // Sprint 4b: RequirementTextDrawer state. One drawer instance, two modes.
+  const [textDrawerItem, setTextDrawerItem] = useState<VisitExecutionItem | null>(null);
+  const [textDrawerMode, setTextDrawerMode] = useState<RequirementTextDrawerMode>('edit');
+
+  // Stable close callback — passed to the drawer's useOverlay which has
+  // onClose in its effect deps. An inline arrow would change identity every
+  // render and re-fire the effect (focus-trap teardown + setup churn during
+  // unrelated parent re-renders, including the saving=true transition).
+  const closeTextDrawer = useCallback(() => setTextDrawerItem(null), []);
 
   // Per-item generation counter for race-guarding rapid clicks. Each click
   // increments the item's generation; the in-flight RPC captures the gen at
@@ -249,43 +265,120 @@ export default function VisitExecutionTab() {
     [effectiveStatusFor, labelForItem, runReviewMutation],
   );
 
-  const handleSetStatus = useCallback(
-    (itemId: string, nextStatus: ExecutionReviewStatus) => {
-      // The menu items that route through onSetStatus today are "Flag for
-      // review" and "Mark needs clarification" (both → 'needs_review'). The
-      // RPC distinguishes them via the action enum even though the resulting
-      // status is identical. We can't tell them apart from `nextStatus`
-      // alone here — the menu in ExecutionChecklist would need to plumb the
-      // action through. For 4a we default to 'flag_for_review'; Sprint 4b
-      // adds the discriminator when it adds the note-input UI.
-      //
-      // 'site_note_added' is unreachable in 4a (Add-site-note removed from
-      // the menu). Treated as a programmer-error guard.
-      const label = labelForItem(itemId);
-      if (nextStatus === 'reviewed') {
-        void runReviewMutation(itemId, label, 'reviewed', () => markReviewed(itemId));
-        return;
-      }
-      if (nextStatus === 'not_reviewed') {
-        void runReviewMutation(itemId, label, 'not_reviewed', () => unmarkReviewed(itemId));
-        return;
-      }
-      if (nextStatus === 'needs_review') {
-        void runReviewMutation(itemId, label, 'needs_review', () => flagForReview(itemId));
-        return;
-      }
-      if (nextStatus === 'site_note_added') {
-        // Programmer error in 4a — the menu shouldn't surface this. Log + ignore.
-        console.warn('[vew] add_site_note path not wired until Sprint 4b', { itemId });
-        return;
-      }
-      if (nextStatus === 'edited') {
-        // edited goes through visit_execution_edit_text — wired in 4b.
-        console.warn('[vew] edit_text path not wired until Sprint 4b', { itemId });
-        return;
+  /**
+   * Sprint 4b dispatcher. Routes each menu action to the right mutation API
+   * call or drawer-open handler.
+   *
+   * - flag_for_review          → flagForReview RPC (sets review_status='needs_review')
+   * - mark_needs_clarification → markNeedsClarification RPC (same end state, distinct audit-log action)
+   * - open_edit                → opens RequirementTextDrawer in 'edit' mode
+   * - open_note                → opens RequirementTextDrawer in 'note' mode
+   */
+  const handleItemAction = useCallback(
+    (item: VisitExecutionItem, action: ChecklistItemAction) => {
+      switch (action) {
+        case 'flag_for_review':
+          void runReviewMutation(item.id, item.label, 'needs_review', () =>
+            flagForReview(item.id),
+          );
+          return;
+        case 'mark_needs_clarification':
+          void runReviewMutation(item.id, item.label, 'needs_review', () =>
+            markNeedsClarification(item.id),
+          );
+          return;
+        case 'open_edit':
+          setTextDrawerItem(item);
+          setTextDrawerMode('edit');
+          return;
+        case 'open_note':
+          setTextDrawerItem(item);
+          setTextDrawerMode('note');
+          return;
+        default: {
+          // Exhaustive-check helper. If a new ChecklistItemAction is added
+          // without updating this switch, TypeScript flags `_exhaustive` as
+          // type `never` → compile error.
+          const _exhaustive: never = action;
+          void _exhaustive;
+        }
       }
     },
-    [labelForItem, runReviewMutation],
+    [runReviewMutation],
+  );
+
+  // ----------------------------------------------------------------------
+  // Drawer save handlers — return Result<> so the drawer can show inline
+  // error / keep itself open on failure / close + refresh state on success.
+  // Optimistic-revert is NOT used for text edits per the plan MD: rolling
+  // back a text change mid-edit is jarring. Drawer shows a saving spinner
+  // and only updates the row on success.
+  // ----------------------------------------------------------------------
+
+  const updateItemFromMutation = useCallback(
+    (itemId: string, patch: Partial<VisitExecutionItem>) => {
+      // Splice the updated row into local workspace state so the UI reflects
+      // the persisted value without a full re-fetch. Future Sprint 4c may
+      // refresh via the v3 RPC to also pick up new audit-log signals.
+      setWorkspaces((prev) =>
+        prev.map((ws) => ({
+          ...ws,
+          items: ws.items.map((i) => (i.id === itemId ? { ...i, ...patch } : i)),
+        })),
+      );
+      // Also re-sync the optimistic-override Map for the row's status, so a
+      // subsequent toggle reflects the new server-authoritative value.
+      if (patch.review_status) {
+        setReviewStatus((prev) => {
+          const next = new Map(prev);
+          next.set(itemId, patch.review_status!);
+          return next;
+        });
+      }
+    },
+    [],
+  );
+
+  const handleEditSave = useCallback(
+    async (newText: string): Promise<{ ok: true } | { ok: false; error: string }> => {
+      if (!textDrawerItem) return { ok: false, error: 'no item open' };
+      const result = await editText(textDrawerItem.id, newText);
+      if (!result.ok) {
+        console.error('[vew] edit_text_failed', {
+          itemId: textDrawerItem.id,
+          error: result.error,
+        });
+        return { ok: false, error: humanizeRpcError(result.error) };
+      }
+      updateItemFromMutation(textDrawerItem.id, {
+        label: result.data.current_text,
+        review_status: result.data.review_status,
+      });
+      setTextDrawerItem(null);
+      return { ok: true };
+    },
+    [textDrawerItem, updateItemFromMutation],
+  );
+
+  const handleNoteSave = useCallback(
+    async (note: string): Promise<{ ok: true } | { ok: false; error: string }> => {
+      if (!textDrawerItem) return { ok: false, error: 'no item open' };
+      const result = await addSiteNote(textDrawerItem.id, note);
+      if (!result.ok) {
+        console.error('[vew] add_site_note_failed', {
+          itemId: textDrawerItem.id,
+          error: result.error,
+        });
+        return { ok: false, error: humanizeRpcError(result.error) };
+      }
+      updateItemFromMutation(textDrawerItem.id, {
+        review_status: result.data.review_status,
+        review_note: note.trim(),
+      });
+      setTextDrawerItem(null);
+      return { ok: true };
+    },
+    [textDrawerItem, updateItemFromMutation],
   );
 
 
@@ -393,7 +486,7 @@ export default function VisitExecutionTab() {
                 workspace={selectedWorkspace}
                 reviewStatus={reviewStatus}
                 onToggleReviewed={handleToggleReviewed}
-                onSetStatus={handleSetStatus}
+                onItemAction={handleItemAction}
                 onOpenTraceability={setTraceabilityItem}
               />
 
@@ -414,6 +507,13 @@ export default function VisitExecutionTab() {
       <TraceabilityDrawer
         item={traceabilityItem}
         onClose={() => setTraceabilityItem(null)}
+      />
+
+      <RequirementTextDrawer
+        item={textDrawerItem}
+        mode={textDrawerMode}
+        onClose={closeTextDrawer}
+        onSave={textDrawerMode === 'edit' ? handleEditSave : handleNoteSave}
       />
     </div>
   );

@@ -81,6 +81,9 @@ export function adaptVisitTemplate(template: ProtocolVisitTemplate): VisitExecut
     id: `${template.id}-item-${index.toString().padStart(2, '0')}`,
     extracted_item_id: null,
     label: procedure,
+    // Sprint 4b: thin-adapter rows have no separately-tracked derived_text;
+    // label === procedure === the parser's flat string. No drift possible.
+    derived_text: procedure,
     description: null,
     phase: 'assessment',
     classification: 'required',

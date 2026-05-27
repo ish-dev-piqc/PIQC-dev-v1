@@ -38,12 +38,28 @@ import ExecutionReviewStatusBadge from './ExecutionReviewStatusBadge';
 //   - Traceability link button (§) opens the drawer scoped to that item
 // =============================================================================
 
+/**
+ * Per-item menu actions Sprint 4b plumbs distinctly.
+ * - flag_for_review / mark_needs_clarification: both set review_status to
+ *   'needs_review' at the DB layer, but the audit log distinguishes them
+ *   via action enum, so the menu needs to surface them separately.
+ * - open_edit / open_note: open the text-input drawer in the matching mode.
+ */
+export type ChecklistItemAction =
+  | 'flag_for_review'
+  | 'mark_needs_clarification'
+  | 'open_edit'
+  | 'open_note';
+
 interface Props {
   workspace: VisitExecutionWorkspace;
-  /** Map of itemId → review status (client-local in Sprint 1). */
+  /** Map of itemId → review status (client-local optimistic override). */
   reviewStatus: Map<string, ExecutionReviewStatus>;
   onToggleReviewed: (itemId: string) => void;
-  onSetStatus: (itemId: string, next: ExecutionReviewStatus) => void;
+  /** Sprint 4b: replaces the old onSetStatus(itemId, status) with an action
+   * discriminator. Parent (VisitExecutionTab) dispatches each action to the
+   * matching mutation API call or drawer-open handler. */
+  onItemAction: (item: VisitExecutionItem, action: ChecklistItemAction) => void;
   onOpenTraceability: (item: VisitExecutionItem) => void;
 }
 
@@ -51,7 +67,7 @@ export default function ExecutionChecklist({
   workspace,
   reviewStatus,
   onToggleReviewed,
-  onSetStatus,
+  onItemAction,
   onOpenTraceability,
 }: Props) {
   const { theme } = useTheme();
@@ -153,7 +169,7 @@ export default function ExecutionChecklist({
                     item={item}
                     status={reviewStatus.get(item.id) ?? item.review_status}
                     onToggleReviewed={onToggleReviewed}
-                    onSetStatus={onSetStatus}
+                    onItemAction={onItemAction}
                     onOpenTraceability={onOpenTraceability}
                   />
                 ))}
@@ -175,7 +191,7 @@ interface RowProps {
   item: VisitExecutionItem;
   status: ExecutionReviewStatus;
   onToggleReviewed: (itemId: string) => void;
-  onSetStatus: (itemId: string, next: ExecutionReviewStatus) => void;
+  onItemAction: (item: VisitExecutionItem, action: ChecklistItemAction) => void;
   onOpenTraceability: (item: VisitExecutionItem) => void;
 }
 
@@ -183,7 +199,7 @@ function ChecklistItemRow({
   item,
   status,
   onToggleReviewed,
-  onSetStatus,
+  onItemAction,
   onOpenTraceability,
 }: RowProps) {
   const { theme } = useTheme();
@@ -191,9 +207,20 @@ function ChecklistItemRow({
 
   const [conditionsOpen, setConditionsOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [driftOpen, setDriftOpen] = useState(false);
 
   const hasConditions = item.conditions.length > 0;
   const isReviewed = status === 'reviewed';
+  /**
+   * Sprint 4b drift detection: label is COALESCE(current_text, derived_text)
+   * from the v3 RPC. When current_text is set AND differs from derived_text,
+   * label !== derived_text. Mock/thin-adapter rows have label === derived_text,
+   * so the hint stays hidden in demo + Sprint 1 bridge paths.
+   */
+  const hasDrift =
+    item.derived_text !== null &&
+    item.derived_text !== undefined &&
+    item.derived_text !== item.label;
 
   return (
     <li
@@ -252,6 +279,42 @@ function ChecklistItemRow({
 
           {item.description && (
             <p className="text-fg-sub text-xs mt-1 leading-relaxed">{item.description}</p>
+          )}
+
+          {hasDrift && item.derived_text && (
+            <div className="mt-1.5">
+              <button
+                type="button"
+                onClick={() => setDriftOpen((p) => !p)}
+                aria-expanded={driftOpen}
+                data-testid="vew-drift-toggle"
+                className={`inline-flex items-center gap-1 text-[11px] rounded-md border px-1.5 py-0.5 ${
+                  isLight
+                    ? 'text-fg-sub bg-[#eef2f6] border-[#dde3ea] hover:bg-[#e2e8ee]'
+                    : 'text-fg-sub bg-white/[0.03] border-white/10 hover:bg-white/[0.06]'
+                }`}
+              >
+                <FileText size={10} aria-hidden />
+                Edited from parser output
+              </button>
+              {driftOpen && (
+                <div
+                  data-testid="vew-drift-original"
+                  className={`mt-1.5 rounded-md border-l-2 px-3 py-1.5 text-xs leading-relaxed ${
+                    isLight
+                      ? 'bg-[#eef2f6] border-[#9aa6b5] text-fg-sub'
+                      : 'bg-white/[0.03] border-white/15 text-fg-sub'
+                  }`}
+                >
+                  {/* Kept in sync with RequirementTextDrawer's drift block —
+                      both surfaces say "Original parser output". */}
+                  <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold mb-0.5">
+                    Original parser output
+                  </p>
+                  <p className="whitespace-pre-wrap">{item.derived_text}</p>
+                </div>
+              )}
+            </div>
           )}
 
           <div className="flex items-center gap-3 flex-wrap mt-1.5 text-xs">
@@ -379,24 +442,25 @@ function ChecklistItemRow({
                   }`}
                 >
                   {/*
-                   * Sprint 4a: only flag-for-review is wired through the
-                   * RPC-backed handler. "Mark needs clarification" requires
-                   * the menu to plumb an action discriminator (since the RPC
-                   * distinguishes via action enum but both produce
-                   * review_status='needs_review'); collapsed into "Flag for
-                   * review" for now. "Add site note" requires note-input UI
-                   * (a textarea or drawer) — deferred to Sprint 4b. Both
-                   * return in 4b/4c with the missing infrastructure.
+                   * Sprint 4b: full menu restored. Each item dispatches via
+                   * the action discriminator so the parent calls the right
+                   * RPC variant (flag_for_review vs mark_needs_clarification
+                   * both set review_status='needs_review' but the audit log
+                   * distinguishes them). Edit + Note items open the
+                   * RequirementTextDrawer in the matching mode.
                    */}
-                  {[
-                    { label: 'Flag for review', next: 'needs_review' as ExecutionReviewStatus },
-                  ].map((opt) => (
+                  {([
+                    { label: 'Edit text',                action: 'open_edit'                as ChecklistItemAction },
+                    { label: 'Add site note',            action: 'open_note'                as ChecklistItemAction },
+                    { label: 'Flag for review',          action: 'flag_for_review'          as ChecklistItemAction },
+                    { label: 'Mark needs clarification', action: 'mark_needs_clarification' as ChecklistItemAction },
+                  ]).map((opt) => (
                     <button
                       key={opt.label}
                       type="button"
                       role="menuitem"
                       onClick={() => {
-                        onSetStatus(item.id, opt.next);
+                        onItemAction(item, opt.action);
                         setMenuOpen(false);
                       }}
                       className={`w-full text-left text-xs px-3 py-2 ${

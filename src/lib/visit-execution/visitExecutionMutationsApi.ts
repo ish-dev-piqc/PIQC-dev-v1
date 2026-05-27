@@ -159,8 +159,8 @@ export function markNeedsClarification(
 /**
  * Add a site-specific note to a requirement. RPC writes review_status =
  * 'site_note_added' + sets review_note column + appends an 'add_site_note'
- * event. Sprint 4a exports this for API completeness but no UI calls it yet
- * — Sprint 4b adds the note-input UI.
+ * event. Sprint 4b wires the note-input UI (RequirementTextDrawer in
+ * 'note' mode).
  */
 export function addSiteNote(
   requirementId: string,
@@ -172,4 +172,83 @@ export function addSiteNote(
     'site_note_added',
     note,
   );
+}
+
+/**
+ * Rewrite the requirement's display text. Goes through a SEPARATE RPC
+ * (`visit_execution_edit_text`) — not `set_review_status` — because the
+ * edit_text action bumps the row's version + sets current_text + flips
+ * review_status to 'edited'. Captures previous_text in the audit log so
+ * the timeline shows before/after.
+ *
+ * Optional `note` attaches to the audit event (not the requirement row).
+ *
+ * Mock-mode short-circuit synthesizes success with a bumped version.
+ */
+export interface VisitRequirementEditTextResult {
+  requirement_id: string;
+  review_status: ExecutionReviewStatus;
+  version: number;
+  current_text: string;
+  event_id: string;
+}
+
+export async function editText(
+  requirementId: string,
+  newText: string,
+  note?: string,
+): Promise<Result<VisitRequirementEditTextResult>> {
+  // Programmer-error guard — DB-level constraint rejects empty too, but a
+  // client-side guard saves a round-trip and gives a cleaner error.
+  const trimmed = newText.trim();
+  if (trimmed.length === 0) {
+    return { ok: false, error: 'edit_text requires non-empty new_text' };
+  }
+
+  if (isMockEnabled()) {
+    return {
+      ok: true,
+      data: {
+        requirement_id: requirementId,
+        review_status: 'edited',
+        version: 2, // synthetic bump — mock starts at v1
+        current_text: trimmed,
+        event_id: `mock-event-edit_text-${requirementId}`,
+      },
+    };
+  }
+
+  const { data, error } = await supabase.rpc(
+    'visit_execution_edit_text',
+    {
+      p_requirement_id: requirementId,
+      p_new_text: trimmed,
+      p_note: note ?? null,
+    },
+  );
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  const payload = data as Partial<VisitRequirementEditTextResult> | null;
+  if (
+    !payload ||
+    typeof payload.requirement_id !== 'string' ||
+    typeof payload.review_status !== 'string' ||
+    typeof payload.current_text !== 'string'
+  ) {
+    return { ok: false, error: 'malformed RPC response' };
+  }
+
+  return {
+    ok: true,
+    data: {
+      requirement_id: payload.requirement_id,
+      review_status: payload.review_status as ExecutionReviewStatus,
+      version: typeof payload.version === 'number' ? payload.version : 0,
+      current_text: payload.current_text,
+      event_id: typeof payload.event_id === 'string' ? payload.event_id : '',
+    },
+  };
 }
