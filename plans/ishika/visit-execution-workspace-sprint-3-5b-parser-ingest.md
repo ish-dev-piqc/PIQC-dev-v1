@@ -1,7 +1,7 @@
 ---
 owner: ish-dev-piqc
 feature: visit-execution-workspace-sprint-3-5b-parser-ingest
-status: active
+status: in-review
 started: 2026-05-26
 target_pr:
 ---

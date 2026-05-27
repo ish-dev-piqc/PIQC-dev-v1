@@ -6,26 +6,16 @@
 // localStorage flag, defaults off, controls whether mock fixture data is
 // returned instead of the real Supabase path.
 //
-// Real path: calls fetchVisitTemplates() from src/lib/site/siteApi.ts (which
-// delegates to the active SiteRepo — real or demo) and runs the result
-// through visitExecutionAdapter.adaptVisitTemplates().
+// Sprint 3.5b: real path now calls the v2 visit_execution_get_workspace RPC
+// directly (per parser-integration.md §9.1). The previous Sprint 1 bridge
+// path (fetchVisitTemplates + adaptVisitTemplates) is retired from production
+// use; visitExecutionAdapter survives only for the mock fixture's typing.
 //
 // No throw outside programmer-error guards.
-//
-// Sprint 3.5a note: the parser-integration design doc §9.1 proposes
-// switching the real path to call the visit_execution_get_workspace RPC
-// directly. That switch is intentionally deferred to Sprint 3.5b — until
-// the ingest pipeline writes visit_requirements / purpose / completeness_
-// signals (Sprint 3.5b work), the RPC returns empty arrays for every
-// protocol. The current adapter path produces a flat-but-non-empty
-// workspace from procedures TEXT[], which is more useful UX-wise as a
-// bridge. 3.5b flips this — at that point this module will import supabase
-// directly. Until then, no Supabase imports here.
 // =============================================================================
 
-import { fetchVisitTemplates } from '../site/siteApi';
+import { supabase } from '../supabase';
 import type { Result } from '../site/siteApi';
-import { adaptVisitTemplates } from './visitExecutionAdapter';
 import { getMockVisitExecutionWorkspaces } from './mockVisitWorkspace';
 import type { VisitExecutionWorkspace } from '../../types/visit-execution';
 
@@ -53,10 +43,17 @@ export function isMockEnabled(): boolean {
  * Fetch the list of VisitExecutionWorkspace objects for a protocol.
  *
  * Mock on  → returns rich Sprint 1 fixture data from mockVisitWorkspace.ts
- * Mock off → calls fetchVisitTemplates() + adaptVisitTemplates() — flat items,
- *            honest "structured ingest extraction pending" purpose copy
+ * Mock off → calls supabase.rpc('visit_execution_get_workspace', {...})
+ *            which returns a fully-shaped { workspaces: [...] } payload
+ *            matching VisitExecutionWorkspace[] directly. No adapter step.
  *
- * Workspaces are ordered by study_day ascending.
+ * Workspaces are ordered by study_day ascending (RPC handles the sort).
+ *
+ * Error surface:
+ *   - RPC error (network, RLS denial, RAISE EXCEPTION) → { ok: false, error }
+ *   - RPC returns null/missing `workspaces` → { ok: true, data: [] } (the
+ *     ownership gate returns an empty array, not an error, to avoid leaking
+ *     existence via error messages).
  */
 export async function fetchVisitExecutionWorkspaces(
   protocolId: string,
@@ -66,9 +63,19 @@ export async function fetchVisitExecutionWorkspaces(
     return { ok: true, data: mockWorkspaces };
   }
 
-  const templatesResult = await fetchVisitTemplates(protocolId);
-  if (!templatesResult.ok) {
-    return templatesResult;
+  const { data, error } = await supabase.rpc('visit_execution_get_workspace', {
+    p_protocol_id: protocolId,
+  });
+
+  if (error) {
+    return { ok: false, error: error.message };
   }
-  return { ok: true, data: adaptVisitTemplates(templatesResult.data) };
+
+  // RPC contract: { workspaces: VisitExecutionWorkspace[] }. Anything else
+  // is a server-side schema drift; surface as empty rather than crash.
+  const payload = data as { workspaces?: unknown } | null;
+  const workspaces = Array.isArray(payload?.workspaces)
+    ? (payload!.workspaces as VisitExecutionWorkspace[])
+    : [];
+  return { ok: true, data: workspaces };
 }
