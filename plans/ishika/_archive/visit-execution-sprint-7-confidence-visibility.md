@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: visit-execution-sprint-7-confidence-visibility
-status: active
+status: merged
+merged: 2026-05-27
 started: 2026-05-27
-target_pr:
+target_pr: #147
 ---
 
 # Visit Execution Workspace — Sprint 7: Quality / Trust / UX Hardening (v1 — Confidence Visibility)
