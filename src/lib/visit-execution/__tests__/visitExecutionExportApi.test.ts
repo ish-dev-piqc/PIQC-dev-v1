@@ -346,6 +346,49 @@ describe('buildVisitWorksheetPdf — pure function', () => {
     });
     expect(() => buildVisitWorksheetPdf(packet)).not.toThrow();
   });
+
+  // ---- Sprint 6 — role-filter awareness ----
+  it('builds without throwing under each role filter', () => {
+    const packet = makePacket();
+    expect(() => buildVisitWorksheetPdf(packet, 'all')).not.toThrow();
+    expect(() => buildVisitWorksheetPdf(packet, 'coordinator')).not.toThrow();
+    expect(() => buildVisitWorksheetPdf(packet, 'nurse')).not.toThrow();
+    expect(() => buildVisitWorksheetPdf(packet, 'investigator')).not.toThrow();
+    expect(() => buildVisitWorksheetPdf(packet, 'lab')).not.toThrow();
+    expect(() => buildVisitWorksheetPdf(packet, 'pharmacy')).not.toThrow();
+  });
+
+  it('builds without throwing when role filter yields zero matching items', () => {
+    // Fixture has Coordinator + Investigator items only — Pharmacy will be
+    // empty. Should still produce a valid (empty-body) PDF without crashing.
+    const packet = makePacket();
+    expect(() => buildVisitWorksheetPdf(packet, 'pharmacy')).not.toThrow();
+  });
+});
+
+// ===========================================================================
+// Sprint 6 — buildWorksheetFilename role segment
+// ===========================================================================
+
+describe('buildWorksheetFilename — role segment', () => {
+  it('omits role segment when filter is "all" (canonical Sprint 5 shape)', () => {
+    const name = buildWorksheetFilename(makePacket(), 'all');
+    expect(name).toBe('brighten-2_week-6-visit_worksheet_draft_2026-05-27.pdf');
+  });
+
+  it('includes role segment when filter is a specific role', () => {
+    const name = buildWorksheetFilename(makePacket(), 'nurse');
+    expect(name).toBe('brighten-2_week-6-visit_nurse_worksheet_draft_2026-05-27.pdf');
+  });
+
+  it('uses raw role enum value (lowercase) for the segment', () => {
+    expect(buildWorksheetFilename(makePacket(), 'pharmacy')).toContain('_pharmacy_');
+    expect(buildWorksheetFilename(makePacket(), 'investigator')).toContain('_investigator_');
+  });
+
+  it('defaults to "all" (no role segment) when filter omitted', () => {
+    expect(buildWorksheetFilename(makePacket())).not.toMatch(/_(coordinator|nurse|investigator|lab|pharmacy)_/);
+  });
 });
 
 // ===========================================================================
@@ -410,6 +453,59 @@ describe('downloadVisitWorksheet — orchestrator', () => {
     });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toMatch(/simulated browser save failure/);
+  });
+
+  // ---- Sprint 6 — role-filter end-to-end ----
+  it('passes roleFilter through to filename + itemCount when filter is a role', async () => {
+    // Fixture has 2 items: req-1 (Coordinator) + req-2 (Investigator).
+    // Filtering to "nurse" should leave 0 items; the orchestrator's
+    // returned itemCount reflects DELIVERED count, not canonical packet length.
+    vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: makePacket(), error: null,
+    } as any);
+
+    const captured: Array<{ filename: string }> = [];
+    const r = await downloadVisitWorksheet(
+      'visit-1',
+      { triggerDownload: (filename) => captured.push({ filename }) },
+      'coordinator',
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data.filename).toContain('_coordinator_');
+      // Fixture: 1 Coordinator-tagged item (req-1).
+      expect(r.data.itemCount).toBe(1);
+    }
+    expect(captured[0]?.filename).toContain('_coordinator_');
+  });
+
+  it('returns deliveredItemCount=0 when role filter matches no items', async () => {
+    vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: makePacket(), error: null,
+    } as any);
+
+    const r = await downloadVisitWorksheet('visit-1', {}, 'pharmacy');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data.itemCount).toBe(0);
+      expect(r.data.filename).toContain('_pharmacy_');
+    }
+  });
+
+  it('defaults to "all" when roleFilter omitted (Sprint 5 backward compat)', async () => {
+    vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: makePacket(), error: null,
+    } as any);
+
+    const r = await downloadVisitWorksheet('visit-1');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data.itemCount).toBe(2); // canonical fixture total
+      expect(r.data.filename).not.toMatch(/_(coordinator|nurse|investigator|lab|pharmacy)_/);
+    }
   });
 });
 
