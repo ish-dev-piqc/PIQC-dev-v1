@@ -327,7 +327,24 @@ BEGIN
     -- -----------------------------------------------------------------------
     -- Completeness signals upsert. UNIQUE (visit_template_id, gap_text).
     -- Only touches 'pending' rows; resolved signals are forensic and stick.
+    --
+    -- Critical: clear stale synthetic 'coverage_check_unavailable' /
+    -- 'coverage_check_malformed' rows for this visit BEFORE upserting the
+    -- new batch. Otherwise a transient OpenAI failure leaves a permanent
+    -- "coverage check unavailable" badge on the visit even after a
+    -- subsequent successful retry. Only `resolution = 'pending'` rows are
+    -- cleared — human-acted-on rows (acknowledged, dismissed, promoted)
+    -- stay as forensic record.
+    --
+    -- Run unconditionally — even when the new batch is empty, because an
+    -- empty batch can mean "successful coverage check found no gaps" and
+    -- that's exactly when we want to clear the stale failure row.
     -- -----------------------------------------------------------------------
+    DELETE FROM visit_completeness_signals
+     WHERE visit_template_id = v_visit_template_id
+       AND resolution = 'pending'
+       AND detection_reason IN ('coverage_check_unavailable', 'coverage_check_malformed');
+
     IF v_visit ? 'completeness_signals' AND jsonb_typeof(v_visit->'completeness_signals') = 'array' THEN
       FOR v_signal IN SELECT * FROM jsonb_array_elements(v_visit->'completeness_signals')
       LOOP
@@ -335,16 +352,20 @@ BEGIN
           CONTINUE;
         END IF;
 
+        -- Hard cap on gap_text length. The LLM is instructed to return short
+        -- verbatim/paraphrase requirements, but an adversarial response could
+        -- emit a 50000-char blob that bloats the table. 1024 chars is far
+        -- more than any legitimate clinical requirement statement needs.
         INSERT INTO visit_completeness_signals (
           visit_template_id, gap_text, source_section, source_page,
           detection_confidence, detection_reason
         ) VALUES (
           v_visit_template_id,
-          v_signal->>'gap_text',
-          v_signal->>'source_section',
+          left(v_signal->>'gap_text', 1024),
+          left(v_signal->>'source_section', 256),
           NULLIF((v_signal->>'source_page'), '')::INTEGER,
           COALESCE((v_signal->>'detection_confidence')::confidence_state, 'needs_review'),
-          v_signal->>'detection_reason'
+          left(v_signal->>'detection_reason', 512)
         )
         ON CONFLICT (visit_template_id, gap_text)
         DO UPDATE SET

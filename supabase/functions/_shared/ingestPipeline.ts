@@ -987,7 +987,17 @@ export function sanitizeProtocolText(input: string | null | undefined): string {
     .filter((line) => line.length > 0)
     .join("\n");
   const MAX_LEN = 12_000;
-  return lineNormalized.length > MAX_LEN ? lineNormalized.slice(0, MAX_LEN) : lineNormalized;
+  if (lineNormalized.length > MAX_LEN) {
+    // Log so a Sprint 4 follow-up can disclose "coverage check ran on first
+    // 12000 chars of source text" — silent truncation creates false-negative
+    // gap detection on long visit sections.
+    console.warn("[ingest] sanitize_truncated", {
+      original_length: lineNormalized.length,
+      max_length: MAX_LEN,
+    });
+    return lineNormalized.slice(0, MAX_LEN);
+  }
+  return lineNormalized;
 }
 
 /**
@@ -1100,6 +1110,17 @@ const OPENAI_BASE_URL = "https://api.openai.com/v1";
 const OPENAI_MODEL    = "gpt-4o-mini";
 const OPENAI_TIMEOUT_MS = 25_000;
 
+/**
+ * OpenAI chat completion with retryable error semantics.
+ *
+ * Throws on transient failures (5xx, timeout, network error) so the caller's
+ * `withRetry` wrapper can back off and try again. Returns `{ ok: false }`
+ * only on permanent failures (4xx, empty content) where retrying is futile.
+ *
+ * This distinction matters: the prior shape (always-return) made withRetry
+ * dead code — the function caught its own errors and returned on the first
+ * attempt, so retries never fired.
+ */
 async function openaiChatCompletion(
   apiKey: string,
   body: Record<string, unknown>,
@@ -1117,17 +1138,28 @@ async function openaiChatCompletion(
       signal: controller.signal,
     });
     if (!res.ok) {
+      // 5xx = retryable (transient server / rate limit). Throw so withRetry retries.
+      // 4xx = permanent (bad key, malformed request). Return so caller fails fast.
+      // 429 specifically is retryable; bucket it with 5xx.
+      if (res.status >= 500 || res.status === 429) {
+        throw new Error(`openai_http_${res.status}`);
+      }
       return { ok: false, reason: `openai_http_${res.status}` };
     }
     const data = await res.json();
     const content = data?.choices?.[0]?.message?.content;
     if (typeof content !== "string" || content.length === 0) {
+      // Empty content is a permanent semantic failure — retrying won't help.
       return { ok: false, reason: "openai_empty_content" };
     }
     return { ok: true, content };
   } catch (err) {
     const aborted = (err as Error).name === "AbortError";
-    return { ok: false, reason: aborted ? "openai_timeout" : "openai_fetch_error" };
+    // Timeout + network errors are retryable. Re-throw so withRetry handles them.
+    // The shape `Error('openai_http_5xx')` from above also lands here.
+    throw aborted
+      ? new Error("openai_timeout")
+      : err instanceof Error ? err : new Error("openai_fetch_error");
   } finally {
     clearTimeout(t);
   }
@@ -1165,18 +1197,29 @@ export async function generateVisitPurpose(
     `<protocol_text>\n${sanitized}\n</protocol_text>\n\n` +
     "Return ONLY the purpose statement. No preamble, no markdown, no quotes.";
 
-  const result = await withRetry(
-    () =>
-      openaiChatCompletion(args.openaiKey, {
-        temperature: 0.3,
-        max_tokens: 220,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-    "generateVisitPurpose",
-  );
+  let result: { ok: true; content: string } | { ok: false; reason: string };
+  try {
+    result = await withRetry(
+      () =>
+        openaiChatCompletion(args.openaiKey, {
+          temperature: 0.3,
+          max_tokens: 220,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+        }),
+      "generateVisitPurpose",
+    );
+  } catch (err) {
+    // Retries exhausted (transient 5xx / timeout / network). Graceful null
+    // — caller leaves protocol_visit_templates.purpose unchanged on retry.
+    console.warn("[ingest] visit_purpose_retries_exhausted", {
+      visit_name: args.visit_name,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
 
   if (!result.ok) {
     console.warn("[ingest] visit_purpose_llm_failed", {
@@ -1242,19 +1285,40 @@ export async function detectMissingRequirements(
     `<protocol_text>\n${sanitized}\n</protocol_text>\n\n` +
     `Return JSON: { "gaps": [...] }.`;
 
-  const result = await withRetry(
-    () =>
-      openaiChatCompletion(args.openaiKey, {
-        temperature: 0.1,
-        max_tokens: 800,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-    "detectMissingRequirements",
-  );
+  let result: { ok: true; content: string } | { ok: false; reason: string };
+  try {
+    result = await withRetry(
+      () =>
+        openaiChatCompletion(args.openaiKey, {
+          temperature: 0.1,
+          max_tokens: 800,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+        }),
+      "detectMissingRequirements",
+    );
+  } catch (err) {
+    // Retries exhausted (transient 5xx / timeout / network). Emit one
+    // synthetic gap so the UI can disclose "Coverage check unavailable".
+    // The persist RPC clears stale synthetic rows on the next successful
+    // run, so this doesn't pollute the workspace forever.
+    console.warn("[ingest] missing_req_retries_exhausted", {
+      visit_name: args.visit_name,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return [
+      {
+        gap_text: `Coverage check unavailable for ${args.visit_name}.`,
+        source_section: null,
+        source_page: null,
+        detection_confidence: "needs_review",
+        detection_reason: "coverage_check_unavailable",
+      },
+    ];
+  }
 
   if (!result.ok) {
     console.warn("[ingest] missing_req_llm_failed", {
@@ -1340,6 +1404,28 @@ interface StructuredProcedureRaw {
   conditions?: unknown;
   timing?: unknown;
   source_fields?: unknown;
+}
+
+/**
+ * Quality floor for Reducto's extracted `visit_purpose`. Reducto follows the
+ * schema description but doesn't enforce substantive-prose quality the way
+ * the dedicated `generateVisitPurpose` prompt does. A response like "Day 1"
+ * or "Visit V2" satisfies a truthy check but fails the mastery principle.
+ *
+ * This heuristic checks for:
+ *   - minimum length (30 chars excludes one-word labels and "Day N" stubs)
+ *   - presence of a clinical action verb (the dedicated prompt's examples
+ *     all start with one: "Confirm", "Establish", "Routine", etc.)
+ *
+ * Returns true → Reducto's value is good enough; skip the dedicated LLM call.
+ * Returns false → call generateVisitPurpose to upgrade the quality.
+ */
+const VISIT_PURPOSE_VERB_REGEX =
+  /\b(confirm|establish|administer|review|assess|dispense|document|measure|monitor|collect|verify|obtain|perform|conduct|baseline|safety|efficacy|tolerability|routine|follow-?up|exit|discharge|reconciliation|final|mid-?treatment|post-?treatment)\b/i;
+
+export function reductoPurposeMeetsQualityFloor(value: string): boolean {
+  if (value.length < 30) return false;
+  return VISIT_PURPOSE_VERB_REGEX.test(value);
 }
 
 function pickVisitSectionText(entry: ScheduleEntry): string {
@@ -1532,6 +1618,11 @@ async function persistVisitExecutionWorkspaces(
 
   const visitsPayload: Array<Record<string, unknown>> = [];
 
+  // Serial across visits is deliberate: each visit fires two parallel LLM
+  // calls (purpose + missing-req), so parallelizing the outer loop would
+  // multiply OpenAI concurrency by N visits and trip rate limits on larger
+  // protocols. Trade-off accepted: ~3s × N visits sequential vs ~3s total
+  // but rate-limit risky. Revisit if ingest latency becomes a complaint.
   for (const entry of args.schedule) {
     if (typeof entry.visit_name !== "string" || typeof entry.study_day !== "number") continue;
     const key = `${String(entry.visit_name).trim()}|${Math.trunc(entry.study_day)}`;
@@ -1551,15 +1642,25 @@ async function persistVisitExecutionWorkspaces(
 
     // LLM passes in parallel per visit. Both fail gracefully — purpose returns
     // null, missing-req returns a synthetic 'coverage_check_unavailable' gap.
-    const [purpose, gaps] = await Promise.all([
-      typeof entry.visit_purpose === "string" && entry.visit_purpose.trim().length > 0
-        ? Promise.resolve(entry.visit_purpose.trim())
+    //
+    // Visit-purpose: short-circuit ONLY if Reducto's extracted value clears
+    // the quality floor (substantive prose, not "Day 1"). Below the floor we
+    // still call the dedicated LLM prompt so the mastery principle holds.
+    const reductoPurpose = typeof entry.visit_purpose === "string"
+      ? entry.visit_purpose.trim()
+      : "";
+    const purposeTask: Promise<string | null> =
+      reductoPurpose.length > 0 && reductoPurposeMeetsQualityFloor(reductoPurpose)
+        ? Promise.resolve(reductoPurpose)
         : generateVisitPurpose({
             visit_name: String(entry.visit_name).trim(),
             study_day: Math.trunc(entry.study_day),
             visit_section_text: visitSectionText,
             openaiKey: args.openaiKey,
-          }),
+          });
+
+    const [purpose, gaps] = await Promise.all([
+      purposeTask,
       detectMissingRequirements({
         visit_name: String(entry.visit_name).trim(),
         study_day: Math.trunc(entry.study_day),

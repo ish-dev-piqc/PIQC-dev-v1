@@ -81,6 +81,12 @@ No new mock surface. Existing `piq-visit-execution-mock-v1` toggle preserved; mo
 
 - `@rv61` (Roger) — for all `supabase/` files (1 migration + 1 edge-function module edit + 1 Deno test file). Heaviest review surface in the VEW arc; design doc PR #124 set the spec.
 
+## Decision debt (deferred to Sprint 4)
+
+- **Orphan `visit_requirements` rows on amendment.** If a protocol amendment REMOVES a requirement, the existing row stays in the DB with no signal that it's obsolete. The workspace shows outdated data; the coordinator has no way to tell. Deferred because destroying a human-reviewed row destroys the audit trail; the safe path is to mark the row (new `review_status = 'amendment_removed'` enum value, or a drift_log event of type `'amendment_removed'`) rather than DELETE. Sprint 4 must address this — it's not just a polish item.
+- **`protocol_visit_templates.confidence_state` always NULL on first ingest.** The LLM passes don't emit a visit-level confidence; the column stays NULL until Sprint 4 wires Reducto's per-field confidence into the persist payload.
+- **`completeness_signal_count` rollup on RPC v2.** Sprint 3.5a added the rollup field; this PR doesn't add a count-vs-array agreement test against real data. Worth a CI smoke when integration tests exist.
+
 ## Verification
 
 - [ ] `supabase db reset` applies all migrations cleanly; the new persist RPC exists with the documented signature

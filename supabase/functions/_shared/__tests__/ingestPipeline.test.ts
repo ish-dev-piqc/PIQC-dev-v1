@@ -20,6 +20,7 @@ import {
   assignPhase,
   fingerprintRequirement,
   normalizeDerivedText,
+  reductoPurposeMeetsQualityFloor,
   sanitizeProtocolText,
 } from "../ingestPipeline.ts";
 
@@ -74,8 +75,36 @@ Deno.test("sanitizeProtocolText also redacts <extracted_requirements> markers", 
 
 Deno.test("sanitizeProtocolText caps output length at 12000 chars", () => {
   const huge = "a".repeat(20_000);
-  const out = sanitizeProtocolText(huge);
-  assertEquals(out.length, 12_000);
+  // Capture the console.warn the truncation path emits.
+  const originalWarn = console.warn;
+  let warnedWith: unknown = null;
+  console.warn = (msg: unknown, meta?: unknown) => {
+    if (typeof msg === "string" && msg.includes("sanitize_truncated")) {
+      warnedWith = meta;
+    }
+  };
+  try {
+    const out = sanitizeProtocolText(huge);
+    assertEquals(out.length, 12_000);
+    assert(warnedWith !== null, "expected sanitize_truncated warn on >cap input");
+  } finally {
+    console.warn = originalWarn;
+  }
+});
+
+Deno.test("sanitizeProtocolText does NOT warn when input is under the cap", () => {
+  const small = "Vital signs prior to dosing.";
+  const originalWarn = console.warn;
+  let warned = false;
+  console.warn = () => {
+    warned = true;
+  };
+  try {
+    sanitizeProtocolText(small);
+    assertEquals(warned, false);
+  } finally {
+    console.warn = originalWarn;
+  }
 });
 
 // -----------------------------------------------------------------------------
@@ -213,4 +242,30 @@ Deno.test("assignClassification matches if-applicable", () => {
 
 Deno.test("assignClassification falls back to 'required'", () => {
   assertEquals(assignClassification("Document concomitant medications"), "required");
+});
+
+// -----------------------------------------------------------------------------
+// reductoPurposeMeetsQualityFloor — gates whether to short-circuit the LLM call
+// -----------------------------------------------------------------------------
+
+Deno.test("reductoPurposeMeetsQualityFloor rejects short stubs", () => {
+  assertEquals(reductoPurposeMeetsQualityFloor("Day 1"), false);
+  assertEquals(reductoPurposeMeetsQualityFloor("Visit V2"), false);
+  assertEquals(reductoPurposeMeetsQualityFloor("Screening visit."), false); // 16 chars
+});
+
+Deno.test("reductoPurposeMeetsQualityFloor rejects long values without a clinical verb", () => {
+  const longNoVerb = "Day 1 of the study from the start of treatment until day 28.";
+  assertEquals(reductoPurposeMeetsQualityFloor(longNoVerb), false);
+});
+
+Deno.test("reductoPurposeMeetsQualityFloor accepts substantive purpose prose", () => {
+  const good =
+    "Establish pre-treatment baseline, dispense the first study drug supply, and observe the first dose under direct supervision.";
+  assertEquals(reductoPurposeMeetsQualityFloor(good), true);
+});
+
+Deno.test("reductoPurposeMeetsQualityFloor accepts routine-safety-follow-up phrasing", () => {
+  const good = "Routine safety follow-up. Lab panel, AE review, and continued drug accountability.";
+  assertEquals(reductoPurposeMeetsQualityFloor(good), true);
 });
