@@ -426,45 +426,35 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
 
               {upgradeError && <p className="text-sm text-red-500">{upgradeError}</p>}
 
+              {/* Mobile: vertical stack, each button full-width. sm+: horizontal
+                  row with auto-width buttons. Same primary-blue treatment for
+                  all three so they read as equally-valid choices; the
+                  full-screen "Opening checkout…" loader covers the per-button
+                  spinner moment so we don't need to render one inline. */}
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleStartPlan('pilot')}
+                  disabled={upgradeLoading}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors disabled:opacity-50"
+                >
+                  Start Pilot — $25 / 30 days
+                </button>
                 <button
                   type="button"
                   onClick={handleStartPlan('workspace_monthly')}
                   disabled={upgradeLoading}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors disabled:opacity-50"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors disabled:opacity-50"
                 >
-                  {upgradeLoading ? (
-                    <>
-                      <Loader2 size={14} className="animate-spin" />
-                      Opening checkout…
-                    </>
-                  ) : (
-                    'Start Workspace — $59 / month'
-                  )}
+                  Start Workspace — $59 / month
                 </button>
                 <button
                   type="button"
                   onClick={handleStartPlan('workspace_annual')}
                   disabled={upgradeLoading}
-                  className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 border ${
-                    isLight
-                      ? 'border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-                      : 'border-white/[0.1] text-[#d2d7e0] hover:bg-white/[0.04]'
-                  }`}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors disabled:opacity-50"
                 >
                   Switch to Annual — $599 / year
-                </button>
-                <button
-                  type="button"
-                  onClick={handleStartPlan('pilot')}
-                  disabled={upgradeLoading}
-                  className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 border ${
-                    isLight
-                      ? 'border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-                      : 'border-white/[0.1] text-[#d2d7e0] hover:bg-white/[0.04]'
-                  }`}
-                >
-                  Start Pilot — $25 / 30 days
                 </button>
               </div>
             </div>
