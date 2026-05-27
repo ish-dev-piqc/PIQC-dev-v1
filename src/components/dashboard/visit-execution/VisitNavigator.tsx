@@ -1,9 +1,13 @@
+import { useMemo } from 'react';
 import { GitFork, Target, AlertOctagon } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import type {
   ExecutionReviewStatus,
+  VisitConfidenceState,
   VisitExecutionWorkspace,
 } from '../../../types/visit-execution';
+import { deriveVisitConfidence } from '../../../lib/visit-execution/deriveVisitConfidence';
+import VisitConfidenceBadge from './VisitConfidenceBadge';
 
 // =============================================================================
 // VisitNavigator — left rail of the workspace. Lists every visit in the
@@ -48,6 +52,18 @@ export default function VisitNavigator({
     ? 'bg-[#f9fafc] border-[#e2e8ee]'
     : 'bg-[#0e141b] border-white/5';
 
+  // Sprint 7: memoize per-visit confidence so the rollup doesn't recompute
+  // on every nav re-render (e.g., on each review-status mutation).
+  // Confidence depends only on workspace data, not on reviewStatusByItemId,
+  // so memoizing by `workspaces` alone is correct.
+  const visitConfidences = useMemo<Map<string, VisitConfidenceState>>(() => {
+    const m = new Map<string, VisitConfidenceState>();
+    for (const ws of workspaces) {
+      m.set(ws.visit_template_id, deriveVisitConfidence(ws.snapshot, ws.items));
+    }
+    return m;
+  }, [workspaces]);
+
   return (
     <nav
       aria-label="Protocol visits"
@@ -74,6 +90,13 @@ export default function VisitNavigator({
             ws.snapshot.study_day >= 0
               ? `Day +${ws.snapshot.study_day}`
               : `Day ${ws.snapshot.study_day}`;
+          // Sprint 7: per-visit confidence dot. Memo'd at the nav level
+          // (visitConfidences Map above) — recomputes only when workspaces
+          // change, not on every review-status mutation. Falls back to
+          // needs_review only in the defensive case where the Map lookup
+          // misses (shouldn't happen since the Map is built from the same
+          // workspaces array we're iterating, but keeps the prop typed).
+          const visitConfidence = visitConfidences.get(ws.visit_template_id) ?? 'needs_review';
 
           return (
             <li key={ws.visit_template_id}>
@@ -96,11 +119,20 @@ export default function VisitNavigator({
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <p
-                      className={`text-sm font-semibold truncate ${
+                      className={`text-sm font-semibold truncate flex items-center gap-2 ${
                         isSelected ? 'text-fg-heading' : 'text-fg-body'
                       }`}
                     >
-                      {ws.snapshot.visit_name}
+                      {/* Sprint 7 confidence dot — ALWAYS visible (per the
+                          plan MD: navigator is a triage surface; positive
+                          green signal is worth showing). 6px circle leads
+                          the visit name so the coordinator can sweep the
+                          rail and prioritize. */}
+                      <VisitConfidenceBadge
+                        confidence={visitConfidence}
+                        variant="dot"
+                      />
+                      <span className="truncate">{ws.snapshot.visit_name}</span>
                     </p>
                     <p className="text-fg-muted text-[11px] mt-0.5">{dayLabel}</p>
                   </div>

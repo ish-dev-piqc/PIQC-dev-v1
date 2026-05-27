@@ -21,6 +21,7 @@ import type {
   VisitExecutionWorkspace,
 } from '../../../types/visit-execution';
 import { itemMatchesRoleFilter } from '../../../lib/visit-execution/parseRoleHint';
+import { deriveVisitConfidence } from '../../../lib/visit-execution/deriveVisitConfidence';
 import VisitNavigator from './VisitNavigator';
 import VisitSnapshotCard from './VisitSnapshotCard';
 import ExecutionChecklist, { type ChecklistItemAction } from './ExecutionChecklist';
@@ -267,6 +268,21 @@ export default function VisitExecutionTab() {
     return selectedWorkspace.items.filter((i) =>
       itemMatchesRoleFilter(i.role_hint, roleFilter),
     ).length;
+  }, [selectedWorkspace, roleFilter]);
+
+  // Sprint 7: derived visit-level confidence. Computed against the
+  // role-filtered item set so that a "Nurse view" rollup reflects the
+  // nurse-relevant items only (consistency with the rest of the workspace).
+  // When role filter is 'all', derivation runs against the canonical items.
+  const derivedVisitConfidence = useMemo(() => {
+    if (!selectedWorkspace) return undefined;
+    const itemsForDerivation =
+      roleFilter === 'all'
+        ? selectedWorkspace.items
+        : selectedWorkspace.items.filter((i) =>
+            itemMatchesRoleFilter(i.role_hint, roleFilter),
+          );
+    return deriveVisitConfidence(selectedWorkspace.snapshot, itemsForDerivation);
   }, [selectedWorkspace, roleFilter]);
 
   // Helper: read the effective current status for an item (optimistic
@@ -803,6 +819,7 @@ export default function VisitExecutionTab() {
                 snapshot={selectedWorkspace.snapshot}
                 reviewedCount={reviewedCountForSelected}
                 totalItems={selectedWorkspace.items.length}
+                derivedConfidence={derivedVisitConfidence}
               />
 
               {selectedWorkspace.snapshot.completeness_signals.length > 0 && (

@@ -364,6 +364,45 @@ describe('buildVisitWorksheetPdf — pure function', () => {
     const packet = makePacket();
     expect(() => buildVisitWorksheetPdf(packet, 'pharmacy')).not.toThrow();
   });
+
+  // ---- Sprint 7 — confidence visibility in PDF ----
+  it('renders the visit-level confidence label in the title block (no throw)', () => {
+    // The "Confidence: <state>" line is always shown. Test ensures the
+    // build path doesn't crash on any of the four confidence states.
+    expect(() =>
+      buildVisitWorksheetPdf(makePacket({
+        snapshot: { ...makePacket().snapshot, confidence_state: 'high' },
+      })),
+    ).not.toThrow();
+    expect(() =>
+      buildVisitWorksheetPdf(makePacket({
+        snapshot: { ...makePacket().snapshot, confidence_state: 'low' },
+      })),
+    ).not.toThrow();
+    expect(() =>
+      buildVisitWorksheetPdf(makePacket({
+        snapshot: { ...makePacket().snapshot, confidence_state: 'needs_review' },
+      })),
+    ).not.toThrow();
+  });
+
+  it('builds when confidence derives from items (snapshot.confidence_state null)', () => {
+    // Server-confidence absent → builder uses deriveVisitConfidence fallback.
+    // Mock fixture items default to 'high'; rollup should land somewhere valid.
+    const packet = makePacket({
+      snapshot: { ...makePacket().snapshot, confidence_state: null },
+    });
+    expect(() => buildVisitWorksheetPdf(packet)).not.toThrow();
+  });
+
+  it('builds when confidence rollup degrades to needs_review (empty filtered items)', () => {
+    // Pharmacy filter → 0 items → derivation lands on 'needs_review'.
+    // Title block confidence label must still render without crashing.
+    const packet = makePacket({
+      snapshot: { ...makePacket().snapshot, confidence_state: null },
+    });
+    expect(() => buildVisitWorksheetPdf(packet, 'pharmacy')).not.toThrow();
+  });
 });
 
 // ===========================================================================

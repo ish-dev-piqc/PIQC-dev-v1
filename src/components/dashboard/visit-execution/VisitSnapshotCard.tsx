@@ -1,7 +1,11 @@
 import { Sparkles, Target, AlertOctagon, GitFork, ClipboardCheck } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
-import type { VisitSnapshot } from '../../../types/visit-execution';
+import type {
+  VisitConfidenceState,
+  VisitSnapshot,
+} from '../../../types/visit-execution';
 import TimingBanner from './TimingBanner';
+import VisitConfidenceBadge from './VisitConfidenceBadge';
 
 // =============================================================================
 // VisitSnapshotCard — above-the-fold summary for the selected visit.
@@ -28,6 +32,18 @@ interface Props {
   snapshot: VisitSnapshot;
   reviewedCount: number;
   totalItems: number;
+  /**
+   * Sprint 7: derived visit-level confidence rollup. Computed in the parent
+   * (VisitExecutionTab) via deriveVisitConfidence(snapshot, items) — passed
+   * in rather than computed here so the snapshot card stays pure and the
+   * parent controls scope (e.g., the rollup respects the active role
+   * filter from Sprint 6).
+   *
+   * Optional: when undefined, no confidence chip renders. Snapshot cards
+   * rendered outside the workspace context (none today, but future
+   * embeds) keep their current behavior.
+   */
+  derivedConfidence?: VisitConfidenceState;
 }
 
 interface Chip {
@@ -86,7 +102,12 @@ function buildChips(snapshot: VisitSnapshot, needsReviewCount: number): Chip[] {
   return chips.slice(0, 3);
 }
 
-export default function VisitSnapshotCard({ snapshot, reviewedCount, totalItems }: Props) {
+export default function VisitSnapshotCard({
+  snapshot,
+  reviewedCount,
+  totalItems,
+  derivedConfidence,
+}: Props) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
   const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
@@ -146,8 +167,19 @@ export default function VisitSnapshotCard({ snapshot, reviewedCount, totalItems 
         </div>
       </div>
 
-      {chips.length > 0 && (
+      {/* Attention-chip row. Sprint 7: confidence chip joins this row when
+          the derived confidence is non-'high' (VisitConfidenceBadge enforces
+          that via its variant='chip' shouldRender rule). 'high' confidence
+          is the expected baseline — no chip, per polish-v2 cognitive-load
+          discipline.
+          Wrapper conditional excludes the high-confidence-only case so we
+          don't render an empty <div> + aria-label with no visible content
+          when chips.length===0 AND derived==='high' (badge would return null). */}
+      {(chips.length > 0 || (derivedConfidence && derivedConfidence !== 'high')) && (
         <div className="flex flex-wrap gap-1.5" aria-label="Visit attention indicators">
+          {derivedConfidence && (
+            <VisitConfidenceBadge confidence={derivedConfidence} variant="chip" />
+          )}
           {chips.map((chip) => (
             <span
               key={chip.key}

@@ -55,6 +55,10 @@ import {
   ROLE_LABELS,
 } from '../../types/visit-execution';
 import { itemMatchesRoleFilter } from './parseRoleHint';
+import {
+  CONFIDENCE_SHORT_LABELS,
+  deriveVisitConfidence,
+} from './deriveVisitConfidence';
 import { isMockEnabled } from './visitExecutionApi';
 import { getMockVisitExecutionWorkspaces } from './mockVisitWorkspace';
 import { DEMO_PROTOCOL_IDS } from '../demo/ids';
@@ -506,6 +510,14 @@ export function buildVisitWorksheetPdf(
   // active. Sits between the protocol-code line and the purpose section
   // so a coordinator scanning the page knows immediately "this is the
   // <Role> view of the worksheet, not the full visit."
+  // Sprint 7: derived visit-level confidence. Computed against the
+  // already-filtered item set so the rollup matches what the PDF actually
+  // contains. Surfaced as a label line below the protocol-title/code line
+  // and again in the title block when the rollup is non-'high' (cognitive-
+  // load discipline). Per-item confidence renders in the autotable column
+  // below.
+  const visitConfidence = deriveVisitConfidence(packet.snapshot, filteredItems);
+
   // `isFiltered` already implies `roleFilter !== 'all'`; second check
   // would be redundant. The inner narrow uses a type-only guard cast
   // because TypeScript can't trace the equivalence across the variable.
@@ -525,7 +537,41 @@ export function buildVisitWorksheetPdf(
     doc.setFont('helvetica', 'normal');
     cursorY += 14;
   }
-  cursorY += 4;
+
+  // Sprint 7: visit-level confidence label. Always shown — the deliverable
+  // is the moment-of-lock-in and the coordinator handing it off should
+  // KNOW PIQC's confidence in the underlying extraction, not have to
+  // guess.
+  //
+  // Color discipline (post-design-critique): only alarm states earn
+  // color in the PDF. high + medium use the default protocol-code gray;
+  // low + needs_review get amber + rose accents. Matches the polish-v2
+  // "rare-loud states earn pixels" rule applied across the workspace.
+  //
+  // Copy uses short labels + agentic attribution: "PIQC confidence: High"
+  // vs the repetitive "Confidence: High confidence" that the long-label
+  // form produced.
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  const isAlarmConfidence =
+    visitConfidence === 'low' || visitConfidence === 'needs_review';
+  if (isAlarmConfidence) {
+    const confidenceColor: [number, number, number] =
+      visitConfidence === 'low'
+        ? [180, 83, 9]     // amber-700
+        : [190, 18, 60];   // rose-700
+    doc.setTextColor(confidenceColor[0], confidenceColor[1], confidenceColor[2]);
+  } else {
+    doc.setTextColor(60); // quiet gray for high/medium (baseline)
+  }
+  doc.text(
+    `PIQC confidence: ${CONFIDENCE_SHORT_LABELS[visitConfidence]}`,
+    margin,
+    cursorY,
+  );
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(60);
+  cursorY += 18;
 
   // Purpose section — placeholder-aware. When the RPC returned the canonical
   // fallback string (parser hasn't extracted a real purpose yet), we frame
