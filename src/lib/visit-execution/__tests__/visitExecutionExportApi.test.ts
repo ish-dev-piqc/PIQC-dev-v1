@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   WORKSHEET_DISCLAIMER,
   WORKSHEET_HEADER_LABEL,
+  WORKSHEET_PLACEHOLDER_PURPOSE,
   buildVisitWorksheetPdf,
   buildWorksheetFilename,
   downloadVisitWorksheet,
@@ -238,16 +239,34 @@ describe('slugifyForFilename', () => {
 });
 
 describe('buildWorksheetFilename', () => {
-  it('joins protocol_code + visit_name + today + .pdf', () => {
-    const packet = makePacket();
+  it('uses packet.generated_at (NOT local clock) for the YYYY-MM-DD segment', () => {
+    // Critical: filename + footer must reference the same server-stamped
+    // moment. Browser clock can drift — that's exactly what we don't want.
+    const packet = makePacket({ generated_at: '2026-05-27T18:30:00.000Z' });
     const name = buildWorksheetFilename(packet);
-    expect(name).toMatch(/^brighten-2_week-6-visit_worksheet_draft_\d{4}-\d{2}-\d{2}\.pdf$/);
+    expect(name).toBe('brighten-2_week-6-visit_worksheet_draft_2026-05-27.pdf');
+  });
+
+  it('uses UTC for the date segment to match the footer timezone', () => {
+    // 2026-05-27T23:59:00Z is still May 27 in UTC even though it might be
+    // May 28 in a UTC+1 browser. We want the UTC date to match the footer.
+    const packet = makePacket({ generated_at: '2026-05-27T23:59:00.000Z' });
+    const name = buildWorksheetFilename(packet);
+    expect(name).toContain('_2026-05-27.pdf');
   });
 
   it('falls back to protocol_<id-prefix> when protocol_code is null', () => {
     const packet = makePacket({ protocol_code: null });
     const name = buildWorksheetFilename(packet);
     expect(name).toMatch(/^protocol_0000_week-6-visit_worksheet_draft_/);
+  });
+
+  it('falls back to today UTC when generated_at is malformed (defensive)', () => {
+    const packet = makePacket({ generated_at: 'not-an-iso-string' });
+    const name = buildWorksheetFilename(packet);
+    // Defensive fallback — just ensure we still build a name with a
+    // YYYY-MM-DD-shaped segment so the export doesn't crash.
+    expect(name).toMatch(/_\d{4}-\d{2}-\d{2}\.pdf$/);
   });
 });
 
@@ -301,6 +320,30 @@ describe('buildVisitWorksheetPdf — pure function', () => {
       ...i,
       traceability: { soa_column: null, protocol_section: null, protocol_page: null, amendment_version: null },
     }));
+    expect(() => buildVisitWorksheetPdf(packet)).not.toThrow();
+  });
+
+  it('builds without throwing when purpose is the canonical placeholder (parser-pending path)', () => {
+    const packet = makePacket({
+      snapshot: {
+        ...makePacket().snapshot,
+        purpose: WORKSHEET_PLACEHOLDER_PURPOSE,
+      },
+    });
+    expect(() => buildVisitWorksheetPdf(packet)).not.toThrow();
+  });
+
+  it('builds without throwing when all requirements are reviewed (no warning banner)', () => {
+    const packet = makePacket({
+      snapshot: { ...makePacket().snapshot, reviewed_count: 12, needs_review_count: 0, item_count: 12 },
+    });
+    expect(() => buildVisitWorksheetPdf(packet)).not.toThrow();
+  });
+
+  it('builds without throwing with 1 open item (singular banner copy path)', () => {
+    const packet = makePacket({
+      snapshot: { ...makePacket().snapshot, reviewed_count: 11, needs_review_count: 1, item_count: 12 },
+    });
     expect(() => buildVisitWorksheetPdf(packet)).not.toThrow();
   });
 });
@@ -385,5 +428,15 @@ describe('disclaimer + header label constants', () => {
   it('header label carries the "PIQC drafted" attribution + DRAFT mark', () => {
     expect(WORKSHEET_HEADER_LABEL).toMatch(/PIQC drafted/);
     expect(WORKSHEET_HEADER_LABEL).toMatch(/DRAFT/);
+  });
+
+  it('placeholder purpose string is the exact RPC fallback (kept in sync with migrations)', () => {
+    // The RPC's COALESCE fallback is hard-coded — if anyone changes the
+    // SQL string without changing this constant, the PDF builder stops
+    // recognizing the placeholder and the deliverable looks unfinished.
+    // This test fails loudly when the strings drift.
+    expect(WORKSHEET_PLACEHOLDER_PURPOSE).toBe(
+      'Per-protocol visit. Detailed execution requirements pending structured ingest extraction.',
+    );
   });
 });

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Download, Loader2, Check, AlertTriangle } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { downloadVisitWorksheet } from '../../../lib/visit-execution/visitExecutionExportApi';
@@ -41,8 +41,29 @@ export default function ExportWorksheetButton({ visitTemplateId, visitName }: Pr
   const [state, setState] = useState<ButtonState>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Track the success-revert timeout so we can clear it on unmount or on
+  // a new click — prevents setState firing on an unmounted component when
+  // the coordinator switches visits mid-success-window.
+  const revertTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (revertTimeoutRef.current !== null) {
+        clearTimeout(revertTimeoutRef.current);
+        revertTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
   async function handleClick() {
     if (state === 'loading') return; // dedupe rapid double-clicks
+
+    // Clear any pending revert from a previous success — a coordinator may
+    // click Export again before the 2s window finishes.
+    if (revertTimeoutRef.current !== null) {
+      clearTimeout(revertTimeoutRef.current);
+      revertTimeoutRef.current = null;
+    }
 
     setState('loading');
     setErrorMessage(null);
@@ -61,9 +82,10 @@ export default function ExportWorksheetButton({ visitTemplateId, visitName }: Pr
 
     setState('success');
     // Auto-revert to idle so a coordinator can re-export (e.g. after
-    // making another edit). Window timeout is fine since this component
-    // is small and the state isn't structural.
-    window.setTimeout(() => {
+    // making another edit). Timeout tracked in revertTimeoutRef so we
+    // can clear it on unmount / next click.
+    revertTimeoutRef.current = setTimeout(() => {
+      revertTimeoutRef.current = null;
       setState('idle');
     }, SUCCESS_RESET_MS);
   }
@@ -95,7 +117,11 @@ export default function ExportWorksheetButton({ visitTemplateId, visitName }: Pr
     switch (state) {
       case 'loading': return 'Exporting…';
       case 'success': return 'Exported ✓';
-      case 'error':   return 'Try again';
+      // "Export failed" rather than "Try again" — design-critique caught
+      // that AlertTriangle + "Try again" mixed metaphors (alert icon paired
+      // with positive action). The button stays clickable in this state;
+      // the click action IS the retry. Tooltip below carries detail.
+      case 'error':   return 'Export failed';
       case 'idle':
       default:        return 'Export worksheet';
     }

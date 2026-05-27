@@ -64,19 +64,23 @@ export const WORKSHEET_DISCLAIMER =
 
 export const WORKSHEET_HEADER_LABEL = 'PIQC drafted · Visit worksheet · DRAFT';
 
+/**
+ * Canonical placeholder purpose prose — emitted by the v2/v3 RPC when no
+ * structured `purpose` has been extracted yet. The PDF builder renders this
+ * differently (italic gray, framed as "parser-pending") so the deliverable
+ * doesn't look like an unfinished worksheet to a coordinator who exports
+ * before re-running the ingest.
+ *
+ * Kept in sync with the COALESCE fallback in
+ * supabase/migrations/20260617000000_visit_execution_export_rpc.sql (and
+ * the older visit_execution_get_workspace RPCs).
+ */
+export const WORKSHEET_PLACEHOLDER_PURPOSE =
+  'Per-protocol visit. Detailed execution requirements pending structured ingest extraction.';
+
 // ---------------------------------------------------------------------------
 // Filename helper
 // ---------------------------------------------------------------------------
-
-/**
- * YYYY-MM-DD in local time. Used in filenames + footers.
- */
-function todayLocalIsoDate(): string {
-  const d = new Date();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${m}-${day}`;
-}
 
 /**
  * Slugify a name for filesystem-safe filenames: lowercase, alphanumerics +
@@ -92,19 +96,51 @@ export function slugifyForFilename(input: string): string {
 }
 
 /**
+ * Extract the YYYY-MM-DD date portion from an ISO 8601 timestamp.
+ *
+ * Uses UTC (matches the PDF footer's `Generated YYYY-MM-DD HH:MM UTC`
+ * format). The packet's `generated_at` is the server-clock authoritative
+ * lock-in time — pulling the date from THAT source means the filename
+ * always matches the footer regardless of browser timezone.
+ *
+ * Falls back to today's UTC date if the input is unparseable (defensive —
+ * the RPC should never return a malformed timestamp, but the API boundary
+ * shouldn't crash the export over it).
+ */
+export function isoDateForFilename(iso: string): string {
+  try {
+    const d = new Date(iso);
+    if (!Number.isNaN(d.getTime())) {
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(d.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+  } catch {
+    // Fall through to today's date.
+  }
+  const fallback = new Date();
+  const m = String(fallback.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(fallback.getUTCDate()).padStart(2, '0');
+  return `${fallback.getUTCFullYear()}-${m}-${day}`;
+}
+
+/**
  * Build the filename for an exported worksheet.
  * Format: `<protocol_code>_<visit_name>_worksheet_draft_<YYYY-MM-DD>.pdf`
  *
  * Protocol code falls back to a short id prefix when null (e.g. `protocol_8f3a`).
+ * Date comes from `packet.generated_at` (the server-stamped lock-in time)
+ * NOT the browser clock — filename and footer timestamp must agree.
  */
 export function buildWorksheetFilename(
-  packet: Pick<VisitWorksheetExportPacket, 'protocol_code' | 'protocol_id' | 'snapshot'>,
+  packet: Pick<VisitWorksheetExportPacket, 'protocol_code' | 'protocol_id' | 'snapshot' | 'generated_at'>,
 ): string {
   const code = packet.protocol_code
     ? slugifyForFilename(packet.protocol_code)
     : `protocol_${packet.protocol_id.slice(0, 4)}`;
   const visit = slugifyForFilename(packet.snapshot.visit_name);
-  return `${code}_${visit}_worksheet_draft_${todayLocalIsoDate()}.pdf`;
+  return `${code}_${visit}_worksheet_draft_${isoDateForFilename(packet.generated_at)}.pdf`;
 }
 
 // ---------------------------------------------------------------------------
@@ -280,7 +316,9 @@ const CLASSIFICATION_LABEL: Record<ItemClassification, string> = {
 
 const REVIEW_LABEL: Record<ExecutionReviewStatus, string> = {
   not_reviewed:    'Not reviewed',
-  needs_review:    'Needs review',
+  // "!" prefix gives needs_review a visual flag for at-a-glance scanning
+  // on a printed page where color and weight aren't reliable cues.
+  needs_review:    '! Needs review',
   reviewed:        'Reviewed ✓',
   edited:          'Edited',
   site_note_added: 'Site note',
@@ -418,30 +456,93 @@ export function buildVisitWorksheetPdf(packet: VisitWorksheetExportPacket): jsPD
   doc.text(codeLabel, margin, cursorY);
   cursorY += 20;
 
-  // Purpose section
+  // Purpose section — placeholder-aware. When the RPC returned the canonical
+  // fallback string (parser hasn't extracted a real purpose yet), we frame
+  // it explicitly as parser-pending in italic gray so the deliverable
+  // doesn't read as "unfinished by the coordinator." When the prose is
+  // real, render it as a normal-weight body block.
   doc.setFontSize(8);
   doc.setTextColor(110);
   doc.text('PIQC DRAFTED', margin, cursorY);
   cursorY += 12;
-  doc.setFontSize(10);
-  doc.setTextColor(40);
-  const purposeLines = doc.splitTextToSize(packet.snapshot.purpose, pageWidth - margin * 2);
-  doc.text(purposeLines, margin, cursorY);
-  cursorY += purposeLines.length * 12 + 14;
+  const isPlaceholderPurpose = packet.snapshot.purpose.trim() === WORKSHEET_PLACEHOLDER_PURPOSE;
+  if (isPlaceholderPurpose) {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(10);
+    doc.setTextColor(120);
+    const placeholderText =
+      'Visit purpose not yet extracted from the protocol. Re-run ingest or fill in the workspace before relying on this draft.';
+    const placeholderLines = doc.splitTextToSize(placeholderText, pageWidth - margin * 2);
+    doc.text(placeholderLines, margin, cursorY);
+    cursorY += placeholderLines.length * 12 + 14;
+    doc.setFont('helvetica', 'normal');
+  } else {
+    doc.setFontSize(10);
+    doc.setTextColor(40);
+    const purposeLines = doc.splitTextToSize(packet.snapshot.purpose, pageWidth - margin * 2);
+    doc.text(purposeLines, margin, cursorY);
+    cursorY += purposeLines.length * 12 + 14;
+  }
 
-  // Stats line
+  // Stats line. The "to review" count is colored amber when non-zero so a
+  // coordinator scanning the stats line sees open work at a glance.
   doc.setFontSize(9);
   doc.setTextColor(60);
-  const statsParts = [
-    `${packet.snapshot.item_count} requirements`,
-    `${packet.snapshot.reviewed_count} reviewed`,
-    `${packet.snapshot.needs_review_count} to review`,
-  ];
-  if (packet.snapshot.amendment_version) {
-    statsParts.push(packet.snapshot.amendment_version);
+  const baseStatsLine = `${packet.snapshot.item_count} requirements · ${packet.snapshot.reviewed_count} reviewed · `;
+  doc.text(baseStatsLine, margin, cursorY);
+  const baseWidth = doc.getTextWidth(baseStatsLine);
+
+  if (packet.snapshot.needs_review_count > 0) {
+    // Approximate Tailwind amber-700 (#B45309) — RGB tuned for print
+    // contrast on white paper. Exact match isn't required since the PDF
+    // viewer's rendering already shifts gamma; this reads clearly amber.
+    doc.setTextColor(180, 83, 9);
+    doc.setFont('helvetica', 'bold');
   }
-  doc.text(statsParts.join(' · '), margin, cursorY);
-  cursorY += 20;
+  doc.text(`${packet.snapshot.needs_review_count} to review`, margin + baseWidth, cursorY);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(60);
+
+  if (packet.snapshot.amendment_version) {
+    const widthSoFar = baseWidth + doc.getTextWidth(`${packet.snapshot.needs_review_count} to review`);
+    doc.text(` · ${packet.snapshot.amendment_version}`, margin + widthSoFar, cursorY);
+  }
+  cursorY += 18;
+
+  // Open-items warning banner. When N requirements still need review, the
+  // coordinator must not mistake this artifact for a complete deliverable.
+  // The banner doesn't gate the export — it's a non-blocking honesty signal.
+  // Skipped when all requirements are reviewed (no false alarms).
+  if (packet.snapshot.needs_review_count > 0) {
+    const bannerHeight = 28;
+    const bannerY = cursorY;
+    // Amber fill + border, matching the workspace's hard-constraint timing tone.
+    doc.setFillColor(254, 243, 199); // amber-100
+    doc.setDrawColor(252, 211, 77);  // amber-300
+    doc.setLineWidth(0.8);
+    doc.rect(margin, bannerY, pageWidth - margin * 2, bannerHeight, 'FD');
+
+    doc.setTextColor(146, 64, 14); // amber-800
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    const bannerLeadingX = margin + 8;
+    doc.text('⚠', bannerLeadingX, bannerY + 12);
+    doc.setFont('helvetica', 'normal');
+    const bannerMessage =
+      `${packet.snapshot.needs_review_count} requirement${packet.snapshot.needs_review_count === 1 ? '' : 's'} not yet reviewed. ` +
+      'Continue reviewing in PIQC before relying on this draft.';
+    const bannerLines = doc.splitTextToSize(
+      bannerMessage,
+      pageWidth - margin * 2 - 28,
+    );
+    doc.text(bannerLines, bannerLeadingX + 14, bannerY + 12);
+    cursorY += bannerHeight + 14;
+    // Reset color state for downstream content.
+    doc.setTextColor(60);
+    doc.setFont('helvetica', 'normal');
+  } else {
+    cursorY += 2;
+  }
 
   // ---- Per-phase autotables ----------------------------------------------
   for (const phase of PHASE_ORDER) {
@@ -557,12 +658,36 @@ export function buildVisitWorksheetPdf(packet: VisitWorksheetExportPacket): jsPD
     });
   }
 
-  // ---- Header + footer band on every page --------------------------------
+  // ---- DRAFT watermark + header + footer on every page ------------------
   // jsPDF doesn't have a "draw on every page" hook for autotable's added
-  // pages; iterate after the body's done.
+  // pages; iterate after the body's done. The watermark is the compliance-
+  // critical signal — the corner header label is too quiet for a printed
+  // artifact that may be photocopied / faxed / scanned mid-stack. A 45°
+  // diagonal "DRAFT" across each page is the standard clinical convention.
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
+
+    // Watermark — 45° diagonal "DRAFT" centered. NOTE: jsPDF has no
+    // background-layer primitive, so the watermark is technically a
+    // foreground layer drawn LAST. The 0.12 GState opacity makes it read
+    // visually as a background (standard jsPDF watermark convention used
+    // across the ecosystem). The compliance-critical signal isn't impaired:
+    // even at low opacity, the diagonal "DRAFT" remains readable mid-stack.
+    // GState reset to 1 after the watermark so subsequent header/footer
+    // text renders fully opaque.
+    const watermarkGState = doc.GState({ opacity: 0.12 });
+    doc.setGState(watermarkGState);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(110);
+    doc.setTextColor(120, 120, 120);
+    doc.text('DRAFT', pageWidth / 2, pageHeight / 2, {
+      align: 'center',
+      angle: 45,
+      baseline: 'middle',
+    });
+    // Reset opacity so subsequent header/footer text renders fully opaque.
+    doc.setGState(doc.GState({ opacity: 1 }));
 
     // Header band — only show on pages 2+ (page 1 has the title block).
     if (i > 1) {
@@ -576,18 +701,20 @@ export function buildVisitWorksheetPdf(packet: VisitWorksheetExportPacket): jsPD
     }
 
     // Footer band — disclaimer left, generated_at + pagination right.
+    // Bumped from 7pt → 8pt: the disclaimer is the most important line
+    // on the deliverable; 7pt was at the readability floor.
     doc.setFont('helvetica', 'italic');
-    doc.setFontSize(7);
+    doc.setFontSize(8);
     doc.setTextColor(120);
     const disclaimerLines = doc.splitTextToSize(WORKSHEET_DISCLAIMER, pageWidth - margin * 2 - 140);
     doc.text(disclaimerLines, margin, pageHeight - margin + 8);
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
+    doc.setFontSize(8);
     doc.text(formatGeneratedAt(packet.generated_at), pageWidth - margin, pageHeight - margin + 8, {
       align: 'right',
     });
-    doc.text(`Page ${i} / ${pageCount}`, pageWidth - margin, pageHeight - margin + 18, {
+    doc.text(`Page ${i} / ${pageCount}`, pageWidth - margin, pageHeight - margin + 20, {
       align: 'right',
     });
   }

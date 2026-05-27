@@ -828,7 +828,12 @@ export default function VisitExecutionTab() {
                 onOpenTraceability={setTraceabilityItem}
               />
 
-              <div className="flex items-center justify-between pt-2 gap-3">
+              {/* Polish-v2 follow-up (Sprint 5 design-critique): the
+                  export row is the moment-of-lock-in / funnel-exit action.
+                  Bumped pt-2 → pt-6 gives the row breathing room from the
+                  checklist content above so it doesn't read as a footer
+                  attachment to the disclaimer line. */}
+              <div className="flex items-center justify-between pt-6 gap-3">
                 <p className="text-fg-muted text-[11px] leading-relaxed max-w-md">
                   This workspace is a draft. Final source-document authoring and
                   approval are performed outside PIQC.
