@@ -4,18 +4,21 @@ import {
   fetchVisitExecutionWorkspaces,
   isMockEnabled,
 } from '../visitExecutionApi';
-import * as siteApi from '../../site/siteApi';
+import { supabase } from '../../supabase';
 import { DEMO_PROTOCOL_IDS } from '../../demo/ids';
-import type { ProtocolVisitTemplate } from '../../site/types';
 
 // =============================================================================
 // visitExecutionApi — Result<T> contract + localStorage mock-toggle behaviour.
 //
 // Two paths to verify:
 //   1. Mock on  → returns rich fixture data from mockVisitWorkspace.ts;
-//                 does NOT call fetchVisitTemplates.
-//   2. Mock off → calls fetchVisitTemplates and runs the result through
-//                 visitExecutionAdapter. Surfaces fetch errors as ok:false.
+//                 does NOT call supabase.rpc.
+//   2. Mock off → calls supabase.rpc('visit_execution_get_workspace', {...}).
+//                 Surfaces RPC errors as ok:false. Treats null/missing
+//                 workspaces as empty array (RLS empty-result contract).
+//
+// Sprint 3.5b change: real path no longer goes through the Sprint 1 bridge
+// (fetchVisitTemplates + adapter). Tests updated accordingly.
 // =============================================================================
 
 describe('isMockEnabled', () => {
@@ -60,8 +63,8 @@ describe('fetchVisitExecutionWorkspaces — mock on', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns the BRIGHTEN-2 mock workspaces without calling fetchVisitTemplates', async () => {
-    const spy = vi.spyOn(siteApi, 'fetchVisitTemplates');
+  it('returns the BRIGHTEN-2 mock workspaces without calling supabase.rpc', async () => {
+    const spy = vi.spyOn(supabase, 'rpc');
     const result = await fetchVisitExecutionWorkspaces(DEMO_PROTOCOL_IDS['BRIGHTEN-2']);
     expect(spy).not.toHaveBeenCalled();
     expect(result.ok).toBe(true);
@@ -115,7 +118,7 @@ describe('fetchVisitExecutionWorkspaces — mock on', () => {
   });
 });
 
-describe('fetchVisitExecutionWorkspaces — mock off', () => {
+describe('fetchVisitExecutionWorkspaces — mock off (Sprint 3.5b RPC path)', () => {
   beforeEach(() => {
     window.localStorage.clear();
   });
@@ -124,39 +127,50 @@ describe('fetchVisitExecutionWorkspaces — mock off', () => {
     vi.restoreAllMocks();
   });
 
-  it('delegates to fetchVisitTemplates and runs results through the adapter', async () => {
-    const templates: ProtocolVisitTemplate[] = [
-      {
-        id: 'tpl-1',
-        protocol_id: 'proto-z',
-        visit_name: 'Screening',
-        study_day: -7,
-        window_minus_days: 0,
-        window_plus_days: 3,
-        procedures: ['Informed consent', 'Vitals'],
-        source_document_id: null,
-        cross_references: [],
-      },
-    ];
-    vi.spyOn(siteApi, 'fetchVisitTemplates').mockResolvedValue({ ok: true, data: templates });
+  it('calls supabase.rpc("visit_execution_get_workspace", { p_protocol_id })', async () => {
+    const spy = vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      // Cast to any: PostgrestSingleResponse type is messy to mock fully.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: { workspaces: [] },
+      error: null,
+    } as any);
+
+    await fetchVisitExecutionWorkspaces('proto-z');
+    expect(spy).toHaveBeenCalledWith('visit_execution_get_workspace', {
+      p_protocol_id: 'proto-z',
+    });
+  });
+
+  it('returns the workspaces array unwrapped from the RPC payload', async () => {
+    const fakePayload = {
+      workspaces: [
+        {
+          visit_template_id: 'tpl-1',
+          protocol_id: 'proto-z',
+          snapshot: { visit_name: 'Screening' },
+          items: [],
+        },
+      ],
+    };
+    vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: fakePayload, error: null,
+    } as any);
 
     const result = await fetchVisitExecutionWorkspaces('proto-z');
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.data).toHaveLength(1);
       expect(result.data[0].visit_template_id).toBe('tpl-1');
-      expect(result.data[0].items.map((i) => i.label)).toEqual([
-        'Informed consent',
-        'Vitals',
-      ]);
     }
   });
 
-  it('passes fetchVisitTemplates errors through as ok:false (no throw)', async () => {
-    vi.spyOn(siteApi, 'fetchVisitTemplates').mockResolvedValue({
-      ok: false,
-      error: 'simulated supabase failure',
-    });
+  it('surfaces RPC errors as ok:false (no throw)', async () => {
+    vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      data: null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      error: { message: 'simulated supabase failure' } as any,
+    } as any);
 
     const result = await fetchVisitExecutionWorkspaces('proto-z');
     expect(result.ok).toBe(false);
@@ -165,8 +179,24 @@ describe('fetchVisitExecutionWorkspaces — mock off', () => {
     }
   });
 
-  it('returns ok:true with [] when fetchVisitTemplates returns no rows', async () => {
-    vi.spyOn(siteApi, 'fetchVisitTemplates').mockResolvedValue({ ok: true, data: [] });
+  it('returns ok:true with [] when RPC returns null payload (ownership-gate empty)', async () => {
+    vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: null, error: null,
+    } as any);
+    const result = await fetchVisitExecutionWorkspaces('proto-z');
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data).toEqual([]);
+    }
+  });
+
+  it('returns ok:true with [] when RPC returns payload without a workspaces array', async () => {
+    vi.spyOn(supabase, 'rpc').mockResolvedValue({
+      // Server-side schema drift fallback — treat as empty rather than crash.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: { workspaces: null } as any, error: null,
+    } as any);
     const result = await fetchVisitExecutionWorkspaces('proto-z');
     expect(result.ok).toBe(true);
     if (result.ok) {
