@@ -1,9 +1,10 @@
 ---
 owner: kiara
 feature: pilot-ux-improvements
-status: active
+status: merged
+merged: 2026-05-27
 started: 2026-05-25
-target_pr:
+target_pr: #151
 ---
 
 # Pilot UX improvements — block double-purchase + banner visibility
