@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: visit-execution-sprint-4b-edit-text-and-notes
-status: in-review
+status: merged
+merged: 2026-05-27
 started: 2026-05-27
-target_pr:
+target_pr: #135
 ---
 
 # Visit Execution — Sprint 4b: Edit text + site notes + drift display
