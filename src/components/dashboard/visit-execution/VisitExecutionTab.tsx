@@ -1,8 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Loader2, FlaskConical } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Loader2, FlaskConical, X, AlertTriangle } from 'lucide-react';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useTheme } from '../../../context/ThemeContext';
 import { fetchVisitExecutionWorkspaces, isMockEnabled } from '../../../lib/visit-execution/visitExecutionApi';
+import {
+  flagForReview,
+  markReviewed,
+  unmarkReviewed,
+} from '../../../lib/visit-execution/visitExecutionMutationsApi';
 import type {
   ExecutionReviewStatus,
   VisitExecutionItem,
@@ -24,14 +29,45 @@ import ExportPlaceholderButton from './ExportPlaceholderButton';
 //                 ExportPlaceholderButton at the bottom
 //   - Drawer overlay: TraceabilityDrawer (one instance, item-scoped)
 //
-// State owned here (client-local, not persisted — Sprint 1):
+// State owned here:
 //   - workspaces[]   — loaded once per active protocol
 //   - selectedVisitTemplateId
-//   - reviewStatus Map<itemId, ExecutionReviewStatus>
+//   - reviewStatus Map<itemId, ExecutionReviewStatus> — optimistic-update
+//     override on top of each item's persisted review_status. Seeded empty
+//     on workspace load; populated on each successful mutation. Sprint 4a
+//     wires this Map to real RPC writes (visit_execution_set_review_status)
+//     via visitExecutionMutationsApi.
+//   - mutationError: string | null — most-recent mutation failure, shown as
+//     a dismissable banner above the checklist
 //   - traceabilityItem (VisitExecutionItem | null)
 //
-// No context promotion in Sprint 1 — single consumer of this data so far.
+// No context promotion yet — single consumer of this data so far.
 // =============================================================================
+
+/**
+ * Map common RPC error patterns to human-readable strings for the banner.
+ * Falls back to a generic message so a coordinator never sees raw Postgres
+ * jargon. The raw error stays in console.error for debugging.
+ */
+function humanizeRpcError(raw: string): string {
+  const r = raw.toLowerCase();
+  if (r.includes('permission denied') || r.includes('access denied')) {
+    return "You don't have permission to change this requirement.";
+  }
+  if (r.includes('not authenticated') || r.includes('jwt')) {
+    return 'Your session expired. Sign in again to save changes.';
+  }
+  if (r.includes('not found') || r.includes('requirement not found')) {
+    return 'This requirement no longer exists — refresh the page.';
+  }
+  if (r.includes('network') || r.includes('fetch')) {
+    return 'Network error — check your connection and try again.';
+  }
+  if (r.includes('malformed')) {
+    return 'The server returned an unexpected response — try again.';
+  }
+  return "Couldn't save that change — try again.";
+}
 
 export default function VisitExecutionTab() {
   const { activeProtocol } = useProtocol();
@@ -43,7 +79,16 @@ export default function VisitExecutionTab() {
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reviewStatus, setReviewStatus] = useState<Map<string, ExecutionReviewStatus>>(new Map());
+  const [mutationError, setMutationError] = useState<{ message: string; itemLabel: string } | null>(null);
   const [traceabilityItem, setTraceabilityItem] = useState<VisitExecutionItem | null>(null);
+
+  // Per-item generation counter for race-guarding rapid clicks. Each click
+  // increments the item's generation; the in-flight RPC captures the gen at
+  // dispatch time. On response, we compare — if the captured gen no longer
+  // matches the current value, a newer click superseded this RPC and we
+  // drop the stale result rather than letting it overwrite the latest state.
+  // Ref (not state) because we never need a re-render on bump.
+  const mutationGenRef = useRef<Map<string, number>>(new Map());
 
   // Load workspaces when the active protocol changes.
   useEffect(() => {
@@ -71,9 +116,13 @@ export default function VisitExecutionTab() {
       } else {
         setSelectedId(null);
       }
-      // Reset review state when protocol changes — review state isn't persisted yet.
+      // Reset optimistic overrides when protocol changes; persisted state
+      // comes through `r.data`. Also clear any lingering mutation error +
+      // race-guard generations (they're scoped to the prior protocol).
       setReviewStatus(new Map());
       setTraceabilityItem(null);
+      setMutationError(null);
+      mutationGenRef.current = new Map();
     });
     return () => {
       cancelled = true;
@@ -85,6 +134,13 @@ export default function VisitExecutionTab() {
     [workspaces, selectedId],
   );
 
+  // Clear any lingering mutation error when the user changes visits — the
+  // error refers to a specific item; banner is contextless once the user
+  // navigates away.
+  useEffect(() => {
+    setMutationError(null);
+  }, [selectedId]);
+
   const reviewedCountForSelected = useMemo(() => {
     if (!selectedWorkspace) return 0;
     return selectedWorkspace.items.filter(
@@ -92,22 +148,146 @@ export default function VisitExecutionTab() {
     ).length;
   }, [selectedWorkspace, reviewStatus]);
 
-  const handleToggleReviewed = (itemId: string) => {
-    setReviewStatus((prev) => {
-      const next = new Map(prev);
-      const current = next.get(itemId) ?? 'not_reviewed';
-      next.set(itemId, current === 'reviewed' ? 'not_reviewed' : 'reviewed');
-      return next;
-    });
-  };
+  // Helper: read the effective current status for an item (optimistic
+  // override OR persisted value). Used to compute the "what to revert to"
+  // value on RPC failure.
+  const effectiveStatusFor = useCallback(
+    (itemId: string): ExecutionReviewStatus => {
+      const override = reviewStatus.get(itemId);
+      if (override) return override;
+      const item = selectedWorkspace?.items.find((i) => i.id === itemId);
+      return item?.review_status ?? 'not_reviewed';
+    },
+    [reviewStatus, selectedWorkspace],
+  );
 
-  const handleSetStatus = (itemId: string, nextStatus: ExecutionReviewStatus) => {
-    setReviewStatus((prev) => {
-      const next = new Map(prev);
-      next.set(itemId, nextStatus);
-      return next;
-    });
-  };
+  // Generic optimistic-mutation runner. Updates the local Map immediately,
+  // fires the RPC, reverts on failure with an error banner.
+  //
+  // Race-guard: every click bumps a per-item generation counter. The RPC
+  // callback captures the gen at dispatch time and only applies its result
+  // if the gen still matches on response. If a later click superseded this
+  // RPC (gen mismatch), we drop the stale result rather than letting an
+  // older response overwrite the newer optimistic state.
+  const runReviewMutation = useCallback(
+    async (
+      itemId: string,
+      itemLabel: string,
+      optimisticNext: ExecutionReviewStatus,
+      rpc: () => Promise<{ ok: true; data: { review_status: ExecutionReviewStatus } } | { ok: false; error: string }>,
+    ) => {
+      const prior = effectiveStatusFor(itemId);
+      // Bump generation. Mutation captures this value; comparing on response
+      // tells us whether a newer click superseded us.
+      const myGen = (mutationGenRef.current.get(itemId) ?? 0) + 1;
+      mutationGenRef.current.set(itemId, myGen);
+
+      // Optimistic update.
+      setReviewStatus((prev) => {
+        const next = new Map(prev);
+        next.set(itemId, optimisticNext);
+        return next;
+      });
+      setMutationError(null);
+
+      const result = await rpc();
+
+      // Stale? A later click superseded us — drop the result.
+      if (mutationGenRef.current.get(itemId) !== myGen) {
+        return;
+      }
+
+      if (!result.ok) {
+        // Revert.
+        setReviewStatus((prev) => {
+          const next = new Map(prev);
+          next.set(itemId, prior);
+          return next;
+        });
+        // Surface a humanized message; keep the raw RPC error in the console
+        // for developer debugging.
+        console.error('[vew] mutation_failed', { itemId, error: result.error });
+        setMutationError({ message: humanizeRpcError(result.error), itemLabel });
+        return;
+      }
+      // Server-authoritative final state. Usually matches optimisticNext,
+      // but if the RPC has rules that snap to a different value (e.g. a
+      // future server-side validation), we honor whatever the server says.
+      if (result.data.review_status !== optimisticNext) {
+        setReviewStatus((prev) => {
+          const next = new Map(prev);
+          next.set(itemId, result.data.review_status);
+          return next;
+        });
+      }
+    },
+    [effectiveStatusFor],
+  );
+
+  // Resolve an item's display label for the mutation-error banner. Looks
+  // in the selected workspace; falls back to the itemId if not found
+  // (defensive — shouldn't happen since handlers are only called from rows
+  // in the current workspace).
+  const labelForItem = useCallback(
+    (itemId: string): string => {
+      const item = selectedWorkspace?.items.find((i) => i.id === itemId);
+      return item?.label ?? itemId;
+    },
+    [selectedWorkspace],
+  );
+
+  const handleToggleReviewed = useCallback(
+    (itemId: string) => {
+      const current = effectiveStatusFor(itemId);
+      const label = labelForItem(itemId);
+      if (current === 'reviewed') {
+        void runReviewMutation(itemId, label, 'not_reviewed', () => unmarkReviewed(itemId));
+      } else {
+        void runReviewMutation(itemId, label, 'reviewed', () => markReviewed(itemId));
+      }
+    },
+    [effectiveStatusFor, labelForItem, runReviewMutation],
+  );
+
+  const handleSetStatus = useCallback(
+    (itemId: string, nextStatus: ExecutionReviewStatus) => {
+      // The menu items that route through onSetStatus today are "Flag for
+      // review" and "Mark needs clarification" (both → 'needs_review'). The
+      // RPC distinguishes them via the action enum even though the resulting
+      // status is identical. We can't tell them apart from `nextStatus`
+      // alone here — the menu in ExecutionChecklist would need to plumb the
+      // action through. For 4a we default to 'flag_for_review'; Sprint 4b
+      // adds the discriminator when it adds the note-input UI.
+      //
+      // 'site_note_added' is unreachable in 4a (Add-site-note removed from
+      // the menu). Treated as a programmer-error guard.
+      const label = labelForItem(itemId);
+      if (nextStatus === 'reviewed') {
+        void runReviewMutation(itemId, label, 'reviewed', () => markReviewed(itemId));
+        return;
+      }
+      if (nextStatus === 'not_reviewed') {
+        void runReviewMutation(itemId, label, 'not_reviewed', () => unmarkReviewed(itemId));
+        return;
+      }
+      if (nextStatus === 'needs_review') {
+        void runReviewMutation(itemId, label, 'needs_review', () => flagForReview(itemId));
+        return;
+      }
+      if (nextStatus === 'site_note_added') {
+        // Programmer error in 4a — the menu shouldn't surface this. Log + ignore.
+        console.warn('[vew] add_site_note path not wired until Sprint 4b', { itemId });
+        return;
+      }
+      if (nextStatus === 'edited') {
+        // edited goes through visit_execution_edit_text — wired in 4b.
+        console.warn('[vew] edit_text path not wired until Sprint 4b', { itemId });
+        return;
+      }
+    },
+    [labelForItem, runReviewMutation],
+  );
+
 
   if (loading) {
     return (
@@ -178,6 +358,36 @@ export default function VisitExecutionTab() {
                 reviewedCount={reviewedCountForSelected}
                 totalItems={selectedWorkspace.items.length}
               />
+
+              {mutationError && (
+                <div
+                  role="alert"
+                  data-testid="vew-mutation-error-banner"
+                  className={`flex items-start gap-2 px-3 py-2 rounded-md border text-xs ${
+                    isLight
+                      ? 'bg-[#fdecec] border-[#f3c7c7] text-[#742a2a]'
+                      : 'bg-[#3b1f1f] border-[#5a2e2e] text-[#f5b8b8]'
+                  }`}
+                >
+                  {/* Icon for non-color signaling — color-blind users need a
+                      non-hue cue that this is an alert. */}
+                  <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" aria-hidden />
+                  <span className="flex-1 leading-relaxed">
+                    Couldn't save change to <strong>{mutationError.itemLabel}</strong>:{' '}
+                    {mutationError.message} Your previous state was restored.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setMutationError(null)}
+                    aria-label="Dismiss error"
+                    className={`flex items-center justify-center w-6 h-6 rounded -mr-1 opacity-70 hover:opacity-100 ${
+                      isLight ? 'hover:bg-[#f3c7c7]' : 'hover:bg-[#5a2e2e]'
+                    }`}
+                  >
+                    <X size={12} aria-hidden />
+                  </button>
+                </div>
+              )}
 
               <ExecutionChecklist
                 workspace={selectedWorkspace}

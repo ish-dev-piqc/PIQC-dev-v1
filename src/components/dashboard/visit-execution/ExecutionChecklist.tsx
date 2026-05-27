@@ -378,10 +378,18 @@ function ChecklistItemRow({
                     isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/10'
                   }`}
                 >
+                  {/*
+                   * Sprint 4a: only flag-for-review is wired through the
+                   * RPC-backed handler. "Mark needs clarification" requires
+                   * the menu to plumb an action discriminator (since the RPC
+                   * distinguishes via action enum but both produce
+                   * review_status='needs_review'); collapsed into "Flag for
+                   * review" for now. "Add site note" requires note-input UI
+                   * (a textarea or drawer) — deferred to Sprint 4b. Both
+                   * return in 4b/4c with the missing infrastructure.
+                   */}
                   {[
                     { label: 'Flag for review', next: 'needs_review' as ExecutionReviewStatus },
-                    { label: 'Mark needs clarification', next: 'needs_review' as ExecutionReviewStatus },
-                    { label: 'Add site note', next: 'site_note_added' as ExecutionReviewStatus },
                   ].map((opt) => (
                     <button
                       key={opt.label}
