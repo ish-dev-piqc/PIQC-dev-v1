@@ -71,6 +71,33 @@ describe('fetchVisitExecutionWorkspaces — mock on', () => {
     }
   });
 
+  it('mock fixture surfaces Sprint 3.5a fields: parser_confidence + completeness_signals + per-item confidence_state', async () => {
+    const result = await fetchVisitExecutionWorkspaces(DEMO_PROTOCOL_IDS['BRIGHTEN-2']);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Every workspace's snapshot has a parser_confidence (high|medium|low|needs_review).
+    for (const ws of result.data) {
+      expect(ws.snapshot.parser_confidence).toMatch(/^(high|medium|low|needs_review)$/);
+      expect(Array.isArray(ws.snapshot.completeness_signals)).toBe(true);
+      for (const item of ws.items) {
+        // Curated fixture items default confidence_state to a string (not null).
+        expect(item.confidence_state).toMatch(/^(high|medium|low|needs_review)$/);
+      }
+    }
+
+    // At least one visit has a non-empty completeness_signals array
+    // (Week 6 visit seeds one — exercising the new VisitCompletenessSignal shape).
+    const weekSix = result.data.find((w) => w.snapshot.visit_name === 'Week 6 visit');
+    expect(weekSix).toBeDefined();
+    if (weekSix) {
+      expect(weekSix.snapshot.completeness_signals.length).toBeGreaterThan(0);
+      const signal = weekSix.snapshot.completeness_signals[0];
+      expect(signal.gap_text).toBeTruthy();
+      expect(signal.detection_confidence).toMatch(/^(high|medium|low|needs_review)$/);
+    }
+  });
+
   it('returns an empty array for a protocol with no mock fixture', async () => {
     const result = await fetchVisitExecutionWorkspaces('not-a-demo-protocol');
     expect(result.ok).toBe(true);

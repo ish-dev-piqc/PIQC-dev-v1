@@ -98,6 +98,9 @@ export function adaptVisitTemplate(template: ProtocolVisitTemplate): VisitExecut
     },
     review_status: 'not_reviewed',
     review_note: null,
+    // No extracted_item linked in the thin adapter path; confidence is unknown.
+    // Sprint 3.5b populates real confidence_state via the v2 RPC, not this code path.
+    confidence_state: null,
   }));
 
   const is_dosing_visit = detectDosingVisit(template.procedures ?? []);
@@ -119,6 +122,11 @@ export function adaptVisitTemplate(template: ProtocolVisitTemplate): VisitExecut
     reviewed_count: 0,
     flagged_count: 0,
     amendment_version: null,
+    // Sprint 3.5a additions. The thin adapter has no parser confidence to
+    // report and no detected gaps — those come from the v2 RPC once
+    // Sprint 3.5b ingest populates the new tables.
+    parser_confidence: null,
+    completeness_signals: [],
   };
 
   return {

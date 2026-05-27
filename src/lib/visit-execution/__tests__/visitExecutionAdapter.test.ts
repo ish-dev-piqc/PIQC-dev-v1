@@ -141,6 +141,35 @@ describe('adaptVisitTemplate', () => {
     expect(ws.items).toEqual([]);
     expect(ws.snapshot.item_count).toBe(0);
   });
+
+  // ---------------------------------------------------------------------------
+  // Sprint 3.5a additions — the new VisitConfidenceState + VisitCompletenessSignal
+  // fields. The thin adapter has no parser confidence or detected gaps to
+  // report (those come from the v2 RPC once 3.5b ingest writes the new tables).
+  // The adapter MUST default them honestly:
+  //   parser_confidence       → null
+  //   completeness_signals    → []
+  //   item.confidence_state   → null
+  // ---------------------------------------------------------------------------
+
+  it('defaults parser_confidence to null in the thin Sprint 1 mapping', () => {
+    const ws = adaptVisitTemplate(makeTemplate({ procedures: ['Vitals'] }));
+    expect(ws.snapshot.parser_confidence).toBeNull();
+  });
+
+  it('defaults completeness_signals to an empty array', () => {
+    const ws = adaptVisitTemplate(makeTemplate({ procedures: ['Vitals'] }));
+    expect(ws.snapshot.completeness_signals).toEqual([]);
+  });
+
+  it('defaults each item.confidence_state to null (no extracted_item linked)', () => {
+    const ws = adaptVisitTemplate(
+      makeTemplate({ procedures: ['Vitals', 'Labs', 'PRO questionnaire'] }),
+    );
+    for (const item of ws.items) {
+      expect(item.confidence_state).toBeNull();
+    }
+  });
 });
 
 describe('adaptVisitTemplates (batch)', () => {
