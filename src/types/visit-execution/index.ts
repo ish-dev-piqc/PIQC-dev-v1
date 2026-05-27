@@ -434,6 +434,113 @@ export interface VisitSignalResolutionResult {
 }
 
 
+// ---------------------------------------------------------------------------
+// Sprint 5 — Export packet shape.
+//
+// The `visit_execution_export_worksheet` RPC returns this denormalized
+// packet for ONE visit, shaped for the export builder (PDF v1; future DOCX
+// /CSV builders share the same packet). It is intentionally DIFFERENT from
+// the workspace shape:
+//
+//   - `generated_at` is a server-stamped timestamp (the moment-of-lock-in)
+//   - `protocol_code` (study_number) is surfaced for the filename + header
+//   - `protocol_title` is included for the PDF header (but never the
+//     sponsor — sponsor branding is intentionally excluded per
+//     feedback_no_sponsor_branding.md)
+//   - The snapshot is trimmed to the fields the PDF renders — no
+//     completeness signals, no per-item confidence, no chips
+//   - Items include `origin` (parser vs human_added) so the PDF can mark
+//     coordinator-added requirements differently
+// ---------------------------------------------------------------------------
+
+/**
+ * Where the requirement was derived from. Mirrors the DB `requirement_origin`
+ * enum. Sprint 5 surfaces this on the exported worksheet so coordinators
+ * can see at a glance which items were coordinator-added vs parser-derived.
+ */
+export type RequirementOrigin =
+  | 'soa_cell'
+  | 'protocol_body'
+  | 'footnote'
+  | 'amendment'
+  | 'human_added';
+
+/**
+ * Per-item row in the export packet. Flatter than `VisitExecutionItem` (no
+ * cross-reference snippet, no per-item confidence) — the exporter builds a
+ * print-friendly representation from this.
+ */
+export interface VisitWorksheetExportRow {
+  id: string;
+  phase: ExecutionPhase;
+  phase_order: number;
+  ordinal: number;
+  /** Effective label: COALESCE(current_text, derived_text). */
+  label: string;
+  description: string | null;
+  classification: ItemClassification;
+  role_hint: string | null;
+  review_status: ExecutionReviewStatus;
+  review_note: string | null;
+  origin: RequirementOrigin;
+  conditions: ConditionalRule[];
+  timing: AssessmentTimingConstraint | null;
+  source_fields: SourceFieldScaffold[];
+  /** Subset of VisitItemTraceability — only the fields the worksheet renders. */
+  traceability: {
+    soa_column: string | null;
+    protocol_section: string | null;
+    protocol_page: number | null;
+    amendment_version: string | null;
+  };
+}
+
+/**
+ * Trimmed snapshot for the exported worksheet. Excludes attention-chip
+ * derivatives (completeness_signals, conditional_item_count, etc.) — those
+ * are workspace affordances, not deliverable content.
+ */
+export interface VisitWorksheetExportSnapshot {
+  visit_name: string;
+  study_day: number;
+  window_minus_days: number;
+  window_plus_days: number;
+  purpose: string;
+  is_dosing_visit: boolean;
+  has_primary_endpoint: boolean;
+  has_safety_critical: boolean;
+  item_count: number;
+  reviewed_count: number;
+  needs_review_count: number;
+  amendment_version: string | null;
+}
+
+/**
+ * Return shape of `visit_execution_export_worksheet(p_visit_template_id)`.
+ *
+ * `protocol_code` is the `protocols.study_number` (NCT, EudraCT, etc — stable
+ * across amendments). Null is acceptable; the filename builder falls back
+ * to a short id prefix.
+ *
+ * `protocol_title` is shown in the PDF header. The sponsor field is
+ * DELIBERATELY excluded from this packet — PIQC artifacts stay
+ * sponsor-name-free per feedback_no_sponsor_branding.md.
+ *
+ * `generated_at` is the server-clock timestamp — the moment-of-lock-in.
+ * Surfaced in the PDF footer.
+ */
+export interface VisitWorksheetExportPacket {
+  protocol_id: string;
+  protocol_code: string | null;
+  protocol_title: string;
+  visit_template_id: string;
+  /** ISO 8601 timestamp from the server. */
+  generated_at: string;
+  snapshot: VisitWorksheetExportSnapshot;
+  items: VisitWorksheetExportRow[];
+}
+
+
 export function defaultExpandedPhases(snapshot: VisitSnapshot): ExecutionPhase[] {
   if (snapshot.is_dosing_visit) {
     return ['dosing', 'post_dose'];

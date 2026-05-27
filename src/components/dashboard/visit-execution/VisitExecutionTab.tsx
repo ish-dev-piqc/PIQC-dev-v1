@@ -23,7 +23,7 @@ import VisitNavigator from './VisitNavigator';
 import VisitSnapshotCard from './VisitSnapshotCard';
 import ExecutionChecklist, { type ChecklistItemAction } from './ExecutionChecklist';
 import TraceabilityDrawer from './TraceabilityDrawer';
-import ExportPlaceholderButton from './ExportPlaceholderButton';
+import ExportWorksheetButton from './ExportWorksheetButton';
 import RequirementTextDrawer, {
   type RequirementTextDrawerMode,
   type RequirementTextDrawerSubject,
@@ -37,7 +37,7 @@ import EditLogDrawer from './EditLogDrawer';
 // Layout:
 //   - Left rail: VisitNavigator (visit list with indicator chips)
 //   - Right pane: VisitSnapshotCard + (Sprint 4c) CompletenessSignalsPanel +
-//                 ExecutionChecklist + ExportPlaceholderButton
+//                 ExecutionChecklist + ExportWorksheetButton (Sprint 5)
 //   - Drawer overlays:
 //       - TraceabilityDrawer (item-scoped)
 //       - RequirementTextDrawer (modes: edit / note / promote_signal)
@@ -828,12 +828,15 @@ export default function VisitExecutionTab() {
                 onOpenTraceability={setTraceabilityItem}
               />
 
-              <div className="flex items-center justify-between pt-2">
+              <div className="flex items-center justify-between pt-2 gap-3">
                 <p className="text-fg-muted text-[11px] leading-relaxed max-w-md">
                   This workspace is a draft. Final source-document authoring and
                   approval are performed outside PIQC.
                 </p>
-                <ExportPlaceholderButton />
+                <ExportWorksheetButton
+                  visitTemplateId={selectedWorkspace.visit_template_id}
+                  visitName={selectedWorkspace.snapshot.visit_name}
+                />
               </div>
             </>
           ) : (
