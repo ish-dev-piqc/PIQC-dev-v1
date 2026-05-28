@@ -9,6 +9,7 @@ import { useHeatmap } from '../context/HeatmapContext';
 import { useDemoMode } from '../context/DemoModeContext';
 import OrgSettingsDrawer from './dashboard/site/OrgSettingsDrawer';
 import ProtocolUploadModal from './dashboard/site/ProtocolUploadModal';
+import { isComingSoonMode } from '../lib/comingSoonMode';
 import type { AuditStage } from '../types/audit';
 import type { AppView } from '../App';
 import type { SettingsSection } from './dashboard/Dashboard';
@@ -387,11 +388,12 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const comingSoon = isComingSoonMode();
   const navLinks = [
     { label: 'How It Works', href: '#what-it-does' },
     { label: 'Pricing', href: '#pricing' },
     { label: 'FAQ', href: '#faq' },
-    { label: 'Contact', href: '#contact' },
+    ...(comingSoon ? [] : [{ label: 'Contact', href: '#contact' }]),
   ];
 
   const isDashboard = view === 'dashboard';
@@ -429,7 +431,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
 
   return (
     <>
-    <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${headerBg}`}>
+    <header className={`fixed ${comingSoon ? 'top-9' : 'top-0'} left-0 right-0 z-50 transition-all duration-300 ${headerBg}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-4">
@@ -603,7 +605,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                 {isLight ? <Moon size={16} /> : <Sun size={16} />}
               </button>
 
-              {isLoggedIn ? (
+              {!comingSoon && (isLoggedIn ? (
                 <button
                   onClick={() => onViewChange('dashboard')}
                   className="ml-2 px-4 py-2 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-all duration-150 shadow-btn hover:shadow-btn-hover"
@@ -625,7 +627,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                     Get Started
                   </button>
                 </>
-              )}
+              ))}
             </nav>
           )}
 
@@ -699,7 +701,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                 Switch to {isLight ? 'Dark' : 'Light'} Mode
               </button>
 
-              {isLoggedIn ? (
+              {!comingSoon && (isLoggedIn ? (
                 <button
                   onClick={() => { onViewChange('dashboard'); setMobileOpen(false); }}
                   className="mt-2 w-full text-center px-4 py-2.5 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors block"
@@ -721,7 +723,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                     Get Started
                   </button>
                 </>
-              )}
+              ))}
             </>
           )}
         </div>

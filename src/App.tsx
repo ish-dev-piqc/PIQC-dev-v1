@@ -7,6 +7,8 @@ import Pricing from './components/Pricing';
 import Contact from './components/Contact';
 import Footer from './components/Footer';
 import Chatbot from './components/Chatbot';
+import ComingSoonBanner from './components/ComingSoonBanner';
+import { isComingSoonMode } from './lib/comingSoonMode';
 import Dashboard, { type DashboardTab, type SettingsSection } from './components/dashboard/Dashboard';
 import Login from './components/auth/Login';
 import ForgotPassword from './components/auth/ForgotPassword';
@@ -124,6 +126,31 @@ function AppContent() {
     return (
       <div className={`min-h-screen ${theme === 'light' ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]'} flex items-center justify-center`}>
         <div className="w-6 h-6 border-2 border-[#4a6fa5] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // Apex coming-soon mode: always render the marketing landing surface
+  // (minus Contact). All auth / dashboard / redirect paths are bypassed so
+  // a stale session can't leak users into the product before launch.
+  if (isComingSoonMode()) {
+    return (
+      <div className={`min-h-screen ${pageBg} ${textColor} antialiased`}>
+        <ComingSoonBanner />
+        <Navbar
+          view="landing"
+          onViewChange={handleViewChange}
+          onDashboardHome={handleDashboardHome}
+          onOpenSettingsSection={handleOpenSettingsSection}
+        />
+        <main>
+          <Hero onViewChange={handleViewChange} />
+          <ValueProps />
+          <Pricing onViewChange={handleViewChange} />
+          <FAQ />
+        </main>
+        <Footer onViewChange={handleViewChange} />
+        <Chatbot />
       </div>
     );
   }

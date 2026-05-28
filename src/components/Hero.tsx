@@ -1,5 +1,6 @@
 import { ArrowRight } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { isComingSoonMode } from '../lib/comingSoonMode';
 import type { AppView } from '../App';
 
 interface HeroProps {
@@ -10,9 +11,10 @@ export default function Hero({ onViewChange }: HeroProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
 
+  const comingSoon = isComingSoonMode();
   return (
     <section
-      className={`relative min-h-[90vh] flex flex-col items-center justify-center overflow-hidden px-4 sm:px-6 lg:px-8 pt-16 ${isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]'}`}
+      className={`relative min-h-[90vh] flex flex-col items-center justify-center overflow-hidden px-4 sm:px-6 lg:px-8 ${comingSoon ? 'pt-[100px]' : 'pt-16'} ${isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]'}`}
     >
       <div
         className="absolute inset-0 pointer-events-none"
@@ -49,18 +51,20 @@ export default function Hero({ onViewChange }: HeroProps) {
           Designed for site managers, auditors, and clinical teams running real trials
         </p>
 
-        <div className="flex flex-col items-center gap-3">
-          <button
-            onClick={() => onViewChange('login')}
-            className="inline-flex items-center gap-2 px-7 py-3.5 text-sm font-semibold text-white bg-[#4a6fa5] rounded-xl hover:bg-[#5b82b8] transition-all duration-200 shadow-btn hover:shadow-btn-hover group"
-          >
-            Get Started
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-          </button>
-          <p className={`text-xs ${isLight ? 'text-[#374152]/50' : 'text-[#d2d7e0]/50'}`}>
-            New or returning — sign in with your email, no password required.
-          </p>
-        </div>
+        {!comingSoon && (
+          <div className="flex flex-col items-center gap-3">
+            <button
+              onClick={() => onViewChange('login')}
+              className="inline-flex items-center gap-2 px-7 py-3.5 text-sm font-semibold text-white bg-[#4a6fa5] rounded-xl hover:bg-[#5b82b8] transition-all duration-200 shadow-btn hover:shadow-btn-hover group"
+            >
+              Get Started
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+            </button>
+            <p className={`text-xs ${isLight ? 'text-[#374152]/50' : 'text-[#d2d7e0]/50'}`}>
+              New or returning — sign in with your email, no password required.
+            </p>
+          </div>
+        )}
       </div>
     </section>
   );
