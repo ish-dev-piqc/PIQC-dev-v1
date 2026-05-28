@@ -1,9 +1,10 @@
 ---
 owner: kiara
 feature: show-manage-billing-to-pilot
-status: in-review
+status: merged
+merged: 2026-05-28
 started: 2026-05-28
-target_pr:
+target_pr: #161
 ---
 
 # Show Manage Billing + Subscribe options to active pilot users
