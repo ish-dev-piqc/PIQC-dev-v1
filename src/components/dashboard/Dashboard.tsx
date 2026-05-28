@@ -202,35 +202,13 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
     }
   };
 
-  // Used by the pilot status panel below. Same flow as PilotCountdownBanner —
-  // launches a Stripe Checkout subscription session for the Workspace
-  // monthly plan. window.location.href round trips back to the same page.
-  const handleUpgradeFromPilot = async () => {
-    const workspace = findProductByKind('workspace_monthly');
-    if (!workspace) return;
-    setUpgradeError('');
-    setUpgradeLoading(true);
-    setRedirecting(true, 'Opening checkout…');
-    try {
-      await createCheckoutSession(
-        workspace.priceId,
-        window.location.href,
-        window.location.href,
-        'subscription',
-      );
-    } catch (err) {
-      setUpgradeError(err instanceof Error ? err.message : 'Could not start checkout.');
-      setUpgradeLoading(false);
-      setRedirecting(false);
-    }
-  };
-
-  // Direct-launch checkout for a no-plan user. Mirrors handleUpgradeFromPilot
-  // but accepts a PlanKind so the three plan buttons (Pilot, Workspace
-  // monthly, Workspace annual) can all share one handler. Stripe Checkout
-  // mode is read from the catalog ('payment' for pilot, 'subscription' for
-  // the workspace plans). The 'none' / 'enterprise' kind is filtered out
-  // by the caller — those don't have priceIds.
+  // Direct-launch checkout. Accepts a PlanKind so the plan buttons
+  // (Pilot, Workspace monthly, Workspace annual) can all share one
+  // handler. Stripe Checkout mode is read from the catalog ('payment'
+  // for pilot, 'subscription' for the workspace plans). The 'none' /
+  // 'enterprise' kind is filtered out by the caller — those don't
+  // have priceIds. Used by both the pilot panel (Subscribe Monthly /
+  // Annual) and the no-plan state.
   const handleStartPlan = (kind: 'pilot' | 'workspace_monthly' | 'workspace_annual') => async () => {
     const product = findProductByKind(kind);
     if (!product || product.mode === 'none') return;
@@ -315,10 +293,17 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
             </p>
           ) : isPilot ? (
             // Pilot users: one-time payment, no Stripe Subscription to
-            // manage. Show the pilot expiry and a clear path to upgrade to
-            // a Workspace. We deliberately do NOT show the "Manage billing"
-            // button because the Stripe Customer Portal has nothing useful
-            // for one-time Orders.
+            // manage — but they're paying customers and should see the
+            // same self-service billing surface as Workspace users.
+            // Shows pilot status + expiry, inline subscribe options for
+            // Workspace Monthly and Annual (matching the no-plan inline
+            // checkout pattern below — required because /#pricing is
+            // routed away from for signed-in users), and a Manage
+            // Billing button matching the Workspace branch's treatment.
+            // The Stripe Customer Portal works for one-time-payment
+            // customers — receipt, payment method, and support contact
+            // are all available; the subscription section is naturally
+            // hidden when there's no subscription.
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div>
@@ -340,27 +325,51 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
 
               <p className={`text-xs ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'} leading-relaxed`}>
                 {pilotState === 'expired'
-                  ? 'Your Pilot has ended. Upgrade to a Workspace to keep your protocols and worksheets and unlock ongoing access.'
-                  : 'Your Pilot includes 30 days of access with one protocol and up to three users. Upgrade to a Workspace any time to keep going beyond your pilot.'}
+                  ? 'Your Pilot has ended. To continue using PIQClinical, choose a subscription. You can cancel any time.'
+                  : 'Your Pilot includes 30 days of access. To continue using PIQClinical, choose a subscription. You can cancel any time.'}
               </p>
 
               {upgradeError && <p className="text-sm text-red-500">{upgradeError}</p>}
 
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleStartPlan('workspace_monthly')}
+                  disabled={upgradeLoading}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors disabled:opacity-50"
+                >
+                  Subscribe — $59 / month
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStartPlan('workspace_annual')}
+                  disabled={upgradeLoading}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors disabled:opacity-50"
+                >
+                  Subscribe — $599 / year
+                </button>
+              </div>
+
+              {portalError && <p className="text-sm text-red-500">{portalError}</p>}
+
               <button
                 type="button"
-                onClick={handleUpgradeFromPilot}
-                disabled={upgradeLoading}
+                onClick={handleManageBilling}
+                disabled={portalLoading}
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors disabled:opacity-50"
               >
-                {upgradeLoading ? (
+                {portalLoading ? (
                   <>
                     <Loader2 size={14} className="animate-spin" />
-                    Opening checkout…
+                    Opening…
                   </>
                 ) : (
-                  'Upgrade to Workspace — $59 / month'
+                  'Manage billing'
                 )}
               </button>
+              <p className={`text-xs ${isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/35'}`}>
+                Manage billing to view your receipt, update payment method, or get help.
+              </p>
             </div>
           ) : isWorkspace ? (
             <div className="space-y-4">
