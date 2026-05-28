@@ -219,6 +219,28 @@ async function syncCustomerFromStripe(customerId: string) {
       }
     }
 
+    // -----------------------------------------------------------------
+    // Subscription-level discount (e.g. retention coupon "20% off 3
+    // months" accepted during Portal cancel flow). Denormalised onto
+    // stripe_subscriptions so the frontend can show "20% off through
+    // <date>" without re-fetching from Stripe. Only percent-off
+    // discounts are surfaced today; amount-off and stacked discounts
+    // are tracked as a backlog item in the plan MD.
+    //
+    // `subscription.discount` is Stripe's legacy single-discount field;
+    // it's still populated when only one discount applies, which is
+    // the common case for retention coupons.
+    // -----------------------------------------------------------------
+    const discount = subscription.discount;
+    const discountPercentOff =
+      typeof discount?.coupon?.percent_off === 'number'
+        ? Math.round(discount.coupon.percent_off)
+        : null;
+    const discountEnd =
+      typeof discount?.end === 'number'
+        ? new Date(discount.end * 1000).toISOString()
+        : null;
+
     // store subscription state
     const { error: subError } = await supabase.from('stripe_subscriptions').upsert(
       {
@@ -230,6 +252,8 @@ async function syncCustomerFromStripe(customerId: string) {
         cancel_at_period_end: subscription.cancel_at_period_end,
         addon_seat_packs: addonSeatPacks,
         addon_protocols: addonProtocols,
+        discount_percent_off: discountPercentOff,
+        discount_end: discountEnd,
         ...(subscription.default_payment_method && typeof subscription.default_payment_method !== 'string'
           ? {
               payment_method_brand: subscription.default_payment_method.card?.brand ?? null,

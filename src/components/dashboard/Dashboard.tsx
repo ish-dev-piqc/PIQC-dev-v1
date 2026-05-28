@@ -261,9 +261,15 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
       const hasActiveSub = subscription?.status === 'active' || subscription?.status === 'trialing';
       const pilotState = pilotStatus(subscription);
       const isPilot = pilotState !== 'none';
+      // A user counts as "on Workspace" for UI purposes only if their
+      // subscription is currently usable (status active or trialing). A
+      // canceled subscription still has kind='workspace_monthly' resolved
+      // from price_id, but the user shouldn't see the Manage Billing UI —
+      // they should see the no-plan state so they can start fresh.
       const isWorkspace =
-        subscription?.kind === 'workspace_monthly' ||
-        subscription?.kind === 'workspace_annual';
+        hasActiveSub &&
+        (subscription?.kind === 'workspace_monthly' ||
+          subscription?.kind === 'workspace_annual');
       const isNoPlan = !subLoading && !isPilot && !isWorkspace;
 
       const pilotDaysLeft = pilotDaysRemaining(subscription);
@@ -366,6 +372,18 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                   {subscription?.currentPeriodEnd && (
                     <p className={`text-xs mt-0.5 ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'}`}>
                       Renews {subscription.currentPeriodEnd}
+                    </p>
+                  )}
+                  {/* Active retention coupon / subscription-level discount.
+                      Shown only on Workspace panel because pilots are one-time
+                      and can't have a recurring discount. Falls back to "no
+                      end date" when the discount has no expiry. */}
+                  {subscription?.discountPercentOff && (
+                    <p className={`text-xs mt-0.5 font-medium ${isLight ? 'text-emerald-700' : 'text-emerald-300'}`}>
+                      {subscription.discountPercentOff}% off
+                      {subscription.discountEnd
+                        ? ` through ${new Date(subscription.discountEnd).toLocaleDateString()}`
+                        : ' (no end date)'}
                     </p>
                   )}
                 </div>

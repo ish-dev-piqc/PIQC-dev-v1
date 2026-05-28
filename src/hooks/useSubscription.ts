@@ -47,6 +47,12 @@ export interface Subscription {
   addonProtocols: number;
   totalUsers: number;
   totalProtocols: number;
+  // Subscription-level discount denormalised from Stripe via the webhook.
+  // Null when no discount is applied. `discountPercentOff` is a whole-number
+  // percent (e.g. 20 for 20%); `discountEnd` is an ISO timestamp string or
+  // null when the discount has no end (forever).
+  discountPercentOff: number | null;
+  discountEnd: string | null;
 }
 
 const NULL_SUBSCRIPTION: Subscription = {
@@ -60,6 +66,8 @@ const NULL_SUBSCRIPTION: Subscription = {
   addonProtocols: 0,
   totalUsers: 0,
   totalProtocols: 0,
+  discountPercentOff: null,
+  discountEnd: null,
 };
 
 export function useSubscription() {
@@ -116,6 +124,16 @@ export function useSubscription() {
         // by stripe-webhook when the one-time payment completes.
         const pilotExpiresAt: string | undefined = data.pilot_expires_at ?? undefined;
 
+        // Discount fields: webhook denormalises percent-off + end timestamp
+        // onto stripe_subscriptions, surfaced via the view. Null when no
+        // active retention coupon. UI shows "N% off through <date>" or
+        // "N% off (no end date)" depending on whether `discountEnd` is set.
+        const discountPercentOff =
+          typeof data.discount_percent_off === 'number'
+            ? data.discount_percent_off
+            : null;
+        const discountEnd: string | null = data.discount_end ?? null;
+
         setSubscription({
           kind,
           billingMode,
@@ -131,6 +149,8 @@ export function useSubscription() {
           addonProtocols,
           totalUsers: includedUsers + 5 * addonSeatPacks,
           totalProtocols: includedProtocols + 1 * addonProtocols,
+          discountPercentOff,
+          discountEnd,
         });
       } catch (e) {
         if (cancelled) return;
