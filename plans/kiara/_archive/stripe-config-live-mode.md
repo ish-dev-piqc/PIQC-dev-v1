@@ -1,9 +1,10 @@
 ---
 owner: kiara
 feature: stripe-config-live-mode
-status: in-review
+status: merged
+merged: 2026-05-28
 started: 2026-05-28
-target_pr:
+target_pr: #159
 ---
 
 # Swap stripe-config to live priceIds + productIds
