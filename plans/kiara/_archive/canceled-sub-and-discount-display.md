@@ -1,9 +1,10 @@
 ---
 owner: kiara
 feature: canceled-sub-and-discount-display
-status: active
+status: merged
+merged: 2026-05-28
 started: 2026-05-25
-target_pr:
+target_pr: #157
 ---
 
 # Canceled-sub no-plan state + subscription discount display
