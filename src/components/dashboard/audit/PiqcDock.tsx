@@ -85,7 +85,7 @@ export default function PiqcDock({ onOpen, hidden, hasSignals = false }: Props) 
         // the workspace's neutral chrome. Warmer in light mode, lifted
         // panel-on-panel feel in dark.
         isLight
-          ? 'bg-white border border-[#017BC8]/25 text-[#334155] shadow-[0_8px_24px_-8px_rgba(1,123,200,0.35)] hover:shadow-[0_12px_32px_-8px_rgba(1,123,200,0.45)] hover:border-[#017BC8]/40'
+          ? 'bg-white border border-[#017BC8]/25 text-[#334155] shadow-[0_8px_24px_-8px_rgba(2,187,184,0.35)] hover:shadow-[0_12px_32px_-8px_rgba(2,187,184,0.45)] hover:border-[#017BC8]/40'
           : 'bg-[#0F172A] border border-[#017BC8]/30 text-[#CBD5E1] shadow-[0_8px_24px_-8px_rgba(0,0,0,0.6)] hover:shadow-[0_12px_32px_-8px_rgba(0,0,0,0.7)] hover:border-[#017BC8]/50',
         // Mark is brand-tinted; the label stays in the workspace's text
         // colour so it doesn't shout. Whimsy lives in the icon + shadow.
