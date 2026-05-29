@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Menu, X, Activity, LogOut, ChevronDown, User, Home, Sun, Moon, ClipboardList, Flame, UserCircle2, CreditCard, Beaker, Building2, Plus } from 'lucide-react';
+import { Menu, X, LogOut, ChevronDown, User, Home, Sun, Moon, ClipboardList, Flame, UserCircle2, CreditCard, Beaker, Building2, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useMode, type DashboardMode } from '../context/ModeContext';
@@ -445,11 +445,13 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
               }}
               className="flex items-center gap-2.5 group"
             >
-              <div className="w-8 h-8 rounded-lg bg-[#017BC8] flex items-center justify-center shadow-btn group-hover:bg-[#1595D1] transition-colors">
-                <Activity className="w-4 h-4 text-white" strokeWidth={2.5} />
-              </div>
+              <img
+                src="/PIQC_Logo.png"
+                alt=""
+                className="w-8 h-8 object-contain group-hover:scale-105 transition-transform"
+              />
               <span className={`text-[15px] font-semibold ${logoTextColor} tracking-tight`}>
-                PIQ<span className="text-[#74B4DC]">Clinical</span>
+                <span className="text-[#017BC8]">PIQC</span>linical
               </span>
             </button>
 

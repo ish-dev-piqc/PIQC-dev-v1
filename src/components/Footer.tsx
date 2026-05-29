@@ -1,4 +1,3 @@
-import { Activity } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import type { AppView } from '../App';
 
@@ -21,11 +20,13 @@ export default function Footer({ onViewChange }: FooterProps) {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
           <a href="#" className="flex items-center gap-2.5 group">
-            <div className="w-7 h-7 rounded-lg bg-[#017BC8] flex items-center justify-center shadow-btn group-hover:bg-[#1595D1] transition-colors">
-              <Activity className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
-            </div>
+            <img
+              src="/PIQC_Logo.png"
+              alt=""
+              className="w-7 h-7 object-contain group-hover:scale-105 transition-transform"
+            />
             <span className={`text-sm font-semibold ${logoText} tracking-tight`}>
-              PIQ<span className="text-[#74B4DC]">Clinical</span>
+              <span className="text-[#017BC8]">PIQC</span>linical
             </span>
           </a>
 

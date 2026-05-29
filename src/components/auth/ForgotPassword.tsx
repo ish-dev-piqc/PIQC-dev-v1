@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Activity, ArrowLeft, CheckCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import type { AppView } from '../../App';
 
@@ -54,11 +54,9 @@ export default function ForgotPassword({ onViewChange }: ForgotPasswordProps) {
         </button>
 
         <div className="flex items-center gap-2.5 mb-8">
-          <div className="w-8 h-8 rounded-lg bg-[#017BC8] flex items-center justify-center shadow-btn">
-            <Activity className="w-4 h-4 text-white" strokeWidth={2.5} />
-          </div>
+          <img src="/PIQC_Logo.png" alt="" className="w-8 h-8 object-contain" />
           <span className="text-[15px] font-semibold text-white tracking-tight">
-            PIQ<span className="text-[#74B4DC]">Clinical</span>
+            <span className="text-[#017BC8]">PIQC</span>linical
           </span>
         </div>
 
