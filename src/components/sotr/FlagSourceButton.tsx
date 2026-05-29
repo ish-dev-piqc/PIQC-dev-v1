@@ -73,7 +73,7 @@ export default function FlagSourceButton({
           onChange={(e) => setNote(e.target.value)}
           rows={2}
           placeholder="What's wrong with this citation?"
-          className="w-full text-xs rounded-md border border-[#e2e8ee] dark:border-white/10 bg-white dark:bg-[#131a22] px-2.5 py-1.5 text-fg-body focus:outline-none focus:ring-1 focus:ring-[#4a6fa5]"
+          className="w-full text-xs rounded-md border border-[#E2E8F0] dark:border-white/10 bg-white dark:bg-[#0F172A] px-2.5 py-1.5 text-fg-body focus:outline-none focus:ring-1 focus:ring-[#017BC8]"
         />
         <div className="flex items-center gap-2">
           <button
@@ -81,7 +81,7 @@ export default function FlagSourceButton({
             data-testid="sotr-flag-source-submit"
             disabled={busy}
             onClick={submit}
-            className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-md border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 bg-white dark:bg-[#131a22] hover:bg-amber-50 dark:hover:bg-amber-500/[0.08] disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-md border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 bg-white dark:bg-[#0F172A] hover:bg-amber-50 dark:hover:bg-amber-500/[0.08] disabled:opacity-50"
           >
             {busy ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
             Flag source
@@ -91,7 +91,7 @@ export default function FlagSourceButton({
             data-testid="sotr-flag-source-cancel"
             onClick={() => setMode({ kind: 'idle' })}
             disabled={busy}
-            className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-md border border-[#e2e8ee] dark:border-white/10 text-fg-body bg-white dark:bg-[#131a22] hover:bg-[#f5f7fa] dark:hover:bg-white/[0.04] disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-md border border-[#E2E8F0] dark:border-white/10 text-fg-body bg-white dark:bg-[#0F172A] hover:bg-[#F8FAFC] dark:hover:bg-white/[0.04] disabled:opacity-50"
           >
             <X size={11} /> Cancel
           </button>
@@ -106,7 +106,7 @@ export default function FlagSourceButton({
         type="button"
         data-testid="sotr-flag-source-button"
         onClick={() => setMode({ kind: 'noting' })}
-        className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-md border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 bg-white dark:bg-[#131a22] hover:bg-amber-50 dark:hover:bg-amber-500/[0.08]"
+        className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-md border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 bg-white dark:bg-[#0F172A] hover:bg-amber-50 dark:hover:bg-amber-500/[0.08]"
       >
         <Flag size={11} />
         Flag Source

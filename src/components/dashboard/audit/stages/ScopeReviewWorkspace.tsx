@@ -115,11 +115,11 @@ export default function ScopeReviewWorkspace() {
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
   const sectionHeader = 'text-fg-label';
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
-  const rowBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-white/[0.02] border-white/[0.04]';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
+  const rowBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-white/[0.02] border-white/[0.04]';
   const buttonApprove = isLight
-    ? 'bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-[#cbd2db] disabled:hover:bg-[#cbd2db]'
-    : 'bg-emerald-500 text-[#0d1118] hover:bg-emerald-400 disabled:bg-white/10 disabled:hover:bg-white/10 disabled:text-white/35';
+    ? 'bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-[#CBD5E1] disabled:hover:bg-[#CBD5E1]'
+    : 'bg-emerald-500 text-[#020617] hover:bg-emerald-400 disabled:bg-white/10 disabled:hover:bg-white/10 disabled:text-white/35';
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -184,7 +184,7 @@ export default function ScopeReviewWorkspace() {
               >
                 <span
                   className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${
-                    isLight ? 'bg-[#eef2f6] text-[#4a6fa5]' : 'bg-white/[0.06] text-[#6e8fb5]'
+                    isLight ? 'bg-[#F2F2F2] text-[#017BC8]' : 'bg-white/[0.06] text-[#74B4DC]'
                   }`}
                 >
                   {r.section_identifier}
@@ -243,7 +243,7 @@ export default function ScopeReviewWorkspace() {
                     >
                       <span
                         className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${
-                          isLight ? 'bg-[#eef2f6] text-[#4a6fa5]' : 'bg-white/[0.06] text-[#6e8fb5]'
+                          isLight ? 'bg-[#F2F2F2] text-[#017BC8]' : 'bg-white/[0.06] text-[#74B4DC]'
                         }`}
                       >
                         {risk?.section_identifier ?? '—'}
@@ -307,8 +307,8 @@ export default function ScopeReviewWorkspace() {
                       key={i}
                       className={`inline-flex items-center text-xs px-2 py-1 rounded border ${
                         isLight
-                          ? 'bg-[#eef2f6] border-[#cbd2db] text-[#1a1f28]'
-                          : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]'
+                          ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#0F172A]'
+                          : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]'
                       }`}
                     >
                       {c}
@@ -327,7 +327,7 @@ export default function ScopeReviewWorkspace() {
                     <li key={i} className={`text-sm flex items-start gap-2 ${headingColor}`}>
                       <span
                         className={`mt-1.5 w-1 h-1 rounded-full flex-shrink-0 ${
-                          isLight ? 'bg-[#4a6fa5]/55' : 'bg-[#6e8fb5]/55'
+                          isLight ? 'bg-[#017BC8]/55' : 'bg-[#74B4DC]/55'
                         }`}
                       />
                       {h}
@@ -469,11 +469,11 @@ function TierChip({ tier, isLight }: { tier: EndpointTier; isLight: boolean }) {
       ? 'bg-amber-50 border-amber-200 text-amber-700'
       : 'bg-amber-500/15 border-amber-500/30 text-amber-300',
     SECONDARY: isLight
-      ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/25 text-[#4a6fa5]'
-      : 'bg-[#6e8fb5]/15 border-[#6e8fb5]/30 text-[#6e8fb5]',
+      ? 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]'
+      : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]',
     SUPPORTIVE: isLight
-      ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]/65'
-      : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]/55',
+      ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/65'
+      : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/55',
   };
   return (
     <span
@@ -493,8 +493,8 @@ function SurfaceChip({ surface, isLight }: { surface: ImpactSurface; isLight: bo
       ? 'bg-amber-50 border-amber-200 text-amber-700'
       : 'bg-amber-500/15 border-amber-500/30 text-amber-300',
     DATA_INTEGRITY: isLight
-      ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/25 text-[#4a6fa5]'
-      : 'bg-[#6e8fb5]/15 border-[#6e8fb5]/30 text-[#6e8fb5]',
+      ? 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]'
+      : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]',
   };
   return (
     <span
@@ -510,8 +510,8 @@ function DomainChip({ label, isLight }: { label: string; isLight: boolean }) {
     <span
       className={`inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded border ${
         isLight
-          ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]/70'
-          : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]/65'
+          ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/70'
+          : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/65'
       }`}
     >
       {label}
@@ -548,11 +548,11 @@ function CriticalityChip({
       ? 'bg-amber-50 border-amber-200 text-amber-700'
       : 'bg-amber-500/15 border-amber-500/30 text-amber-300',
     MODERATE: isLight
-      ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/25 text-[#4a6fa5]'
-      : 'bg-[#6e8fb5]/15 border-[#6e8fb5]/30 text-[#6e8fb5]',
+      ? 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]'
+      : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]',
     LOW: isLight
-      ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]/65'
-      : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]/55',
+      ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/65'
+      : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/55',
   };
   return (
     <span
@@ -576,18 +576,18 @@ function PostureSummary({
 }) {
   const cardBg = isUnknown
     ? isLight
-      ? 'bg-[#f9fafc] border-[#e2e8ee]'
+      ? 'bg-[#F8FAFC] border-[#E2E8F0]'
       : 'bg-white/[0.02] border-white/5'
     : isLight
-    ? 'bg-[#4a6fa5]/[0.06] border-[#4a6fa5]/20'
-    : 'bg-[#4a6fa5]/[0.10] border-[#6e8fb5]/30';
+    ? 'bg-[#017BC8]/[0.06] border-[#017BC8]/20'
+    : 'bg-[#017BC8]/[0.10] border-[#74B4DC]/30';
   const sectionHeader = 'text-fg-label';
   const valueColor = isUnknown
     ? isLight
-      ? 'text-[#374152]/55'
-      : 'text-[#d2d7e0]/45'
+      ? 'text-[#334155]/55'
+      : 'text-[#CBD5E1]/45'
     : isLight
-    ? 'text-[#1a1f28]'
+    ? 'text-[#0F172A]'
     : 'text-white';
   return (
     <div className={`${cardBg} border rounded-md px-3 py-2.5`}>

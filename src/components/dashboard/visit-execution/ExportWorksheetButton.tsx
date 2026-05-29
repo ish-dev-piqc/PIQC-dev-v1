@@ -124,14 +124,14 @@ export default function ExportWorksheetButton({
 
   const baseClass = `inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors`;
   const enabledClass = isLight
-    ? 'bg-[#1f2937] text-white hover:bg-[#111827]'
-    : 'bg-white text-[#0d1118] hover:bg-[#e5e7eb]';
+    ? 'bg-[#1E293B] text-white hover:bg-[#0F172A]'
+    : 'bg-white text-[#020617] hover:bg-[#E2E8F0]';
   // Cursor differs by disabled reason: `cursor-wait` for loading (work
   // in progress), `cursor-not-allowed` for empty-for-role (can't proceed
   // until the user changes filter).
   const disabledCursor = state === 'loading' ? 'cursor-wait' : 'cursor-not-allowed';
   const disabledClass = isLight
-    ? `bg-[#cbd2db] text-white ${disabledCursor}`
+    ? `bg-[#CBD5E1] text-white ${disabledCursor}`
     : `bg-white/10 text-fg-muted ${disabledCursor}`;
 
   const iconForState = (() => {
@@ -186,8 +186,8 @@ export default function ExportWorksheetButton({
           data-testid="vew-export-worksheet-error"
           className={`pointer-events-none absolute right-0 top-full mt-2 w-72 text-[11px] leading-relaxed px-3 py-2 rounded-md border shadow-lg z-20 ${
             isLight
-              ? 'bg-[#fdecec] border-[#f3c7c7] text-[#742a2a]'
-              : 'bg-[#3b1f1f] border-[#5a2e2e] text-[#f5b8b8]'
+              ? 'bg-[#FFF1F2] border-[#FECDD3] text-[#881337]'
+              : 'bg-[#4C0519] border-[#881337] text-[#FECDD3]'
           }`}
         >
           Couldn't export the worksheet: {errorMessage}. Try again or refresh the page.
@@ -199,8 +199,8 @@ export default function ExportWorksheetButton({
           role="tooltip"
           className={`pointer-events-none absolute right-0 top-full mt-2 w-72 text-[11px] leading-relaxed px-3 py-2 rounded-md border shadow-lg opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150 z-20 ${
             isLight
-              ? 'bg-white border-[#e2e8ee] text-[#374152]'
-              : 'bg-[#131a22] border-white/10 text-[#d2d7e0]'
+              ? 'bg-white border-[#E2E8F0] text-[#334155]'
+              : 'bg-[#0F172A] border-white/10 text-[#CBD5E1]'
           }`}
         >
           PIQC-drafted worksheet (PDF). Final accuracy + compliance verification
@@ -219,8 +219,8 @@ export default function ExportWorksheetButton({
           data-testid="vew-export-worksheet-empty-for-role"
           className={`pointer-events-none absolute right-0 top-full mt-2 w-72 text-[11px] leading-relaxed px-3 py-2 rounded-md border shadow-lg z-20 ${
             isLight
-              ? 'bg-white border-[#e2e8ee] text-[#374152]'
-              : 'bg-[#131a22] border-white/10 text-[#d2d7e0]'
+              ? 'bg-white border-[#E2E8F0] text-[#334155]'
+              : 'bg-[#0F172A] border-white/10 text-[#CBD5E1]'
           }`}
         >
           No requirements in the <span className="font-semibold">{ROLE_LABELS[roleFilter as Exclude<RoleFilter, 'all'>]}</span> view

@@ -104,13 +104,13 @@ export default function ProfileCompletion() {
     setSubmitting(false);
   };
 
-  const pageBg = isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]';
-  const labelColor = isLight ? 'text-[#374152]/70' : 'text-[#d2d7e0]/70';
+  const pageBg = isLight ? 'bg-[#F8FAFC]' : 'bg-[#020617]';
+  const labelColor = isLight ? 'text-[#334155]/70' : 'text-[#CBD5E1]/70';
   const inputBg = isLight
-    ? 'bg-white border-[#d8dfe8] text-[#1a1f28] placeholder-[#374152]/20 focus:border-[#4a6fa5]/60 focus:ring-[#4a6fa5]/30'
-    : 'bg-[#131a22] border-white/[0.08] text-white placeholder-[#d2d7e0]/20 focus:border-[#4a6fa5]/60 focus:ring-[#4a6fa5]/30';
-  const subColor = isLight ? 'text-[#374152]/60' : 'text-[#d2d7e0]/60';
-  const backColor = isLight ? 'text-[#374152]/40 hover:text-[#374152]/70' : 'text-[#d2d7e0]/40 hover:text-[#d2d7e0]/70';
+    ? 'bg-white border-[#E2E8F0] text-[#0F172A] placeholder-[#334155]/20 focus:border-[#017BC8]/60 focus:ring-[#017BC8]/30'
+    : 'bg-[#0F172A] border-white/[0.08] text-white placeholder-[#CBD5E1]/20 focus:border-[#017BC8]/60 focus:ring-[#017BC8]/30';
+  const subColor = isLight ? 'text-[#334155]/60' : 'text-[#CBD5E1]/60';
+  const backColor = isLight ? 'text-[#334155]/40 hover:text-[#334155]/70' : 'text-[#CBD5E1]/40 hover:text-[#CBD5E1]/70';
 
   return (
     <div className={`min-h-screen ${pageBg} flex flex-col items-center justify-center px-4 py-10 relative overflow-hidden`}>
@@ -118,8 +118,8 @@ export default function ProfileCompletion() {
         className="absolute inset-0 pointer-events-none"
         style={{
           background: isLight
-            ? 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(74,111,165,0.10) 0%, transparent 65%)'
-            : 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(74,111,165,0.18) 0%, transparent 65%)',
+            ? 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(1,123,200,0.10) 0%, transparent 65%)'
+            : 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(1,123,200,0.18) 0%, transparent 65%)',
         }}
       />
 
@@ -134,11 +134,11 @@ export default function ProfileCompletion() {
         </button>
 
         <div className="flex items-center gap-2.5 mb-8">
-          <div className="w-8 h-8 rounded-lg bg-[#4a6fa5] flex items-center justify-center shadow-btn">
+          <div className="w-8 h-8 rounded-lg bg-[#017BC8] flex items-center justify-center shadow-btn">
             <Activity className="w-4 h-4 text-white" strokeWidth={2.5} />
           </div>
           <span className="text-[15px] font-semibold text-fg-heading tracking-tight">
-            PIQ<span className="text-[#6e8fb5]">Clinical</span>
+            PIQ<span className="text-[#74B4DC]">Clinical</span>
           </span>
         </div>
 
@@ -223,7 +223,7 @@ export default function ProfileCompletion() {
           <button
             type="submit"
             disabled={!isValid || submitting}
-            className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-all duration-150 shadow-btn hover:shadow-btn-hover disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+            className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-all duration-150 shadow-btn hover:shadow-btn-hover disabled:opacity-50 disabled:cursor-not-allowed mt-2"
           >
             {submitting ? 'Saving...' : 'Continue to dashboard'}
           </button>

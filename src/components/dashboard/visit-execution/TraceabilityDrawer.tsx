@@ -68,15 +68,15 @@ export default function TraceabilityDrawer({ item, onClose }: Props) {
         {...swipe}
         className={`relative w-full max-w-md h-full overflow-y-auto shadow-xl border-l ${
           isLight
-            ? 'bg-[#f5f7fa] border-[#e2e8ee]'
-            : 'bg-[#0d1118] border-white/5'
+            ? 'bg-[#F8FAFC] border-[#E2E8F0]'
+            : 'bg-[#020617] border-white/5'
         }`}
       >
         <div
           className={`sticky top-0 z-10 backdrop-blur px-5 py-3.5 border-b flex items-center justify-between gap-3 ${
             isLight
-              ? 'bg-[#f5f7fa]/95 border-[#e2e8ee]'
-              : 'bg-[#0d1118]/95 border-white/5'
+              ? 'bg-[#F8FAFC]/95 border-[#E2E8F0]'
+              : 'bg-[#020617]/95 border-white/5'
           }`}
         >
           <div className="min-w-0">
@@ -93,7 +93,7 @@ export default function TraceabilityDrawer({ item, onClose }: Props) {
             aria-label="Close traceability panel"
             className={`inline-flex items-center justify-center w-7 h-7 rounded-md flex-shrink-0 ${
               isLight
-                ? 'text-fg-sub hover:bg-[#e2e8ee]'
+                ? 'text-fg-sub hover:bg-[#E2E8F0]'
                 : 'text-fg-sub hover:bg-white/[0.06]'
             }`}
           >
@@ -150,7 +150,7 @@ export default function TraceabilityDrawer({ item, onClose }: Props) {
               {t.cross_reference_snippet && (
                 <blockquote
                   className={`text-fg-body text-sm leading-relaxed pl-3 border-l-2 ${
-                    isLight ? 'border-[#cbd2db]' : 'border-white/10'
+                    isLight ? 'border-[#CBD5E1]' : 'border-white/10'
                   }`}
                 >
                   {t.cross_reference_snippet}
@@ -161,7 +161,7 @@ export default function TraceabilityDrawer({ item, onClose }: Props) {
 
           <p
             className={`mt-6 pt-4 border-t text-fg-muted text-[11px] leading-relaxed ${
-              isLight ? 'border-[#e2e8ee]' : 'border-white/5'
+              isLight ? 'border-[#E2E8F0]' : 'border-white/5'
             }`}
           >
             Final source-document verification is performed outside PIQC.

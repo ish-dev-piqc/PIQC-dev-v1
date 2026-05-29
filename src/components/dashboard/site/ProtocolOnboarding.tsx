@@ -82,22 +82,22 @@ export default function ProtocolOnboarding({ onTabChange }: ProtocolOnboardingPr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [protocolsLen]);
 
-  const pageBg = isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]';
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
+  const pageBg = isLight ? 'bg-[#F8FAFC]' : 'bg-[#020617]';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const headingColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
-  const stepIconBg = isLight ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/20' : 'bg-[#4a6fa5]/15 border-[#4a6fa5]/25';
+  const stepIconBg = isLight ? 'bg-[#017BC8]/10 border-[#017BC8]/20' : 'bg-[#017BC8]/15 border-[#017BC8]/25';
 
   return (
     <div className={`min-h-screen ${pageBg} pt-20 pb-16 px-4 sm:px-6`}>
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center gap-2.5 mb-8">
-          <div className="w-8 h-8 rounded-lg bg-[#4a6fa5] flex items-center justify-center shadow-btn">
+          <div className="w-8 h-8 rounded-lg bg-[#017BC8] flex items-center justify-center shadow-btn">
             <Activity className="w-4 h-4 text-white" strokeWidth={2.5} />
           </div>
           <span className={`text-[15px] font-semibold ${headingColor} tracking-tight`}>
-            PIQ<span className="text-[#6e8fb5]">Clinical</span>
+            PIQ<span className="text-[#74B4DC]">Clinical</span>
           </span>
         </div>
 
@@ -116,7 +116,7 @@ export default function ProtocolOnboarding({ onTabChange }: ProtocolOnboardingPr
             {STEPS.map(({ icon: Icon, title, detail }, idx) => (
               <div key={title} className="flex gap-4">
                 <div className={`flex-shrink-0 w-9 h-9 rounded-xl ${stepIconBg} border flex items-center justify-center`}>
-                  <Icon className="w-4 h-4 text-[#6e8fb5]" strokeWidth={1.75} />
+                  <Icon className="w-4 h-4 text-[#74B4DC]" strokeWidth={1.75} />
                 </div>
                 <div className="flex-1 pt-0.5">
                   <p className={`text-[11px] font-semibold ${mutedColor} tracking-widest uppercase mb-1`}>
@@ -129,7 +129,7 @@ export default function ProtocolOnboarding({ onTabChange }: ProtocolOnboardingPr
             ))}
           </div>
 
-          <div className={`pt-6 border-t ${isLight ? 'border-[#e2e8ee]' : 'border-white/5'}`}>
+          <div className={`pt-6 border-t ${isLight ? 'border-[#E2E8F0]' : 'border-white/5'}`}>
             <UploadForm
               isLight={isLight}
               onSuccess={() => {
@@ -150,7 +150,7 @@ export default function ProtocolOnboarding({ onTabChange }: ProtocolOnboardingPr
         <details className={`${cardBg} border rounded-xl group`}>
           <summary
             className={`flex items-center gap-2 px-5 py-3 cursor-pointer list-none ${
-              isLight ? 'hover:bg-[#f0f4f8]' : 'hover:bg-[#1a2230]'
+              isLight ? 'hover:bg-[#F2F2F2]' : 'hover:bg-[#1E293B]'
             } transition-colors`}
           >
             <HelpCircle size={14} className={mutedColor} strokeWidth={1.75} />
@@ -171,7 +171,7 @@ export default function ProtocolOnboarding({ onTabChange }: ProtocolOnboardingPr
               Still stuck? Email{' '}
               <a
                 href="mailto:contact@piqclinical.com"
-                className="text-[#6e8fb5] hover:text-[#87b5c7] underline underline-offset-2"
+                className="text-[#74B4DC] hover:text-[#87b5c7] underline underline-offset-2"
               >
                 contact@piqclinical.com
               </a>{' '}

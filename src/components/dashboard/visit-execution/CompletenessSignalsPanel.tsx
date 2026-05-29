@@ -160,11 +160,11 @@ export default function CompletenessSignalsPanel({
                     className={`inline-flex items-center gap-1 px-2.5 py-1.5 min-h-[28px] rounded-md text-[11px] font-semibold ${
                       inFlight
                         ? isLight
-                          ? 'bg-[#cbd2db] text-white cursor-not-allowed'
+                          ? 'bg-[#CBD5E1] text-white cursor-not-allowed'
                           : 'bg-white/10 text-fg-muted cursor-not-allowed'
                         : isLight
-                        ? 'bg-[#1f2937] text-white hover:bg-[#111827]'
-                        : 'bg-white text-[#0d1118] hover:bg-[#e5e7eb]'
+                        ? 'bg-[#1E293B] text-white hover:bg-[#0F172A]'
+                        : 'bg-white text-[#020617] hover:bg-[#E2E8F0]'
                     }`}
                   >
                     {inFlight ? (
@@ -184,7 +184,7 @@ export default function CompletenessSignalsPanel({
                       inFlight
                         ? 'opacity-50 cursor-not-allowed'
                         : isLight
-                        ? 'text-fg-sub hover:bg-[#eef2f6]'
+                        ? 'text-fg-sub hover:bg-[#F2F2F2]'
                         : 'text-fg-sub hover:bg-white/[0.06]'
                     }`}
                   >

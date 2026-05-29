@@ -37,12 +37,12 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
   const sectionHeader = 'text-fg-label';
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
-  const rowBorder = isLight ? 'border-[#f0f3f6]' : 'border-white/[0.04]';
-  const pageBg = isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
+  const rowBorder = isLight ? 'border-[#F2F2F2]' : 'border-white/[0.04]';
+  const pageBg = isLight ? 'bg-[#F8FAFC]' : 'bg-[#020617]';
   const buttonSecondary = isLight
-    ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-    : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]';
+    ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+    : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]';
 
   const scopedVisits = useMemo(() => {
     if (!activeProtocol) return allSiteVisits;
@@ -409,7 +409,7 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
                     key={v.id}
                     type="button"
                     onClick={() => setSelectedVisit(v)}
-                    className={`w-full text-left px-5 py-4 transition-colors ${isLight ? 'hover:bg-[#f9fafc]' : 'hover:bg-white/[0.02]'}`}
+                    className={`w-full text-left px-5 py-4 transition-colors ${isLight ? 'hover:bg-[#F8FAFC]' : 'hover:bg-white/[0.02]'}`}
                   >
                     <div className="flex items-center gap-2 flex-wrap mb-1.5">
                       <span className={`${headingColor} text-xs font-semibold`}>
@@ -462,7 +462,7 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
                     key={v.id}
                     type="button"
                     onClick={() => setSelectedVisit(v)}
-                    className={`w-full text-left px-5 py-3.5 transition-colors ${isLight ? 'hover:bg-[#f9fafc]' : 'hover:bg-white/[0.02]'}`}
+                    className={`w-full text-left px-5 py-3.5 transition-colors ${isLight ? 'hover:bg-[#F8FAFC]' : 'hover:bg-white/[0.02]'}`}
                   >
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`${headingColor} text-xs font-semibold`}>
@@ -521,7 +521,7 @@ interface StatCardProps {
 }
 
 function StatCard({ label, value, sub, icon, highlight, isLight }: StatCardProps) {
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const valueColor = highlight
     ? highlight === 'green'
       ? isLight ? 'text-emerald-600' : 'text-emerald-400'
@@ -529,7 +529,7 @@ function StatCard({ label, value, sub, icon, highlight, isLight }: StatCardProps
       ? isLight ? 'text-amber-600' : 'text-amber-400'
       : isLight ? 'text-rose-600' : 'text-rose-400'
     : 'text-fg-heading';
-  const iconColor = isLight ? 'text-[#374152]/30' : 'text-[#d2d7e0]/25';
+  const iconColor = isLight ? 'text-[#334155]/30' : 'text-[#CBD5E1]/25';
 
   return (
     <div className={`${cardBg} border rounded-xl p-4`}>

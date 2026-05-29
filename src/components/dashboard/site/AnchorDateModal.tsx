@@ -74,12 +74,12 @@ export default function AnchorDateModal({
     onClose();
   };
 
-  const bg = isLight ? 'bg-white' : 'bg-[#131a22]';
-  const border = isLight ? 'border-[#e2e8ee]' : 'border-white/5';
-  const inputBg = isLight ? 'bg-white' : 'bg-[#0d1118]';
+  const bg = isLight ? 'bg-white' : 'bg-[#0F172A]';
+  const border = isLight ? 'border-[#E2E8F0]' : 'border-white/5';
+  const inputBg = isLight ? 'bg-white' : 'bg-[#020617]';
   const inputBorder = isLight
-    ? 'border-[#cbd2db] focus:border-[#4a6fa5] focus:ring-1 focus:ring-[#4a6fa5]/30'
-    : 'border-white/15 focus:border-[#6e8fb5] focus:ring-1 focus:ring-[#6e8fb5]/30';
+    ? 'border-[#CBD5E1] focus:border-[#017BC8] focus:ring-1 focus:ring-[#017BC8]/30'
+    : 'border-white/15 focus:border-[#74B4DC] focus:ring-1 focus:ring-[#74B4DC]/30';
   const labelColor = 'text-fg-label';
   const headingColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
@@ -201,7 +201,7 @@ export default function AnchorDateModal({
             onClick={submit}
             disabled={submitting}
             className={`text-xs font-semibold px-4 py-1.5 rounded-md text-white transition-colors disabled:opacity-50 ${
-              isLight ? 'bg-[#4a6fa5] hover:bg-[#3a5f95]' : 'bg-[#6e8fb5] hover:bg-[#7e9fc5]'
+              isLight ? 'bg-[#017BC8] hover:bg-[#0477BF]' : 'bg-[#74B4DC] hover:bg-[#3CACF4]'
             }`}
           >
             {submitting ? 'Projecting visits…' : 'Set anchor & project'}

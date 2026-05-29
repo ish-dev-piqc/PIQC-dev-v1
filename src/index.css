@@ -14,35 +14,41 @@
        isLight ternary through every theme token. New code should prefer the
        Tailwind utilities over re-declaring `headingColor = isLight ? ...`.
 
+       Values mapped onto the new slate scale (slate-700 = #334155 = rgb(51,65,85),
+       slate-900 = #0F172A) per the brand palette overhaul. Alphas preserved
+       from the prior implementation so the visual hierarchy doesn't shift.
+
        Existing components that already declare those constants are not being
        swept en masse; they keep working. */
-    --fg-heading: #1a1f28;        /* opaque headings, primary content */
-    --fg-body:    rgba(55, 65, 82, 0.85);  /* body copy at full strength */
-    --fg-sub:     rgba(55, 65, 82, 0.65);  /* sub-text, descriptions */
-    --fg-muted:   rgba(55, 65, 82, 0.40);  /* hints, metadata, separators */
-    --fg-label:   rgba(55, 65, 82, 0.45);  /* uppercase tracking labels */
+    --fg-heading: #0F172A;                  /* slate-900 — headings, primary content */
+    --fg-body:    rgba(51, 65, 85, 0.85);   /* slate-700 @ 85% — body copy */
+    --fg-sub:     rgba(51, 65, 85, 0.65);   /* slate-700 @ 65% — sub-text, descriptions */
+    --fg-muted:   rgba(51, 65, 85, 0.40);   /* slate-700 @ 40% — hints, metadata, separators */
+    --fg-label:   rgba(51, 65, 85, 0.45);   /* slate-700 @ 45% — uppercase tracking labels */
   }
 
   html.dark {
-    /* Text-tone palette (dark) — same names, dark-mode values. */
-    --fg-heading: #ffffff;
-    --fg-body:    rgba(210, 215, 224, 0.75);
-    --fg-sub:     rgba(210, 215, 224, 0.55);
-    --fg-muted:   rgba(210, 215, 224, 0.35);
-    --fg-label:   rgba(210, 215, 224, 0.40);
+    /* Text-tone palette (dark) — same names, dark-mode values.
+       Values mapped onto slate-300 (#CBD5E1 = rgb(203,213,225)) at the
+       same alphas as the light-mode counterparts. */
+    --fg-heading: #FFFFFF;
+    --fg-body:    rgba(203, 213, 225, 0.75);
+    --fg-sub:     rgba(203, 213, 225, 0.55);
+    --fg-muted:   rgba(203, 213, 225, 0.35);
+    --fg-label:   rgba(203, 213, 225, 0.40);
   }
 
   body {
     font-family: 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background-color: #f5f7fa;
-    color: #1a1f28;
+    background-color: #F8FAFC;  /* slate-50 — light page background */
+    color: #0F172A;             /* slate-900 — body text on light bg */
   }
 
   html.dark body {
-    background-color: #0d1118;
-    color: #ffffff;
+    background-color: #020617;  /* slate-950 — deep dark page background */
+    color: #FFFFFF;
   }
 }
 
@@ -51,15 +57,25 @@
     text-wrap: balance;
   }
 
+  /* Hero glow tint at brand blue-500 (#1595D1 = rgb(21,149,209)). Mirrors
+     `bg-hero-glow` in tailwind.config.js but lets components opt into the
+     utility class directly. */
   .bg-hero-glow {
-    background-image: radial-gradient(ellipse 90% 55% at 50% -5%, rgba(74,111,165,0.22) 0%, transparent 68%);
+    background-image: radial-gradient(ellipse 90% 55% at 50% -5%, rgba(21,149,209,0.22) 0%, transparent 68%);
   }
 
   .card-border {
     border: 1px solid rgba(255,255,255,0.07);
   }
 
+  /* Subtle blue-tinted card border using the new brand blue. */
   .card-border-blue {
-    border: 1px solid rgba(74,111,165,0.2);
+    border: 1px solid rgba(21,149,209,0.2);
+  }
+
+  /* Teal-tinted card border for Audit Mode surfaces (brand teal-500 =
+     #06BFAD = rgb(6,191,173)). */
+  .card-border-teal {
+    border: 1px solid rgba(6,191,173,0.2);
   }
 }

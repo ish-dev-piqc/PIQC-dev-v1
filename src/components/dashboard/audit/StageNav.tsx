@@ -31,7 +31,7 @@ export default function StageNav({ currentStage, viewedStage, onSelectStage }: S
 
   const currentIdx = AUDIT_STAGES.indexOf(currentStage);
 
-  const navBg = isLight ? 'bg-[#f9fafc] border-[#e2e8ee]' : 'bg-[#0e141b] border-white/5';
+  const navBg = isLight ? 'bg-[#F8FAFC] border-[#E2E8F0]' : 'bg-[#020617] border-white/5';
   const headerColor = 'text-fg-label';
   const headingColor = 'text-fg-heading';
 
@@ -40,7 +40,7 @@ export default function StageNav({ currentStage, viewedStage, onSelectStage }: S
       aria-label="Audit stages"
       className={`${navBg} border-r flex-shrink-0 w-60 overflow-y-auto hidden md:flex md:flex-col`}
     >
-      <div className={`px-4 pt-5 pb-3 border-b ${isLight ? 'border-[#e2e8ee]' : 'border-white/5'}`}>
+      <div className={`px-4 pt-5 pb-3 border-b ${isLight ? 'border-[#E2E8F0]' : 'border-white/5'}`}>
         <p className={`text-[10px] uppercase tracking-wider font-semibold ${headerColor}`}>
           Audit stage
         </p>
@@ -61,24 +61,24 @@ export default function StageNav({ currentStage, viewedStage, onSelectStage }: S
           // Visual classes
           const rowBg = isViewed
             ? isLight
-              ? 'bg-[#4a6fa5]/10'
-              : 'bg-[#4a6fa5]/15'
+              ? 'bg-[#017BC8]/10'
+              : 'bg-[#017BC8]/15'
             : 'bg-transparent';
           const accent = isViewed
-            ? 'border-l-[#4a6fa5]'
+            ? 'border-l-[#017BC8]'
             : 'border-l-transparent';
           const labelColor = isFutureLocked
             ? isLight
-              ? 'text-[#374152]/35'
-              : 'text-[#d2d7e0]/30'
+              ? 'text-[#334155]/35'
+              : 'text-[#CBD5E1]/30'
             : isViewed
             ? isLight
-              ? 'text-[#4a6fa5]'
-              : 'text-[#6e8fb5]'
+              ? 'text-[#017BC8]'
+              : 'text-[#74B4DC]'
             : isLight
-            ? 'text-[#1a1f28]'
-            : 'text-[#d2d7e0]';
-          const numberColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/35';
+            ? 'text-[#0F172A]'
+            : 'text-[#CBD5E1]';
+          const numberColor = isLight ? 'text-[#334155]/40' : 'text-[#CBD5E1]/35';
 
           return (
             <li key={stage}>
@@ -90,7 +90,7 @@ export default function StageNav({ currentStage, viewedStage, onSelectStage }: S
                 className={`w-full flex items-start gap-3 pl-3 pr-4 py-2.5 border-l-[3px] ${accent} ${rowBg} transition-colors ${
                   clickable
                     ? isLight
-                      ? 'hover:bg-[#1a1f28]/[0.04]'
+                      ? 'hover:bg-[#0F172A]/[0.04]'
                       : 'hover:bg-white/[0.04]'
                     : 'cursor-default'
                 }`}
@@ -152,8 +152,8 @@ function StageDot({ done, current, futureLocked, isLight }: StageDotProps) {
       <span
         className={`inline-block w-5 h-5 rounded-full mt-0.5 flex-shrink-0 ring-2 ring-offset-2 ${
           isLight
-            ? 'bg-[#4a6fa5] ring-[#4a6fa5]/30 ring-offset-[#f9fafc]'
-            : 'bg-[#6e8fb5] ring-[#6e8fb5]/30 ring-offset-[#0e141b]'
+            ? 'bg-[#017BC8] ring-[#017BC8]/30 ring-offset-[#F8FAFC]'
+            : 'bg-[#74B4DC] ring-[#74B4DC]/30 ring-offset-[#020617]'
         }`}
       />
     );
@@ -162,7 +162,7 @@ function StageDot({ done, current, futureLocked, isLight }: StageDotProps) {
     return (
       <span
         className={`inline-flex items-center justify-center w-5 h-5 rounded-full mt-0.5 flex-shrink-0 ${
-          isLight ? 'bg-[#1a1f28]/[0.04] text-[#374152]/35' : 'bg-white/[0.04] text-[#d2d7e0]/30'
+          isLight ? 'bg-[#0F172A]/[0.04] text-[#334155]/35' : 'bg-white/[0.04] text-[#CBD5E1]/30'
         }`}
       >
         <Lock size={10} />
@@ -173,7 +173,7 @@ function StageDot({ done, current, futureLocked, isLight }: StageDotProps) {
   return (
     <span
       className={`inline-block w-5 h-5 rounded-full mt-0.5 flex-shrink-0 border-2 ${
-        isLight ? 'border-[#cbd2db]' : 'border-white/15'
+        isLight ? 'border-[#CBD5E1]' : 'border-white/15'
       }`}
     />
   );

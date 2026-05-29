@@ -29,8 +29,8 @@ export default function ProtocolUploadModal({ onClose }: ProtocolUploadModalProp
   const panelRef = useRef<HTMLDivElement>(null);
   useOverlay({ isOpen: true, onClose, containerRef: panelRef });
 
-  const bg = isLight ? 'bg-white' : 'bg-[#131a22]';
-  const border = isLight ? 'border-[#e2e8ee]' : 'border-white/5';
+  const bg = isLight ? 'bg-white' : 'bg-[#0F172A]';
+  const border = isLight ? 'border-[#E2E8F0]' : 'border-white/5';
   const headingColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
 

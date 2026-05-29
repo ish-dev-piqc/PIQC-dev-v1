@@ -53,7 +53,7 @@ export default function WorksheetItemRow({ item, onViewSource, onPick }: Props) 
           type="button"
           onClick={() => onViewSource(item)}
           data-testid="sotr-view-source-button"
-          className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-md border bg-white dark:bg-[#131a22] border-[#e2e8ee] dark:border-white/10 text-fg-body hover:bg-[#f5f7fa] dark:hover:bg-white/[0.04]"
+          className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-md border bg-white dark:bg-[#0F172A] border-[#E2E8F0] dark:border-white/10 text-fg-body hover:bg-[#F8FAFC] dark:hover:bg-white/[0.04]"
         >
           <FileSearch size={11} />
           View Source
@@ -63,7 +63,7 @@ export default function WorksheetItemRow({ item, onViewSource, onPick }: Props) 
             type="button"
             onClick={() => onPick(item)}
             data-testid="sotr-attach-button"
-            className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-md bg-[#4a6fa5] text-white hover:bg-[#3d5e8f] dark:bg-[#6e8fb5] dark:text-[#1a1f28] dark:hover:bg-[#5e7fa5]"
+            className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-md bg-[#017BC8] text-white hover:bg-[#0477BF] dark:bg-[#74B4DC] dark:text-[#0F172A] dark:hover:bg-[#026BBE]"
           >
             <Link2 size={11} />
             Attach

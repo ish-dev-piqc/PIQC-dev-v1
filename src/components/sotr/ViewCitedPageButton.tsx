@@ -69,7 +69,7 @@ export default function ViewCitedPageButton({ studyId, documentId, opener = defa
         onClick={handleClick}
         disabled={state.kind === 'loading'}
         data-testid="sotr-view-cited-page-button"
-        className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-md border bg-white dark:bg-[#131a22] border-[#e2e8ee] dark:border-white/10 text-fg-body hover:bg-[#f5f7fa] dark:hover:bg-white/[0.04] disabled:opacity-50"
+        className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-md border bg-white dark:bg-[#0F172A] border-[#E2E8F0] dark:border-white/10 text-fg-body hover:bg-[#F8FAFC] dark:hover:bg-white/[0.04] disabled:opacity-50"
       >
         {state.kind === 'loading' ? (
           <Loader2 size={11} className="animate-spin" />

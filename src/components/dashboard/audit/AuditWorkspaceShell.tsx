@@ -175,14 +175,14 @@ export default function AuditWorkspaceShell() {
   }
 
   const headerBg = isLight
-    ? 'bg-white border-[#e2e8ee]'
-    : 'bg-[#131a22] border-white/5';
+    ? 'bg-white border-[#E2E8F0]'
+    : 'bg-[#0F172A] border-white/5';
   const headingColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
   const chipBg = isLight
-    ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/20 text-[#4a6fa5]'
-    : 'bg-[#4a6fa5]/15 border-[#4a6fa5]/30 text-[#6e8fb5]';
+    ? 'bg-[#017BC8]/10 border-[#017BC8]/20 text-[#017BC8]'
+    : 'bg-[#017BC8]/15 border-[#017BC8]/30 text-[#74B4DC]';
 
   return (
     <div className="flex-1 flex" style={{ minHeight: 0 }}>
@@ -240,8 +240,8 @@ export default function AuditWorkspaceShell() {
                 title="Start a new audit"
                 className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors ${
                   isLight
-                    ? 'bg-white border-[#dce4ed] text-[#374152] hover:bg-[#f5f7fa]'
-                    : 'bg-[#131a22] border-white/[0.08] text-[#d2d7e0] hover:bg-white/[0.04]'
+                    ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+                    : 'bg-[#0F172A] border-white/[0.08] text-[#CBD5E1] hover:bg-white/[0.04]'
                 }`}
               >
                 <Plus size={12} />
@@ -271,8 +271,8 @@ export default function AuditWorkspaceShell() {
                 data-testid="audit-protocol-source-button"
                 className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                   isLight
-                    ? 'bg-white border-[#dce4ed] text-[#374152] hover:bg-[#f5f7fa]'
-                    : 'bg-[#131a22] border-white/[0.08] text-[#d2d7e0] hover:bg-white/[0.04]'
+                    ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+                    : 'bg-[#0F172A] border-white/[0.08] text-[#CBD5E1] hover:bg-white/[0.04]'
                 }`}
               >
                 <FileSearch size={12} />
@@ -289,8 +289,8 @@ export default function AuditWorkspaceShell() {
                 onClick={() => setSummaryDrawerOpen(true)}
                 className={`xl:hidden inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors ${
                   isLight
-                    ? 'bg-white border-[#dce4ed] text-[#374152] hover:bg-[#f5f7fa]'
-                    : 'bg-[#131a22] border-white/[0.08] text-[#d2d7e0] hover:bg-white/[0.04]'
+                    ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+                    : 'bg-[#0F172A] border-white/[0.08] text-[#CBD5E1] hover:bg-white/[0.04]'
                 }`}
               >
                 <Sparkles size={12} />
@@ -520,8 +520,8 @@ function MobileStagePicker({
         aria-label="Audit stage"
         className={`appearance-none text-xs font-semibold pl-3 pr-8 py-1.5 rounded-md border transition-colors cursor-pointer ${
           isLight
-            ? 'bg-white border-[#dce4ed] text-[#374152] hover:bg-[#f5f7fa]'
-            : 'bg-[#131a22] border-white/[0.08] text-[#d2d7e0] hover:bg-white/[0.04]'
+            ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+            : 'bg-[#0F172A] border-white/[0.08] text-[#CBD5E1] hover:bg-white/[0.04]'
         }`}
       >
         {AUDIT_STAGES.map((s, idx) => {
@@ -538,7 +538,7 @@ function MobileStagePicker({
       <ChevronDown
         size={12}
         className={`pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 ${
-          isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'
+          isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'
         }`}
       />
     </div>

@@ -790,7 +790,7 @@ export default function VisitExecutionTab() {
               <>
                 To preview with sample data, enable the mock toggle:
                 <code className={`ml-1 px-1 py-0.5 rounded text-[10px] ${
-                  isLight ? 'bg-[#eef2f6]' : 'bg-white/[0.05]'
+                  isLight ? 'bg-[#F2F2F2]' : 'bg-white/[0.05]'
                 }`}>
                   localStorage.setItem('piq-visit-execution-mock-v1', '1')
                 </code>
@@ -851,8 +851,8 @@ export default function VisitExecutionTab() {
                   data-kind={mutationError.kind}
                   className={`flex items-start gap-2 px-3 py-2 rounded-md border text-xs ${
                     isLight
-                      ? 'bg-[#fdecec] border-[#f3c7c7] text-[#742a2a]'
-                      : 'bg-[#3b1f1f] border-[#5a2e2e] text-[#f5b8b8]'
+                      ? 'bg-[#FFF1F2] border-[#FECDD3] text-[#881337]'
+                      : 'bg-[#4C0519] border-[#881337] text-[#FECDD3]'
                   }`}
                 >
                   <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" aria-hidden />
@@ -875,7 +875,7 @@ export default function VisitExecutionTab() {
                     onClick={() => setMutationError(null)}
                     aria-label="Dismiss error"
                     className={`flex items-center justify-center w-6 h-6 rounded -mr-1 opacity-70 hover:opacity-100 ${
-                      isLight ? 'hover:bg-[#f3c7c7]' : 'hover:bg-[#5a2e2e]'
+                      isLight ? 'hover:bg-[#FECDD3]' : 'hover:bg-[#881337]'
                     }`}
                   >
                     <X size={12} aria-hidden />

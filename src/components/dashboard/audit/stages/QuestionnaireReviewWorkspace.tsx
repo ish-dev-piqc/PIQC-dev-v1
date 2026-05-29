@@ -54,18 +54,18 @@ const SOURCE_TONES: Record<
   { light: string; dark: string; label: string }
 > = {
   PENDING: {
-    light: 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]/65',
-    dark: 'bg-white/[0.06] border-white/10 text-[#d2d7e0]/55',
+    light: 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/65',
+    dark: 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/55',
     label: 'Pending',
   },
   AUDITOR_PREFILL_WEB: {
-    light: 'bg-[#4a6fa5]/10 border-[#4a6fa5]/25 text-[#4a6fa5]',
-    dark: 'bg-[#6e8fb5]/15 border-[#6e8fb5]/30 text-[#6e8fb5]',
+    light: 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]',
+    dark: 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]',
     label: 'Web pre-fill',
   },
   AUDITOR_PREFILL_PRIOR_AUDIT: {
-    light: 'bg-[#4a6fa5]/10 border-[#4a6fa5]/25 text-[#4a6fa5]',
-    dark: 'bg-[#6e8fb5]/15 border-[#6e8fb5]/30 text-[#6e8fb5]',
+    light: 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]',
+    dark: 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]',
     label: 'Prior audit',
   },
   AUDITOR_AUTHORED: {
@@ -79,8 +79,8 @@ const SOURCE_TONES: Record<
     label: 'Vendor',
   },
   NOT_APPLICABLE: {
-    light: 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]/55',
-    dark: 'bg-white/[0.06] border-white/10 text-[#d2d7e0]/45',
+    light: 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/55',
+    dark: 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/45',
     label: 'N/A',
   },
 };
@@ -158,13 +158,13 @@ export default function QuestionnaireReviewWorkspace() {
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
   const sectionHeader = 'text-fg-label';
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const buttonPrimary = isLight
-    ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
-    : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]';
+    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
+    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]';
   const buttonSecondary = isLight
-    ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-    : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]';
+    ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+    : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]';
 
   // ---------------------------------------------------------------------------
   // Empty state — create instance
@@ -473,7 +473,7 @@ export default function QuestionnaireReviewWorkspace() {
       {/* Questions, grouped by section */}
       {grouped.map((group) => (
         <section key={group.code} className="space-y-3">
-          <h3 className={`${headingColor} text-sm font-semibold border-b ${isLight ? 'border-[#e2e8ee]' : 'border-white/5'} pb-1.5`}>
+          <h3 className={`${headingColor} text-sm font-semibold border-b ${isLight ? 'border-[#E2E8F0]' : 'border-white/5'} pb-1.5`}>
             <span className={mutedColor}>{group.code}</span>{' '}— {group.title}
           </h3>
           <div className="space-y-2">
@@ -519,7 +519,7 @@ export default function QuestionnaireReviewWorkspace() {
               type="button"
               onClick={approve}
               className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${
-                isLight ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-emerald-500 text-[#0d1118] hover:bg-emerald-400'
+                isLight ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-emerald-500 text-[#020617] hover:bg-emerald-400'
               }`}
             >
               <CheckCircle2 size={14} />
@@ -570,16 +570,16 @@ function LifecycleStepper({ status, isLight }: LifecycleStepperProps) {
           const isFuture = i > idx;
           const tone = isCurrent
             ? isLight
-              ? 'bg-[#4a6fa5] text-white border-[#4a6fa5]'
-              : 'bg-[#6e8fb5] text-[#1a1f28] border-[#6e8fb5]'
+              ? 'bg-[#017BC8] text-white border-[#017BC8]'
+              : 'bg-[#74B4DC] text-[#0F172A] border-[#74B4DC]'
             : isDone
             ? isLight
               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
               : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
             : isFuture
             ? isLight
-              ? 'bg-white text-[#374152]/45 border-[#e2e8ee]'
-              : 'bg-[#131a22] text-[#d2d7e0]/35 border-white/10'
+              ? 'bg-white text-[#334155]/45 border-[#E2E8F0]'
+              : 'bg-[#0F172A] text-[#CBD5E1]/35 border-white/10'
             : '';
           return (
             <span
@@ -624,17 +624,17 @@ function QuestionRow({ question, response, onUpdate, isLight, readOnly }: Questi
 
   const headingColor = 'text-fg-heading';
   const mutedColor = 'text-fg-muted';
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
-  const inputBg = isLight ? 'bg-white' : 'bg-[#131a22]';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
+  const inputBg = isLight ? 'bg-white' : 'bg-[#0F172A]';
   const inputBorder = isLight
-    ? 'border-[#cbd2db] focus:border-[#4a6fa5] focus:ring-1 focus:ring-[#4a6fa5]/30'
-    : 'border-white/15 focus:border-[#6e8fb5] focus:ring-1 focus:ring-[#6e8fb5]/30';
+    ? 'border-[#CBD5E1] focus:border-[#017BC8] focus:ring-1 focus:ring-[#017BC8]/30'
+    : 'border-white/15 focus:border-[#74B4DC] focus:ring-1 focus:ring-[#74B4DC]/30';
   const buttonSecondary = isLight
-    ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-    : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]';
+    ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+    : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]';
   const buttonGhost = isLight
-    ? 'text-[#374152]/55 hover:text-[#1a1f28]'
-    : 'text-[#d2d7e0]/55 hover:text-white';
+    ? 'text-[#334155]/55 hover:text-[#0F172A]'
+    : 'text-[#CBD5E1]/55 hover:text-white';
 
   const sourceTone = SOURCE_TONES[source];
   const sourceClass = isLight ? sourceTone.light : sourceTone.dark;
@@ -685,7 +685,7 @@ function QuestionRow({ question, response, onUpdate, isLight, readOnly }: Questi
 
       {/* Existing response (read view) */}
       {!editing && response?.response_text && (
-        <div className={`mt-3 p-3 rounded-md border ${isLight ? 'bg-[#f9fafc] border-[#eef2f6]' : 'bg-white/[0.02] border-white/[0.04]'}`}>
+        <div className={`mt-3 p-3 rounded-md border ${isLight ? 'bg-[#F8FAFC] border-[#F2F2F2]' : 'bg-white/[0.02] border-white/[0.04]'}`}>
           <p className={`${headingColor} text-sm whitespace-pre-wrap leading-relaxed`}>
             {response.response_text}
           </p>
@@ -812,11 +812,11 @@ function Tag({
       ? 'bg-amber-50 border-amber-200 text-amber-700'
       : 'bg-amber-500/15 border-amber-500/30 text-amber-300',
     blue: isLight
-      ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/25 text-[#4a6fa5]'
-      : 'bg-[#6e8fb5]/15 border-[#6e8fb5]/30 text-[#6e8fb5]',
+      ? 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]'
+      : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]',
     neutral: isLight
-      ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]/65'
-      : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]/55',
+      ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/65'
+      : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/55',
   };
   return (
     <span

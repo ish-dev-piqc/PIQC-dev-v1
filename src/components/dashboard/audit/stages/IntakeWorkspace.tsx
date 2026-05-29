@@ -170,16 +170,16 @@ export default function IntakeWorkspace() {
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
   const sectionHeader = 'text-fg-label';
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const formCardBg = isLight
-    ? 'bg-[#f9fafc] border-[#e2e8ee]'
+    ? 'bg-[#F8FAFC] border-[#E2E8F0]'
     : 'bg-white/[0.02] border-white/5';
   const emptyBg = isLight
-    ? 'border-[#e2e8ee] bg-[#f9fafc]/40'
+    ? 'border-[#E2E8F0] bg-[#F8FAFC]/40'
     : 'border-white/5 bg-white/[0.01]';
   const buttonPrimary = isLight
-    ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
-    : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]';
+    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
+    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]';
 
   const inForm = mode !== 'list';
 
@@ -332,8 +332,8 @@ function SectionRow({
   mutedColor,
 }: SectionRowProps) {
   const buttonSecondary = isLight
-    ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-    : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]';
+    ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+    : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]';
 
   const domainLabel =
     OPERATIONAL_DOMAIN_OPTIONS.find((o) => o.value === section.operational_domain_tag)?.label ??
@@ -347,8 +347,8 @@ function SectionRow({
             <span
               className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded ${
                 isLight
-                  ? 'bg-[#eef2f6] text-[#4a6fa5]'
-                  : 'bg-white/[0.06] text-[#6e8fb5]'
+                  ? 'bg-[#F2F2F2] text-[#017BC8]'
+                  : 'bg-white/[0.06] text-[#74B4DC]'
               }`}
             >
               {section.section_identifier}
@@ -431,11 +431,11 @@ function TierChip({ tier, isLight }: { tier: EndpointTier; isLight: boolean }) {
       ? 'bg-amber-50 border-amber-200 text-amber-700'
       : 'bg-amber-500/15 border-amber-500/30 text-amber-300',
     SECONDARY: isLight
-      ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/25 text-[#4a6fa5]'
-      : 'bg-[#6e8fb5]/15 border-[#6e8fb5]/30 text-[#6e8fb5]',
+      ? 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]'
+      : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]',
     SUPPORTIVE: isLight
-      ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]/65'
-      : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]/55',
+      ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/65'
+      : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/55',
   };
   return (
     <span
@@ -455,8 +455,8 @@ function SurfaceChip({ surface, isLight }: { surface: ImpactSurface; isLight: bo
       ? 'bg-amber-50 border-amber-200 text-amber-700'
       : 'bg-amber-500/15 border-amber-500/30 text-amber-300',
     DATA_INTEGRITY: isLight
-      ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/25 text-[#4a6fa5]'
-      : 'bg-[#6e8fb5]/15 border-[#6e8fb5]/30 text-[#6e8fb5]',
+      ? 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]'
+      : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]',
   };
   return (
     <span
@@ -472,8 +472,8 @@ function DomainChip({ label, isLight }: { label: string; isLight: boolean }) {
     <span
       className={`inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded border ${
         isLight
-          ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]/70'
-          : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]/65'
+          ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/70'
+          : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/65'
       }`}
     >
       {label}
@@ -504,8 +504,8 @@ function SourceLinkedChip({ isLight }: ChipProps) {
       title="Linked to a parsed protocol source item"
       className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border ${
         isLight
-          ? 'bg-[#eef2f6] border-[#cbd2db] text-[#4a6fa5]'
-          : 'bg-white/[0.06] border-white/10 text-[#6e8fb5]'
+          ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#017BC8]'
+          : 'bg-white/[0.06] border-white/10 text-[#74B4DC]'
       }`}
     >
       <Link2 size={10} />

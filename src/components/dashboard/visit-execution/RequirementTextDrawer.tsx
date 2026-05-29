@@ -229,15 +229,15 @@ export default function RequirementTextDrawer({
         ref={panelRef}
         {...swipe}
         className={`relative w-full max-w-md h-full flex flex-col shadow-xl border-l ${
-          isLight ? 'bg-[#f5f7fa] border-[#e2e8ee]' : 'bg-[#0d1118] border-white/5'
+          isLight ? 'bg-[#F8FAFC] border-[#E2E8F0]' : 'bg-[#020617] border-white/5'
         }`}
       >
         {/* Sticky header */}
         <div
           className={`sticky top-0 z-10 backdrop-blur px-5 py-3.5 border-b flex items-start justify-between gap-3 ${
             isLight
-              ? 'bg-[#f5f7fa]/95 border-[#e2e8ee]'
-              : 'bg-[#0d1118]/95 border-white/5'
+              ? 'bg-[#F8FAFC]/95 border-[#E2E8F0]'
+              : 'bg-[#020617]/95 border-white/5'
           }`}
         >
           <div className="min-w-0 flex-1">
@@ -258,7 +258,7 @@ export default function RequirementTextDrawer({
               saving
                 ? 'opacity-40 cursor-not-allowed'
                 : isLight
-                ? 'text-fg-sub hover:bg-[#e2e8ee] hover:text-fg-body'
+                ? 'text-fg-sub hover:bg-[#E2E8F0] hover:text-fg-body'
                 : 'text-fg-sub hover:bg-white/[0.06] hover:text-fg-body'
             }`}
           >
@@ -277,7 +277,7 @@ export default function RequirementTextDrawer({
             <div
               data-testid="vew-drift-original-block"
               className={`rounded-md border px-3 py-2 ${
-                isLight ? 'bg-[#eef2f6] border-[#dde3ea]' : 'bg-white/[0.03] border-white/5'
+                isLight ? 'bg-[#F2F2F2] border-[#dde3ea]' : 'bg-white/[0.03] border-white/5'
               }`}
             >
               <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold mb-1">
@@ -308,7 +308,7 @@ export default function RequirementTextDrawer({
               rows={6}
               className={`w-full px-3 py-2 rounded-md border text-sm leading-relaxed resize-y min-h-[6rem] focus:outline-none focus:ring-2 ${
                 isLight
-                  ? 'bg-white border-[#cbd2db] text-fg-body placeholder:text-fg-muted focus:ring-[#9aa6b5]'
+                  ? 'bg-white border-[#CBD5E1] text-fg-body placeholder:text-fg-muted focus:ring-[#94A3B8]'
                   : 'bg-[#1a2029] border-white/10 text-fg-body placeholder:text-fg-muted focus:ring-white/20'
               } ${saving ? 'opacity-60 cursor-not-allowed' : ''}`}
             />
@@ -323,8 +323,8 @@ export default function RequirementTextDrawer({
               data-testid="vew-text-drawer-error"
               className={`flex items-start gap-2 px-3 py-2 rounded-md border text-xs ${
                 isLight
-                  ? 'bg-[#fdecec] border-[#f3c7c7] text-[#742a2a]'
-                  : 'bg-[#3b1f1f] border-[#5a2e2e] text-[#f5b8b8]'
+                  ? 'bg-[#FFF1F2] border-[#FECDD3] text-[#881337]'
+                  : 'bg-[#4C0519] border-[#881337] text-[#FECDD3]'
               }`}
             >
               <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" aria-hidden />
@@ -334,9 +334,9 @@ export default function RequirementTextDrawer({
 
           <p className="text-fg-muted text-[10px] leading-relaxed">
             Press <kbd className={`px-1 py-0.5 rounded text-[10px] ${
-              isLight ? 'bg-[#eef2f6]' : 'bg-white/[0.05]'
+              isLight ? 'bg-[#F2F2F2]' : 'bg-white/[0.05]'
             }`}>⌘</kbd> + <kbd className={`px-1 py-0.5 rounded text-[10px] ${
-              isLight ? 'bg-[#eef2f6]' : 'bg-white/[0.05]'
+              isLight ? 'bg-[#F2F2F2]' : 'bg-white/[0.05]'
             }`}>Enter</kbd> to save.
           </p>
         </div>
@@ -345,8 +345,8 @@ export default function RequirementTextDrawer({
         <div
           className={`sticky bottom-0 z-10 backdrop-blur px-5 py-3 border-t flex items-center justify-end gap-2 ${
             isLight
-              ? 'bg-[#f5f7fa]/95 border-[#e2e8ee]'
-              : 'bg-[#0d1118]/95 border-white/5'
+              ? 'bg-[#F8FAFC]/95 border-[#E2E8F0]'
+              : 'bg-[#020617]/95 border-white/5'
           }`}
         >
           <button
@@ -357,7 +357,7 @@ export default function RequirementTextDrawer({
               saving
                 ? 'opacity-40 cursor-not-allowed'
                 : isLight
-                ? 'text-fg-body hover:bg-[#e2e8ee]'
+                ? 'text-fg-body hover:bg-[#E2E8F0]'
                 : 'text-fg-body hover:bg-white/[0.06]'
             }`}
           >
@@ -371,11 +371,11 @@ export default function RequirementTextDrawer({
             className={`px-3 py-1.5 rounded-md text-xs font-semibold inline-flex items-center gap-1.5 ${
               !canSave
                 ? isLight
-                  ? 'bg-[#cbd2db] text-white cursor-not-allowed'
+                  ? 'bg-[#CBD5E1] text-white cursor-not-allowed'
                   : 'bg-white/10 text-fg-muted cursor-not-allowed'
                 : isLight
-                ? 'bg-[#1f2937] text-white hover:bg-[#111827]'
-                : 'bg-white text-[#0d1118] hover:bg-[#e5e7eb]'
+                ? 'bg-[#1E293B] text-white hover:bg-[#0F172A]'
+                : 'bg-white text-[#020617] hover:bg-[#E2E8F0]'
             }`}
           >
             {saving && <Loader2 size={11} className="animate-spin" aria-hidden />}

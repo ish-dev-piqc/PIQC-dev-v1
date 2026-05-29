@@ -147,17 +147,17 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
     }
   };
 
-  const bg = isLight ? 'bg-white' : 'bg-[#131a22]';
-  const border = isLight ? 'border-[#e2e8ee]' : 'border-white/5';
-  const inputBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#1a2230] border-white/10';
+  const bg = isLight ? 'bg-white' : 'bg-[#0F172A]';
+  const border = isLight ? 'border-[#E2E8F0]' : 'border-white/5';
+  const inputBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#1E293B] border-white/10';
   const headingColor = 'text-fg-heading';
   const labelColor = 'text-fg-label';
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
-  const sectionBg = isLight ? 'bg-[#f9fafc]' : 'bg-white/[0.02]';
+  const sectionBg = isLight ? 'bg-[#F8FAFC]' : 'bg-white/[0.02]';
   const buttonPrimary = isLight
-    ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f] disabled:bg-[#4a6fa5]/50'
-    : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5] disabled:bg-[#6e8fb5]/50';
+    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF] disabled:bg-[#017BC8]/50'
+    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE] disabled:bg-[#74B4DC]/50';
 
   return (
     <div
@@ -223,18 +223,18 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
                           <UserIcon size={13} className={mutedColor} />
                         )}
                         <span className={`${headingColor} text-sm font-medium truncate`}>{m.name}</span>
-                        <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${m.role === 'admin' ? (isLight ? 'bg-amber-100 text-amber-800' : 'bg-amber-500/15 text-amber-300') : (isLight ? 'bg-[#eef2f6] text-[#374152]/65' : 'bg-white/[0.06] text-[#d2d7e0]/55')}`}>
+                        <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${m.role === 'admin' ? (isLight ? 'bg-amber-100 text-amber-800' : 'bg-amber-500/15 text-amber-300') : (isLight ? 'bg-[#F2F2F2] text-[#334155]/65' : 'bg-white/[0.06] text-[#CBD5E1]/55')}`}>
                           {m.role}
                         </span>
                       </div>
                       {isAdmin && (
                         <div className="flex items-center gap-1">
                           {m.role === 'admin' ? (
-                            <button type="button" onClick={() => handleRoleChange(m, 'member')} className={`text-[11px] px-2 py-1 rounded ${isLight ? 'text-[#374152]/70 hover:bg-[#1a1f28]/[0.05]' : 'text-[#d2d7e0]/60 hover:bg-white/[0.05]'}`}>
+                            <button type="button" onClick={() => handleRoleChange(m, 'member')} className={`text-[11px] px-2 py-1 rounded ${isLight ? 'text-[#334155]/70 hover:bg-[#0F172A]/[0.05]' : 'text-[#CBD5E1]/60 hover:bg-white/[0.05]'}`}>
                               Make member
                             </button>
                           ) : (
-                            <button type="button" onClick={() => handleRoleChange(m, 'admin')} className={`text-[11px] px-2 py-1 rounded ${isLight ? 'text-[#374152]/70 hover:bg-[#1a1f28]/[0.05]' : 'text-[#d2d7e0]/60 hover:bg-white/[0.05]'}`}>
+                            <button type="button" onClick={() => handleRoleChange(m, 'admin')} className={`text-[11px] px-2 py-1 rounded ${isLight ? 'text-[#334155]/70 hover:bg-[#0F172A]/[0.05]' : 'text-[#CBD5E1]/60 hover:bg-white/[0.05]'}`}>
                               Make admin
                             </button>
                           )}
@@ -263,14 +263,14 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
                         value={inviteEmail}
                         onChange={(e) => setInviteEmail(e.target.value)}
                         placeholder="name@example.com"
-                        className={`px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30`}
+                        className={`px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30`}
                         disabled={creatingInvite}
                         required
                       />
                       <select
                         value={inviteRole}
                         onChange={(e) => setInviteRole(e.target.value as 'admin' | 'member')}
-                        className={`px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30`}
+                        className={`px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30`}
                         disabled={creatingInvite}
                       >
                         <option value="member">Member</option>
@@ -294,7 +294,7 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
                               <p className={`${headingColor} text-sm truncate`}>{inv.email}</p>
                               <p className={`${mutedColor} text-[11px]`}>{inv.role} · expires {new Date(inv.expires_at).toLocaleDateString()}</p>
                             </div>
-                            <button type="button" onClick={() => copyInviteUrl(inv.token)} className={`inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded ${isLight ? 'text-[#4a6fa5] hover:bg-[#4a6fa5]/[0.06]' : 'text-[#6e8fb5] hover:bg-white/[0.04]'}`}>
+                            <button type="button" onClick={() => copyInviteUrl(inv.token)} className={`inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded ${isLight ? 'text-[#017BC8] hover:bg-[#017BC8]/[0.06]' : 'text-[#74B4DC] hover:bg-white/[0.04]'}`}>
                               {copiedToken === inv.token ? <Check size={11} /> : <Copy size={11} />}
                               {copiedToken === inv.token ? 'Copied' : 'Copy link'}
                             </button>

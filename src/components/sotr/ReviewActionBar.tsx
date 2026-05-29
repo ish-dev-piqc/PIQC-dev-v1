@@ -165,7 +165,7 @@ export default function ReviewActionBar({ studyId, data, onCompleted }: Props) {
 
 const TONE_CLASSES: Record<'success' | 'neutral' | 'danger' | 'warning', string> = {
   success: 'border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-300 dark:hover:bg-emerald-500/[0.08]',
-  neutral: 'border-[#e2e8ee] text-fg-body hover:bg-[#f5f7fa] dark:border-white/10 dark:hover:bg-white/[0.04]',
+  neutral: 'border-[#E2E8F0] text-fg-body hover:bg-[#F8FAFC] dark:border-white/10 dark:hover:bg-white/[0.04]',
   danger:  'border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-500/30 dark:text-rose-300 dark:hover:bg-rose-500/[0.08]',
   warning: 'border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-500/30 dark:text-amber-300 dark:hover:bg-amber-500/[0.08]',
 };
@@ -193,7 +193,7 @@ function ActionButton({
       data-testid={testid}
       disabled={disabled || busy}
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-md border bg-white dark:bg-[#131a22] disabled:opacity-50 ${TONE_CLASSES[tone]}`}
+      className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-md border bg-white dark:bg-[#0F172A] disabled:opacity-50 ${TONE_CLASSES[tone]}`}
     >
       {busy ? <Loader2 size={11} className="animate-spin" /> : icon}
       {label}
@@ -231,7 +231,7 @@ function EditDraftForm({
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={3}
-          className="mt-1 w-full text-sm rounded-md border border-[#e2e8ee] dark:border-white/10 bg-white dark:bg-[#131a22] px-2.5 py-1.5 text-fg-body focus:outline-none focus:ring-1 focus:ring-[#4a6fa5]"
+          className="mt-1 w-full text-sm rounded-md border border-[#E2E8F0] dark:border-white/10 bg-white dark:bg-[#0F172A] px-2.5 py-1.5 text-fg-body focus:outline-none focus:ring-1 focus:ring-[#017BC8]"
         />
       </label>
       <label className="block">
@@ -244,7 +244,7 @@ function EditDraftForm({
           onChange={(e) => setNote(e.target.value)}
           rows={2}
           placeholder="Why this edit?"
-          className="mt-1 w-full text-xs rounded-md border border-[#e2e8ee] dark:border-white/10 bg-white dark:bg-[#131a22] px-2.5 py-1.5 text-fg-body focus:outline-none focus:ring-1 focus:ring-[#4a6fa5]"
+          className="mt-1 w-full text-xs rounded-md border border-[#E2E8F0] dark:border-white/10 bg-white dark:bg-[#0F172A] px-2.5 py-1.5 text-fg-body focus:outline-none focus:ring-1 focus:ring-[#017BC8]"
         />
       </label>
       <div className="flex items-center gap-2">
@@ -253,7 +253,7 @@ function EditDraftForm({
           data-testid="sotr-edit-draft-save"
           disabled={!valid || busy}
           onClick={() => onSave(text.trim(), note.trim())}
-          className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-md border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300 bg-white dark:bg-[#131a22] hover:bg-emerald-50 dark:hover:bg-emerald-500/[0.08] disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-md border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300 bg-white dark:bg-[#0F172A] hover:bg-emerald-50 dark:hover:bg-emerald-500/[0.08] disabled:opacity-50"
         >
           {busy ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
           Save edit
@@ -263,7 +263,7 @@ function EditDraftForm({
           data-testid="sotr-edit-draft-cancel"
           onClick={onCancel}
           disabled={busy}
-          className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-md border border-[#e2e8ee] dark:border-white/10 text-fg-body bg-white dark:bg-[#131a22] hover:bg-[#f5f7fa] dark:hover:bg-white/[0.04] disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-md border border-[#E2E8F0] dark:border-white/10 text-fg-body bg-white dark:bg-[#0F172A] hover:bg-[#F8FAFC] dark:hover:bg-white/[0.04] disabled:opacity-50"
         >
           Cancel
         </button>
@@ -315,7 +315,7 @@ function NoteForm({
           onChange={(e) => setNote(e.target.value)}
           rows={2}
           placeholder={cfg.placeholder}
-          className="mt-1 w-full text-xs rounded-md border border-[#e2e8ee] dark:border-white/10 bg-white dark:bg-[#131a22] px-2.5 py-1.5 text-fg-body focus:outline-none focus:ring-1 focus:ring-[#4a6fa5]"
+          className="mt-1 w-full text-xs rounded-md border border-[#E2E8F0] dark:border-white/10 bg-white dark:bg-[#0F172A] px-2.5 py-1.5 text-fg-body focus:outline-none focus:ring-1 focus:ring-[#017BC8]"
         />
       </label>
       <div className="flex items-center gap-2">
@@ -324,7 +324,7 @@ function NoteForm({
           data-testid={`sotr-note-submit-${action}`}
           disabled={busy}
           onClick={() => onSubmit(note.trim())}
-          className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-md border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 bg-white dark:bg-[#131a22] hover:bg-rose-50 dark:hover:bg-rose-500/[0.08] disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-md border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 bg-white dark:bg-[#0F172A] hover:bg-rose-50 dark:hover:bg-rose-500/[0.08] disabled:opacity-50"
         >
           {busy ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
           {cfg.submitLabel}
@@ -334,7 +334,7 @@ function NoteForm({
           data-testid={`sotr-note-cancel-${action}`}
           onClick={onCancel}
           disabled={busy}
-          className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-md border border-[#e2e8ee] dark:border-white/10 text-fg-body bg-white dark:bg-[#131a22] hover:bg-[#f5f7fa] dark:hover:bg-white/[0.04] disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-md border border-[#E2E8F0] dark:border-white/10 text-fg-body bg-white dark:bg-[#0F172A] hover:bg-[#F8FAFC] dark:hover:bg-white/[0.04] disabled:opacity-50"
         >
           Cancel
         </button>

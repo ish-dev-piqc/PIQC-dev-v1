@@ -84,10 +84,10 @@ export default function RoleFilterBar({
               className={`inline-flex items-center px-2.5 py-1 min-h-[32px] rounded-md text-[11px] font-semibold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-offset-1 ${
                 isActive
                   ? isLight
-                    ? 'bg-[#e2e8ee] border border-[#1f2937] text-fg-heading focus-visible:ring-[#1f2937]'
+                    ? 'bg-[#E2E8F0] border border-[#1E293B] text-fg-heading focus-visible:ring-[#1E293B]'
                     : 'bg-white/[0.10] border border-white/40 text-fg-heading focus-visible:ring-white/60'
                   : isLight
-                  ? 'bg-transparent border border-[#cbd2db] text-fg-body hover:bg-[#eef2f6] focus-visible:ring-[#9aa6b5]'
+                  ? 'bg-transparent border border-[#CBD5E1] text-fg-body hover:bg-[#F2F2F2] focus-visible:ring-[#94A3B8]'
                   : 'bg-transparent border border-white/10 text-fg-body hover:bg-white/[0.04] focus-visible:ring-white/30'
               }`}
             >

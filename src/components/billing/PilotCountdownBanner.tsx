@@ -56,7 +56,7 @@ export default function PilotCountdownBanner() {
   };
 
   // Tone scales with urgency. Active state was previously too subtle on the
-  // light-mode page background (bg-[#f5f7fa]) — the 8% opacity background
+  // light-mode page background (bg-[#F8FAFC]) — the 8% opacity background
   // visually blended in. Bumped to 18% bg + 50% border so the banner reads
   // as a clear notification without escalating to the amber 'warning' or
   // rose 'urgent' tones, which are reserved for expiring_soon and expired.
@@ -70,8 +70,8 @@ export default function PilotCountdownBanner() {
         ? 'bg-amber-50 border-amber-200 text-amber-700'
         : 'bg-amber-500/[0.06] border-amber-500/20 text-amber-300'
       : isLight
-      ? 'bg-[#4a6fa5]/[0.18] border-[#4a6fa5]/50 text-[#1a3d6f]'
-      : 'bg-[#6e8fb5]/20 border-[#6e8fb5]/40 text-[#c8d8eb]';
+      ? 'bg-[#017BC8]/[0.18] border-[#017BC8]/50 text-[#1a3d6f]'
+      : 'bg-[#74B4DC]/20 border-[#74B4DC]/40 text-[#c8d8eb]';
 
   const label =
     status === 'expired'
@@ -88,8 +88,8 @@ export default function PilotCountdownBanner() {
       : 'Upgrade to a Workspace before your pilot ends to keep going.';
 
   const buttonClasses = isLight
-    ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
-    : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]';
+    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
+    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]';
 
   return (
     <div className={`${toneClass} border rounded-lg px-4 py-3 flex items-start gap-3`}>

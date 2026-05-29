@@ -254,20 +254,20 @@ export default function PreAuditDraftingWorkspace() {
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
   const sectionHeader = 'text-fg-label';
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
-  const tabRail = isLight ? 'border-[#e2e8ee]' : 'border-white/5';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
+  const tabRail = isLight ? 'border-[#E2E8F0]' : 'border-white/5';
   const tabActive = isLight
-    ? 'border-[#4a6fa5] text-[#4a6fa5]'
-    : 'border-[#6e8fb5] text-[#6e8fb5]';
+    ? 'border-[#017BC8] text-[#017BC8]'
+    : 'border-[#74B4DC] text-[#74B4DC]';
   const tabInactive = isLight
-    ? 'border-transparent text-[#374152]/60 hover:text-[#1a1f28]'
-    : 'border-transparent text-[#d2d7e0]/55 hover:text-white';
+    ? 'border-transparent text-[#334155]/60 hover:text-[#0F172A]'
+    : 'border-transparent text-[#CBD5E1]/55 hover:text-white';
   const buttonPrimary = isLight
-    ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
-    : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]';
+    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
+    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]';
   const buttonApprove = isLight
-    ? 'bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-[#cbd2db]'
-    : 'bg-emerald-500 text-[#0d1118] hover:bg-emerald-400 disabled:bg-white/10 disabled:text-white/35';
+    ? 'bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-[#CBD5E1]'
+    : 'bg-emerald-500 text-[#020617] hover:bg-emerald-400 disabled:bg-white/10 disabled:text-white/35';
 
   // ---------------------------------------------------------------------------
   // Empty state — all three deliverables missing
@@ -434,7 +434,7 @@ export default function PreAuditDraftingWorkspace() {
                         <CheckCircle2 size={11} className="text-emerald-600" />
                       ) : (
                         <span className={`inline-block w-2.5 h-2.5 rounded-full border ${
-                          isLight ? 'border-[#cbd2db]' : 'border-white/15'
+                          isLight ? 'border-[#CBD5E1]' : 'border-white/15'
                         }`} />
                       )}
                       <span className={ok ? subColor : mutedColor}>{t.label}</span>
@@ -491,7 +491,7 @@ function ApprovalDot({
         status === 'DRAFT'
           ? 'bg-amber-500'
           : isLight
-          ? 'bg-[#cbd2db]'
+          ? 'bg-[#CBD5E1]'
           : 'bg-white/15'
       }`}
     />
@@ -579,7 +579,7 @@ function ConfirmationLetterTab({ deliverable, isLight, onChange }: ConfirmationL
       {!editing && deliverable ? (
         <div className="space-y-4">
           <SubSection label="Body" isLight={isLight}>
-            <p className={`text-sm whitespace-pre-wrap leading-relaxed ${isLight ? 'text-[#1a1f28]' : 'text-white'}`}>
+            <p className={`text-sm whitespace-pre-wrap leading-relaxed ${isLight ? 'text-[#0F172A]' : 'text-white'}`}>
               {deliverable.content.body_text}
             </p>
           </SubSection>
@@ -598,11 +598,11 @@ function ConfirmationLetterTab({ deliverable, isLight, onChange }: ConfirmationL
                 {deliverable.content.scope.map((s, i) => (
                   <li
                     key={i}
-                    className={`text-sm flex items-start gap-2 ${isLight ? 'text-[#1a1f28]' : 'text-white'}`}
+                    className={`text-sm flex items-start gap-2 ${isLight ? 'text-[#0F172A]' : 'text-white'}`}
                   >
                     <span
                       className={`mt-1.5 w-1 h-1 rounded-full flex-shrink-0 ${
-                        isLight ? 'bg-[#4a6fa5]/55' : 'bg-[#6e8fb5]/55'
+                        isLight ? 'bg-[#017BC8]/55' : 'bg-[#74B4DC]/55'
                       }`}
                     />
                     {s}
@@ -734,13 +734,13 @@ function AgendaTab({ deliverable, isLight, onChange }: AgendaTabProps) {
           ))}
         </div>
       ) : !editing && deliverable ? (
-        <p className={`text-sm italic ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'}`}>
+        <p className={`text-sm italic ${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'}`}>
           No agenda items.
         </p>
       ) : (
         <div className="space-y-2">
           {items.length === 0 && (
-            <p className={`text-sm italic ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'}`}>
+            <p className={`text-sm italic ${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'}`}>
               No agenda items yet. Add one below.
             </p>
           )}
@@ -758,8 +758,8 @@ function AgendaTab({ deliverable, isLight, onChange }: AgendaTabProps) {
             onClick={addItem}
             className={`inline-flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-md transition-colors ${
               isLight
-                ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-                : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]'
+                ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+                : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]'
             }`}
           >
             <Plus size={14} />
@@ -775,7 +775,7 @@ function AgendaItemRow({ item, isLight }: { item: MockAgendaItem; isLight: boole
   const headingColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-white/[0.02] border-white/[0.04]';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-white/[0.02] border-white/[0.04]';
   return (
     <div className={`${cardBg} border rounded-md px-3 py-2.5`}>
       <p className={`text-[11px] uppercase tracking-wider font-semibold ${mutedColor}`}>
@@ -802,10 +802,10 @@ function AgendaItemEditRow({
   onRemove: () => void;
 }) {
   const headingColor = 'text-fg-heading';
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const buttonGhost = isLight
-    ? 'text-[#374152]/55 hover:text-red-600'
-    : 'text-[#d2d7e0]/55 hover:text-red-400';
+    ? 'text-[#334155]/55 hover:text-red-600'
+    : 'text-[#CBD5E1]/55 hover:text-red-400';
   return (
     <div className={`${cardBg} border rounded-md p-3 space-y-2`}>
       <div className="flex items-start gap-2">
@@ -924,10 +924,10 @@ function ChecklistTab({ deliverable, isLight, onChange }: ChecklistTabProps) {
   const headingColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-white/[0.02] border-white/[0.04]';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-white/[0.02] border-white/[0.04]';
   const buttonGhost = isLight
-    ? 'text-[#374152]/55 hover:text-red-600'
-    : 'text-[#d2d7e0]/55 hover:text-red-400';
+    ? 'text-[#334155]/55 hover:text-red-600'
+    : 'text-[#CBD5E1]/55 hover:text-red-400';
 
   return (
     <DeliverableShell
@@ -965,8 +965,8 @@ function ChecklistTab({ deliverable, isLight, onChange }: ChecklistTabProps) {
                     <span
                       className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
                         isLight
-                          ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/25 text-[#4a6fa5]'
-                          : 'bg-[#6e8fb5]/15 border-[#6e8fb5]/30 text-[#6e8fb5]'
+                          ? 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]'
+                          : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]'
                       }`}
                     >
                       Evidence expected
@@ -985,7 +985,7 @@ function ChecklistTab({ deliverable, isLight, onChange }: ChecklistTabProps) {
             <p className={`text-sm italic ${subColor}`}>No checklist items yet. Add one below.</p>
           )}
           {items.map((it, idx) => (
-            <div key={it.id} className={`${cardBg.replace('bg-white/[0.02]', 'bg-[#131a22]')} border rounded-md p-3`}>
+            <div key={it.id} className={`${cardBg.replace('bg-white/[0.02]', 'bg-[#0F172A]')} border rounded-md p-3`}>
               <div className="flex items-start gap-2">
                 <span className={`text-[11px] font-semibold ${mutedColor} w-5 flex-shrink-0 mt-2`}>
                   {idx + 1}.
@@ -1037,8 +1037,8 @@ function ChecklistTab({ deliverable, isLight, onChange }: ChecklistTabProps) {
             onClick={addItem}
             className={`inline-flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-md transition-colors ${
               isLight
-                ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-                : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]'
+                ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+                : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]'
             }`}
           >
             <Plus size={14} />
@@ -1093,16 +1093,16 @@ function DeliverableShell({
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
   const sectionHeader = 'text-fg-label';
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const buttonPrimary = isLight
-    ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
-    : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]';
+    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
+    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]';
   const buttonSecondary = isLight
-    ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-    : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]';
+    ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+    : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]';
   const buttonApprove = isLight
     ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-    : 'bg-emerald-500 text-[#0d1118] hover:bg-emerald-400';
+    : 'bg-emerald-500 text-[#020617] hover:bg-emerald-400';
 
   const approved = deliverable?.approval_status === 'APPROVED';
 
@@ -1126,7 +1126,7 @@ function DeliverableShell({
               className={`${mutedColor} text-[11px] mt-1 inline-flex items-center gap-1`}
               title="Drafted from approved Stage 3 + Stage 4 context"
             >
-              <Sparkles size={10} className={isLight ? 'text-[#4a6fa5]' : 'text-[#6e8fb5]'} />
+              <Sparkles size={10} className={isLight ? 'text-[#017BC8]' : 'text-[#74B4DC]'} />
               Started from: {prefilledSources.join(' + ')}
             </p>
           )}
@@ -1194,7 +1194,7 @@ function DeliverableShell({
       <div>{children}</div>
 
       {editing && (
-        <div className={`flex items-center gap-2 pt-3 border-t ${isLight ? 'border-[#e2e8ee]' : 'border-white/5'}`}>
+        <div className={`flex items-center gap-2 pt-3 border-t ${isLight ? 'border-[#E2E8F0]' : 'border-white/5'}`}>
           <button
             type="button"
             onClick={onSave}
@@ -1266,8 +1266,8 @@ function StatusBadge({
     <span
       className={`inline-flex items-center text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
         isLight
-          ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]/55'
-          : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]/45'
+          ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/55'
+          : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/45'
       }`}
     >
       Not started
@@ -1328,8 +1328,8 @@ function Chip({
     <span
       className={`inline-flex items-center text-xs px-2 py-1 rounded border ${
         isLight
-          ? 'bg-[#eef2f6] border-[#cbd2db] text-[#1a1f28]'
-          : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]'
+          ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#0F172A]'
+          : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]'
       }`}
     >
       {children}
@@ -1371,8 +1371,8 @@ function ChipListEditor({ label, placeholder, items, onChange, isLight, multilin
               key={`${it}-${i}`}
               className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded border ${
                 isLight
-                  ? 'bg-[#eef2f6] border-[#cbd2db] text-[#1a1f28]'
-                  : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]'
+                  ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#0F172A]'
+                  : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]'
               }`}
             >
               {it}
@@ -1381,7 +1381,7 @@ function ChipListEditor({ label, placeholder, items, onChange, isLight, multilin
                 onClick={() => remove(i)}
                 aria-label="Remove"
                 className={`flex-shrink-0 ${
-                  isLight ? 'text-[#374152]/55 hover:text-red-600' : 'text-[#d2d7e0]/55 hover:text-red-400'
+                  isLight ? 'text-[#334155]/55 hover:text-red-600' : 'text-[#CBD5E1]/55 hover:text-red-400'
                 }`}
               >
                 <X size={12} />
@@ -1420,8 +1420,8 @@ function ChipListEditor({ label, placeholder, items, onChange, isLight, multilin
           disabled={!draft.trim()}
           className={`flex-shrink-0 inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-md transition-colors ${
             isLight
-              ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
-              : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]'
+              ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
+              : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]'
           } disabled:opacity-50`}
         >
           <Plus size={12} />
@@ -1438,12 +1438,12 @@ function ChipListEditor({ label, placeholder, items, onChange, isLight, multilin
 
 function inputClass(isLight: boolean): string {
   return `w-full rounded-md border px-2.5 py-1.5 text-sm ${
-    isLight ? 'bg-white' : 'bg-[#131a22]'
+    isLight ? 'bg-white' : 'bg-[#0F172A]'
   } ${
     isLight
-      ? 'border-[#cbd2db] focus:border-[#4a6fa5] focus:ring-1 focus:ring-[#4a6fa5]/30'
-      : 'border-white/15 focus:border-[#6e8fb5] focus:ring-1 focus:ring-[#6e8fb5]/30'
-  } ${isLight ? 'text-[#1a1f28]' : 'text-white'} focus:outline-none transition-colors`;
+      ? 'border-[#CBD5E1] focus:border-[#017BC8] focus:ring-1 focus:ring-[#017BC8]/30'
+      : 'border-white/15 focus:border-[#74B4DC] focus:ring-1 focus:ring-[#74B4DC]/30'
+  } ${isLight ? 'text-[#0F172A]' : 'text-white'} focus:outline-none transition-colors`;
 }
 
 function textareaClass(isLight: boolean): string {

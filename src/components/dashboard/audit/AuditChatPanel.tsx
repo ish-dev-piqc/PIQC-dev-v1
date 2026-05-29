@@ -301,7 +301,7 @@ export default function AuditChatPanel({
       <div
         ref={panelRef}
         {...swipe}
-        className="relative w-full max-w-xl h-full bg-[#f5f7fa] dark:bg-[#0d1118] shadow-xl border-l border-[#e2e8ee] dark:border-white/5 flex flex-col"
+        className="relative w-full max-w-xl h-full bg-[#F8FAFC] dark:bg-[#020617] shadow-xl border-l border-[#E2E8F0] dark:border-white/5 flex flex-col"
       >
         {/* Header.
             PIQC's brand mark + name lead; the "AI · advisory" honesty chip
@@ -309,10 +309,10 @@ export default function AuditChatPanel({
             auditor is viewing a specific stage, a soft "focused on …" chip
             renders below so PIQC's stage-awareness is visible, not just
             inferred from replies. */}
-        <div className="sticky top-0 z-10 bg-[#f5f7fa]/95 dark:bg-[#0d1118]/95 backdrop-blur px-5 py-3 border-b border-[#e2e8ee] dark:border-white/5 flex items-start justify-between gap-3">
+        <div className="sticky top-0 z-10 bg-[#F8FAFC]/95 dark:bg-[#020617]/95 backdrop-blur px-5 py-3 border-b border-[#E2E8F0] dark:border-white/5 flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className="text-[#4a6fa5] dark:text-[#6e8fb5] flex-shrink-0">
+              <span className="text-[#017BC8] dark:text-[#74B4DC] flex-shrink-0">
                 <PiqcMark size={14} />
               </span>
               <h2
@@ -325,7 +325,7 @@ export default function AuditChatPanel({
                 PIQC
               </h2>
               <span
-                className="text-[10px] uppercase tracking-wider font-semibold text-fg-muted bg-[#eef2f6] dark:bg-white/[0.04] border border-[#cbd2db] dark:border-white/10 rounded px-1.5 py-0.5 flex-shrink-0"
+                className="text-[10px] uppercase tracking-wider font-semibold text-fg-muted bg-[#F2F2F2] dark:bg-white/[0.04] border border-[#CBD5E1] dark:border-white/10 rounded px-1.5 py-0.5 flex-shrink-0"
                 aria-label="AI-drafted, advisory only"
               >
                 AI · advisory
@@ -349,7 +349,7 @@ export default function AuditChatPanel({
             type="button"
             onClick={onClose}
             aria-label="Close PIQC"
-            className="inline-flex items-center justify-center w-7 h-7 rounded-md text-fg-sub hover:bg-[#e2e8ee] dark:hover:bg-white/[0.06] flex-shrink-0"
+            className="inline-flex items-center justify-center w-7 h-7 rounded-md text-fg-sub hover:bg-[#E2E8F0] dark:hover:bg-white/[0.06] flex-shrink-0"
           >
             <X size={14} />
           </button>
@@ -516,8 +516,8 @@ export default function AuditChatPanel({
                     <div
                       className={`max-w-[85%] rounded-lg px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
                         m.role === 'user'
-                          ? 'bg-[#4a6fa5] text-white'
-                          : 'bg-white dark:bg-white/[0.04] border border-[#e2e8ee] dark:border-white/10 text-fg-heading'
+                          ? 'bg-[#017BC8] text-white'
+                          : 'bg-white dark:bg-white/[0.04] border border-[#E2E8F0] dark:border-white/10 text-fg-heading'
                       }`}
                     >
                       {m.content}
@@ -537,7 +537,7 @@ export default function AuditChatPanel({
                           type="button"
                           onClick={() => openWritebackConfirm(i, 'executive_summary')}
                           data-testid={`audit-chat-writeback-open-exec-${i}`}
-                          className="font-medium underline underline-offset-2 decoration-[#4a6fa5]/40 hover:decoration-[#4a6fa5] hover:text-fg-heading"
+                          className="font-medium underline underline-offset-2 decoration-[#017BC8]/40 hover:decoration-[#017BC8] hover:text-fg-heading"
                           aria-label="Use this PIQC reply as your executive summary draft"
                         >
                           Use in exec summary →
@@ -546,7 +546,7 @@ export default function AuditChatPanel({
                           type="button"
                           onClick={() => openWritebackConfirm(i, 'conclusions')}
                           data-testid={`audit-chat-writeback-open-conclusions-${i}`}
-                          className="font-medium underline underline-offset-2 decoration-[#4a6fa5]/40 hover:decoration-[#4a6fa5] hover:text-fg-heading"
+                          className="font-medium underline underline-offset-2 decoration-[#017BC8]/40 hover:decoration-[#017BC8] hover:text-fg-heading"
                           aria-label="Use this PIQC reply as your conclusions draft"
                         >
                           Use in conclusions →
@@ -561,7 +561,7 @@ export default function AuditChatPanel({
                     {isAssistant && writebackOpen && writebackPending && (
                       <div
                         data-testid={`audit-chat-writeback-confirm-${i}`}
-                        className="mt-2 max-w-[85%] rounded-md border border-[#4a6fa5]/30 dark:border-[#4a6fa5]/40 bg-[#eef2f6] dark:bg-white/[0.04] px-3 py-2.5 text-xs text-fg-heading"
+                        className="mt-2 max-w-[85%] rounded-md border border-[#017BC8]/30 dark:border-[#017BC8]/40 bg-[#F2F2F2] dark:bg-white/[0.04] px-3 py-2.5 text-xs text-fg-heading"
                       >
                         <p className="font-semibold mb-1">
                           Drop this into your {WRITEBACK_KIND_LABELS[writebackPending.kind]} draft?
@@ -593,7 +593,7 @@ export default function AuditChatPanel({
                             onClick={confirmWriteback}
                             disabled={writebackInFlight}
                             data-testid={`audit-chat-writeback-confirm-action-${i}`}
-                            className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-[#4a6fa5] text-white hover:bg-[#3f5f8e] disabled:opacity-60 disabled:cursor-not-allowed"
+                            className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-[#017BC8] text-white hover:bg-[#3f5f8e] disabled:opacity-60 disabled:cursor-not-allowed"
                           >
                             {writebackInFlight ? 'Saving…' : 'Replace and review →'}
                           </button>
@@ -605,7 +605,7 @@ export default function AuditChatPanel({
               })}
               {pending && (
                 <li className="flex justify-start" data-testid="audit-chat-pending">
-                  <div className="bg-white dark:bg-white/[0.04] border border-[#e2e8ee] dark:border-white/10 rounded-lg px-3.5 py-2.5 text-sm text-fg-sub italic">
+                  <div className="bg-white dark:bg-white/[0.04] border border-[#E2E8F0] dark:border-white/10 rounded-lg px-3.5 py-2.5 text-sm text-fg-sub italic">
                     Thinking…
                   </div>
                 </li>
@@ -627,7 +627,7 @@ export default function AuditChatPanel({
         )}
 
         {/* Input */}
-        <div className="border-t border-[#e2e8ee] dark:border-white/5 bg-[#f5f7fa] dark:bg-[#0d1118] px-5 py-3">
+        <div className="border-t border-[#E2E8F0] dark:border-white/5 bg-[#F8FAFC] dark:bg-[#020617] px-5 py-3">
           <div className="flex items-end gap-2">
             <textarea
               ref={inputRef}
@@ -639,7 +639,7 @@ export default function AuditChatPanel({
               disabled={pending}
               aria-label="Message PIQC"
               data-testid="audit-chat-input"
-              className="flex-1 resize-none rounded-md border border-[#dce4ed] dark:border-white/10 bg-white dark:bg-[#131a22] text-sm text-fg-heading placeholder:text-fg-muted px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30 disabled:opacity-60"
+              className="flex-1 resize-none rounded-md border border-[#E2E8F0] dark:border-white/10 bg-white dark:bg-[#0F172A] text-sm text-fg-heading placeholder:text-fg-muted px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30 disabled:opacity-60"
             />
             <button
               type="button"
@@ -647,7 +647,7 @@ export default function AuditChatPanel({
               disabled={!canSend}
               aria-label="Send message"
               data-testid="audit-chat-send"
-              className="inline-flex items-center justify-center w-9 h-9 rounded-md bg-[#4a6fa5] text-white hover:bg-[#3f5f8e] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+              className="inline-flex items-center justify-center w-9 h-9 rounded-md bg-[#017BC8] text-white hover:bg-[#3f5f8e] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
             >
               <Send size={14} />
             </button>

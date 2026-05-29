@@ -108,12 +108,12 @@ export default function ValueProps() {
   const { theme } = useTheme();
   const isLight = theme === 'light';
 
-  const bg = isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]';
-  const border = isLight ? 'border-[#e2e8ee]' : 'border-white/[0.05]';
+  const bg = isLight ? 'bg-[#F8FAFC]' : 'bg-[#020617]';
+  const border = isLight ? 'border-[#E2E8F0]' : 'border-white/[0.05]';
   const headingColor = 'text-fg-heading';
   const bodyColor = 'text-fg-sub';
   const stepHeadColor = 'text-fg-heading';
-  const iconBg = isLight ? 'bg-[#4a6fa5]/10 border border-[#4a6fa5]/20' : 'bg-[#4a6fa5]/15 border border-[#4a6fa5]/25';
+  const iconBg = isLight ? 'bg-[#017BC8]/10 border border-[#017BC8]/20' : 'bg-[#017BC8]/15 border border-[#017BC8]/25';
 
   return (
     <>
@@ -121,7 +121,7 @@ export default function ValueProps() {
         <div className="max-w-6xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-20 items-start">
             <div className="lg:sticky lg:top-24">
-              <p className="text-xs font-semibold text-[#6e8fb5] uppercase tracking-widest mb-4">
+              <p className="text-xs font-semibold text-[#74B4DC] uppercase tracking-widest mb-4">
                 What It Does
               </p>
               <h2 className={`text-3xl sm:text-4xl font-bold ${headingColor} leading-tight mb-6`}>
@@ -140,14 +140,14 @@ export default function ValueProps() {
                   <div className="relative flex gap-6">
                     <div className="flex flex-col items-center">
                       <div className={`w-10 h-10 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0`}>
-                        <Icon className="w-4.5 h-4.5 text-[#6e8fb5]" strokeWidth={1.75} />
+                        <Icon className="w-4.5 h-4.5 text-[#74B4DC]" strokeWidth={1.75} />
                       </div>
                       {idx < steps.length - 1 && (
-                        <div className="w-px flex-1 mt-3 mb-0 bg-gradient-to-b from-[#4a6fa5]/20 to-transparent min-h-[2.5rem]" />
+                        <div className="w-px flex-1 mt-3 mb-0 bg-gradient-to-b from-[#017BC8]/20 to-transparent min-h-[2.5rem]" />
                       )}
                     </div>
                     <div className={idx < steps.length - 1 ? 'pb-10' : ''}>
-                      <span className="text-[11px] font-semibold text-[#6e8fb5]/70 tracking-widest uppercase">
+                      <span className="text-[11px] font-semibold text-[#74B4DC]/70 tracking-widest uppercase">
                         Step {number}
                       </span>
                       <h3 className={`text-[16px] font-semibold ${stepHeadColor} mt-1 mb-2`}>{title}</h3>
@@ -163,7 +163,7 @@ export default function ValueProps() {
 
       <section className={`py-24 px-4 sm:px-6 lg:px-8 ${bg} border-t ${border}`}>
         <div className="max-w-4xl mx-auto">
-          <p className="text-xs font-semibold text-[#6e8fb5] uppercase tracking-widest mb-4 text-center">
+          <p className="text-xs font-semibold text-[#74B4DC] uppercase tracking-widest mb-4 text-center">
             Why It Matters
           </p>
           <p className={`text-2xl sm:text-3xl font-semibold ${headingColor} leading-snug text-center mb-4 max-w-3xl mx-auto`}>
@@ -178,7 +178,7 @@ export default function ValueProps() {
           <div className="space-y-6">
             {whyBullets.map(({ heading, body }, idx) => (
               <FadeInUp key={heading} delay={idx * 80}>
-                <div className="flex gap-6 pl-6 border-l-2 border-[#4a6fa5]/30">
+                <div className="flex gap-6 pl-6 border-l-2 border-[#017BC8]/30">
                   <div>
                     <p className={`text-[15px] font-semibold ${headingColor} mb-1.5`}>{heading}</p>
                     <p className={`text-[14px] ${bodyColor} leading-relaxed`}>{body}</p>
@@ -193,7 +193,7 @@ export default function ValueProps() {
       <section className={`py-24 px-4 sm:px-6 lg:px-8 ${bg} border-t ${border}`}>
         <div className="max-w-6xl mx-auto">
           <div className="mb-14 text-center">
-            <p className="text-xs font-semibold text-[#6e8fb5] uppercase tracking-widest mb-4">
+            <p className="text-xs font-semibold text-[#74B4DC] uppercase tracking-widest mb-4">
               How Teams Use It
             </p>
             <h2 className={`text-3xl sm:text-4xl font-bold ${headingColor} leading-tight max-w-2xl mx-auto`}>
@@ -209,15 +209,15 @@ export default function ValueProps() {
             {modes.map(({ icon: Icon, label, tagline, bullets }, idx) => (
               <FadeInUp key={label} delay={idx * 120}>
                 <div
-                  className={`${isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#161d25] border-white/[0.07]'} border rounded-2xl p-7 h-full`}
+                  className={`${isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/[0.07]'} border rounded-2xl p-7 h-full`}
                 >
                   <div className="flex items-center gap-3 mb-5">
                     <div className={`w-10 h-10 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0`}>
-                      <Icon className="w-5 h-5 text-[#6e8fb5]" strokeWidth={1.75} />
+                      <Icon className="w-5 h-5 text-[#74B4DC]" strokeWidth={1.75} />
                     </div>
                     <div>
                       <h3 className={`text-[17px] font-bold ${headingColor} leading-tight`}>{label}</h3>
-                      <p className="text-[12px] font-medium text-[#6e8fb5] uppercase tracking-wider mt-0.5">
+                      <p className="text-[12px] font-medium text-[#74B4DC] uppercase tracking-wider mt-0.5">
                         {tagline}
                       </p>
                     </div>
@@ -225,7 +225,7 @@ export default function ValueProps() {
                   <ul className="space-y-4">
                     {bullets.map((bullet, bIdx) => (
                       <li key={bIdx} className="flex gap-3">
-                        <span className="w-1 flex-shrink-0 mt-2 h-1 rounded-full bg-[#6e8fb5]/60" />
+                        <span className="w-1 flex-shrink-0 mt-2 h-1 rounded-full bg-[#74B4DC]/60" />
                         <p className={`text-[14px] ${bodyColor} leading-relaxed`}>{bullet}</p>
                       </li>
                     ))}

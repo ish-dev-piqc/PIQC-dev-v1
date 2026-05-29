@@ -75,11 +75,11 @@ export default function DemoAskPanel() {
   };
 
   const bubbleUser = isLight
-    ? 'bg-[#4a6fa5] text-white'
-    : 'bg-[#4a6fa5] text-white';
+    ? 'bg-[#017BC8] text-white'
+    : 'bg-[#017BC8] text-white';
   const bubbleAssistant = isLight
-    ? 'bg-white border border-[#e2e8ee] text-[#1a1f28]'
-    : 'bg-[#131a22] border border-white/10 text-[#d2d7e0]';
+    ? 'bg-white border border-[#E2E8F0] text-[#0F172A]'
+    : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1]';
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
 
@@ -89,7 +89,7 @@ export default function DemoAskPanel() {
         {thread.length === 0 ? (
           <div className="max-w-2xl mx-auto">
             <div className="flex items-center gap-2 mb-4">
-              <Sparkles size={16} className={isLight ? 'text-[#4a6fa5]' : 'text-[#6e8fb5]'} />
+              <Sparkles size={16} className={isLight ? 'text-[#017BC8]' : 'text-[#74B4DC]'} />
               <p className={`${subColor} text-sm`}>
                 Pick a starter to see a demo response. Live chat is disabled in demo mode.
               </p>
@@ -101,11 +101,11 @@ export default function DemoAskPanel() {
                   onClick={() => handleSuggestion(s)}
                   className={`text-left p-4 rounded-xl border transition-colors ${
                     isLight
-                      ? 'bg-white border-[#e2e8ee] hover:border-[#4a6fa5]/40 hover:bg-[#4a6fa5]/[0.04]'
-                      : 'bg-[#131a22] border-white/10 hover:border-[#6e8fb5]/40 hover:bg-white/[0.04]'
+                      ? 'bg-white border-[#E2E8F0] hover:border-[#017BC8]/40 hover:bg-[#017BC8]/[0.04]'
+                      : 'bg-[#0F172A] border-white/10 hover:border-[#74B4DC]/40 hover:bg-white/[0.04]'
                   }`}
                 >
-                  <p className={`text-sm font-medium ${isLight ? 'text-[#1a1f28]' : 'text-white'}`}>
+                  <p className={`text-sm font-medium ${isLight ? 'text-[#0F172A]' : 'text-white'}`}>
                     {s.text}
                   </p>
                 </button>
@@ -126,7 +126,7 @@ export default function DemoAskPanel() {
                   <div className={`${bubbleAssistant} rounded-2xl px-4 py-3 max-w-[85%] text-sm leading-relaxed`}>
                     <p className="whitespace-pre-wrap">{m.text}</p>
                     {m.citations && m.citations.length > 0 && (
-                      <div className={`mt-3 pt-3 border-t ${isLight ? 'border-[#e2e8ee]' : 'border-white/10'} space-y-1.5`}>
+                      <div className={`mt-3 pt-3 border-t ${isLight ? 'border-[#E2E8F0]' : 'border-white/10'} space-y-1.5`}>
                         {m.citations.map((c, idx) => (
                           <div key={idx} className="flex items-start gap-2">
                             <FileText size={12} className={`${mutedColor} mt-0.5 flex-shrink-0`} />
@@ -154,7 +154,7 @@ export default function DemoAskPanel() {
           </div>
         )}
       </div>
-      <div className={`flex-shrink-0 border-t px-6 py-3 ${isLight ? 'border-[#e2e8ee] bg-[#f5f7fa]' : 'border-white/[0.06] bg-white/[0.02]'}`}>
+      <div className={`flex-shrink-0 border-t px-6 py-3 ${isLight ? 'border-[#E2E8F0] bg-[#F8FAFC]' : 'border-white/[0.06] bg-white/[0.02]'}`}>
         <p className={`${mutedColor} text-xs text-center`}>
           Demo mode — chat input disabled. Use the suggestions above to explore demo answers.
         </p>

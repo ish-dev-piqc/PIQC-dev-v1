@@ -18,10 +18,10 @@ export default function SiteWelcomePanel() {
 
   const headingColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const iconBg = isLight
-    ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/20 text-[#4a6fa5]'
-    : 'bg-[#6e8fb5]/15 border-[#6e8fb5]/30 text-[#6e8fb5]';
+    ? 'bg-[#017BC8]/10 border-[#017BC8]/20 text-[#017BC8]'
+    : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]';
 
   return (
     <div className="flex items-center justify-center h-full p-6">

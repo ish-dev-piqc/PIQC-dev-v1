@@ -162,16 +162,16 @@ export default function FinalReviewExportWorkspace() {
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
   const sectionHeader = 'text-fg-label';
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const buttonPrimary = isLight
-    ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
-    : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]';
+    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
+    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]';
   const buttonSecondary = isLight
-    ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-    : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]';
+    ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+    : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]';
   const buttonApprove = isLight
-    ? 'bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-[#cbd2db] disabled:hover:bg-[#cbd2db]'
-    : 'bg-emerald-500 text-[#0d1118] hover:bg-emerald-400 disabled:bg-white/10 disabled:hover:bg-white/10 disabled:text-white/35';
+    ? 'bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-[#CBD5E1] disabled:hover:bg-[#CBD5E1]'
+    : 'bg-emerald-500 text-[#020617] hover:bg-emerald-400 disabled:bg-white/10 disabled:hover:bg-white/10 disabled:text-white/35';
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-5">
@@ -253,7 +253,7 @@ export default function FinalReviewExportWorkspace() {
               <div className="min-w-0">
                 <p
                   className={`text-sm font-semibold ${
-                    g.passed ? headingColor : isLight ? 'text-[#374152]/60' : 'text-[#d2d7e0]/55'
+                    g.passed ? headingColor : isLight ? 'text-[#334155]/60' : 'text-[#CBD5E1]/55'
                   }`}
                 >
                   {g.label}
@@ -320,7 +320,7 @@ export default function FinalReviewExportWorkspace() {
                   className={`text-xs font-semibold px-2.5 py-1.5 rounded-md transition-colors ${
                     isLight
                       ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                      : 'bg-emerald-500 text-[#0d1118] hover:bg-emerald-400'
+                      : 'bg-emerald-500 text-[#020617] hover:bg-emerald-400'
                   }`}
                 >
                   Confirm sign-off

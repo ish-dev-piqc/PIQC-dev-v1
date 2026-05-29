@@ -141,7 +141,7 @@ export default function ExecutionChecklist({
         <div
           data-testid="vew-checklist-empty-for-role"
           className={`rounded-xl border px-4 py-6 text-center ${
-            isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5'
+            isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5'
           }`}
         >
           <p className="text-fg-body text-sm">
@@ -170,7 +170,7 @@ export default function ExecutionChecklist({
             data-phase={phase}
             data-open={isOpen}
             className={`rounded-xl border overflow-hidden ${
-              isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5'
+              isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5'
             }`}
           >
             <button
@@ -179,7 +179,7 @@ export default function ExecutionChecklist({
               aria-expanded={isOpen}
               aria-controls={`vew-phase-items-${phase}`}
               className={`w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left ${
-                isLight ? 'hover:bg-[#f5f7fa]' : 'hover:bg-white/[0.02]'
+                isLight ? 'hover:bg-[#F8FAFC]' : 'hover:bg-white/[0.02]'
               }`}
             >
               <div className="flex items-center gap-2 min-w-0">
@@ -212,7 +212,7 @@ export default function ExecutionChecklist({
               <ul
                 id={`vew-phase-items-${phase}`}
                 className={`divide-y ${
-                  isLight ? 'divide-[#f0f3f6]' : 'divide-white/[0.04]'
+                  isLight ? 'divide-[#F2F2F2]' : 'divide-white/[0.04]'
                 }`}
               >
                 {phaseItems.map((item) => (
@@ -300,7 +300,7 @@ function ChecklistItemRow({
                 ? 'bg-emerald-500 border-emerald-500 text-white'
                 : 'bg-emerald-500/80 border-emerald-500/80 text-white'
               : isLight
-                ? 'border-[#cbd2db] hover:border-[#374152]'
+                ? 'border-[#CBD5E1] hover:border-[#334155]'
                 : 'border-white/15 hover:border-white/30'
           }`}
         >
@@ -369,7 +369,7 @@ function ChecklistItemRow({
                 title="This requirement has been edited from PIQC's draft text"
                 className={`inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider rounded-md border px-1.5 py-0.5 ${
                   isLight
-                    ? 'text-fg-sub bg-[#eef2f6] border-[#dde3ea] hover:bg-[#e2e8ee]'
+                    ? 'text-fg-sub bg-[#F2F2F2] border-[#dde3ea] hover:bg-[#E2E8F0]'
                     : 'text-fg-sub bg-white/[0.03] border-white/10 hover:bg-white/[0.06]'
                 }`}
               >
@@ -381,7 +381,7 @@ function ChecklistItemRow({
                   data-testid="vew-drift-original"
                   className={`mt-2 rounded-md border-l-2 px-3 py-1.5 text-xs leading-relaxed ${
                     isLight
-                      ? 'bg-[#eef2f6] border-[#9aa6b5] text-fg-sub'
+                      ? 'bg-[#F2F2F2] border-[#94A3B8] text-fg-sub'
                       : 'bg-white/[0.03] border-white/15 text-fg-sub'
                   }`}
                 >
@@ -485,7 +485,7 @@ function ChecklistItemRow({
             onClick={() => onOpenTraceability(item)}
             aria-label={`View protocol source for ${item.label}`}
             className={`inline-flex items-center justify-center w-6 h-6 rounded-md text-fg-sub ${
-              isLight ? 'hover:bg-[#e2e8ee] hover:text-fg-body' : 'hover:bg-white/[0.06] hover:text-fg-body'
+              isLight ? 'hover:bg-[#E2E8F0] hover:text-fg-body' : 'hover:bg-white/[0.06] hover:text-fg-body'
             }`}
             data-testid="vew-traceability-link"
           >
@@ -500,7 +500,7 @@ function ChecklistItemRow({
               aria-haspopup="menu"
               aria-expanded={menuOpen}
               className={`inline-flex items-center justify-center w-6 h-6 rounded-md text-fg-sub ${
-                isLight ? 'hover:bg-[#e2e8ee] hover:text-fg-body' : 'hover:bg-white/[0.06] hover:text-fg-body'
+                isLight ? 'hover:bg-[#E2E8F0] hover:text-fg-body' : 'hover:bg-white/[0.06] hover:text-fg-body'
               }`}
             >
               <MoreHorizontal size={13} aria-hidden />
@@ -518,7 +518,7 @@ function ChecklistItemRow({
                   role="menu"
                   data-testid="vew-item-overflow-menu"
                   className={`absolute right-0 top-full mt-1 w-44 z-20 rounded-md border shadow-lg overflow-hidden ${
-                    isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/10'
+                    isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/10'
                   }`}
                 >
                   {/*
@@ -548,7 +548,7 @@ function ChecklistItemRow({
                         setMenuOpen(false);
                       }}
                       className={`w-full text-left text-xs px-3 py-2 ${
-                        isLight ? 'text-fg-body hover:bg-[#f5f7fa]' : 'text-fg-body hover:bg-white/[0.04]'
+                        isLight ? 'text-fg-body hover:bg-[#F8FAFC]' : 'text-fg-body hover:bg-white/[0.04]'
                       }`}
                     >
                       {opt.label}

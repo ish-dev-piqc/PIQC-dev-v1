@@ -100,18 +100,18 @@ export default function TeamFormDrawer({ mode, protocolId, initial, onClose }: T
     onClose();
   };
 
-  const bg = isLight ? 'bg-white' : 'bg-[#131a22]';
-  const border = isLight ? 'border-[#e2e8ee]' : 'border-white/5';
-  const inputBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#1a2230] border-white/10';
+  const bg = isLight ? 'bg-white' : 'bg-[#0F172A]';
+  const border = isLight ? 'border-[#E2E8F0]' : 'border-white/5';
+  const inputBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#1E293B] border-white/10';
   const headingColor = 'text-fg-heading';
   const labelColor = 'text-fg-label';
   const subColor = 'text-fg-sub';
   const buttonPrimary = isLight
-    ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f] disabled:bg-[#4a6fa5]/50'
-    : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5] disabled:bg-[#6e8fb5]/50';
+    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF] disabled:bg-[#017BC8]/50'
+    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE] disabled:bg-[#74B4DC]/50';
   const buttonSecondary = isLight
-    ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-    : 'bg-[#131a22] border border-white/5 text-[#d2d7e0] hover:bg-white/[0.04]';
+    ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+    : 'bg-[#0F172A] border border-white/5 text-[#CBD5E1] hover:bg-white/[0.04]';
 
   return (
     <div
@@ -142,8 +142,8 @@ export default function TeamFormDrawer({ mode, protocolId, initial, onClose }: T
                 <div
                   className={`flex items-start gap-3 px-4 py-3.5 rounded-md border ${
                     isLight
-                      ? 'bg-[#f5f7fa] border-[#e2e8ee] text-[#374152]'
-                      : 'bg-white/[0.02] border-white/5 text-[#d2d7e0]'
+                      ? 'bg-[#F8FAFC] border-[#E2E8F0] text-[#334155]'
+                      : 'bg-white/[0.02] border-white/5 text-[#CBD5E1]'
                   }`}
                 >
                   <Mail size={16} className={`mt-0.5 flex-shrink-0 ${subColor}`} />
@@ -180,7 +180,7 @@ export default function TeamFormDrawer({ mode, protocolId, initial, onClose }: T
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Sarah Chen"
-                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30`}
+                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30`}
                 disabled={submitting}
               />
             </div>
@@ -192,7 +192,7 @@ export default function TeamFormDrawer({ mode, protocolId, initial, onClose }: T
               <select
                 value={role}
                 onChange={(e) => setRole(e.target.value as TeamRole)}
-                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30`}
+                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30`}
                 disabled={submitting}
               >
                 {ROLE_OPTIONS.map((r) => (
@@ -212,7 +212,7 @@ export default function TeamFormDrawer({ mode, protocolId, initial, onClose }: T
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@example.com"
-                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30`}
+                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30`}
                 disabled={submitting}
               />
             </div>
@@ -226,7 +226,7 @@ export default function TeamFormDrawer({ mode, protocolId, initial, onClose }: T
                 value={delegatedTasksText}
                 onChange={(e) => setDelegatedTasksText(e.target.value)}
                 placeholder="Comma-separated, e.g. Informed consent, Vitals, ECG"
-                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30`}
+                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30`}
                 disabled={submitting}
               />
               <p className={`${subColor} text-[11px] mt-1`}>Split by commas. Trailing/leading spaces trimmed.</p>
@@ -241,7 +241,7 @@ export default function TeamFormDrawer({ mode, protocolId, initial, onClose }: T
                   type="date"
                   value={certifiedThrough}
                   onChange={(e) => setCertifiedThrough(e.target.value)}
-                  className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30`}
+                  className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30`}
                   disabled={submitting}
                 />
               </div>
@@ -252,7 +252,7 @@ export default function TeamFormDrawer({ mode, protocolId, initial, onClose }: T
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value as TeamMemberStatus)}
-                  className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30`}
+                  className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30`}
                   disabled={submitting}
                 >
                   {STATUS_OPTIONS.map((s) => (
@@ -273,7 +273,7 @@ export default function TeamFormDrawer({ mode, protocolId, initial, onClose }: T
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
                 placeholder="Optional context (e.g. on leave through Sept; GCP cert pending re-test)."
-                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-[#4a6fa5]/30 resize-none`}
+                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30 resize-none`}
                 disabled={submitting}
               />
             </div>
