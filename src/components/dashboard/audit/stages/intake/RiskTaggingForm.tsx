@@ -177,17 +177,17 @@ export default function RiskTaggingForm({
   const sectionHeader = 'text-fg-label';
   const labelColor = 'text-fg-heading';
   const inputBorder = isLight
-    ? 'border-[#CBD5E1] focus:border-[#017BC8] focus:ring-1 focus:ring-[#017BC8]/30'
-    : 'border-white/15 focus:border-[#74B4DC] focus:ring-1 focus:ring-[#74B4DC]/30';
+    ? 'border-[#CBD5E1] focus:border-[#02BBB8] focus:ring-1 focus:ring-[#02BBB8]/30'
+    : 'border-white/15 focus:border-[#6FC9C7] focus:ring-1 focus:ring-[#6FC9C7]/30';
   const inputBg = isLight ? 'bg-white' : 'bg-[#0F172A]';
-  const radioActiveLight = 'bg-[#017BC8]/10 border-[#017BC8] text-[#017BC8]';
-  const radioActiveDark = 'bg-[#017BC8]/15 border-[#74B4DC] text-[#74B4DC]';
+  const radioActiveLight = 'bg-[#02BBB8]/10 border-[#02BBB8] text-[#02BBB8]';
+  const radioActiveDark = 'bg-[#02BBB8]/15 border-[#6FC9C7] text-[#6FC9C7]';
   const radioInactive = isLight
     ? 'bg-white border-[#E2E8F0] text-[#334155]/65 hover:border-[#CBD5E1] hover:text-[#0F172A]'
     : 'bg-[#0F172A] border-white/10 text-[#CBD5E1]/55 hover:border-white/20 hover:text-[#CBD5E1]';
   const buttonPrimary = isLight
-    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
-    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]';
+    ? 'bg-[#02BBB8] text-white hover:bg-[#016663]'
+    : 'bg-[#6FC9C7] text-[#0F172A] hover:bg-[#028E8B]';
   const buttonSecondary = isLight
     ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
     : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]';
@@ -407,8 +407,8 @@ export default function RiskTaggingForm({
               onClick={() => setPickerOpen(true)}
               className={`w-full text-left rounded-md border border-dashed px-3 py-2.5 text-sm transition-colors flex items-center gap-2 ${
                 isLight
-                  ? 'border-[#CBD5E1] hover:border-[#017BC8]/40 hover:bg-[#F8FAFC] text-[#334155]/75'
-                  : 'border-white/15 hover:border-[#74B4DC]/40 hover:bg-white/[0.03] text-[#CBD5E1]/70'
+                  ? 'border-[#CBD5E1] hover:border-[#02BBB8]/40 hover:bg-[#F8FAFC] text-[#334155]/75'
+                  : 'border-white/15 hover:border-[#6FC9C7]/40 hover:bg-white/[0.03] text-[#CBD5E1]/70'
               }`}
             >
               <FileSearch size={13} className={mutedColor} />

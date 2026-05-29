@@ -178,8 +178,8 @@ export default function IntakeWorkspace() {
     ? 'border-[#E2E8F0] bg-[#F8FAFC]/40'
     : 'border-white/5 bg-white/[0.01]';
   const buttonPrimary = isLight
-    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
-    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]';
+    ? 'bg-[#02BBB8] text-white hover:bg-[#016663]'
+    : 'bg-[#6FC9C7] text-[#0F172A] hover:bg-[#028E8B]';
 
   const inForm = mode !== 'list';
 
@@ -347,8 +347,8 @@ function SectionRow({
             <span
               className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded ${
                 isLight
-                  ? 'bg-[#F2F2F2] text-[#017BC8]'
-                  : 'bg-white/[0.06] text-[#74B4DC]'
+                  ? 'bg-[#F2F2F2] text-[#02BBB8]'
+                  : 'bg-white/[0.06] text-[#6FC9C7]'
               }`}
             >
               {section.section_identifier}
@@ -431,8 +431,8 @@ function TierChip({ tier, isLight }: { tier: EndpointTier; isLight: boolean }) {
       ? 'bg-amber-50 border-amber-200 text-amber-700'
       : 'bg-amber-500/15 border-amber-500/30 text-amber-300',
     SECONDARY: isLight
-      ? 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]'
-      : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]',
+      ? 'bg-[#02BBB8]/10 border-[#02BBB8]/25 text-[#02BBB8]'
+      : 'bg-[#6FC9C7]/15 border-[#6FC9C7]/30 text-[#6FC9C7]',
     SUPPORTIVE: isLight
       ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/65'
       : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/55',
@@ -455,8 +455,8 @@ function SurfaceChip({ surface, isLight }: { surface: ImpactSurface; isLight: bo
       ? 'bg-amber-50 border-amber-200 text-amber-700'
       : 'bg-amber-500/15 border-amber-500/30 text-amber-300',
     DATA_INTEGRITY: isLight
-      ? 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]'
-      : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]',
+      ? 'bg-[#02BBB8]/10 border-[#02BBB8]/25 text-[#02BBB8]'
+      : 'bg-[#6FC9C7]/15 border-[#6FC9C7]/30 text-[#6FC9C7]',
   };
   return (
     <span
@@ -504,8 +504,8 @@ function SourceLinkedChip({ isLight }: ChipProps) {
       title="Linked to a parsed protocol source item"
       className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border ${
         isLight
-          ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#017BC8]'
-          : 'bg-white/[0.06] border-white/10 text-[#74B4DC]'
+          ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#02BBB8]'
+          : 'bg-white/[0.06] border-white/10 text-[#6FC9C7]'
       }`}
     >
       <Link2 size={10} />

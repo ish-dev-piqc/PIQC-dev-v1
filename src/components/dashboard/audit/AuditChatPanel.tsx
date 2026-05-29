@@ -312,7 +312,7 @@ export default function AuditChatPanel({
         <div className="sticky top-0 z-10 bg-[#F8FAFC]/95 dark:bg-[#020617]/95 backdrop-blur px-5 py-3 border-b border-[#E2E8F0] dark:border-white/5 flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className="text-[#017BC8] dark:text-[#74B4DC] flex-shrink-0">
+              <span className="text-[#02BBB8] dark:text-[#6FC9C7] flex-shrink-0">
                 <PiqcMark size={14} />
               </span>
               <h2
@@ -516,7 +516,7 @@ export default function AuditChatPanel({
                     <div
                       className={`max-w-[85%] rounded-lg px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
                         m.role === 'user'
-                          ? 'bg-[#017BC8] text-white'
+                          ? 'bg-[#02BBB8] text-white'
                           : 'bg-white dark:bg-white/[0.04] border border-[#E2E8F0] dark:border-white/10 text-fg-heading'
                       }`}
                     >
@@ -537,7 +537,7 @@ export default function AuditChatPanel({
                           type="button"
                           onClick={() => openWritebackConfirm(i, 'executive_summary')}
                           data-testid={`audit-chat-writeback-open-exec-${i}`}
-                          className="font-medium underline underline-offset-2 decoration-[#017BC8]/40 hover:decoration-[#017BC8] hover:text-fg-heading"
+                          className="font-medium underline underline-offset-2 decoration-[#02BBB8]/40 hover:decoration-[#02BBB8] hover:text-fg-heading"
                           aria-label="Use this PIQC reply as your executive summary draft"
                         >
                           Use in exec summary →
@@ -546,7 +546,7 @@ export default function AuditChatPanel({
                           type="button"
                           onClick={() => openWritebackConfirm(i, 'conclusions')}
                           data-testid={`audit-chat-writeback-open-conclusions-${i}`}
-                          className="font-medium underline underline-offset-2 decoration-[#017BC8]/40 hover:decoration-[#017BC8] hover:text-fg-heading"
+                          className="font-medium underline underline-offset-2 decoration-[#02BBB8]/40 hover:decoration-[#02BBB8] hover:text-fg-heading"
                           aria-label="Use this PIQC reply as your conclusions draft"
                         >
                           Use in conclusions →
@@ -561,7 +561,7 @@ export default function AuditChatPanel({
                     {isAssistant && writebackOpen && writebackPending && (
                       <div
                         data-testid={`audit-chat-writeback-confirm-${i}`}
-                        className="mt-2 max-w-[85%] rounded-md border border-[#017BC8]/30 dark:border-[#017BC8]/40 bg-[#F2F2F2] dark:bg-white/[0.04] px-3 py-2.5 text-xs text-fg-heading"
+                        className="mt-2 max-w-[85%] rounded-md border border-[#02BBB8]/30 dark:border-[#02BBB8]/40 bg-[#F2F2F2] dark:bg-white/[0.04] px-3 py-2.5 text-xs text-fg-heading"
                       >
                         <p className="font-semibold mb-1">
                           Drop this into your {WRITEBACK_KIND_LABELS[writebackPending.kind]} draft?
@@ -593,7 +593,7 @@ export default function AuditChatPanel({
                             onClick={confirmWriteback}
                             disabled={writebackInFlight}
                             data-testid={`audit-chat-writeback-confirm-action-${i}`}
-                            className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-[#017BC8] text-white hover:bg-[#3f5f8e] disabled:opacity-60 disabled:cursor-not-allowed"
+                            className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-[#02BBB8] text-white hover:bg-[#3f5f8e] disabled:opacity-60 disabled:cursor-not-allowed"
                           >
                             {writebackInFlight ? 'Saving…' : 'Replace and review →'}
                           </button>
@@ -639,7 +639,7 @@ export default function AuditChatPanel({
               disabled={pending}
               aria-label="Message PIQC"
               data-testid="audit-chat-input"
-              className="flex-1 resize-none rounded-md border border-[#E2E8F0] dark:border-white/10 bg-white dark:bg-[#0F172A] text-sm text-fg-heading placeholder:text-fg-muted px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30 disabled:opacity-60"
+              className="flex-1 resize-none rounded-md border border-[#E2E8F0] dark:border-white/10 bg-white dark:bg-[#0F172A] text-sm text-fg-heading placeholder:text-fg-muted px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#02BBB8]/30 disabled:opacity-60"
             />
             <button
               type="button"
@@ -647,7 +647,7 @@ export default function AuditChatPanel({
               disabled={!canSend}
               aria-label="Send message"
               data-testid="audit-chat-send"
-              className="inline-flex items-center justify-center w-9 h-9 rounded-md bg-[#017BC8] text-white hover:bg-[#3f5f8e] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+              className="inline-flex items-center justify-center w-9 h-9 rounded-md bg-[#02BBB8] text-white hover:bg-[#3f5f8e] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
             >
               <Send size={14} />
             </button>

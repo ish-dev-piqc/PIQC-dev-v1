@@ -109,11 +109,11 @@ export default function RiskSummaryPanel({
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
   const sectionHeader = 'text-fg-label';
-  const inputBorder = isLight ? 'border-[#CBD5E1] focus:border-[#017BC8]' : 'border-white/15 focus:border-[#74B4DC]';
+  const inputBorder = isLight ? 'border-[#CBD5E1] focus:border-[#02BBB8]' : 'border-white/15 focus:border-[#6FC9C7]';
   const inputBg = isLight ? 'bg-white' : 'bg-[#0F172A]';
   const buttonPrimary = isLight
-    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
-    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]';
+    ? 'bg-[#02BBB8] text-white hover:bg-[#016663]'
+    : 'bg-[#6FC9C7] text-[#0F172A] hover:bg-[#028E8B]';
   const buttonSecondary = isLight
     ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
     : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]';
@@ -338,7 +338,7 @@ export default function RiskSummaryPanel({
                     <li key={f} className={`text-xs flex items-start gap-2 ${headingColor}`}>
                       <span
                         className={`mt-1.5 w-1 h-1 rounded-full flex-shrink-0 ${
-                          isLight ? 'bg-[#017BC8]/55' : 'bg-[#74B4DC]/55'
+                          isLight ? 'bg-[#02BBB8]/55' : 'bg-[#6FC9C7]/55'
                         }`}
                       />
                       <span className="flex-1 flex items-center gap-1.5 flex-wrap">
@@ -512,8 +512,8 @@ interface EmptyStateProps {
 
 function EmptyState({ isLight, cardBg, subColor, buttonPrimary, onGenerate }: EmptyStateProps) {
   const iconBg = isLight
-    ? 'bg-[#017BC8]/10 border-[#017BC8]/20 text-[#017BC8]'
-    : 'bg-[#017BC8]/15 border-[#017BC8]/30 text-[#74B4DC]';
+    ? 'bg-[#02BBB8]/10 border-[#02BBB8]/20 text-[#02BBB8]'
+    : 'bg-[#02BBB8]/15 border-[#02BBB8]/30 text-[#6FC9C7]';
   return (
     <div className={`${cardBg} border rounded-lg p-4`}>
       <div className={`inline-flex items-center justify-center w-9 h-9 rounded-xl border mb-3 ${iconBg}`}>

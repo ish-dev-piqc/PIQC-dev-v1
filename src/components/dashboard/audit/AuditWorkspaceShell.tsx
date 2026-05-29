@@ -181,8 +181,8 @@ export default function AuditWorkspaceShell() {
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
   const chipBg = isLight
-    ? 'bg-[#017BC8]/10 border-[#017BC8]/20 text-[#017BC8]'
-    : 'bg-[#017BC8]/15 border-[#017BC8]/30 text-[#74B4DC]';
+    ? 'bg-[#02BBB8]/10 border-[#02BBB8]/20 text-[#02BBB8]'
+    : 'bg-[#02BBB8]/15 border-[#02BBB8]/30 text-[#6FC9C7]';
 
   return (
     <div className="flex-1 flex" style={{ minHeight: 0 }}>
