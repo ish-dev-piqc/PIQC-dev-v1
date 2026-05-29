@@ -691,8 +691,13 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                 <p className={`text-xs ${isLight ? 'text-[#334155]/40' : 'text-[#CBD5E1]/40'} mb-0.5`}>Signed in as</p>
                 <p className={`text-sm ${isLight ? 'text-[#0F172A]' : 'text-white'} font-medium truncate`}>{user?.email}</p>
               </div>
+              {/* Settings section — mirrors the desktop user menu so mobile/
+                  split-screen users get the same controls as full-screen. */}
+              <p className={`px-3 py-1.5 text-[11px] uppercase tracking-wider ${isLight ? 'text-[#334155]/35' : 'text-[#CBD5E1]/35'}`}>
+                Settings
+              </p>
               <button
-                onClick={() => handleOpenSettingsSection('account')}
+                onClick={() => { handleOpenSettingsSection('account'); setMobileOpen(false); }}
                 className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#334155]/70 hover:text-[#0F172A] hover:bg-[#0F172A]/[0.06]' : 'text-[#CBD5E1]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
               >
                 <UserCircle2 size={14} />
@@ -706,12 +711,67 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                 Billing
               </button>
               <button
-                onClick={() => { toggleTheme(); setMobileOpen(false); }}
+                onClick={() => { setMobileOpen(false); setOrgDrawerOpen(true); }}
+                className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#334155]/70 hover:text-[#0F172A] hover:bg-[#0F172A]/[0.06]' : 'text-[#CBD5E1]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
+              >
+                <Building2 size={14} />
+                Organization
+              </button>
+              <p className={`px-3 pt-3 pb-1.5 text-[11px] uppercase tracking-wider ${isLight ? 'text-[#334155]/35' : 'text-[#CBD5E1]/35'}`}>
+                Appearance
+              </p>
+              <button
+                onClick={toggleTheme}
                 className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#334155]/70 hover:text-[#0F172A] hover:bg-[#0F172A]/[0.06]' : 'text-[#CBD5E1]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
               >
                 {isLight ? <Moon size={14} /> : <Sun size={14} />}
                 Switch to {isLight ? 'Dark' : 'Light'} Mode
               </button>
+              <button
+                onClick={toggleHeatmap}
+                className={`flex items-center justify-between gap-2.5 w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#334155]/70 hover:text-[#0F172A] hover:bg-[#0F172A]/[0.06]' : 'text-[#CBD5E1]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
+                title="Toggle the cross-study friction heatmap layer"
+              >
+                <span className="inline-flex items-center gap-2.5">
+                  <Flame size={14} />
+                  Heatmap layer
+                </span>
+                <span className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
+                  heatmapEnabled
+                    ? isLight
+                      ? 'bg-brand-600/10 border-brand-600/25 text-brand-600'
+                      : 'bg-brand-300/15 border-brand-300/30 text-brand-300'
+                    : isLight
+                    ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/55'
+                    : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/45'
+                }`}>
+                  {heatmapEnabled ? 'On' : 'Off'}
+                </span>
+              </button>
+              {canUseDemo && (
+                <button
+                  onClick={() => setDemoActive(!demoActive)}
+                  className={`flex items-center justify-between gap-2.5 w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#334155]/70 hover:text-[#0F172A] hover:bg-[#0F172A]/[0.06]' : 'text-[#CBD5E1]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
+                  title="Show sample data instead of real Supabase rows. For pitches and previews only."
+                >
+                  <span className="inline-flex items-center gap-2.5">
+                    <Beaker size={14} />
+                    Demo mode
+                  </span>
+                  <span className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
+                    demoActive
+                      ? isLight
+                        ? 'bg-amber-500/10 border-amber-500/30 text-amber-700'
+                        : 'bg-amber-400/15 border-amber-400/30 text-amber-300'
+                      : isLight
+                      ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/55'
+                      : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/45'
+                  }`}>
+                    {demoActive ? 'On' : 'Off'}
+                  </span>
+                </button>
+              )}
+              <div className={`my-1 h-px ${isLight ? 'bg-[#E2E8F0]' : 'bg-white/[0.05]'}`} />
               <button
                 onClick={handleSignOut}
                 className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm font-medium text-red-500/80 hover:text-red-500 rounded-lg hover:bg-red-500/[0.06] transition-colors"
