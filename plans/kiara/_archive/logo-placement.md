@@ -1,9 +1,10 @@
 ---
 owner: kiara
 feature: logo-placement
-status: active
+status: merged
+merged: 2026-05-29
 started: 2026-05-28
-target_pr:
+target_pr: #173
 ---
 
 # Logo placement + audit-mode teal recolor + CSS-variable mode theming
