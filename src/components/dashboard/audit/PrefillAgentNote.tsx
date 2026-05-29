@@ -78,7 +78,7 @@ export default function PrefillAgentNote({ storageKey, message, headline }: Prop
     >
       <Sparkles
         size={14}
-        className={`mt-0.5 flex-shrink-0 ${isLight ? 'text-[#017BC8]' : 'text-[#74B4DC]'}`}
+        className={`mt-0.5 flex-shrink-0 ${isLight ? 'text-[#02BBB8]' : 'text-[#6FC9C7]'}`}
         aria-hidden
       />
       <p className="text-sm leading-relaxed flex-1 min-w-0">

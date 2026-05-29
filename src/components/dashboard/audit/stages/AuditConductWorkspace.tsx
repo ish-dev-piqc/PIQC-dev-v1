@@ -270,8 +270,8 @@ export default function AuditConductWorkspace() {
     ? 'border-[#E2E8F0] bg-[#F8FAFC]/40'
     : 'border-white/5 bg-white/[0.01]';
   const buttonPrimary = isLight
-    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
-    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]';
+    ? 'bg-[#02BBB8] text-white hover:bg-[#016663]'
+    : 'bg-[#6FC9C7] text-[#0F172A] hover:bg-[#028E8B]';
 
   const inForm = mode !== 'list';
   const canSave = !!form.vendor_domain.trim() && !!form.observation_text.trim();
@@ -495,11 +495,11 @@ function EntryForm({
   const headingColor = 'text-fg-heading';
   const inputBg = isLight ? 'bg-white' : 'bg-[#0F172A]';
   const inputBorder = isLight
-    ? 'border-[#CBD5E1] focus:border-[#017BC8] focus:ring-1 focus:ring-[#017BC8]/30'
-    : 'border-white/15 focus:border-[#74B4DC] focus:ring-1 focus:ring-[#74B4DC]/30';
+    ? 'border-[#CBD5E1] focus:border-[#02BBB8] focus:ring-1 focus:ring-[#02BBB8]/30'
+    : 'border-white/15 focus:border-[#6FC9C7] focus:ring-1 focus:ring-[#6FC9C7]/30';
   const radioActive = isLight
-    ? 'bg-[#017BC8]/10 border-[#017BC8] text-[#017BC8]'
-    : 'bg-[#017BC8]/15 border-[#74B4DC] text-[#74B4DC]';
+    ? 'bg-[#02BBB8]/10 border-[#02BBB8] text-[#02BBB8]'
+    : 'bg-[#02BBB8]/15 border-[#6FC9C7] text-[#6FC9C7]';
   const radioInactive = isLight
     ? 'bg-white border-[#E2E8F0] text-[#334155]/65 hover:border-[#CBD5E1] hover:text-[#0F172A]'
     : 'bg-[#0F172A] border-white/10 text-[#CBD5E1]/55 hover:border-white/20 hover:text-[#CBD5E1]';
@@ -616,8 +616,8 @@ function EntryForm({
               onClick={onOpenSourcePicker}
               className={`inline-flex items-center gap-1.5 text-[11px] rounded-md border border-dashed px-2.5 py-1 transition-colors ${
                 isLight
-                  ? 'border-[#CBD5E1] hover:border-[#017BC8]/40 hover:bg-[#F8FAFC] text-[#334155]/70'
-                  : 'border-white/15 hover:border-[#74B4DC]/40 hover:bg-white/[0.03] text-[#CBD5E1]/60'
+                  ? 'border-[#CBD5E1] hover:border-[#02BBB8]/40 hover:bg-[#F8FAFC] text-[#334155]/70'
+                  : 'border-white/15 hover:border-[#6FC9C7]/40 hover:bg-white/[0.03] text-[#CBD5E1]/60'
               }`}
             >
               <FileSearch size={11} />
@@ -857,11 +857,11 @@ function ImpactChip({ impact, isLight }: { impact: ProvisionalImpact; isLight: b
       ? 'bg-amber-50 border-amber-200 text-amber-700'
       : 'bg-amber-500/15 border-amber-500/30 text-amber-300',
     MINOR: isLight
-      ? 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]'
-      : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]',
+      ? 'bg-[#02BBB8]/10 border-[#02BBB8]/25 text-[#02BBB8]'
+      : 'bg-[#6FC9C7]/15 border-[#6FC9C7]/30 text-[#6FC9C7]',
     OBSERVATION: isLight
-      ? 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]'
-      : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]',
+      ? 'bg-[#02BBB8]/10 border-[#02BBB8]/25 text-[#02BBB8]'
+      : 'bg-[#6FC9C7]/15 border-[#6FC9C7]/30 text-[#6FC9C7]',
     NONE: isLight
       ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/65'
       : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/55',
@@ -887,8 +887,8 @@ function ClassificationChip({
       ? 'bg-amber-50 border-amber-200 text-amber-700'
       : 'bg-amber-500/15 border-amber-500/30 text-amber-300',
     OBSERVATION: isLight
-      ? 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]'
-      : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]',
+      ? 'bg-[#02BBB8]/10 border-[#02BBB8]/25 text-[#02BBB8]'
+      : 'bg-[#6FC9C7]/15 border-[#6FC9C7]/30 text-[#6FC9C7]',
     OPPORTUNITY_FOR_IMPROVEMENT: isLight
       ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/65'
       : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/55',

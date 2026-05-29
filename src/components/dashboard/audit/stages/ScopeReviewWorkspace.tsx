@@ -184,7 +184,7 @@ export default function ScopeReviewWorkspace() {
               >
                 <span
                   className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${
-                    isLight ? 'bg-[#F2F2F2] text-[#017BC8]' : 'bg-white/[0.06] text-[#74B4DC]'
+                    isLight ? 'bg-[#F2F2F2] text-[#02BBB8]' : 'bg-white/[0.06] text-[#6FC9C7]'
                   }`}
                 >
                   {r.section_identifier}
@@ -243,7 +243,7 @@ export default function ScopeReviewWorkspace() {
                     >
                       <span
                         className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${
-                          isLight ? 'bg-[#F2F2F2] text-[#017BC8]' : 'bg-white/[0.06] text-[#74B4DC]'
+                          isLight ? 'bg-[#F2F2F2] text-[#02BBB8]' : 'bg-white/[0.06] text-[#6FC9C7]'
                         }`}
                       >
                         {risk?.section_identifier ?? '—'}
@@ -327,7 +327,7 @@ export default function ScopeReviewWorkspace() {
                     <li key={i} className={`text-sm flex items-start gap-2 ${headingColor}`}>
                       <span
                         className={`mt-1.5 w-1 h-1 rounded-full flex-shrink-0 ${
-                          isLight ? 'bg-[#017BC8]/55' : 'bg-[#74B4DC]/55'
+                          isLight ? 'bg-[#02BBB8]/55' : 'bg-[#6FC9C7]/55'
                         }`}
                       />
                       {h}
@@ -469,8 +469,8 @@ function TierChip({ tier, isLight }: { tier: EndpointTier; isLight: boolean }) {
       ? 'bg-amber-50 border-amber-200 text-amber-700'
       : 'bg-amber-500/15 border-amber-500/30 text-amber-300',
     SECONDARY: isLight
-      ? 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]'
-      : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]',
+      ? 'bg-[#02BBB8]/10 border-[#02BBB8]/25 text-[#02BBB8]'
+      : 'bg-[#6FC9C7]/15 border-[#6FC9C7]/30 text-[#6FC9C7]',
     SUPPORTIVE: isLight
       ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/65'
       : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/55',
@@ -493,8 +493,8 @@ function SurfaceChip({ surface, isLight }: { surface: ImpactSurface; isLight: bo
       ? 'bg-amber-50 border-amber-200 text-amber-700'
       : 'bg-amber-500/15 border-amber-500/30 text-amber-300',
     DATA_INTEGRITY: isLight
-      ? 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]'
-      : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]',
+      ? 'bg-[#02BBB8]/10 border-[#02BBB8]/25 text-[#02BBB8]'
+      : 'bg-[#6FC9C7]/15 border-[#6FC9C7]/30 text-[#6FC9C7]',
   };
   return (
     <span
@@ -548,8 +548,8 @@ function CriticalityChip({
       ? 'bg-amber-50 border-amber-200 text-amber-700'
       : 'bg-amber-500/15 border-amber-500/30 text-amber-300',
     MODERATE: isLight
-      ? 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]'
-      : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]',
+      ? 'bg-[#02BBB8]/10 border-[#02BBB8]/25 text-[#02BBB8]'
+      : 'bg-[#6FC9C7]/15 border-[#6FC9C7]/30 text-[#6FC9C7]',
     LOW: isLight
       ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/65'
       : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/55',
@@ -579,8 +579,8 @@ function PostureSummary({
       ? 'bg-[#F8FAFC] border-[#E2E8F0]'
       : 'bg-white/[0.02] border-white/5'
     : isLight
-    ? 'bg-[#017BC8]/[0.06] border-[#017BC8]/20'
-    : 'bg-[#017BC8]/[0.10] border-[#74B4DC]/30';
+    ? 'bg-[#02BBB8]/[0.06] border-[#02BBB8]/20'
+    : 'bg-[#02BBB8]/[0.10] border-[#6FC9C7]/30';
   const sectionHeader = 'text-fg-label';
   const valueColor = isUnknown
     ? isLight

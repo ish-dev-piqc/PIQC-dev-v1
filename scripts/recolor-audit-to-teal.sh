@@ -69,8 +69,7 @@ CLASS_PREFIXES="bg text border ring from to via fill stroke divide outline place
 
 echo "Phase 1 — hex literals"
 echo "$HEX_MAPPINGS" | while IFS=';' read -r OLD NEW; do
-  [[ -z "$OLD" || "$OLD" == \#* ]] && continue
-  [[ -z "$NEW" ]] && continue
+  [[ -z "$OLD" || -z "$NEW" ]] && continue
   if (( DRY_RUN )); then
     COUNT=$(echo "$FILES" | xargs grep -ih "$OLD" 2>/dev/null | wc -l | tr -d ' ')
     echo "  $OLD -> $NEW  ($COUNT lines match)"
@@ -83,8 +82,7 @@ done
 echo ""
 echo "Phase 2 — rgba/rgb decomposed values"
 echo "$RGB_MAPPINGS" | while IFS=';' read -r OLD NEW; do
-  [[ -z "$OLD" || "$OLD" == \#* ]] && continue
-  [[ -z "$NEW" ]] && continue
+  [[ -z "$OLD" || -z "$NEW" ]] && continue
   if (( DRY_RUN )); then
     COUNT=$(echo "$FILES" | xargs grep -oh "$OLD" 2>/dev/null | wc -l | tr -d ' ')
     echo "  $OLD -> $NEW  ($COUNT occurrences)"
