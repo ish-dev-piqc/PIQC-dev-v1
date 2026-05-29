@@ -356,7 +356,11 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                 type="button"
                 onClick={handleManageBilling}
                 disabled={portalLoading}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-colors disabled:opacity-50"
+                className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg border transition-colors disabled:opacity-50 ${
+                  isLight
+                    ? 'border-brand-600 text-brand-600 hover:bg-brand-600/10'
+                    : 'border-brand-300 text-brand-300 hover:bg-brand-300/10'
+                }`}
               >
                 {portalLoading ? (
                   <>
@@ -416,7 +420,11 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                 type="button"
                 onClick={handleManageBilling}
                 disabled={portalLoading}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-colors disabled:opacity-50"
+                className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg border transition-colors disabled:opacity-50 ${
+                  isLight
+                    ? 'border-brand-600 text-brand-600 hover:bg-brand-600/10'
+                    : 'border-brand-300 text-brand-300 hover:bg-brand-300/10'
+                }`}
               >
                 {portalLoading ? (
                   <>
