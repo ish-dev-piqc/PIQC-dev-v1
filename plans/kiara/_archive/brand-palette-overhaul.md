@@ -1,9 +1,10 @@
 ---
 owner: kiara
 feature: brand-palette-overhaul
-status: active
+status: merged
+merged: 2026-05-29
 started: 2026-05-28
-target_pr:
+target_pr: #165
 ---
 
 # Brand palette overhaul — blue + teal anchors, slate neutrals
