@@ -830,8 +830,8 @@ export default function DashboardChat({
       }`}>
         <div className={`rounded-2xl border transition-all duration-200 ${
           isLight
-            ? 'bg-[#f5f9fc] border-[#d8e8f0] focus-within:border-[#017BC8]/60 focus-within:shadow-[0_0_0_3px_rgba(74,111,165,0.08)]'
-            : 'bg-[#0F172A] border-white/[0.08] focus-within:border-[#017BC8]/40 focus-within:shadow-[0_0_0_3px_rgba(74,111,165,0.06)]'
+            ? 'bg-[#f5f9fc] border-[#d8e8f0] focus-within:border-[#017BC8]/60 focus-within:shadow-[0_0_0_3px_rgba(1,123,200,0.08)]'
+            : 'bg-[#0F172A] border-white/[0.08] focus-within:border-[#017BC8]/40 focus-within:shadow-[0_0_0_3px_rgba(1,123,200,0.06)]'
         }`}>
 
           <div className="px-4 pt-3 pb-2">

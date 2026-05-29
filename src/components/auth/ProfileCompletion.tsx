@@ -118,8 +118,8 @@ export default function ProfileCompletion() {
         className="absolute inset-0 pointer-events-none"
         style={{
           background: isLight
-            ? 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(74,111,165,0.10) 0%, transparent 65%)'
-            : 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(74,111,165,0.18) 0%, transparent 65%)',
+            ? 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(1,123,200,0.10) 0%, transparent 65%)'
+            : 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(1,123,200,0.18) 0%, transparent 65%)',
         }}
       />
 

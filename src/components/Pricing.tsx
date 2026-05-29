@@ -270,8 +270,8 @@ export default function Pricing({ onViewChange }: PricingProps) {
                     className="absolute inset-0 pointer-events-none"
                     style={{
                       background: isLight
-                        ? 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(74,111,165,0.35) 0%, transparent 70%)'
-                        : 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(74,111,165,0.25) 0%, transparent 70%)',
+                        ? 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(1,123,200,0.35) 0%, transparent 70%)'
+                        : 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(1,123,200,0.25) 0%, transparent 70%)',
                     }}
                   />
                 )}

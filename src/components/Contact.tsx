@@ -92,7 +92,7 @@ export default function Contact() {
             <div
               className="absolute inset-0 pointer-events-none rounded-2xl"
               style={{
-                background: 'radial-gradient(ellipse 80% 40% at 50% -5%, rgba(74,111,165,0.08) 0%, transparent 60%)',
+                background: 'radial-gradient(ellipse 80% 40% at 50% -5%, rgba(1,123,200,0.08) 0%, transparent 60%)',
               }}
             />
 

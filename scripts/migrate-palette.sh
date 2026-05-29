@@ -108,10 +108,62 @@ echo "$MAPPINGS" | while IFS=';' read -r OLD NEW; do
   fi
 done
 
+# =============================================================================
+# Phase 2 — rgba() form sweep
+#
+# The bracketed-hex sweep above catches `[#4a6fa5]` (Tailwind arbitrary
+# values) and `'#4a6fa5'` (string literals in inline styles), but it does
+# NOT catch the same color expressed as `rgba(74,111,165,X)` — which is
+# used for box-shadows, glow gradients, and semi-transparent borders.
+#
+# This phase rewrites the RGB component of rgba()/rgb() calls. Alphas are
+# preserved (we replace the substring "74,111,165" wherever it appears,
+# leaving the alpha argument and the surrounding parens intact).
+#
+# Mapping rationale:
+#  - 74,111,165 (old brand blue #4a6fa5) → 1,123,200 (new blue-600 #017BC8)
+#    matches the bracketed-hex sweep for visual consistency.
+#  - 55,65,82 (old body text #374152) → 51,65,85 (new slate-700 #334155).
+#  - 210,215,224 (old dark text #d2d7e0) → 203,213,225 (new slate-300 #CBD5E1).
+#  - 37,99,235 (old Tailwind default blue #2563eb) → 1,123,200. This appears
+#    only in src/tailwind.config.js which is a stale duplicate; the script
+#    still rewrites the values for hygiene even though that file is
+#    scheduled for deletion.
+# =============================================================================
+
+RGBA_MAPPINGS=$(cat <<'EOF'
+74,111,165;1,123,200
+55,65,82;51,65,85
+210,215,224;203,213,225
+37,99,235;1,123,200
+EOF
+)
+
+# Phase 2 uses a wider file scope so it also touches .js (the stale
+# src/tailwind.config.js, if still present) and .css files.
+FILES_PHASE2=$(find src -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.css' \) \
+               ! -path 'src/lib/site/protocolColors.ts')
+
+echo "$RGBA_MAPPINGS" | while IFS=';' read -r OLD NEW; do
+  [[ -z "$OLD" || "$OLD" == \#* ]] && continue
+  [[ -z "$NEW" ]] && continue
+
+  if (( DRY_RUN )); then
+    COUNT=$(echo "$FILES_PHASE2" | xargs grep -oh "$OLD" 2>/dev/null | wc -l | tr -d ' ')
+    echo "  rgba/rgb $OLD -> $NEW  ($COUNT occurrences)"
+  else
+    echo "$FILES_PHASE2" | xargs perl -i -pe "s/\Q${OLD}\E/${NEW}/g"
+    echo "  rgba/rgb $OLD -> $NEW  (applied)"
+  fi
+done
+
 if (( DRY_RUN == 0 )); then
   echo ""
-  echo ">> Sweep complete. Run \`git diff --stat\` to see the scope of changes."
+  echo ">> Sweep complete (Phase 1 + Phase 2). Run \`git diff --stat\` to see"
+  echo "   the scope of changes."
   echo ">> Run \`npm run build\` to verify TS strict still passes."
   echo ">> Run \`grep -rE '\\[#[0-9a-fA-F]{6}\\]' src/\` and spot-check any"
   echo "   remaining hex literals against the brand palette."
+  echo ">> If src/tailwind.config.js still exists, remove it — it's a stale"
+  echo "   duplicate of the root tailwind.config.js (Vite doesn't read it)."
 fi

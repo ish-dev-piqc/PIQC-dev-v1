@@ -1022,7 +1022,7 @@ function CalendarFilters({
 
                 {expanded && participants.length > 0 && (
                   <div className="ml-6 pl-2 border-l border-dashed space-y-0.5 mb-1"
-                       style={{ borderColor: isLight ? 'rgba(55,65,82,0.12)' : 'rgba(210,215,224,0.1)' }}>
+                       style={{ borderColor: isLight ? 'rgba(51,65,85,0.12)' : 'rgba(203,213,225,0.1)' }}>
                     {participants.map((pid) => {
                       const partHidden = hiddenParts.has(pid);
                       return (

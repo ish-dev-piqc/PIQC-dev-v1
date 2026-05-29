@@ -18,8 +18,8 @@ export default function Hero({ onViewChange }: HeroProps) {
         className="absolute inset-0 pointer-events-none"
         style={{
           background: isLight
-            ? 'radial-gradient(ellipse 90% 55% at 50% -5%, rgba(74,111,165,0.12) 0%, transparent 68%)'
-            : 'radial-gradient(ellipse 90% 55% at 50% -5%, rgba(74,111,165,0.22) 0%, transparent 68%)',
+            ? 'radial-gradient(ellipse 90% 55% at 50% -5%, rgba(1,123,200,0.12) 0%, transparent 68%)'
+            : 'radial-gradient(ellipse 90% 55% at 50% -5%, rgba(1,123,200,0.22) 0%, transparent 68%)',
         }}
       />
 
