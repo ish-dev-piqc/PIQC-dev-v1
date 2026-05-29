@@ -130,11 +130,11 @@ export default function TeamTab() {
   const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const inputBg = isLight ? 'bg-white' : 'bg-[#0F172A]';
   const inputBorder = isLight
-    ? 'border-[#CBD5E1] focus:border-[#017BC8] focus:ring-1 focus:ring-[#017BC8]/30'
-    : 'border-white/15 focus:border-[#74B4DC] focus:ring-1 focus:ring-[#74B4DC]/30';
+    ? 'border-[#CBD5E1] focus:border-brand-600 focus:ring-1 focus:ring-brand-600/30'
+    : 'border-white/15 focus:border-brand-300 focus:ring-1 focus:ring-brand-300/30';
   const filterActive = isLight
-    ? 'bg-[#017BC8]/10 border-[#017BC8] text-[#017BC8]'
-    : 'bg-[#017BC8]/15 border-[#74B4DC] text-[#74B4DC]';
+    ? 'bg-brand-600/10 border-brand-600 text-brand-600'
+    : 'bg-brand-600/15 border-brand-300 text-brand-300';
   const filterInactive = isLight
     ? 'bg-white border-[#E2E8F0] text-[#334155]/65 hover:border-[#CBD5E1] hover:text-[#0F172A]'
     : 'bg-[#0F172A] border-white/10 text-[#CBD5E1]/55 hover:border-white/20 hover:text-[#CBD5E1]';
@@ -165,8 +165,8 @@ export default function TeamTab() {
             }}
             className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
               isLight
-                ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
-                : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]'
+                ? 'bg-brand-600 text-white hover:bg-brand-800'
+                : 'bg-brand-300 text-[#0F172A] hover:bg-brand-700'
             }`}
           >
             <Plus size={13} />
@@ -228,8 +228,8 @@ export default function TeamTab() {
                 className={`text-[10px] font-semibold px-1 rounded ${
                   isActive
                     ? isLight
-                      ? 'bg-[#017BC8]/20'
-                      : 'bg-[#74B4DC]/20'
+                      ? 'bg-brand-600/20'
+                      : 'bg-brand-300/20'
                     : isLight
                     ? 'bg-[#0F172A]/[0.04]'
                     : 'bg-white/[0.06]'
@@ -478,11 +478,11 @@ function TeamCard({ member, isLight, cardBg, headingColor, subColor, mutedColor,
 function RoleChip({ role, isLight }: { role: TeamRole; isLight: boolean }) {
   const tones: Record<TeamRole, string> = {
     PI: isLight
-      ? 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]'
-      : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]',
+      ? 'bg-brand-600/10 border-brand-600/25 text-brand-600'
+      : 'bg-brand-300/15 border-brand-300/30 text-brand-300',
     SUB_I: isLight
-      ? 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]'
-      : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]',
+      ? 'bg-brand-600/10 border-brand-600/25 text-brand-600'
+      : 'bg-brand-300/15 border-brand-300/30 text-brand-300',
     COORDINATOR: isLight
       ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
       : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300',

@@ -6,7 +6,7 @@ started: 2026-05-28
 target_pr:
 ---
 
-# Logo placement + audit-mode teal recolor
+# Logo placement + audit-mode teal recolor + CSS-variable mode theming
 
 ## Context
 
@@ -83,12 +83,45 @@ at the project root, because:
 - `src/public/assets/PIQC_Logo.png` (deleted — moved out)
 - `src/public/assets/PIQClinical_Logo.png` (deleted — moved out)
 
-### Audit-mode teal recolor
+### Audit-mode teal recolor (interim)
 
 - `src/components/dashboard/audit/**/*.{ts,tsx}` — all audit-mode
   components and sub-stages. Mechanical recolor from new-blue to
   new-teal scale via `scripts/recolor-audit-to-teal.sh`.
 - `scripts/recolor-audit-to-teal.sh` — the recolor script itself.
+
+### CSS-variable mode theming (the architectural piece)
+
+Treats Site Mode and Audit Mode as separately-sellable products with
+distinct visual identities. The mode anchor color (blue for site,
+teal for audit) is held in CSS variables that switch based on a
+`mode-{mode}` class on App's root div. Components reference `brand-N`
+Tailwind tokens that resolve to the active mode's color, so flipping
+modes flips every brand-colored surface automatically.
+
+- `src/index.css` — define `--brand-50` through `--brand-950` RGB
+  variables. Default to blue scale. Override per mode class:
+  `.mode-audit { --brand-N: <teal-N rgb> }`. SOTR keeps the default
+  blue until SOTR's anchor decision lands.
+- `tailwind.config.js` — add a `brand` color scale that consumes the
+  CSS variables via `rgb(var(--brand-N) / <alpha-value>)` so Tailwind
+  opacity modifiers (`bg-brand-600/50`) work.
+- `src/App.tsx` — read `useMode()` and put `mode-{mode}` class on
+  the outermost div so the variable scope covers Navbar, Dashboard,
+  and everything inside.
+- `src/**/*.{ts,tsx}` — mechanical sweep replacing both blue and
+  teal hex literals (the bracketed `[#...]` Tailwind syntax and the
+  decomposed rgb() / rgba() forms) with `brand-N` Tailwind classes or
+  `rgb(var(--brand-N) / X)` rgba equivalents. Touches shared and
+  mode-specific components alike — both end up reading their color
+  from the mode-aware variables, which makes the audit-only recolor
+  redundant (audit components rendered in audit mode resolve to teal
+  via the variables, not by having teal hex baked in). The interim
+  audit recolor commit is left in history for forensic clarity.
+- `scripts/sweep-to-brand-tokens.sh` — the migration script.
+- Excluded from sweep: `src/lib/site/protocolColors.ts` (protocol
+  palette stays separate), slate / neutral / semantic colors (they
+  aren't brand-mode-sensitive).
 
 ### Plan
 

@@ -75,8 +75,8 @@ export default function DemoAskPanel() {
   };
 
   const bubbleUser = isLight
-    ? 'bg-[#017BC8] text-white'
-    : 'bg-[#017BC8] text-white';
+    ? 'bg-brand-600 text-white'
+    : 'bg-brand-600 text-white';
   const bubbleAssistant = isLight
     ? 'bg-white border border-[#E2E8F0] text-[#0F172A]'
     : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1]';
@@ -89,7 +89,7 @@ export default function DemoAskPanel() {
         {thread.length === 0 ? (
           <div className="max-w-2xl mx-auto">
             <div className="flex items-center gap-2 mb-4">
-              <Sparkles size={16} className={isLight ? 'text-[#017BC8]' : 'text-[#74B4DC]'} />
+              <Sparkles size={16} className={isLight ? 'text-brand-600' : 'text-brand-300'} />
               <p className={`${subColor} text-sm`}>
                 Pick a starter to see a demo response. Live chat is disabled in demo mode.
               </p>
@@ -101,8 +101,8 @@ export default function DemoAskPanel() {
                   onClick={() => handleSuggestion(s)}
                   className={`text-left p-4 rounded-xl border transition-colors ${
                     isLight
-                      ? 'bg-white border-[#E2E8F0] hover:border-[#017BC8]/40 hover:bg-[#017BC8]/[0.04]'
-                      : 'bg-[#0F172A] border-white/10 hover:border-[#74B4DC]/40 hover:bg-white/[0.04]'
+                      ? 'bg-white border-[#E2E8F0] hover:border-brand-600/40 hover:bg-brand-600/[0.04]'
+                      : 'bg-[#0F172A] border-white/10 hover:border-brand-300/40 hover:bg-white/[0.04]'
                   }`}
                 >
                   <p className={`text-sm font-medium ${isLight ? 'text-[#0F172A]' : 'text-white'}`}>

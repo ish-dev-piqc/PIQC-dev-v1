@@ -156,8 +156,8 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
   const mutedColor = 'text-fg-muted';
   const sectionBg = isLight ? 'bg-[#F8FAFC]' : 'bg-white/[0.02]';
   const buttonPrimary = isLight
-    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF] disabled:bg-[#017BC8]/50'
-    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE] disabled:bg-[#74B4DC]/50';
+    ? 'bg-brand-600 text-white hover:bg-brand-800 disabled:bg-brand-600/50'
+    : 'bg-brand-300 text-[#0F172A] hover:bg-brand-700 disabled:bg-brand-300/50';
 
   return (
     <div
@@ -263,14 +263,14 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
                         value={inviteEmail}
                         onChange={(e) => setInviteEmail(e.target.value)}
                         placeholder="name@example.com"
-                        className={`px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30`}
+                        className={`px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-brand-600/30`}
                         disabled={creatingInvite}
                         required
                       />
                       <select
                         value={inviteRole}
                         onChange={(e) => setInviteRole(e.target.value as 'admin' | 'member')}
-                        className={`px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30`}
+                        className={`px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-brand-600/30`}
                         disabled={creatingInvite}
                       >
                         <option value="member">Member</option>
@@ -294,7 +294,7 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
                               <p className={`${headingColor} text-sm truncate`}>{inv.email}</p>
                               <p className={`${mutedColor} text-[11px]`}>{inv.role} · expires {new Date(inv.expires_at).toLocaleDateString()}</p>
                             </div>
-                            <button type="button" onClick={() => copyInviteUrl(inv.token)} className={`inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded ${isLight ? 'text-[#017BC8] hover:bg-[#017BC8]/[0.06]' : 'text-[#74B4DC] hover:bg-white/[0.04]'}`}>
+                            <button type="button" onClick={() => copyInviteUrl(inv.token)} className={`inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded ${isLight ? 'text-brand-600 hover:bg-brand-600/[0.06]' : 'text-brand-300 hover:bg-white/[0.04]'}`}>
                               {copiedToken === inv.token ? <Check size={11} /> : <Copy size={11} />}
                               {copiedToken === inv.token ? 'Copied' : 'Copy link'}
                             </button>

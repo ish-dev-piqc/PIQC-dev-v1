@@ -26,7 +26,7 @@ export default function Footer({ onViewChange }: FooterProps) {
               className="w-7 h-7 object-contain group-hover:scale-105 transition-transform"
             />
             <span className={`text-sm font-semibold ${logoText} tracking-tight`}>
-              <span className="text-[#017BC8]">PIQC</span>linical
+              <span className="text-brand-600">PIQC</span>linical
             </span>
           </a>
 
@@ -42,7 +42,7 @@ export default function Footer({ onViewChange }: FooterProps) {
             ))}
             <button
               onClick={() => onViewChange('login')}
-              className="ml-1 px-3.5 py-1.5 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-colors shadow-btn"
+              className="ml-1 px-3.5 py-1.5 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-colors shadow-btn"
             >
               Get Started
             </button>

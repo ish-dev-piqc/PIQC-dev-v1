@@ -70,8 +70,8 @@ export default function PilotCountdownBanner() {
         ? 'bg-amber-50 border-amber-200 text-amber-700'
         : 'bg-amber-500/[0.06] border-amber-500/20 text-amber-300'
       : isLight
-      ? 'bg-[#017BC8]/[0.18] border-[#017BC8]/50 text-[#1a3d6f]'
-      : 'bg-[#74B4DC]/20 border-[#74B4DC]/40 text-[#c8d8eb]';
+      ? 'bg-brand-600/[0.18] border-brand-600/50 text-[#1a3d6f]'
+      : 'bg-brand-300/20 border-brand-300/40 text-[#c8d8eb]';
 
   const label =
     status === 'expired'
@@ -88,8 +88,8 @@ export default function PilotCountdownBanner() {
       : 'Upgrade to a Workspace before your pilot ends to keep going.';
 
   const buttonClasses = isLight
-    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
-    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]';
+    ? 'bg-brand-600 text-white hover:bg-brand-800'
+    : 'bg-brand-300 text-[#0F172A] hover:bg-brand-700';
 
   return (
     <div className={`${toneClass} border rounded-lg px-4 py-3 flex items-start gap-3`}>

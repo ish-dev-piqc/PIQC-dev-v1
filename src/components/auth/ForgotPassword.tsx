@@ -40,7 +40,7 @@ export default function ForgotPassword({ onViewChange }: ForgotPasswordProps) {
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(1,123,200,0.18) 0%, transparent 65%)',
+          background: 'radial-gradient(ellipse 80% 50% at 50% -10%, rgb(var(--brand-600) / 0.18) 0%, transparent 65%)',
         }}
       />
 
@@ -56,14 +56,14 @@ export default function ForgotPassword({ onViewChange }: ForgotPasswordProps) {
         <div className="flex items-center gap-2.5 mb-8">
           <img src="/PIQC_Logo.png" alt="" className="w-8 h-8 object-contain" />
           <span className="text-[15px] font-semibold text-white tracking-tight">
-            <span className="text-[#017BC8]">PIQC</span>linical
+            <span className="text-brand-600">PIQC</span>linical
           </span>
         </div>
 
         {sent ? (
           <div className="text-center">
-            <div className="w-12 h-12 rounded-full bg-[#017BC8]/15 border border-[#017BC8]/25 flex items-center justify-center mx-auto mb-5">
-              <CheckCircle size={22} className="text-[#74B4DC]" />
+            <div className="w-12 h-12 rounded-full bg-brand-600/15 border border-brand-600/25 flex items-center justify-center mx-auto mb-5">
+              <CheckCircle size={22} className="text-brand-300" />
             </div>
             <h1 className="text-2xl font-bold text-white mb-2">Check your email</h1>
             <p className="text-[#CBD5E1]/45 text-sm leading-relaxed mb-6">
@@ -71,7 +71,7 @@ export default function ForgotPassword({ onViewChange }: ForgotPasswordProps) {
             </p>
             <button
               onClick={() => onViewChange('login')}
-              className="text-sm text-[#74B4DC] hover:text-[#87b5c7] transition-colors font-medium"
+              className="text-sm text-brand-300 hover:text-[#87b5c7] transition-colors font-medium"
             >
               Return to sign in
             </button>
@@ -97,7 +97,7 @@ export default function ForgotPassword({ onViewChange }: ForgotPasswordProps) {
                   required
                   autoComplete="email"
                   placeholder="you@organization.com"
-                  className="w-full px-3.5 py-2.5 bg-[#0F172A] border border-white/[0.08] rounded-lg text-white placeholder-[#CBD5E1]/20 text-sm focus:outline-none focus:border-[#017BC8]/60 focus:ring-1 focus:ring-[#017BC8]/30 transition-all"
+                  className="w-full px-3.5 py-2.5 bg-[#0F172A] border border-white/[0.08] rounded-lg text-white placeholder-[#CBD5E1]/20 text-sm focus:outline-none focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/30 transition-all"
                 />
               </div>
 
@@ -110,7 +110,7 @@ export default function ForgotPassword({ onViewChange }: ForgotPasswordProps) {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-all duration-150 shadow-btn hover:shadow-btn-hover disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+                className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-all duration-150 shadow-btn hover:shadow-btn-hover disabled:opacity-50 disabled:cursor-not-allowed mt-2"
               >
                 {loading ? 'Sending...' : 'Send reset link'}
               </button>

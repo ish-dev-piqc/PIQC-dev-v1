@@ -56,8 +56,8 @@ export default function ServiceMappingTable({
     ? 'border-[#E2E8F0] bg-[#F8FAFC]/40'
     : 'border-white/5 bg-white/[0.01]';
   const buttonPrimary = isLight
-    ? 'bg-[#02BBB8] text-white hover:bg-[#016663]'
-    : 'bg-[#6FC9C7] text-[#0F172A] hover:bg-[#028E8B]';
+    ? 'bg-brand-600 text-white hover:bg-brand-800'
+    : 'bg-brand-300 text-[#0F172A] hover:bg-brand-700';
 
   return (
     <div className="space-y-3">
@@ -187,15 +187,15 @@ function MappingRow(props: MappingRowProps) {
     ? 'bg-white border border-red-200 text-red-600 hover:bg-red-50'
     : 'bg-[#0F172A] border border-red-500/30 text-red-400 hover:bg-red-500/[0.06]';
   const buttonPrimary = isLight
-    ? 'bg-[#02BBB8] text-white hover:bg-[#016663]'
-    : 'bg-[#6FC9C7] text-[#0F172A] hover:bg-[#028E8B]';
+    ? 'bg-brand-600 text-white hover:bg-brand-800'
+    : 'bg-brand-300 text-[#0F172A] hover:bg-brand-700';
   const inputBg = isLight ? 'bg-white' : 'bg-[#0F172A]';
   const inputBorder = isLight
-    ? 'border-[#CBD5E1] focus:border-[#02BBB8] focus:ring-1 focus:ring-[#02BBB8]/30'
-    : 'border-white/15 focus:border-[#6FC9C7] focus:ring-1 focus:ring-[#6FC9C7]/30';
+    ? 'border-[#CBD5E1] focus:border-brand-600 focus:ring-1 focus:ring-brand-600/30'
+    : 'border-white/15 focus:border-brand-300 focus:ring-1 focus:ring-brand-300/30';
   const radioActive = isLight
-    ? 'bg-[#02BBB8]/10 border-[#02BBB8] text-[#02BBB8]'
-    : 'bg-[#02BBB8]/15 border-[#6FC9C7] text-[#6FC9C7]';
+    ? 'bg-brand-600/10 border-brand-600 text-brand-600'
+    : 'bg-brand-600/15 border-brand-300 text-brand-300';
   const radioInactive = isLight
     ? 'bg-white border-[#E2E8F0] text-[#334155]/65 hover:border-[#CBD5E1]'
     : 'bg-[#0F172A] border-white/10 text-[#CBD5E1]/55 hover:border-white/20';
@@ -213,8 +213,8 @@ function MappingRow(props: MappingRowProps) {
               <span
                 className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded ${
                   isLight
-                    ? 'bg-[#F2F2F2] text-[#02BBB8]'
-                    : 'bg-white/[0.06] text-[#6FC9C7]'
+                    ? 'bg-[#F2F2F2] text-brand-600'
+                    : 'bg-white/[0.06] text-brand-300'
                 }`}
               >
                 {risk?.section_identifier ?? 'unknown section'}
@@ -257,8 +257,8 @@ function MappingRow(props: MappingRowProps) {
         <span
           className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded ${
             isLight
-              ? 'bg-[#F2F2F2] text-[#02BBB8]'
-              : 'bg-white/[0.06] text-[#6FC9C7]'
+              ? 'bg-[#F2F2F2] text-brand-600'
+              : 'bg-white/[0.06] text-brand-300'
           }`}
         >
           {risk?.section_identifier ?? '—'}
@@ -366,17 +366,17 @@ function AddMappingForm({
   const headingColor = 'text-fg-heading';
   const inputBg = isLight ? 'bg-white' : 'bg-[#0F172A]';
   const inputBorder = isLight
-    ? 'border-[#CBD5E1] focus:border-[#02BBB8] focus:ring-1 focus:ring-[#02BBB8]/30'
-    : 'border-white/15 focus:border-[#6FC9C7] focus:ring-1 focus:ring-[#6FC9C7]/30';
+    ? 'border-[#CBD5E1] focus:border-brand-600 focus:ring-1 focus:ring-brand-600/30'
+    : 'border-white/15 focus:border-brand-300 focus:ring-1 focus:ring-brand-300/30';
   const radioActive = isLight
-    ? 'bg-[#02BBB8]/10 border-[#02BBB8] text-[#02BBB8]'
-    : 'bg-[#02BBB8]/15 border-[#6FC9C7] text-[#6FC9C7]';
+    ? 'bg-brand-600/10 border-brand-600 text-brand-600'
+    : 'bg-brand-600/15 border-brand-300 text-brand-300';
   const radioInactive = isLight
     ? 'bg-white border-[#E2E8F0] text-[#334155]/65 hover:border-[#CBD5E1]'
     : 'bg-[#0F172A] border-white/10 text-[#CBD5E1]/55 hover:border-white/20';
   const buttonPrimary = isLight
-    ? 'bg-[#02BBB8] text-white hover:bg-[#016663]'
-    : 'bg-[#6FC9C7] text-[#0F172A] hover:bg-[#028E8B]';
+    ? 'bg-brand-600 text-white hover:bg-brand-800'
+    : 'bg-brand-300 text-[#0F172A] hover:bg-brand-700';
   const buttonSecondary = isLight
     ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
     : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]';
@@ -484,8 +484,8 @@ function CriticalityChip({
       ? 'bg-amber-50 border-amber-200 text-amber-700'
       : 'bg-amber-500/15 border-amber-500/30 text-amber-300',
     MODERATE: isLight
-      ? 'bg-[#02BBB8]/10 border-[#02BBB8]/25 text-[#02BBB8]'
-      : 'bg-[#6FC9C7]/15 border-[#6FC9C7]/30 text-[#6FC9C7]',
+      ? 'bg-brand-600/10 border-brand-600/25 text-brand-600'
+      : 'bg-brand-300/15 border-brand-300/30 text-brand-300',
     LOW: isLight
       ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/65'
       : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/55',

@@ -192,7 +192,7 @@ export default function Pricing({ onViewChange }: PricingProps) {
     : 'bg-[#0F172A] border-white/[0.07]';
   const featuredCardBg = isLight
     ? 'bg-[#0F172A] border-[#0F172A]'
-    : 'bg-[#017BC8]/20 border-[#017BC8]/40';
+    : 'bg-brand-600/20 border-brand-600/40';
   const headingColor = 'text-fg-heading';
   const bodyColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
@@ -205,7 +205,7 @@ export default function Pricing({ onViewChange }: PricingProps) {
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="text-center mb-14">
-          <p className="text-xs font-semibold text-[#74B4DC] uppercase tracking-widest mb-4">
+          <p className="text-xs font-semibold text-brand-300 uppercase tracking-widest mb-4">
             Pricing
           </p>
           <h2
@@ -249,16 +249,16 @@ export default function Pricing({ onViewChange }: PricingProps) {
               : bodyColor;
             const checkTone = isFeatured
               ? isLight
-                ? 'text-[#74B4DC]'
+                ? 'text-brand-300'
                 : 'text-[#7aafd4]'
-              : 'text-[#74B4DC]';
+              : 'text-brand-300';
             const buttonClasses = isFeatured
               ? isLight
                 ? 'bg-white text-[#0F172A] hover:bg-[#F2F2F2]'
                 : 'bg-white/[0.12] text-white hover:bg-white/[0.18] border border-white/[0.12]'
               : isLight
-              ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
-              : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]';
+              ? 'bg-brand-600 text-white hover:bg-brand-800'
+              : 'bg-brand-300 text-[#0F172A] hover:bg-brand-700';
 
             return (
               <div
@@ -270,8 +270,8 @@ export default function Pricing({ onViewChange }: PricingProps) {
                     className="absolute inset-0 pointer-events-none"
                     style={{
                       background: isLight
-                        ? 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(1,123,200,0.35) 0%, transparent 70%)'
-                        : 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(1,123,200,0.25) 0%, transparent 70%)',
+                        ? 'radial-gradient(ellipse 80% 50% at 50% -10%, rgb(var(--brand-600) / 0.35) 0%, transparent 70%)'
+                        : 'radial-gradient(ellipse 80% 50% at 50% -10%, rgb(var(--brand-600) / 0.25) 0%, transparent 70%)',
                     }}
                   />
                 )}
@@ -287,8 +287,8 @@ export default function Pricing({ onViewChange }: PricingProps) {
                         <span
                           className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
                             isLight
-                              ? 'bg-[#74B4DC]/30 text-[#d0dff0]'
-                              : 'bg-[#74B4DC]/25 text-[#a8c0d8]'
+                              ? 'bg-brand-300/30 text-[#d0dff0]'
+                              : 'bg-brand-300/25 text-[#a8c0d8]'
                           }`}
                         >
                           {p.badge}

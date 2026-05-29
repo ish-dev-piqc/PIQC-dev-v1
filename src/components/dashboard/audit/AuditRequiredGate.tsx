@@ -66,8 +66,8 @@ export default function AuditRequiredGate() {
     switch (status) {
       case 'IN_PROGRESS':
         return isLight
-          ? 'bg-[#02BBB8]/10 border-[#02BBB8]/25 text-[#02BBB8]'
-          : 'bg-[#6FC9C7]/15 border-[#6FC9C7]/30 text-[#6FC9C7]';
+          ? 'bg-brand-600/10 border-brand-600/25 text-brand-600'
+          : 'bg-brand-300/15 border-brand-300/30 text-brand-300';
       case 'REVIEW':
         return isLight
           ? 'bg-amber-50 border-amber-200 text-amber-700'
@@ -86,7 +86,7 @@ export default function AuditRequiredGate() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="w-5 h-5 border-2 border-[#02BBB8] border-t-transparent rounded-full animate-spin" />
+        <div className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -113,7 +113,7 @@ export default function AuditRequiredGate() {
                 {total} total
               </span>
               {inProgress > 0 && (
-                <span className={`px-2.5 py-1 rounded-lg border font-medium ${isLight ? 'bg-[#02BBB8]/10 border-[#02BBB8]/25 text-[#02BBB8]' : 'bg-[#6FC9C7]/15 border-[#6FC9C7]/30 text-[#6FC9C7]'}`}>
+                <span className={`px-2.5 py-1 rounded-lg border font-medium ${isLight ? 'bg-brand-600/10 border-brand-600/25 text-brand-600' : 'bg-brand-300/15 border-brand-300/30 text-brand-300'}`}>
                   {inProgress} in progress
                 </span>
               )}
@@ -134,8 +134,8 @@ export default function AuditRequiredGate() {
             onClick={() => setNewAuditOpen(true)}
             className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${
               isLight
-                ? 'bg-[#02BBB8] text-white hover:bg-[#016663]'
-                : 'bg-[#6FC9C7] text-[#0F172A] hover:bg-[#028E8B]'
+                ? 'bg-brand-600 text-white hover:bg-brand-800'
+                : 'bg-brand-300 text-[#0F172A] hover:bg-brand-700'
             }`}
           >
             <Plus size={14} />
@@ -147,7 +147,7 @@ export default function AuditRequiredGate() {
       {/* Worklist */}
       {audits.length === 0 ? (
         <div className={`${cardBg} border rounded-xl px-6 py-12 text-center border-dashed`}>
-          <div className={`inline-flex items-center justify-center w-12 h-12 rounded-2xl border mb-4 ${isLight ? 'bg-[#02BBB8]/10 border-[#02BBB8]/20 text-[#02BBB8]' : 'bg-[#02BBB8]/15 border-[#02BBB8]/30 text-[#6FC9C7]'}`}>
+          <div className={`inline-flex items-center justify-center w-12 h-12 rounded-2xl border mb-4 ${isLight ? 'bg-brand-600/10 border-brand-600/20 text-brand-600' : 'bg-brand-600/15 border-brand-600/30 text-brand-300'}`}>
             <ClipboardList size={20} />
           </div>
           <h3 className={`${headingColor} font-semibold text-base mb-1`}>No audits yet</h3>
@@ -159,8 +159,8 @@ export default function AuditRequiredGate() {
             onClick={() => setNewAuditOpen(true)}
             className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${
               isLight
-                ? 'bg-[#02BBB8] text-white hover:bg-[#016663]'
-                : 'bg-[#6FC9C7] text-[#0F172A] hover:bg-[#028E8B]'
+                ? 'bg-brand-600 text-white hover:bg-brand-800'
+                : 'bg-brand-300 text-[#0F172A] hover:bg-brand-700'
             }`}
           >
             <Plus size={14} />
@@ -221,7 +221,7 @@ export default function AuditRequiredGate() {
                   {/* Stage — desktop */}
                   <div className="hidden sm:flex items-center gap-2">
                     <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-md border ${isLight ? 'bg-[#F2F2F2] border-[#E2E8F0] text-[#334155]/70' : 'bg-white/[0.04] border-white/10 text-[#CBD5E1]/55'}`}>
-                      <span className={`font-semibold ${isLight ? 'text-[#02BBB8]' : 'text-[#6FC9C7]'}`}>{stage}</span>
+                      <span className={`font-semibold ${isLight ? 'text-brand-600' : 'text-brand-300'}`}>{stage}</span>
                       <span className="hidden lg:inline">{STAGE_LABELS[audit.current_stage]}</span>
                     </span>
                   </div>

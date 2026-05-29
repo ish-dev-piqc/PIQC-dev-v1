@@ -61,11 +61,11 @@ export default function StageNav({ currentStage, viewedStage, onSelectStage }: S
           // Visual classes
           const rowBg = isViewed
             ? isLight
-              ? 'bg-[#02BBB8]/10'
-              : 'bg-[#02BBB8]/15'
+              ? 'bg-brand-600/10'
+              : 'bg-brand-600/15'
             : 'bg-transparent';
           const accent = isViewed
-            ? 'border-l-[#02BBB8]'
+            ? 'border-l-brand-600'
             : 'border-l-transparent';
           const labelColor = isFutureLocked
             ? isLight
@@ -73,8 +73,8 @@ export default function StageNav({ currentStage, viewedStage, onSelectStage }: S
               : 'text-[#CBD5E1]/30'
             : isViewed
             ? isLight
-              ? 'text-[#02BBB8]'
-              : 'text-[#6FC9C7]'
+              ? 'text-brand-600'
+              : 'text-brand-300'
             : isLight
             ? 'text-[#0F172A]'
             : 'text-[#CBD5E1]';
@@ -152,8 +152,8 @@ function StageDot({ done, current, futureLocked, isLight }: StageDotProps) {
       <span
         className={`inline-block w-5 h-5 rounded-full mt-0.5 flex-shrink-0 ring-2 ring-offset-2 ${
           isLight
-            ? 'bg-[#02BBB8] ring-[#02BBB8]/30 ring-offset-[#F8FAFC]'
-            : 'bg-[#6FC9C7] ring-[#6FC9C7]/30 ring-offset-[#020617]'
+            ? 'bg-brand-600 ring-brand-600/30 ring-offset-[#F8FAFC]'
+            : 'bg-brand-300 ring-brand-300/30 ring-offset-[#020617]'
         }`}
       />
     );

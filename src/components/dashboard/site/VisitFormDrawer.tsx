@@ -164,8 +164,8 @@ export default function VisitFormDrawer({ protocolId, defaultParticipantUuid, on
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
   const buttonPrimary = isLight
-    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF] disabled:bg-[#017BC8]/50'
-    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE] disabled:bg-[#74B4DC]/50';
+    ? 'bg-brand-600 text-white hover:bg-brand-800 disabled:bg-brand-600/50'
+    : 'bg-brand-300 text-[#0F172A] hover:bg-brand-700 disabled:bg-brand-300/50';
   const buttonSecondary = isLight
     ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
     : 'bg-[#0F172A] border border-white/5 text-[#CBD5E1] hover:bg-white/[0.04]';
@@ -237,7 +237,7 @@ export default function VisitFormDrawer({ protocolId, defaultParticipantUuid, on
               <select
                 value={participantUuid}
                 onChange={(e) => setParticipantUuid(e.target.value)}
-                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30`}
+                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-brand-600/30`}
                 disabled={submitting}
               >
                 {eligibleParticipants.map((p) => (
@@ -258,7 +258,7 @@ export default function VisitFormDrawer({ protocolId, defaultParticipantUuid, on
                   type="date"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
-                  className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30`}
+                  className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-brand-600/30`}
                   disabled={submitting}
                 />
               </div>
@@ -270,7 +270,7 @@ export default function VisitFormDrawer({ protocolId, defaultParticipantUuid, on
                   type="time"
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
-                  className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30`}
+                  className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-brand-600/30`}
                   disabled={submitting}
                 />
               </div>
@@ -285,7 +285,7 @@ export default function VisitFormDrawer({ protocolId, defaultParticipantUuid, on
                 value={visitName}
                 onChange={(e) => setVisitName(e.target.value)}
                 placeholder="e.g. Make-up Week 2 visit"
-                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30`}
+                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-brand-600/30`}
                 disabled={submitting}
               />
             </div>
@@ -344,7 +344,7 @@ export default function VisitFormDrawer({ protocolId, defaultParticipantUuid, on
                 value={adhocProcedure}
                 onChange={(e) => setAdhocProcedure(e.target.value)}
                 placeholder="Optional: comma-separated ad-hoc additions"
-                className={`mt-2 w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30`}
+                className={`mt-2 w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-brand-600/30`}
                 disabled={submitting}
               />
             </div>
@@ -358,7 +358,7 @@ export default function VisitFormDrawer({ protocolId, defaultParticipantUuid, on
                 onChange={(e) => setPriorNote(e.target.value)}
                 rows={3}
                 placeholder="Optional context for whoever runs this visit."
-                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30 resize-none`}
+                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-brand-600/30 resize-none`}
                 disabled={submitting}
               />
             </div>

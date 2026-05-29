@@ -74,14 +74,14 @@ export default function CompletenessSignalsPanel({
       aria-label="PIQC-detected possibly-missing requirements"
       className={`rounded-2xl border p-4 space-y-3 ${
         isLight
-          ? 'bg-blue-50/40 border-blue-200/60'
-          : 'bg-blue-400/[0.04] border-blue-400/15'
+          ? 'bg-brand-50/40 border-brand-200/60'
+          : 'bg-brand-400/[0.04] border-brand-400/15'
       }`}
     >
       <header className="flex items-start gap-2.5">
         <div
           className={`mt-0.5 inline-flex items-center justify-center w-6 h-6 rounded-md flex-shrink-0 ${
-            isLight ? 'bg-blue-100 text-blue-700' : 'bg-blue-400/15 text-blue-300'
+            isLight ? 'bg-brand-100 text-brand-700' : 'bg-brand-400/15 text-brand-300'
           }`}
           aria-hidden
         >
@@ -123,8 +123,8 @@ export default function CompletenessSignalsPanel({
                     <span
                       className={`inline-flex items-center text-[10px] font-semibold uppercase tracking-wider rounded-md border px-1.5 py-0.5 ${
                         isLight
-                          ? 'text-blue-700 bg-blue-50 border-blue-200'
-                          : 'text-blue-400 bg-blue-400/10 border-blue-400/20'
+                          ? 'text-brand-700 bg-brand-50 border-brand-200'
+                          : 'text-brand-400 bg-brand-400/10 border-brand-400/20'
                       }`}
                     >
                       {confidenceLabel(signal.detection_confidence)}
@@ -204,7 +204,7 @@ export default function CompletenessSignalsPanel({
           onClick={() => setShowAll(true)}
           data-testid="vew-signals-show-all"
           className={`text-[11px] font-medium ${
-            isLight ? 'text-blue-700 hover:text-blue-900' : 'text-blue-300 hover:text-blue-200'
+            isLight ? 'text-brand-700 hover:text-brand-900' : 'text-brand-300 hover:text-brand-200'
           }`}
         >
           Show {hiddenCount} more

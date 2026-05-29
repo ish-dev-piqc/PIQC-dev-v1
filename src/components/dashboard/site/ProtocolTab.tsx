@@ -140,7 +140,7 @@ export default function ProtocolTab() {
                   onClick={handleMaterialize}
                   disabled={materializing}
                   className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-md text-white transition-colors disabled:opacity-50 ${
-                    isLight ? 'bg-[#017BC8] hover:bg-[#0477BF]' : 'bg-[#74B4DC] hover:bg-[#3CACF4]'
+                    isLight ? 'bg-brand-600 hover:bg-brand-800' : 'bg-brand-300 hover:bg-brand-400'
                   }`}
                 >
                   <RefreshCw size={11} className={materializing ? 'animate-spin' : ''} />

@@ -231,7 +231,7 @@ function EditDraftForm({
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={3}
-          className="mt-1 w-full text-sm rounded-md border border-[#E2E8F0] dark:border-white/10 bg-white dark:bg-[#0F172A] px-2.5 py-1.5 text-fg-body focus:outline-none focus:ring-1 focus:ring-[#017BC8]"
+          className="mt-1 w-full text-sm rounded-md border border-[#E2E8F0] dark:border-white/10 bg-white dark:bg-[#0F172A] px-2.5 py-1.5 text-fg-body focus:outline-none focus:ring-1 focus:ring-brand-600"
         />
       </label>
       <label className="block">
@@ -244,7 +244,7 @@ function EditDraftForm({
           onChange={(e) => setNote(e.target.value)}
           rows={2}
           placeholder="Why this edit?"
-          className="mt-1 w-full text-xs rounded-md border border-[#E2E8F0] dark:border-white/10 bg-white dark:bg-[#0F172A] px-2.5 py-1.5 text-fg-body focus:outline-none focus:ring-1 focus:ring-[#017BC8]"
+          className="mt-1 w-full text-xs rounded-md border border-[#E2E8F0] dark:border-white/10 bg-white dark:bg-[#0F172A] px-2.5 py-1.5 text-fg-body focus:outline-none focus:ring-1 focus:ring-brand-600"
         />
       </label>
       <div className="flex items-center gap-2">
@@ -315,7 +315,7 @@ function NoteForm({
           onChange={(e) => setNote(e.target.value)}
           rows={2}
           placeholder={cfg.placeholder}
-          className="mt-1 w-full text-xs rounded-md border border-[#E2E8F0] dark:border-white/10 bg-white dark:bg-[#0F172A] px-2.5 py-1.5 text-fg-body focus:outline-none focus:ring-1 focus:ring-[#017BC8]"
+          className="mt-1 w-full text-xs rounded-md border border-[#E2E8F0] dark:border-white/10 bg-white dark:bg-[#0F172A] px-2.5 py-1.5 text-fg-body focus:outline-none focus:ring-1 focus:ring-brand-600"
         />
       </label>
       <div className="flex items-center gap-2">

@@ -20,8 +20,8 @@ export default function SiteWelcomePanel() {
   const subColor = 'text-fg-sub';
   const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const iconBg = isLight
-    ? 'bg-[#017BC8]/10 border-[#017BC8]/20 text-[#017BC8]'
-    : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]';
+    ? 'bg-brand-600/10 border-brand-600/20 text-brand-600'
+    : 'bg-brand-300/15 border-brand-300/30 text-brand-300';
 
   return (
     <div className="flex items-center justify-center h-full p-6">

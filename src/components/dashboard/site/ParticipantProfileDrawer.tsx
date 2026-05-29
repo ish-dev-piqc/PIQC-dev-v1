@@ -41,7 +41,7 @@ interface Props {
 
 const STATUS_TONE: Record<ParticipantStatus, string> = {
   ACTIVE:         'text-emerald-600 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-400/10 dark:border-emerald-400/20',
-  SCREENING:      'text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-400/10 dark:border-blue-400/20',
+  SCREENING:      'text-brand-600 bg-brand-50 border-brand-200 dark:text-brand-400 dark:bg-brand-400/10 dark:border-brand-400/20',
   SCREEN_FAILURE: 'text-rose-600 bg-rose-50 border-rose-200 dark:text-rose-400 dark:bg-rose-400/10 dark:border-rose-400/20',
   COMPLETED:      'text-purple-600 bg-purple-50 border-purple-200 dark:text-purple-400 dark:bg-purple-400/10 dark:border-purple-400/20',
   WITHDRAWN:      'text-fg-muted bg-transparent border-transparent',

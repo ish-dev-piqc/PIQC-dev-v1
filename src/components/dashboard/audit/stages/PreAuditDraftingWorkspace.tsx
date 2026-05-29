@@ -257,14 +257,14 @@ export default function PreAuditDraftingWorkspace() {
   const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const tabRail = isLight ? 'border-[#E2E8F0]' : 'border-white/5';
   const tabActive = isLight
-    ? 'border-[#02BBB8] text-[#02BBB8]'
-    : 'border-[#6FC9C7] text-[#6FC9C7]';
+    ? 'border-brand-600 text-brand-600'
+    : 'border-brand-300 text-brand-300';
   const tabInactive = isLight
     ? 'border-transparent text-[#334155]/60 hover:text-[#0F172A]'
     : 'border-transparent text-[#CBD5E1]/55 hover:text-white';
   const buttonPrimary = isLight
-    ? 'bg-[#02BBB8] text-white hover:bg-[#016663]'
-    : 'bg-[#6FC9C7] text-[#0F172A] hover:bg-[#028E8B]';
+    ? 'bg-brand-600 text-white hover:bg-brand-800'
+    : 'bg-brand-300 text-[#0F172A] hover:bg-brand-700';
   const buttonApprove = isLight
     ? 'bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-[#CBD5E1]'
     : 'bg-emerald-500 text-[#020617] hover:bg-emerald-400 disabled:bg-white/10 disabled:text-white/35';
@@ -602,7 +602,7 @@ function ConfirmationLetterTab({ deliverable, isLight, onChange }: ConfirmationL
                   >
                     <span
                       className={`mt-1.5 w-1 h-1 rounded-full flex-shrink-0 ${
-                        isLight ? 'bg-[#02BBB8]/55' : 'bg-[#6FC9C7]/55'
+                        isLight ? 'bg-brand-600/55' : 'bg-brand-300/55'
                       }`}
                     />
                     {s}
@@ -965,8 +965,8 @@ function ChecklistTab({ deliverable, isLight, onChange }: ChecklistTabProps) {
                     <span
                       className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
                         isLight
-                          ? 'bg-[#02BBB8]/10 border-[#02BBB8]/25 text-[#02BBB8]'
-                          : 'bg-[#6FC9C7]/15 border-[#6FC9C7]/30 text-[#6FC9C7]'
+                          ? 'bg-brand-600/10 border-brand-600/25 text-brand-600'
+                          : 'bg-brand-300/15 border-brand-300/30 text-brand-300'
                       }`}
                     >
                       Evidence expected
@@ -1095,8 +1095,8 @@ function DeliverableShell({
   const sectionHeader = 'text-fg-label';
   const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const buttonPrimary = isLight
-    ? 'bg-[#02BBB8] text-white hover:bg-[#016663]'
-    : 'bg-[#6FC9C7] text-[#0F172A] hover:bg-[#028E8B]';
+    ? 'bg-brand-600 text-white hover:bg-brand-800'
+    : 'bg-brand-300 text-[#0F172A] hover:bg-brand-700';
   const buttonSecondary = isLight
     ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
     : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]';
@@ -1126,7 +1126,7 @@ function DeliverableShell({
               className={`${mutedColor} text-[11px] mt-1 inline-flex items-center gap-1`}
               title="Drafted from approved Stage 3 + Stage 4 context"
             >
-              <Sparkles size={10} className={isLight ? 'text-[#02BBB8]' : 'text-[#6FC9C7]'} />
+              <Sparkles size={10} className={isLight ? 'text-brand-600' : 'text-brand-300'} />
               Started from: {prefilledSources.join(' + ')}
             </p>
           )}
@@ -1420,8 +1420,8 @@ function ChipListEditor({ label, placeholder, items, onChange, isLight, multilin
           disabled={!draft.trim()}
           className={`flex-shrink-0 inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-md transition-colors ${
             isLight
-              ? 'bg-[#02BBB8] text-white hover:bg-[#016663]'
-              : 'bg-[#6FC9C7] text-[#0F172A] hover:bg-[#028E8B]'
+              ? 'bg-brand-600 text-white hover:bg-brand-800'
+              : 'bg-brand-300 text-[#0F172A] hover:bg-brand-700'
           } disabled:opacity-50`}
         >
           <Plus size={12} />
@@ -1441,8 +1441,8 @@ function inputClass(isLight: boolean): string {
     isLight ? 'bg-white' : 'bg-[#0F172A]'
   } ${
     isLight
-      ? 'border-[#CBD5E1] focus:border-[#02BBB8] focus:ring-1 focus:ring-[#02BBB8]/30'
-      : 'border-white/15 focus:border-[#6FC9C7] focus:ring-1 focus:ring-[#6FC9C7]/30'
+      ? 'border-[#CBD5E1] focus:border-brand-600 focus:ring-1 focus:ring-brand-600/30'
+      : 'border-white/15 focus:border-brand-300 focus:ring-1 focus:ring-brand-300/30'
   } ${isLight ? 'text-[#0F172A]' : 'text-white'} focus:outline-none transition-colors`;
 }
 

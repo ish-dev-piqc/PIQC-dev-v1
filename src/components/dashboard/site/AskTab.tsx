@@ -134,11 +134,11 @@ export default function AskTab({
   const mutedColor = 'text-fg-muted';
   const sectionHeader = 'text-fg-label';
   const stripBg = isLight
-    ? 'bg-[#017BC8]/[0.05] border-[#017BC8]/20'
-    : 'bg-[#74B4DC]/[0.06] border-[#74B4DC]/25';
+    ? 'bg-brand-600/[0.05] border-brand-600/20'
+    : 'bg-brand-300/[0.06] border-brand-300/25';
   const iconBg = isLight
-    ? 'bg-[#017BC8]/10 border-[#017BC8]/20 text-[#017BC8]'
-    : 'bg-[#74B4DC]/15 border-[#74B4DC]/25 text-[#74B4DC]';
+    ? 'bg-brand-600/10 border-brand-600/20 text-brand-600'
+    : 'bg-brand-300/15 border-brand-300/25 text-brand-300';
 
   return (
     <div className="h-full flex flex-col overflow-hidden">

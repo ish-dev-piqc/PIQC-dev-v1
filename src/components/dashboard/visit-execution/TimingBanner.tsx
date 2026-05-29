@@ -73,26 +73,26 @@ export default function TimingBanner({ snapshot }: Props) {
         : 'bg-amber-400/10 border-amber-400/20';
     }
     return isLight
-      ? 'bg-blue-50 border-blue-200'
-      : 'bg-blue-400/10 border-blue-400/20';
+      ? 'bg-brand-50 border-brand-200'
+      : 'bg-brand-400/10 border-brand-400/20';
   })();
 
   const iconTone = (() => {
     if (tone === 'rose') return 'text-rose-700 dark:text-rose-400';
     if (tone === 'amber') return 'text-amber-700 dark:text-amber-400';
-    return 'text-blue-700 dark:text-blue-400';
+    return 'text-brand-700 dark:text-brand-400';
   })();
 
   const labelTone = (() => {
     if (tone === 'rose') return 'text-rose-800 dark:text-rose-300';
     if (tone === 'amber') return 'text-amber-800 dark:text-amber-300';
-    return 'text-blue-800 dark:text-blue-300';
+    return 'text-brand-800 dark:text-brand-300';
   })();
 
   const valueTone = (() => {
     if (tone === 'rose') return 'text-rose-900 dark:text-rose-200';
     if (tone === 'amber') return 'text-amber-900 dark:text-amber-200';
-    return 'text-blue-900 dark:text-blue-200';
+    return 'text-brand-900 dark:text-brand-200';
   })();
 
   const subRowBorder = tone === 'rose'

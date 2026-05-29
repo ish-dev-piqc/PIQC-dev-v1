@@ -128,8 +128,8 @@ export default function VisitDetailDrawer({
     ? 'bg-red-50 border-red-200/80'
     : 'bg-red-500/[0.06] border-red-500/15';
   const buttonPrimary = isLight
-    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
-    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]';
+    ? 'bg-brand-600 text-white hover:bg-brand-800'
+    : 'bg-brand-300 text-[#0F172A] hover:bg-brand-700';
   const buttonSecondary = isLight
     ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
     : 'bg-[#0F172A] border border-white/5 text-[#CBD5E1] hover:bg-white/[0.04]';
@@ -137,8 +137,8 @@ export default function VisitDetailDrawer({
     ? 'border-[#CBD5E1] bg-white'
     : 'border-white/20 bg-[#1E293B]';
   const checkboxDone = isLight
-    ? 'border-[#017BC8] bg-[#017BC8]'
-    : 'border-[#74B4DC] bg-[#74B4DC]';
+    ? 'border-brand-600 bg-brand-600'
+    : 'border-brand-300 bg-brand-300';
 
   const toggleCheck = (i: number) => {
     setChecked((prev) => {
@@ -335,7 +335,7 @@ export default function VisitDetailDrawer({
                     <li key={i} className={`text-sm flex items-start gap-2 ${headingColor}`}>
                       <span
                         className={`mt-1.5 w-1 h-1 rounded-full flex-shrink-0 ${
-                          isLight ? 'bg-[#017BC8]/50' : 'bg-[#74B4DC]/60'
+                          isLight ? 'bg-brand-600/50' : 'bg-brand-300/60'
                         }`}
                       />
                       {p}

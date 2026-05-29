@@ -106,8 +106,8 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
   const isLight = theme === 'light';
   const cardClass = isLight ? 'bg-[#F8FAFC] border-[#E2E8F0]' : 'bg-[#020617] border-white/8';
   const inputClass = isLight
-    ? 'bg-white border-[#E2E8F0] text-[#0F172A] placeholder-[#334155]/25 focus:border-[#017BC8]/60'
-    : 'bg-[#0F172A] border-white/[0.08] text-white placeholder-[#CBD5E1]/25 focus:border-[#017BC8]/60';
+    ? 'bg-white border-[#E2E8F0] text-[#0F172A] placeholder-[#334155]/25 focus:border-brand-600/60'
+    : 'bg-[#0F172A] border-white/[0.08] text-white placeholder-[#CBD5E1]/25 focus:border-brand-600/60';
 
   // First/last split so each is its own field. Initial population reads
   // `user_metadata.first_name` / `user_metadata.last_name` when set, then
@@ -283,7 +283,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
       return (
         <section className={`${cardClass} border rounded-xl p-5`}>
           <div className="flex items-center gap-2 mb-4">
-            <CreditCard size={16} className="text-[#74B4DC]" />
+            <CreditCard size={16} className="text-brand-300" />
             <h3 className={`${isLight ? 'text-[#0F172A]' : 'text-white'} font-medium text-sm`}>Subscription</h3>
           </div>
 
@@ -336,7 +336,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                   type="button"
                   onClick={handleStartPlan('workspace_monthly')}
                   disabled={upgradeLoading}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-colors disabled:opacity-50"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-colors disabled:opacity-50"
                 >
                   Subscribe — $59 / month
                 </button>
@@ -344,7 +344,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                   type="button"
                   onClick={handleStartPlan('workspace_annual')}
                   disabled={upgradeLoading}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-colors disabled:opacity-50"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-colors disabled:opacity-50"
                 >
                   Subscribe — $599 / year
                 </button>
@@ -356,7 +356,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                 type="button"
                 onClick={handleManageBilling}
                 disabled={portalLoading}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-colors disabled:opacity-50"
               >
                 {portalLoading ? (
                   <>
@@ -416,7 +416,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                 type="button"
                 onClick={handleManageBilling}
                 disabled={portalLoading}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-colors disabled:opacity-50"
               >
                 {portalLoading ? (
                   <>
@@ -463,7 +463,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                   type="button"
                   onClick={handleStartPlan('pilot')}
                   disabled={upgradeLoading}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-colors disabled:opacity-50"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-colors disabled:opacity-50"
                 >
                   Start Pilot — $25 / 30 days
                 </button>
@@ -471,7 +471,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                   type="button"
                   onClick={handleStartPlan('workspace_monthly')}
                   disabled={upgradeLoading}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-colors disabled:opacity-50"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-colors disabled:opacity-50"
                 >
                   Start Workspace — $59 / month
                 </button>
@@ -479,7 +479,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                   type="button"
                   onClick={handleStartPlan('workspace_annual')}
                   disabled={upgradeLoading}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-colors disabled:opacity-50"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-colors disabled:opacity-50"
                 >
                   Switch to Annual — $599 / year
                 </button>
@@ -495,7 +495,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
         <div className="space-y-6">
           <section className={`${cardClass} border rounded-xl p-5`}>
             <div className="flex items-center gap-2 mb-4">
-              <UserCircle2 size={16} className="text-[#74B4DC]" />
+              <UserCircle2 size={16} className="text-brand-300" />
               <h3 className={`${isLight ? 'text-[#0F172A]' : 'text-white'} font-medium text-sm`}>Account Profile</h3>
             </div>
 
@@ -567,12 +567,12 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
               </div>
 
               {profileError && <p className="text-sm text-red-500">{profileError}</p>}
-              {profileMessage && <p className="text-sm text-blue-500">{profileMessage}</p>}
+              {profileMessage && <p className="text-sm text-brand-500">{profileMessage}</p>}
 
               <button
                 type="submit"
                 disabled={profileSaving}
-                className="px-4 py-2 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-colors disabled:opacity-50"
+                className="px-4 py-2 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-colors disabled:opacity-50"
               >
                 {profileSaving ? 'Saving...' : 'Save profile'}
               </button>
@@ -625,7 +625,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                   onClick={() => onSectionChange(item.id)}
                   className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                     selected
-                      ? 'bg-[#017BC8]/15 text-[#017BC8]'
+                      ? 'bg-brand-600/15 text-brand-600'
                       : isLight
                         ? 'text-[#334155]/65 hover:bg-[#0F172A]/[0.05] hover:text-[#0F172A]'
                         : 'text-[#CBD5E1]/60 hover:bg-white/[0.05] hover:text-white'
@@ -884,7 +884,7 @@ export default function Dashboard({
                     isActive ? activeTabClass : inactiveTabClass
                   }`}
                 >
-                  <Icon size={15} className={isActive ? 'text-[#74B4DC]' : ''} />
+                  <Icon size={15} className={isActive ? 'text-brand-300' : ''} />
                   {tab.label}
                   {showAwaitingBadge && (
                     <span

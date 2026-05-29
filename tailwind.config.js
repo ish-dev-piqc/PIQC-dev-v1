@@ -78,6 +78,36 @@ export default {
         },
 
         // =====================================================================
+        // Brand (mode-aware) — CSS-variable-backed. Default resolves to the
+        // blue scale (Site Mode / SOTR / landing / auth). Components inside a
+        // `.mode-audit` root pick up the teal scale automatically.
+        //
+        // Variable values live in src/index.css. Using the
+        // `rgb(var(--brand-N) / <alpha-value>)` form means Tailwind's opacity
+        // modifiers work: `bg-brand-600/30` renders as
+        // `rgb(<active-brand-600-rgb> / 0.3)`.
+        //
+        // Usage:
+        //   bg-brand-600       → primary CTA color, mode-aware
+        //   text-brand-500     → brand text accent
+        //   border-brand-300   → light brand border
+        //   hover:bg-brand-700 → hover state for primary CTA
+        // =====================================================================
+        brand: {
+          50:  'rgb(var(--brand-50)  / <alpha-value>)',
+          100: 'rgb(var(--brand-100) / <alpha-value>)',
+          200: 'rgb(var(--brand-200) / <alpha-value>)',
+          300: 'rgb(var(--brand-300) / <alpha-value>)',
+          400: 'rgb(var(--brand-400) / <alpha-value>)',
+          500: 'rgb(var(--brand-500) / <alpha-value>)',
+          600: 'rgb(var(--brand-600) / <alpha-value>)',
+          700: 'rgb(var(--brand-700) / <alpha-value>)',
+          800: 'rgb(var(--brand-800) / <alpha-value>)',
+          900: 'rgb(var(--brand-900) / <alpha-value>)',
+          950: 'rgb(var(--brand-950) / <alpha-value>)',
+        },
+
+        // =====================================================================
         // DEPRECATED — `navy` palette retained for one PR cycle to avoid
         // breaking any lingering references. Will be removed in a follow-up
         // PR once a clean build confirms no usages remain. Do NOT add new
@@ -100,30 +130,27 @@ export default {
       },
 
       // =======================================================================
-      // Decorative gradients. The blue variants use the new brand blue-500
-      // (#1595D1) at low alpha. The teal variants use teal-500 (#06BFAD)
-      // for Audit Mode surfaces.
+      // Decorative gradients. Use the mode-aware `--brand-500` CSS variable
+      // so glows shift hue based on the active mode without any per-mode
+      // class names needed at the call site. The legacy `-teal` variants
+      // are removed because `bg-hero-glow` is now mode-aware.
       // =======================================================================
       backgroundImage: {
-        'hero-glow':      'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(21,149,209,0.25) 0%, transparent 70%)',
-        'card-glow':      'radial-gradient(ellipse 60% 60% at 50%   0%, rgba(21,149,209,0.08) 0%, transparent 70%)',
-        'hero-glow-teal': 'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(6,191,173,0.25)  0%, transparent 70%)',
-        'card-glow-teal': 'radial-gradient(ellipse 60% 60% at 50%   0%, rgba(6,191,173,0.08)  0%, transparent 70%)',
+        'hero-glow': 'radial-gradient(ellipse 80% 60% at 50% -10%, rgb(var(--brand-500) / 0.25) 0%, transparent 70%)',
+        'card-glow': 'radial-gradient(ellipse 60% 60% at 50%   0%, rgb(var(--brand-500) / 0.08) 0%, transparent 70%)',
       },
 
       // =======================================================================
-      // Shadows. Card shadows stay neutral. Button + card-hover shadows use
-      // the new brand blue. Audit Mode components should use the `-teal`
-      // variants.
+      // Shadows. Card-hover, btn, btn-hover all use the mode-aware
+      // `--brand-N` CSS variables so a Site Mode button glows blue and an
+      // Audit Mode button glows teal, automatically. The legacy `-teal`
+      // suffix variants are no longer needed.
       // =======================================================================
       boxShadow: {
-        'card':            '0 1px 3px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.3)',
-        'card-hover':      '0 4px 24px rgba(21,149,209,0.15), 0 1px 3px rgba(0,0,0,0.5)',
-        'card-hover-teal': '0 4px 24px rgba(6,191,173,0.15),  0 1px 3px rgba(0,0,0,0.5)',
-        'btn':             '0 2px 8px rgba(21,149,209,0.4)',
-        'btn-hover':       '0 4px 16px rgba(21,149,209,0.5)',
-        'btn-teal':        '0 2px 8px rgba(6,191,173,0.4)',
-        'btn-hover-teal':  '0 4px 16px rgba(6,191,173,0.5)',
+        'card':       '0 1px 3px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.3)',
+        'card-hover': '0 4px 24px rgb(var(--brand-500) / 0.15), 0 1px 3px rgba(0,0,0,0.5)',
+        'btn':        '0 2px 8px rgb(var(--brand-600) / 0.4)',
+        'btn-hover':  '0 4px 16px rgb(var(--brand-600) / 0.5)',
       },
 
       borderRadius: {

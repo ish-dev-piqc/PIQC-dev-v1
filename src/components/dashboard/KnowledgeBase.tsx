@@ -271,8 +271,8 @@ export function UploadForm({
   const canSubmit = (mode === 'pdf' && pdfFile != null) || (mode === 'text' && content.trim().length > 0);
 
   const inputClass = isLight
-    ? 'bg-white border-[#E2E8F0] text-[#0F172A] placeholder-[#334155]/30 focus:border-[#017BC8]/50'
-    : 'bg-[#020617] border-white/8 text-white placeholder-[#334155] focus:border-[#017BC8]/40';
+    ? 'bg-white border-[#E2E8F0] text-[#0F172A] placeholder-[#334155]/30 focus:border-brand-600/50'
+    : 'bg-[#020617] border-white/8 text-white placeholder-[#334155] focus:border-brand-600/40';
 
   const labelClass = isLight ? 'text-[#334155]/50' : 'text-[#CBD5E1]/40';
 
@@ -286,7 +286,7 @@ export function UploadForm({
           onClick={() => setMode('pdf')}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             mode === 'pdf'
-              ? 'bg-[#017BC8] text-white shadow-lg shadow-[#017BC8]/20'
+              ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/20'
               : isLight ? 'text-[#334155]/50 hover:text-[#334155]/80' : 'text-[#CBD5E1]/40 hover:text-[#CBD5E1]/70'
           }`}
         >
@@ -298,7 +298,7 @@ export function UploadForm({
           onClick={() => setMode('text')}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             mode === 'text'
-              ? 'bg-[#017BC8] text-white shadow-lg shadow-[#017BC8]/20'
+              ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/20'
               : isLight ? 'text-[#334155]/50 hover:text-[#334155]/80' : 'text-[#CBD5E1]/40 hover:text-[#CBD5E1]/70'
           }`}
         >
@@ -392,9 +392,9 @@ export function UploadForm({
             onClick={() => fileInputRef.current?.click()}
             className={`relative cursor-pointer border-2 border-dashed rounded-xl p-8 text-center transition-all ${
               dragOver
-                ? 'border-[#017BC8]/60 bg-[#017BC8]/5'
+                ? 'border-brand-600/60 bg-brand-600/5'
                 : pdfFile
-                ? 'border-blue-500/40 bg-blue-500/5'
+                ? 'border-brand-500/40 bg-brand-500/5'
                 : isLight
                 ? 'border-[#d0d8e0] bg-[#F8FAFC] hover:border-[#b0bcc8] hover:bg-[#F2F2F2]'
                 : 'border-white/10 bg-[#020617] hover:border-white/20 hover:bg-white/[0.02]'
@@ -409,17 +409,17 @@ export function UploadForm({
             />
             {pdfFile ? (
               <div className="flex flex-col items-center gap-2">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-                  <FileText size={18} className="text-blue-400" />
+                <div className="w-10 h-10 rounded-xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center">
+                  <FileText size={18} className="text-brand-400" />
                 </div>
-                <p className="text-blue-600 text-sm font-medium">{pdfFile.name}</p>
+                <p className="text-brand-600 text-sm font-medium">{pdfFile.name}</p>
                 <p className={`text-xs ${isLight ? 'text-[#334155]/35' : 'text-[#CBD5E1]/25'}`}>{(pdfFile.size / 1024 / 1024).toFixed(2)} MB</p>
                 <p className={`text-xs ${isLight ? 'text-[#334155]/35' : 'text-[#CBD5E1]/25'}`}>Click to change file</p>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-2">
-                <div className="w-10 h-10 rounded-xl bg-[#017BC8]/10 border border-[#017BC8]/20 flex items-center justify-center">
-                  <Upload size={18} className="text-[#74B4DC]" />
+                <div className="w-10 h-10 rounded-xl bg-brand-600/10 border border-brand-600/20 flex items-center justify-center">
+                  <Upload size={18} className="text-brand-300" />
                 </div>
                 <p className={`text-sm font-medium ${isLight ? 'text-[#334155]/80' : 'text-[#CBD5E1]/70'}`}>Drop PDF here or click to browse</p>
                 <p className={`text-xs ${isLight ? 'text-[#334155]/35' : 'text-[#CBD5E1]/25'}`}>Parsed with Reducto — tables, headers, and structure preserved</p>
@@ -452,10 +452,10 @@ export function UploadForm({
       {state.status !== 'idle' && (
         <div className={`flex items-start gap-3 rounded-xl px-4 py-3 text-sm border ${
           state.status === 'success'
-            ? 'bg-blue-400/5 border-blue-400/20 text-blue-600'
+            ? 'bg-brand-400/5 border-brand-400/20 text-brand-600'
             : state.status === 'error'
             ? 'bg-red-400/5 border-red-400/20 text-red-500'
-            : 'bg-[#017BC8]/5 border-[#017BC8]/20 text-[#74B4DC]'
+            : 'bg-brand-600/5 border-brand-600/20 text-brand-300'
         }`}>
           {(state.status === 'uploading' || state.status === 'parsing') && <Loader size={16} className="animate-spin flex-shrink-0 mt-0.5" />}
           {state.status === 'success' && <CheckCircle size={16} className="flex-shrink-0 mt-0.5" />}
@@ -463,7 +463,7 @@ export function UploadForm({
           <span>
             {state.message}
             {state.status === 'success' && state.chunks !== undefined && (
-              <span className="text-blue-500 ml-1">({state.chunks} chunks embedded)</span>
+              <span className="text-brand-500 ml-1">({state.chunks} chunks embedded)</span>
             )}
           </span>
         </div>
@@ -473,7 +473,7 @@ export function UploadForm({
         <button
           type="submit"
           disabled={!canSubmit || state.status === 'uploading' || state.status === 'parsing'}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#017BC8] hover:bg-[#1595D1] disabled:opacity-30 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 disabled:opacity-30 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
         >
           {(state.status === 'uploading' || state.status === 'parsing') ? (
             <Loader size={15} className="animate-spin" />
@@ -573,8 +573,8 @@ function DocumentList({ refreshKey, isLight }: { refreshKey: number; isLight: bo
               }`}
             >
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-[#017BC8]/10 border border-[#017BC8]/20 flex items-center justify-center flex-shrink-0">
-                  <FileText size={14} className="text-[#74B4DC]" />
+                <div className="w-8 h-8 rounded-lg bg-brand-600/10 border border-brand-600/20 flex items-center justify-center flex-shrink-0">
+                  <FileText size={14} className="text-brand-300" />
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
@@ -638,8 +638,8 @@ export default function KnowledgeBase() {
         isLight ? 'bg-[#F8FAFC] border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5'
       }`}>
         <div className="flex items-center gap-3 mb-5">
-          <div className="w-8 h-8 rounded-lg bg-[#017BC8]/15 border border-[#017BC8]/25 flex items-center justify-center">
-            <Upload size={15} className="text-[#74B4DC]" />
+          <div className="w-8 h-8 rounded-lg bg-brand-600/15 border border-brand-600/25 flex items-center justify-center">
+            <Upload size={15} className="text-brand-300" />
           </div>
           <div>
             <h3 className={`font-medium text-sm ${isLight ? 'text-[#0F172A]' : 'text-white'}`}>Add Document</h3>

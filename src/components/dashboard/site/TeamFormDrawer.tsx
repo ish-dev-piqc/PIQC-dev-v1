@@ -107,8 +107,8 @@ export default function TeamFormDrawer({ mode, protocolId, initial, onClose }: T
   const labelColor = 'text-fg-label';
   const subColor = 'text-fg-sub';
   const buttonPrimary = isLight
-    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF] disabled:bg-[#017BC8]/50'
-    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE] disabled:bg-[#74B4DC]/50';
+    ? 'bg-brand-600 text-white hover:bg-brand-800 disabled:bg-brand-600/50'
+    : 'bg-brand-300 text-[#0F172A] hover:bg-brand-700 disabled:bg-brand-300/50';
   const buttonSecondary = isLight
     ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
     : 'bg-[#0F172A] border border-white/5 text-[#CBD5E1] hover:bg-white/[0.04]';
@@ -180,7 +180,7 @@ export default function TeamFormDrawer({ mode, protocolId, initial, onClose }: T
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Sarah Chen"
-                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30`}
+                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-brand-600/30`}
                 disabled={submitting}
               />
             </div>
@@ -192,7 +192,7 @@ export default function TeamFormDrawer({ mode, protocolId, initial, onClose }: T
               <select
                 value={role}
                 onChange={(e) => setRole(e.target.value as TeamRole)}
-                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30`}
+                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-brand-600/30`}
                 disabled={submitting}
               >
                 {ROLE_OPTIONS.map((r) => (
@@ -212,7 +212,7 @@ export default function TeamFormDrawer({ mode, protocolId, initial, onClose }: T
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@example.com"
-                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30`}
+                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-brand-600/30`}
                 disabled={submitting}
               />
             </div>
@@ -226,7 +226,7 @@ export default function TeamFormDrawer({ mode, protocolId, initial, onClose }: T
                 value={delegatedTasksText}
                 onChange={(e) => setDelegatedTasksText(e.target.value)}
                 placeholder="Comma-separated, e.g. Informed consent, Vitals, ECG"
-                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30`}
+                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-brand-600/30`}
                 disabled={submitting}
               />
               <p className={`${subColor} text-[11px] mt-1`}>Split by commas. Trailing/leading spaces trimmed.</p>
@@ -241,7 +241,7 @@ export default function TeamFormDrawer({ mode, protocolId, initial, onClose }: T
                   type="date"
                   value={certifiedThrough}
                   onChange={(e) => setCertifiedThrough(e.target.value)}
-                  className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30`}
+                  className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-brand-600/30`}
                   disabled={submitting}
                 />
               </div>
@@ -252,7 +252,7 @@ export default function TeamFormDrawer({ mode, protocolId, initial, onClose }: T
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value as TeamMemberStatus)}
-                  className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30`}
+                  className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-brand-600/30`}
                   disabled={submitting}
                 >
                   {STATUS_OPTIONS.map((s) => (
@@ -273,7 +273,7 @@ export default function TeamFormDrawer({ mode, protocolId, initial, onClose }: T
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
                 placeholder="Optional context (e.g. on leave through Sept; GCP cert pending re-test)."
-                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-[#017BC8]/30 resize-none`}
+                className={`w-full px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-brand-600/30 resize-none`}
                 disabled={submitting}
               />
             </div>
