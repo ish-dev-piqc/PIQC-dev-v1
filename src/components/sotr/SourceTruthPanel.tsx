@@ -182,7 +182,7 @@ function SourceNavigator({ count, index, onPrev, onNext }: NavProps) {
           onClick={onPrev}
           disabled={atStart}
           aria-label="Previous source"
-          className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-[#e2e8ee] dark:border-white/10 text-fg-body hover:bg-[#f5f7fa] dark:hover:bg-white/[0.04] disabled:opacity-40 disabled:cursor-not-allowed"
+          className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-[#E2E8F0] dark:border-white/10 text-fg-body hover:bg-[#F8FAFC] dark:hover:bg-white/[0.04] disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <ChevronLeft size={14} />
         </button>
@@ -191,7 +191,7 @@ function SourceNavigator({ count, index, onPrev, onNext }: NavProps) {
           onClick={onNext}
           disabled={atEnd}
           aria-label="Next source"
-          className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-[#e2e8ee] dark:border-white/10 text-fg-body hover:bg-[#f5f7fa] dark:hover:bg-white/[0.04] disabled:opacity-40 disabled:cursor-not-allowed"
+          className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-[#E2E8F0] dark:border-white/10 text-fg-body hover:bg-[#F8FAFC] dark:hover:bg-white/[0.04] disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <ChevronRight size={14} />
         </button>
@@ -228,9 +228,9 @@ function SourceCard({
   return (
     <article
       data-testid="sotr-source-card"
-      className="border border-[#e2e8ee] dark:border-white/5 rounded-xl bg-white dark:bg-[#131a22] overflow-hidden"
+      className="border border-[#E2E8F0] dark:border-white/5 rounded-xl bg-white dark:bg-[#0F172A] overflow-hidden"
     >
-      <div className="px-4 py-3 border-b border-[#f0f3f6] dark:border-white/[0.04]">
+      <div className="px-4 py-3 border-b border-[#F2F2F2] dark:border-white/[0.04]">
         <p
           data-testid="sotr-source-header"
           className="text-fg-heading text-xs font-semibold leading-relaxed"
@@ -255,7 +255,7 @@ function SourceCard({
         {source.source_text ? (
           <blockquote
             data-testid="sotr-quoted-text"
-            className="border-l-2 border-[#4a6fa5] dark:border-[#6e8fb5] pl-3 text-fg-body text-sm leading-relaxed whitespace-pre-wrap"
+            className="border-l-2 border-[#017BC8] dark:border-[#74B4DC] pl-3 text-fg-body text-sm leading-relaxed whitespace-pre-wrap"
           >
             {source.source_text}
           </blockquote>

@@ -103,23 +103,23 @@ export default function RiskSummaryPanel({
   // ---------------------------------------------------------------------------
   // Theme tokens
   // ---------------------------------------------------------------------------
-  const panelBg = isLight ? 'bg-[#f9fafc] border-[#e2e8ee]' : 'bg-[#0e141b] border-white/5';
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
+  const panelBg = isLight ? 'bg-[#F8FAFC] border-[#E2E8F0]' : 'bg-[#020617] border-white/5';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const headingColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
   const sectionHeader = 'text-fg-label';
-  const inputBorder = isLight ? 'border-[#cbd2db] focus:border-[#4a6fa5]' : 'border-white/15 focus:border-[#6e8fb5]';
-  const inputBg = isLight ? 'bg-white' : 'bg-[#131a22]';
+  const inputBorder = isLight ? 'border-[#CBD5E1] focus:border-[#017BC8]' : 'border-white/15 focus:border-[#74B4DC]';
+  const inputBg = isLight ? 'bg-white' : 'bg-[#0F172A]';
   const buttonPrimary = isLight
-    ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
-    : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]';
+    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
+    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]';
   const buttonSecondary = isLight
-    ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-    : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]';
+    ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+    : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]';
   const buttonApprove = isLight
     ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-    : 'bg-emerald-500 text-[#0d1118] hover:bg-emerald-400';
+    : 'bg-emerald-500 text-[#020617] hover:bg-emerald-400';
 
   // ---------------------------------------------------------------------------
   // Actions — backed by audit_mode_* RPCs in
@@ -206,7 +206,7 @@ export default function RiskSummaryPanel({
   const aside = (
     <aside aria-label="Vendor risk summary" className={wrapperClass}>
       {/* Header */}
-      <div className={`px-5 pt-5 pb-3 border-b ${isLight ? 'border-[#e2e8ee]' : 'border-white/5'} flex-shrink-0`}>
+      <div className={`px-5 pt-5 pb-3 border-b ${isLight ? 'border-[#E2E8F0]' : 'border-white/5'} flex-shrink-0`}>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className={`text-[10px] uppercase tracking-wider font-semibold ${sectionHeader}`}>
@@ -338,7 +338,7 @@ export default function RiskSummaryPanel({
                     <li key={f} className={`text-xs flex items-start gap-2 ${headingColor}`}>
                       <span
                         className={`mt-1.5 w-1 h-1 rounded-full flex-shrink-0 ${
-                          isLight ? 'bg-[#4a6fa5]/55' : 'bg-[#6e8fb5]/55'
+                          isLight ? 'bg-[#017BC8]/55' : 'bg-[#74B4DC]/55'
                         }`}
                       />
                       <span className="flex-1 flex items-center gap-1.5 flex-wrap">
@@ -379,7 +379,7 @@ export default function RiskSummaryPanel({
 
       {/* Footer actions */}
       {summary && (
-        <div className={`px-5 py-3 border-t ${isLight ? 'border-[#e2e8ee]' : 'border-white/5'} flex-shrink-0 space-y-2`}>
+        <div className={`px-5 py-3 border-t ${isLight ? 'border-[#E2E8F0]' : 'border-white/5'} flex-shrink-0 space-y-2`}>
           {confirmingApprove && (
             <div
               className={`rounded-md border px-2.5 py-2 ${
@@ -512,8 +512,8 @@ interface EmptyStateProps {
 
 function EmptyState({ isLight, cardBg, subColor, buttonPrimary, onGenerate }: EmptyStateProps) {
   const iconBg = isLight
-    ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/20 text-[#4a6fa5]'
-    : 'bg-[#4a6fa5]/15 border-[#4a6fa5]/30 text-[#6e8fb5]';
+    ? 'bg-[#017BC8]/10 border-[#017BC8]/20 text-[#017BC8]'
+    : 'bg-[#017BC8]/15 border-[#017BC8]/30 text-[#74B4DC]';
   return (
     <div className={`${cardBg} border rounded-lg p-4`}>
       <div className={`inline-flex items-center justify-center w-9 h-9 rounded-xl border mb-3 ${iconBg}`}>

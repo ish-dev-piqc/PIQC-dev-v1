@@ -36,7 +36,7 @@ export default function ForgotPassword({ onViewChange }: ForgotPasswordProps) {
   };
 
   return (
-    <div className="min-h-screen bg-[#0d1118] flex flex-col items-center justify-center px-4 relative overflow-hidden">
+    <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center px-4 relative overflow-hidden">
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
@@ -47,33 +47,33 @@ export default function ForgotPassword({ onViewChange }: ForgotPasswordProps) {
       <div className="relative z-10 w-full max-w-sm">
         <button
           onClick={() => onViewChange('login')}
-          className="flex items-center gap-1.5 text-sm text-[#d2d7e0]/40 hover:text-[#d2d7e0]/70 transition-colors mb-8 group"
+          className="flex items-center gap-1.5 text-sm text-[#CBD5E1]/40 hover:text-[#CBD5E1]/70 transition-colors mb-8 group"
         >
           <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
           Back to sign in
         </button>
 
         <div className="flex items-center gap-2.5 mb-8">
-          <div className="w-8 h-8 rounded-lg bg-[#4a6fa5] flex items-center justify-center shadow-btn">
+          <div className="w-8 h-8 rounded-lg bg-[#017BC8] flex items-center justify-center shadow-btn">
             <Activity className="w-4 h-4 text-white" strokeWidth={2.5} />
           </div>
           <span className="text-[15px] font-semibold text-white tracking-tight">
-            PIQ<span className="text-[#6e8fb5]">Clinical</span>
+            PIQ<span className="text-[#74B4DC]">Clinical</span>
           </span>
         </div>
 
         {sent ? (
           <div className="text-center">
-            <div className="w-12 h-12 rounded-full bg-[#4a6fa5]/15 border border-[#4a6fa5]/25 flex items-center justify-center mx-auto mb-5">
-              <CheckCircle size={22} className="text-[#6e8fb5]" />
+            <div className="w-12 h-12 rounded-full bg-[#017BC8]/15 border border-[#017BC8]/25 flex items-center justify-center mx-auto mb-5">
+              <CheckCircle size={22} className="text-[#74B4DC]" />
             </div>
             <h1 className="text-2xl font-bold text-white mb-2">Check your email</h1>
-            <p className="text-[#d2d7e0]/45 text-sm leading-relaxed mb-6">
-              We sent a password reset link to <span className="text-[#d2d7e0]/70 font-medium">{email}</span>. Check your inbox and follow the instructions.
+            <p className="text-[#CBD5E1]/45 text-sm leading-relaxed mb-6">
+              We sent a password reset link to <span className="text-[#CBD5E1]/70 font-medium">{email}</span>. Check your inbox and follow the instructions.
             </p>
             <button
               onClick={() => onViewChange('login')}
-              className="text-sm text-[#6e8fb5] hover:text-[#87b5c7] transition-colors font-medium"
+              className="text-sm text-[#74B4DC] hover:text-[#87b5c7] transition-colors font-medium"
             >
               Return to sign in
             </button>
@@ -82,14 +82,14 @@ export default function ForgotPassword({ onViewChange }: ForgotPasswordProps) {
           <>
             <div className="mb-8">
               <h1 className="text-2xl font-bold text-white mb-1.5">Reset your password</h1>
-              <p className="text-[#d2d7e0]/45 text-sm">
+              <p className="text-[#CBD5E1]/45 text-sm">
                 Enter your email and we'll send you a reset link.
               </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[#d2d7e0]/70 mb-1.5">
+                <label className="block text-sm font-medium text-[#CBD5E1]/70 mb-1.5">
                   Email address
                 </label>
                 <input
@@ -99,7 +99,7 @@ export default function ForgotPassword({ onViewChange }: ForgotPasswordProps) {
                   required
                   autoComplete="email"
                   placeholder="you@organization.com"
-                  className="w-full px-3.5 py-2.5 bg-[#131a22] border border-white/[0.08] rounded-lg text-white placeholder-[#d2d7e0]/20 text-sm focus:outline-none focus:border-[#4a6fa5]/60 focus:ring-1 focus:ring-[#4a6fa5]/30 transition-all"
+                  className="w-full px-3.5 py-2.5 bg-[#0F172A] border border-white/[0.08] rounded-lg text-white placeholder-[#CBD5E1]/20 text-sm focus:outline-none focus:border-[#017BC8]/60 focus:ring-1 focus:ring-[#017BC8]/30 transition-all"
                 />
               </div>
 
@@ -112,7 +112,7 @@ export default function ForgotPassword({ onViewChange }: ForgotPasswordProps) {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-all duration-150 shadow-btn hover:shadow-btn-hover disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+                className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-all duration-150 shadow-btn hover:shadow-btn-hover disabled:opacity-50 disabled:cursor-not-allowed mt-2"
               >
                 {loading ? 'Sending...' : 'Send reset link'}
               </button>

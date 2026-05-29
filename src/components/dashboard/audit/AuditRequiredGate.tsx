@@ -52,10 +52,10 @@ export default function AuditRequiredGate() {
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
   const sectionHeader = 'text-fg-label';
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
-  const rowHover = isLight ? 'hover:bg-[#f5f7fa]' : 'hover:bg-white/[0.02]';
-  const divider = isLight ? 'divide-[#f0f4f8]' : 'divide-white/[0.03]';
-  const tableHeaderBg = isLight ? 'bg-[#f9fafc] border-[#eef2f6]' : 'bg-white/[0.02] border-white/[0.04]';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
+  const rowHover = isLight ? 'hover:bg-[#F8FAFC]' : 'hover:bg-white/[0.02]';
+  const divider = isLight ? 'divide-[#F2F2F2]' : 'divide-white/[0.03]';
+  const tableHeaderBg = isLight ? 'bg-[#F8FAFC] border-[#F2F2F2]' : 'bg-white/[0.02] border-white/[0.04]';
 
   const total = audits.length;
   const inProgress = audits.filter((a) => a.status === 'IN_PROGRESS').length;
@@ -66,8 +66,8 @@ export default function AuditRequiredGate() {
     switch (status) {
       case 'IN_PROGRESS':
         return isLight
-          ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/25 text-[#4a6fa5]'
-          : 'bg-[#6e8fb5]/15 border-[#6e8fb5]/30 text-[#6e8fb5]';
+          ? 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]'
+          : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]';
       case 'REVIEW':
         return isLight
           ? 'bg-amber-50 border-amber-200 text-amber-700'
@@ -78,15 +78,15 @@ export default function AuditRequiredGate() {
           : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300';
       default:
         return isLight
-          ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]/65'
-          : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]/55';
+          ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/65'
+          : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/55';
     }
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="w-5 h-5 border-2 border-[#4a6fa5] border-t-transparent rounded-full animate-spin" />
+        <div className="w-5 h-5 border-2 border-[#017BC8] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -109,11 +109,11 @@ export default function AuditRequiredGate() {
           {/* Stat chips */}
           {total > 0 && (
             <div className="flex items-center gap-2 flex-wrap text-xs">
-              <span className={`px-2.5 py-1 rounded-lg border font-medium ${isLight ? 'bg-white border-[#e2e8ee] text-[#374152]/70' : 'bg-[#131a22] border-white/10 text-[#d2d7e0]/60'}`}>
+              <span className={`px-2.5 py-1 rounded-lg border font-medium ${isLight ? 'bg-white border-[#E2E8F0] text-[#334155]/70' : 'bg-[#0F172A] border-white/10 text-[#CBD5E1]/60'}`}>
                 {total} total
               </span>
               {inProgress > 0 && (
-                <span className={`px-2.5 py-1 rounded-lg border font-medium ${isLight ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/25 text-[#4a6fa5]' : 'bg-[#6e8fb5]/15 border-[#6e8fb5]/30 text-[#6e8fb5]'}`}>
+                <span className={`px-2.5 py-1 rounded-lg border font-medium ${isLight ? 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]' : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]'}`}>
                   {inProgress} in progress
                 </span>
               )}
@@ -134,8 +134,8 @@ export default function AuditRequiredGate() {
             onClick={() => setNewAuditOpen(true)}
             className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${
               isLight
-                ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
-                : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]'
+                ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
+                : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]'
             }`}
           >
             <Plus size={14} />
@@ -147,7 +147,7 @@ export default function AuditRequiredGate() {
       {/* Worklist */}
       {audits.length === 0 ? (
         <div className={`${cardBg} border rounded-xl px-6 py-12 text-center border-dashed`}>
-          <div className={`inline-flex items-center justify-center w-12 h-12 rounded-2xl border mb-4 ${isLight ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/20 text-[#4a6fa5]' : 'bg-[#4a6fa5]/15 border-[#4a6fa5]/30 text-[#6e8fb5]'}`}>
+          <div className={`inline-flex items-center justify-center w-12 h-12 rounded-2xl border mb-4 ${isLight ? 'bg-[#017BC8]/10 border-[#017BC8]/20 text-[#017BC8]' : 'bg-[#017BC8]/15 border-[#017BC8]/30 text-[#74B4DC]'}`}>
             <ClipboardList size={20} />
           </div>
           <h3 className={`${headingColor} font-semibold text-base mb-1`}>No audits yet</h3>
@@ -159,8 +159,8 @@ export default function AuditRequiredGate() {
             onClick={() => setNewAuditOpen(true)}
             className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${
               isLight
-                ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
-                : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]'
+                ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
+                : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]'
             }`}
           >
             <Plus size={14} />
@@ -212,7 +212,7 @@ export default function AuditRequiredGate() {
                           </span>
                         </>
                       )}
-                      <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border sm:hidden ${isLight ? 'bg-[#f0f4f8] border-[#d8dfe8] text-[#374152]/70' : 'bg-white/[0.04] border-white/10 text-[#d2d7e0]/55'}`}>
+                      <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border sm:hidden ${isLight ? 'bg-[#F2F2F2] border-[#E2E8F0] text-[#334155]/70' : 'bg-white/[0.04] border-white/10 text-[#CBD5E1]/55'}`}>
                         {AUDIT_TYPE_LABELS[audit.audit_type]}
                       </span>
                     </div>
@@ -220,8 +220,8 @@ export default function AuditRequiredGate() {
 
                   {/* Stage — desktop */}
                   <div className="hidden sm:flex items-center gap-2">
-                    <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-md border ${isLight ? 'bg-[#f0f4f8] border-[#d8dfe8] text-[#374152]/70' : 'bg-white/[0.04] border-white/10 text-[#d2d7e0]/55'}`}>
-                      <span className={`font-semibold ${isLight ? 'text-[#4a6fa5]' : 'text-[#6e8fb5]'}`}>{stage}</span>
+                    <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-md border ${isLight ? 'bg-[#F2F2F2] border-[#E2E8F0] text-[#334155]/70' : 'bg-white/[0.04] border-white/10 text-[#CBD5E1]/55'}`}>
+                      <span className={`font-semibold ${isLight ? 'text-[#017BC8]' : 'text-[#74B4DC]'}`}>{stage}</span>
                       <span className="hidden lg:inline">{STAGE_LABELS[audit.current_stage]}</span>
                     </span>
                   </div>

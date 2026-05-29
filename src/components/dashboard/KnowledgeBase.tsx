@@ -271,23 +271,23 @@ export function UploadForm({
   const canSubmit = (mode === 'pdf' && pdfFile != null) || (mode === 'text' && content.trim().length > 0);
 
   const inputClass = isLight
-    ? 'bg-white border-[#e2e8ee] text-[#1a1f28] placeholder-[#374152]/30 focus:border-[#4a6fa5]/50'
-    : 'bg-[#0d1118] border-white/8 text-white placeholder-[#3c3c3c] focus:border-[#4a6fa5]/40';
+    ? 'bg-white border-[#E2E8F0] text-[#0F172A] placeholder-[#334155]/30 focus:border-[#017BC8]/50'
+    : 'bg-[#020617] border-white/8 text-white placeholder-[#334155] focus:border-[#017BC8]/40';
 
-  const labelClass = isLight ? 'text-[#374152]/50' : 'text-[#d2d7e0]/40';
+  const labelClass = isLight ? 'text-[#334155]/50' : 'text-[#CBD5E1]/40';
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className={`flex gap-1 p-1 rounded-xl border w-fit ${
-        isLight ? 'bg-[#f5f7fa] border-[#e2e8ee]' : 'bg-[#0d1118] border-white/8'
+        isLight ? 'bg-[#F8FAFC] border-[#E2E8F0]' : 'bg-[#020617] border-white/8'
       }`}>
         <button
           type="button"
           onClick={() => setMode('pdf')}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             mode === 'pdf'
-              ? 'bg-[#4a6fa5] text-white shadow-lg shadow-[#4a6fa5]/20'
-              : isLight ? 'text-[#374152]/50 hover:text-[#374152]/80' : 'text-[#d2d7e0]/40 hover:text-[#d2d7e0]/70'
+              ? 'bg-[#017BC8] text-white shadow-lg shadow-[#017BC8]/20'
+              : isLight ? 'text-[#334155]/50 hover:text-[#334155]/80' : 'text-[#CBD5E1]/40 hover:text-[#CBD5E1]/70'
           }`}
         >
           <FilePlus size={14} />
@@ -298,8 +298,8 @@ export function UploadForm({
           onClick={() => setMode('text')}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             mode === 'text'
-              ? 'bg-[#4a6fa5] text-white shadow-lg shadow-[#4a6fa5]/20'
-              : isLight ? 'text-[#374152]/50 hover:text-[#374152]/80' : 'text-[#d2d7e0]/40 hover:text-[#d2d7e0]/70'
+              ? 'bg-[#017BC8] text-white shadow-lg shadow-[#017BC8]/20'
+              : isLight ? 'text-[#334155]/50 hover:text-[#334155]/80' : 'text-[#CBD5E1]/40 hover:text-[#CBD5E1]/70'
           }`}
         >
           <FileText size={14} />
@@ -348,8 +348,8 @@ export function UploadForm({
           <div
             className={`w-full border rounded-xl px-4 py-2.5 text-sm ${
               isLight
-                ? 'bg-[#f5f7fa] border-[#e2e8ee] text-[#374152]'
-                : 'bg-[#0d1118] border-white/10 text-[#d2d7e0]'
+                ? 'bg-[#F8FAFC] border-[#E2E8F0] text-[#334155]'
+                : 'bg-[#020617] border-white/10 text-[#CBD5E1]'
             }`}
           >
             {lockedProtocol.code} — {lockedProtocol.name}
@@ -372,7 +372,7 @@ export function UploadForm({
               </option>
             ))}
           </select>
-          <p className={`text-[11px] mt-1 ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'}`}>
+          <p className={`text-[11px] mt-1 ${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'}`}>
             {protocolId
               ? 'Document will be attached to this protocol regardless of what Reducto extracts.'
               : 'For protocol PDFs the parser will auto-link via the protocol number. For supplemental docs (IB, lab manual, pharmacy manual) pick the protocol explicitly so Phase B cross-references work.'}
@@ -392,12 +392,12 @@ export function UploadForm({
             onClick={() => fileInputRef.current?.click()}
             className={`relative cursor-pointer border-2 border-dashed rounded-xl p-8 text-center transition-all ${
               dragOver
-                ? 'border-[#4a6fa5]/60 bg-[#4a6fa5]/5'
+                ? 'border-[#017BC8]/60 bg-[#017BC8]/5'
                 : pdfFile
                 ? 'border-blue-500/40 bg-blue-500/5'
                 : isLight
-                ? 'border-[#d0d8e0] bg-[#f5f7fa] hover:border-[#b0bcc8] hover:bg-[#f0f4f8]'
-                : 'border-white/10 bg-[#0d1118] hover:border-white/20 hover:bg-white/[0.02]'
+                ? 'border-[#d0d8e0] bg-[#F8FAFC] hover:border-[#b0bcc8] hover:bg-[#F2F2F2]'
+                : 'border-white/10 bg-[#020617] hover:border-white/20 hover:bg-white/[0.02]'
             }`}
           >
             <input
@@ -413,16 +413,16 @@ export function UploadForm({
                   <FileText size={18} className="text-blue-400" />
                 </div>
                 <p className="text-blue-600 text-sm font-medium">{pdfFile.name}</p>
-                <p className={`text-xs ${isLight ? 'text-[#374152]/35' : 'text-[#d2d7e0]/25'}`}>{(pdfFile.size / 1024 / 1024).toFixed(2)} MB</p>
-                <p className={`text-xs ${isLight ? 'text-[#374152]/35' : 'text-[#d2d7e0]/25'}`}>Click to change file</p>
+                <p className={`text-xs ${isLight ? 'text-[#334155]/35' : 'text-[#CBD5E1]/25'}`}>{(pdfFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                <p className={`text-xs ${isLight ? 'text-[#334155]/35' : 'text-[#CBD5E1]/25'}`}>Click to change file</p>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-2">
-                <div className="w-10 h-10 rounded-xl bg-[#4a6fa5]/10 border border-[#4a6fa5]/20 flex items-center justify-center">
-                  <Upload size={18} className="text-[#6e8fb5]" />
+                <div className="w-10 h-10 rounded-xl bg-[#017BC8]/10 border border-[#017BC8]/20 flex items-center justify-center">
+                  <Upload size={18} className="text-[#74B4DC]" />
                 </div>
-                <p className={`text-sm font-medium ${isLight ? 'text-[#374152]/80' : 'text-[#d2d7e0]/70'}`}>Drop PDF here or click to browse</p>
-                <p className={`text-xs ${isLight ? 'text-[#374152]/35' : 'text-[#d2d7e0]/25'}`}>Parsed with Reducto — tables, headers, and structure preserved</p>
+                <p className={`text-sm font-medium ${isLight ? 'text-[#334155]/80' : 'text-[#CBD5E1]/70'}`}>Drop PDF here or click to browse</p>
+                <p className={`text-xs ${isLight ? 'text-[#334155]/35' : 'text-[#CBD5E1]/25'}`}>Parsed with Reducto — tables, headers, and structure preserved</p>
               </div>
             )}
           </div>
@@ -434,7 +434,7 @@ export function UploadForm({
               Document Content
             </label>
             {wordCount > 0 && (
-              <span className={`text-xs ${isLight ? 'text-[#374152]/35' : 'text-[#d2d7e0]/25'}`}>
+              <span className={`text-xs ${isLight ? 'text-[#334155]/35' : 'text-[#CBD5E1]/25'}`}>
                 ~{wordCount.toLocaleString()} words &middot; ~{estimatedChunks} chunks
               </span>
             )}
@@ -455,7 +455,7 @@ export function UploadForm({
             ? 'bg-blue-400/5 border-blue-400/20 text-blue-600'
             : state.status === 'error'
             ? 'bg-red-400/5 border-red-400/20 text-red-500'
-            : 'bg-[#4a6fa5]/5 border-[#4a6fa5]/20 text-[#6e8fb5]'
+            : 'bg-[#017BC8]/5 border-[#017BC8]/20 text-[#74B4DC]'
         }`}>
           {(state.status === 'uploading' || state.status === 'parsing') && <Loader size={16} className="animate-spin flex-shrink-0 mt-0.5" />}
           {state.status === 'success' && <CheckCircle size={16} className="flex-shrink-0 mt-0.5" />}
@@ -473,7 +473,7 @@ export function UploadForm({
         <button
           type="submit"
           disabled={!canSubmit || state.status === 'uploading' || state.status === 'parsing'}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#4a6fa5] hover:bg-[#5b82b8] disabled:opacity-30 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#017BC8] hover:bg-[#1595D1] disabled:opacity-30 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
         >
           {(state.status === 'uploading' || state.status === 'parsing') ? (
             <Loader size={15} className="animate-spin" />
@@ -537,13 +537,13 @@ function DocumentList({ refreshKey, isLight }: { refreshKey: number; isLight: bo
   return (
     <div key={refreshKey}>
       <div className="flex items-center justify-between mb-3">
-        <h4 className={`text-sm font-medium ${isLight ? 'text-[#374152]/60' : 'text-[#d2d7e0]/50'}`}>
+        <h4 className={`text-sm font-medium ${isLight ? 'text-[#334155]/60' : 'text-[#CBD5E1]/50'}`}>
           Knowledge Base ({docs.length} {docs.length === 1 ? 'document' : 'documents'})
         </h4>
         <button
           onClick={load}
           className={`flex items-center gap-1.5 text-xs transition-colors ${
-            isLight ? 'text-[#374152]/40 hover:text-[#374152]/70' : 'text-[#d2d7e0]/30 hover:text-[#d2d7e0]/60'
+            isLight ? 'text-[#334155]/40 hover:text-[#334155]/70' : 'text-[#CBD5E1]/30 hover:text-[#CBD5E1]/60'
           }`}
         >
           <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
@@ -555,12 +555,12 @@ function DocumentList({ refreshKey, isLight }: { refreshKey: number; isLight: bo
         <div className="space-y-2">
           {[1, 2].map(i => (
             <div key={i} className={`h-14 rounded-xl border animate-pulse ${
-              isLight ? 'bg-[#f0f4f8] border-[#e2e8ee]' : 'bg-white/[0.02] border-white/5'
+              isLight ? 'bg-[#F2F2F2] border-[#E2E8F0]' : 'bg-white/[0.02] border-white/5'
             }`} />
           ))}
         </div>
       ) : docs.length === 0 ? (
-        <p className={`text-sm py-4 text-center ${isLight ? 'text-[#374152]/35' : 'text-[#d2d7e0]/25'}`}>No documents ingested yet.</p>
+        <p className={`text-sm py-4 text-center ${isLight ? 'text-[#334155]/35' : 'text-[#CBD5E1]/25'}`}>No documents ingested yet.</p>
       ) : (
         <div className="space-y-2">
           {docs.map(doc => (
@@ -568,17 +568,17 @@ function DocumentList({ refreshKey, isLight }: { refreshKey: number; isLight: bo
               key={doc.id}
               className={`flex items-center justify-between gap-3 border rounded-xl px-4 py-3 group transition-colors ${
                 isLight
-                  ? 'bg-[#f5f7fa] border-[#e2e8ee] hover:bg-[#f0f4f8]'
-                  : 'bg-[#0d1118] border-white/5'
+                  ? 'bg-[#F8FAFC] border-[#E2E8F0] hover:bg-[#F2F2F2]'
+                  : 'bg-[#020617] border-white/5'
               }`}
             >
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-[#4a6fa5]/10 border border-[#4a6fa5]/20 flex items-center justify-center flex-shrink-0">
-                  <FileText size={14} className="text-[#6e8fb5]" />
+                <div className="w-8 h-8 rounded-lg bg-[#017BC8]/10 border border-[#017BC8]/20 flex items-center justify-center flex-shrink-0">
+                  <FileText size={14} className="text-[#74B4DC]" />
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <p className={`text-sm font-medium truncate ${isLight ? 'text-[#1a1f28]/90' : 'text-[#d2d7e0]/80'}`}>{doc.title || 'Untitled'}</p>
+                    <p className={`text-sm font-medium truncate ${isLight ? 'text-[#0F172A]/90' : 'text-[#CBD5E1]/80'}`}>{doc.title || 'Untitled'}</p>
                     {doc.status === 'pending' && (
                       <span className="flex-shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-400/15 text-amber-500">ingesting</span>
                     )}
@@ -586,23 +586,23 @@ function DocumentList({ refreshKey, isLight }: { refreshKey: number; isLight: bo
                       <span className="flex-shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400" title={doc.error_message ?? ''}>failed</span>
                     )}
                   </div>
-                  <p className={`text-xs truncate ${isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/30'}`}>
+                  <p className={`text-xs truncate ${isLight ? 'text-[#334155]/40' : 'text-[#CBD5E1]/30'}`}>
                     {doc.source || 'No source'}
                     {doc.chunk_count !== undefined && doc.status !== 'failed' && (
-                      <span className={`ml-2 ${isLight ? 'text-[#374152]/30' : 'text-[#d2d7e0]/20'}`}>&middot; {doc.chunk_count} chunks</span>
+                      <span className={`ml-2 ${isLight ? 'text-[#334155]/30' : 'text-[#CBD5E1]/20'}`}>&middot; {doc.chunk_count} chunks</span>
                     )}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-3 flex-shrink-0">
-                <span className={`text-xs hidden sm:block ${isLight ? 'text-[#374152]/30' : 'text-[#d2d7e0]/20'}`}>
+                <span className={`text-xs hidden sm:block ${isLight ? 'text-[#334155]/30' : 'text-[#CBD5E1]/20'}`}>
                   {new Date(doc.created_at).toLocaleDateString()}
                 </span>
                 <button
                   onClick={() => handleDelete(doc.id)}
                   disabled={deleting === doc.id}
                   className={`opacity-0 group-hover:opacity-100 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-500/10 hover:text-red-400 transition-all ${
-                    isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/30'
+                    isLight ? 'text-[#334155]/40' : 'text-[#CBD5E1]/30'
                   }`}
                 >
                   {deleting === doc.id
@@ -627,23 +627,23 @@ export default function KnowledgeBase() {
   return (
     <div className="p-6 space-y-8 overflow-y-auto h-full">
       <div>
-        <h2 className={`font-semibold text-lg mb-1 ${isLight ? 'text-[#1a1f28]' : 'text-white'}`}>Knowledge Base</h2>
-        <p className={`text-sm ${isLight ? 'text-[#374152]/50' : 'text-[#d2d7e0]/40'}`}>
+        <h2 className={`font-semibold text-lg mb-1 ${isLight ? 'text-[#0F172A]' : 'text-white'}`}>Knowledge Base</h2>
+        <p className={`text-sm ${isLight ? 'text-[#334155]/50' : 'text-[#CBD5E1]/40'}`}>
           Upload PDF protocols or paste text to ground the Protocol Assistant in your organization's content.
           Each document is parsed, chunked, embedded, and retrieved automatically during chat.
         </p>
       </div>
 
       <div className={`border rounded-2xl p-6 ${
-        isLight ? 'bg-[#f5f7fa] border-[#e2e8ee]' : 'bg-[#161d25] border-white/5'
+        isLight ? 'bg-[#F8FAFC] border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5'
       }`}>
         <div className="flex items-center gap-3 mb-5">
-          <div className="w-8 h-8 rounded-lg bg-[#4a6fa5]/15 border border-[#4a6fa5]/25 flex items-center justify-center">
-            <Upload size={15} className="text-[#6e8fb5]" />
+          <div className="w-8 h-8 rounded-lg bg-[#017BC8]/15 border border-[#017BC8]/25 flex items-center justify-center">
+            <Upload size={15} className="text-[#74B4DC]" />
           </div>
           <div>
-            <h3 className={`font-medium text-sm ${isLight ? 'text-[#1a1f28]' : 'text-white'}`}>Add Document</h3>
-            <p className={`text-xs ${isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/30'}`}>Upload a PDF or paste text to embed into the knowledge base</p>
+            <h3 className={`font-medium text-sm ${isLight ? 'text-[#0F172A]' : 'text-white'}`}>Add Document</h3>
+            <p className={`text-xs ${isLight ? 'text-[#334155]/40' : 'text-[#CBD5E1]/30'}`}>Upload a PDF or paste text to embed into the knowledge base</p>
           </div>
         </div>
         <UploadForm onSuccess={() => setRefreshKey(k => k + 1)} isLight={isLight} />

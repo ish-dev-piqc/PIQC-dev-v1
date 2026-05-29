@@ -134,11 +134,11 @@ export default function AskTab({
   const mutedColor = 'text-fg-muted';
   const sectionHeader = 'text-fg-label';
   const stripBg = isLight
-    ? 'bg-[#4a6fa5]/[0.05] border-[#4a6fa5]/20'
-    : 'bg-[#6e8fb5]/[0.06] border-[#6e8fb5]/25';
+    ? 'bg-[#017BC8]/[0.05] border-[#017BC8]/20'
+    : 'bg-[#74B4DC]/[0.06] border-[#74B4DC]/25';
   const iconBg = isLight
-    ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/20 text-[#4a6fa5]'
-    : 'bg-[#6e8fb5]/15 border-[#6e8fb5]/25 text-[#6e8fb5]';
+    ? 'bg-[#017BC8]/10 border-[#017BC8]/20 text-[#017BC8]'
+    : 'bg-[#74B4DC]/15 border-[#74B4DC]/25 text-[#74B4DC]';
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -177,7 +177,7 @@ export default function AskTab({
         <div className="flex-1 min-h-0 overflow-y-auto p-8">
           <div
             className={`max-w-md mx-auto text-center border rounded-xl px-6 py-10 ${
-              isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5'
+              isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5'
             }`}
           >
             <Upload className={`mx-auto mb-3 ${mutedColor}`} size={28} />

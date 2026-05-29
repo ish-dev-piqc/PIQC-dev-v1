@@ -22,10 +22,10 @@ export default function StagePlaceholder({ stage }: StagePlaceholderProps) {
   const headingColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const iconBg = isLight
-    ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/20 text-[#4a6fa5]'
-    : 'bg-[#4a6fa5]/15 border-[#4a6fa5]/30 text-[#6e8fb5]';
+    ? 'bg-[#017BC8]/10 border-[#017BC8]/20 text-[#017BC8]'
+    : 'bg-[#017BC8]/15 border-[#017BC8]/30 text-[#74B4DC]';
 
   return (
     <div className="p-6 max-w-3xl mx-auto">

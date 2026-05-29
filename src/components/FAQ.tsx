@@ -40,10 +40,10 @@ export default function FAQ() {
   const { theme } = useTheme();
   const isLight = theme === 'light';
 
-  const bg = isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]';
-  const border = isLight ? 'border-[#e2e8ee]' : 'border-white/[0.05]';
-  const itemBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#161d25] border-white/[0.07]';
-  const itemHover = isLight ? 'hover:bg-[#f0f4f8]' : 'hover:bg-[#1a2230]';
+  const bg = isLight ? 'bg-[#F8FAFC]' : 'bg-[#020617]';
+  const border = isLight ? 'border-[#E2E8F0]' : 'border-white/[0.05]';
+  const itemBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/[0.07]';
+  const itemHover = isLight ? 'hover:bg-[#F2F2F2]' : 'hover:bg-[#1E293B]';
 
   return (
     <section
@@ -52,7 +52,7 @@ export default function FAQ() {
     >
       <div className="max-w-3xl mx-auto">
         <div className="text-center mb-12">
-          <p className="text-xs font-semibold text-[#6e8fb5] uppercase tracking-widest mb-4">
+          <p className="text-xs font-semibold text-[#74B4DC] uppercase tracking-widest mb-4">
             FAQ
           </p>
           <h2 className="text-3xl sm:text-4xl font-bold text-fg-heading leading-tight">

@@ -377,20 +377,20 @@ export default function ReportDraftingWorkspace({
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
   const sectionHeader = 'text-fg-label';
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
-  const inputBg = isLight ? 'bg-white' : 'bg-[#131a22]';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
+  const inputBg = isLight ? 'bg-white' : 'bg-[#0F172A]';
   const inputBorder = isLight
-    ? 'border-[#cbd2db] focus:border-[#4a6fa5] focus:ring-1 focus:ring-[#4a6fa5]/30'
-    : 'border-white/15 focus:border-[#6e8fb5] focus:ring-1 focus:ring-[#6e8fb5]/30';
+    ? 'border-[#CBD5E1] focus:border-[#017BC8] focus:ring-1 focus:ring-[#017BC8]/30'
+    : 'border-white/15 focus:border-[#74B4DC] focus:ring-1 focus:ring-[#74B4DC]/30';
   const buttonPrimary = isLight
-    ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
-    : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]';
+    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
+    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]';
   const buttonSecondary = isLight
-    ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-    : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]';
+    ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+    : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]';
   const buttonApprove = isLight
-    ? 'bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-[#cbd2db]'
-    : 'bg-emerald-500 text-[#0d1118] hover:bg-emerald-400 disabled:bg-white/10 disabled:text-white/35';
+    ? 'bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-[#CBD5E1]'
+    : 'bg-emerald-500 text-[#020617] hover:bg-emerald-400 disabled:bg-white/10 disabled:text-white/35';
 
   // ---------------------------------------------------------------------------
   // Empty state
@@ -447,7 +447,7 @@ export default function ReportDraftingWorkspace({
               className={`${mutedColor} text-[11px] mt-1 inline-flex items-center gap-1`}
               title="Drafted from approved Stage 4 risk summary + Stage 6 workspace entries"
             >
-              <Sparkles size={10} className={isLight ? 'text-[#4a6fa5]' : 'text-[#6e8fb5]'} />
+              <Sparkles size={10} className={isLight ? 'text-[#017BC8]' : 'text-[#74B4DC]'} />
               Started from: risk summary focus areas + audit observations
             </p>
           )}
@@ -547,8 +547,8 @@ export default function ReportDraftingWorkspace({
             data-testid="exec-summary-llm-fallback"
             className={`flex items-start gap-2 px-3 py-2 mb-3 rounded-md border ${
               isLight
-                ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]'
-                : 'bg-white/[0.04] border-white/10 text-[#d2d7e0]'
+                ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]'
+                : 'bg-white/[0.04] border-white/10 text-[#CBD5E1]'
             }`}
           >
             <FileText size={12} className="flex-shrink-0 mt-0.5 opacity-70" />
@@ -558,7 +558,7 @@ export default function ReportDraftingWorkspace({
               onClick={() => setLlmFallback(null)}
               aria-label="Dismiss"
               className={`inline-flex items-center justify-center w-5 h-5 rounded ${
-                isLight ? 'text-[#374152]/55 hover:bg-white/60' : 'text-[#d2d7e0]/55 hover:bg-white/[0.06]'
+                isLight ? 'text-[#334155]/55 hover:bg-white/60' : 'text-[#CBD5E1]/55 hover:bg-white/[0.06]'
               }`}
             >
               <XIcon size={11} />
@@ -700,8 +700,8 @@ export default function ReportDraftingWorkspace({
                     key={i}
                     className={`inline-flex items-center text-[11px] px-2 py-0.5 rounded border ${
                       isLight
-                        ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]/75'
-                        : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]/65'
+                        ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/75'
+                        : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/65'
                     }`}
                   >
                     {f}
@@ -804,8 +804,8 @@ export default function ReportDraftingWorkspace({
             data-testid="conclusions-llm-fallback"
             className={`flex items-start gap-2 px-3 py-2 mb-3 rounded-md border ${
               isLight
-                ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]'
-                : 'bg-white/[0.04] border-white/10 text-[#d2d7e0]'
+                ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]'
+                : 'bg-white/[0.04] border-white/10 text-[#CBD5E1]'
             }`}
           >
             <FileText size={12} className="flex-shrink-0 mt-0.5 opacity-70" />
@@ -815,7 +815,7 @@ export default function ReportDraftingWorkspace({
               onClick={() => setLlmConclusionsFallback(null)}
               aria-label="Dismiss"
               className={`inline-flex items-center justify-center w-5 h-5 rounded ${
-                isLight ? 'text-[#374152]/55 hover:bg-white/60' : 'text-[#d2d7e0]/55 hover:bg-white/[0.06]'
+                isLight ? 'text-[#334155]/55 hover:bg-white/60' : 'text-[#CBD5E1]/55 hover:bg-white/[0.06]'
               }`}
             >
               <XIcon size={11} />
@@ -1036,8 +1036,8 @@ function SourceChip({
         data-source="refining"
         className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
           isLight
-            ? 'bg-[#eef2f6] border-[#cbd2db] text-[#4a6fa5]'
-            : 'bg-white/[0.04] border-white/10 text-[#6e8fb5]'
+            ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#017BC8]'
+            : 'bg-white/[0.04] border-white/10 text-[#74B4DC]'
         }`}
       >
         <Loader2 size={9} className="animate-spin" />
@@ -1054,17 +1054,17 @@ function SourceChip({
   const tone = (() => {
     if (source === 'llm') {
       return isLight
-        ? 'bg-[#eef2f6] border-[#cbd2db] text-[#4a6fa5]'
-        : 'bg-white/[0.04] border-white/10 text-[#6e8fb5]';
+        ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#017BC8]'
+        : 'bg-white/[0.04] border-white/10 text-[#74B4DC]';
     }
     if (source === 'auditor_edited') {
       return isLight
-        ? 'bg-white border-[#e2e8ee] text-[#374152]'
-        : 'bg-[#131a22] border-white/10 text-[#d2d7e0]';
+        ? 'bg-white border-[#E2E8F0] text-[#334155]'
+        : 'bg-[#0F172A] border-white/10 text-[#CBD5E1]';
     }
     return isLight
-      ? 'bg-white border-[#e2e8ee] text-[#374152]/65'
-      : 'bg-[#131a22] border-white/10 text-[#d2d7e0]/60';
+      ? 'bg-white border-[#E2E8F0] text-[#334155]/65'
+      : 'bg-[#0F172A] border-white/10 text-[#CBD5E1]/60';
   })();
   return (
     <span
@@ -1170,12 +1170,12 @@ function PiqcLandingNote({
       role="status"
       className={`flex items-start gap-2 px-3 py-2 mb-3 rounded-md border ${
         isLight
-          ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]'
-          : 'bg-white/[0.04] border-white/10 text-[#d2d7e0]'
+          ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]'
+          : 'bg-white/[0.04] border-white/10 text-[#CBD5E1]'
       }`}
     >
       <span
-        className={`mt-0.5 flex-shrink-0 ${isLight ? 'text-[#4a6fa5]' : 'text-[#6e8fb5]'}`}
+        className={`mt-0.5 flex-shrink-0 ${isLight ? 'text-[#017BC8]' : 'text-[#74B4DC]'}`}
         aria-hidden
       >
         <PiqcMark size={12} />
@@ -1192,8 +1192,8 @@ function PiqcLandingNote({
           data-testid={`piqc-landing-note-dismiss-${field}`}
           className={`inline-flex items-center justify-center w-5 h-5 rounded flex-shrink-0 ${
             isLight
-              ? 'text-[#374152]/55 hover:text-[#1a1f28] hover:bg-white/60'
-              : 'text-[#d2d7e0]/55 hover:text-white hover:bg-white/[0.06]'
+              ? 'text-[#334155]/55 hover:text-[#0F172A] hover:bg-white/60'
+              : 'text-[#CBD5E1]/55 hover:text-white hover:bg-white/[0.06]'
           }`}
         >
           <XIcon size={11} />

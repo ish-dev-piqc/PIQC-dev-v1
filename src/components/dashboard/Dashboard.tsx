@@ -86,11 +86,11 @@ function PlaceholderTab({ label }: { label: string }) {
 
   return (
     <div className="flex flex-col items-center justify-center h-full text-center p-6">
-      <div className={`w-12 h-12 rounded-2xl ${isLight ? 'bg-[#1a1f28]/[0.03] border border-[#e2e8ee]' : 'bg-white/[0.03] border border-white/5'} flex items-center justify-center mb-4`}>
-        <FileText size={20} className={isLight ? 'text-[#374152]/25' : 'text-[#d2d7e0]/25'} />
+      <div className={`w-12 h-12 rounded-2xl ${isLight ? 'bg-[#0F172A]/[0.03] border border-[#E2E8F0]' : 'bg-white/[0.03] border border-white/5'} flex items-center justify-center mb-4`}>
+        <FileText size={20} className={isLight ? 'text-[#334155]/25' : 'text-[#CBD5E1]/25'} />
       </div>
-      <h3 className={`${isLight ? 'text-[#374152]/50' : 'text-[#d2d7e0]/50'} font-medium text-sm mb-1`}>{label}</h3>
-      <p className={`${isLight ? 'text-[#374152]/20' : 'text-[#d2d7e0]/20'} text-xs max-w-xs`}>This section is coming soon.</p>
+      <h3 className={`${isLight ? 'text-[#334155]/50' : 'text-[#CBD5E1]/50'} font-medium text-sm mb-1`}>{label}</h3>
+      <p className={`${isLight ? 'text-[#334155]/20' : 'text-[#CBD5E1]/20'} text-xs max-w-xs`}>This section is coming soon.</p>
     </div>
   );
 }
@@ -104,10 +104,10 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
   const { theme } = useTheme();
   const { user, profile } = useAuth();
   const isLight = theme === 'light';
-  const cardClass = isLight ? 'bg-[#f5f7fa] border-[#e2e8ee]' : 'bg-[#0d1118] border-white/8';
+  const cardClass = isLight ? 'bg-[#F8FAFC] border-[#E2E8F0]' : 'bg-[#020617] border-white/8';
   const inputClass = isLight
-    ? 'bg-white border-[#d8dfe8] text-[#1a1f28] placeholder-[#374152]/25 focus:border-[#4a6fa5]/60'
-    : 'bg-[#131a22] border-white/[0.08] text-white placeholder-[#d2d7e0]/25 focus:border-[#4a6fa5]/60';
+    ? 'bg-white border-[#E2E8F0] text-[#0F172A] placeholder-[#334155]/25 focus:border-[#017BC8]/60'
+    : 'bg-[#0F172A] border-white/[0.08] text-white placeholder-[#CBD5E1]/25 focus:border-[#017BC8]/60';
 
   // First/last split so each is its own field. Initial population reads
   // `user_metadata.first_name` / `user_metadata.last_name` when set, then
@@ -283,12 +283,12 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
       return (
         <section className={`${cardClass} border rounded-xl p-5`}>
           <div className="flex items-center gap-2 mb-4">
-            <CreditCard size={16} className="text-[#6e8fb5]" />
-            <h3 className={`${isLight ? 'text-[#1a1f28]' : 'text-white'} font-medium text-sm`}>Subscription</h3>
+            <CreditCard size={16} className="text-[#74B4DC]" />
+            <h3 className={`${isLight ? 'text-[#0F172A]' : 'text-white'} font-medium text-sm`}>Subscription</h3>
           </div>
 
           {subLoading ? (
-            <p className={`text-sm ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'}`}>
+            <p className={`text-sm ${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'}`}>
               Loading subscription info…
             </p>
           ) : isPilot ? (
@@ -307,11 +307,11 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div>
-                  <p className={`text-sm font-medium ${isLight ? 'text-[#1a1f28]' : 'text-white'}`}>
+                  <p className={`text-sm font-medium ${isLight ? 'text-[#0F172A]' : 'text-white'}`}>
                     {subscription?.planName ?? 'Protocol Clarity Pilot'}
                   </p>
                   {pilotExpiresFmt && (
-                    <p className={`text-xs mt-0.5 ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'}`}>
+                    <p className={`text-xs mt-0.5 ${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'}`}>
                       {pilotState === 'expired' ? 'Expired ' : 'Access through '}
                       {pilotExpiresFmt}
                     </p>
@@ -323,7 +323,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                 </span>
               </div>
 
-              <p className={`text-xs ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'} leading-relaxed`}>
+              <p className={`text-xs ${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'} leading-relaxed`}>
                 {pilotState === 'expired'
                   ? 'Your Pilot has ended. To continue using PIQClinical, choose a subscription. You can cancel any time.'
                   : 'Your Pilot includes 30 days of access. To continue using PIQClinical, choose a subscription. You can cancel any time.'}
@@ -336,7 +336,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                   type="button"
                   onClick={handleStartPlan('workspace_monthly')}
                   disabled={upgradeLoading}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors disabled:opacity-50"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-colors disabled:opacity-50"
                 >
                   Subscribe — $59 / month
                 </button>
@@ -344,7 +344,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                   type="button"
                   onClick={handleStartPlan('workspace_annual')}
                   disabled={upgradeLoading}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors disabled:opacity-50"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-colors disabled:opacity-50"
                 >
                   Subscribe — $599 / year
                 </button>
@@ -356,7 +356,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                 type="button"
                 onClick={handleManageBilling}
                 disabled={portalLoading}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-colors disabled:opacity-50"
               >
                 {portalLoading ? (
                   <>
@@ -367,7 +367,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                   'Manage billing'
                 )}
               </button>
-              <p className={`text-xs ${isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/35'}`}>
+              <p className={`text-xs ${isLight ? 'text-[#334155]/45' : 'text-[#CBD5E1]/35'}`}>
                 Manage billing to view your receipt, update payment method, or get help.
               </p>
             </div>
@@ -375,11 +375,11 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div>
-                  <p className={`text-sm font-medium ${isLight ? 'text-[#1a1f28]' : 'text-white'}`}>
+                  <p className={`text-sm font-medium ${isLight ? 'text-[#0F172A]' : 'text-white'}`}>
                     {subscription?.planName}
                   </p>
                   {subscription?.currentPeriodEnd && (
-                    <p className={`text-xs mt-0.5 ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'}`}>
+                    <p className={`text-xs mt-0.5 ${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'}`}>
                       Renews {subscription.currentPeriodEnd}
                     </p>
                   )}
@@ -416,7 +416,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                 type="button"
                 onClick={handleManageBilling}
                 disabled={portalLoading}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-colors disabled:opacity-50"
               >
                 {portalLoading ? (
                   <>
@@ -427,7 +427,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                   'Manage billing'
                 )}
               </button>
-              <p className={`text-xs ${isLight ? 'text-[#374152]/45' : 'text-[#d2d7e0]/35'}`}>
+              <p className={`text-xs ${isLight ? 'text-[#334155]/45' : 'text-[#CBD5E1]/35'}`}>
                 Update payment method, download invoices, or cancel your subscription.
               </p>
             </div>
@@ -443,10 +443,10 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
             // rendered.
             <div className="space-y-4">
               <div>
-                <p className={`text-sm font-medium ${isLight ? 'text-[#1a1f28]' : 'text-white'}`}>
+                <p className={`text-sm font-medium ${isLight ? 'text-[#0F172A]' : 'text-white'}`}>
                   No active plan
                 </p>
-                <p className={`text-xs mt-1 ${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'} leading-relaxed`}>
+                <p className={`text-xs mt-1 ${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'} leading-relaxed`}>
                   Pick a plan to get started. You can change or cancel from this page any time.
                 </p>
               </div>
@@ -463,7 +463,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                   type="button"
                   onClick={handleStartPlan('pilot')}
                   disabled={upgradeLoading}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors disabled:opacity-50"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-colors disabled:opacity-50"
                 >
                   Start Pilot — $25 / 30 days
                 </button>
@@ -471,7 +471,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                   type="button"
                   onClick={handleStartPlan('workspace_monthly')}
                   disabled={upgradeLoading}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors disabled:opacity-50"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-colors disabled:opacity-50"
                 >
                   Start Workspace — $59 / month
                 </button>
@@ -479,7 +479,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                   type="button"
                   onClick={handleStartPlan('workspace_annual')}
                   disabled={upgradeLoading}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors disabled:opacity-50"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-colors disabled:opacity-50"
                 >
                   Switch to Annual — $599 / year
                 </button>
@@ -495,14 +495,14 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
         <div className="space-y-6">
           <section className={`${cardClass} border rounded-xl p-5`}>
             <div className="flex items-center gap-2 mb-4">
-              <UserCircle2 size={16} className="text-[#6e8fb5]" />
-              <h3 className={`${isLight ? 'text-[#1a1f28]' : 'text-white'} font-medium text-sm`}>Account Profile</h3>
+              <UserCircle2 size={16} className="text-[#74B4DC]" />
+              <h3 className={`${isLight ? 'text-[#0F172A]' : 'text-white'} font-medium text-sm`}>Account Profile</h3>
             </div>
 
             <form className="space-y-4" onSubmit={handleProfileSave}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className={`${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'} text-xs block mb-1.5`}>First name</label>
+                  <label className={`${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'} text-xs block mb-1.5`}>First name</label>
                   <input
                     value={firstName}
                     onChange={(event) => setFirstName(event.target.value)}
@@ -511,7 +511,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                   />
                 </div>
                 <div>
-                  <label className={`${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'} text-xs block mb-1.5`}>Last name</label>
+                  <label className={`${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'} text-xs block mb-1.5`}>Last name</label>
                   <input
                     value={lastName}
                     onChange={(event) => setLastName(event.target.value)}
@@ -520,7 +520,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                   />
                 </div>
                 <div>
-                  <label className={`${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'} text-xs block mb-1.5`}>Title / Department</label>
+                  <label className={`${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'} text-xs block mb-1.5`}>Title / Department</label>
                   <input
                     value={title}
                     onChange={(event) => setTitle(event.target.value)}
@@ -529,7 +529,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                   />
                 </div>
                 <div>
-                  <label className={`${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'} text-xs block mb-1.5`}>Timezone</label>
+                  <label className={`${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'} text-xs block mb-1.5`}>Timezone</label>
                   <select
                     value={timezone}
                     onChange={(event) => setTimezone(event.target.value)}
@@ -549,7 +549,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                   </select>
                 </div>
                 <div>
-                  <label className={`${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'} text-xs block mb-1.5`}>Organization</label>
+                  <label className={`${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'} text-xs block mb-1.5`}>Organization</label>
                   <input
                     value={organization || '—'}
                     disabled
@@ -557,7 +557,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                   />
                 </div>
                 <div>
-                  <label className={`${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'} text-xs block mb-1.5`}>Work email</label>
+                  <label className={`${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'} text-xs block mb-1.5`}>Work email</label>
                   <input
                     value={user?.email ?? ''}
                     disabled
@@ -572,7 +572,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
               <button
                 type="submit"
                 disabled={profileSaving}
-                className="px-4 py-2 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-colors disabled:opacity-50"
+                className="px-4 py-2 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-colors disabled:opacity-50"
               >
                 {profileSaving ? 'Saving...' : 'Save profile'}
               </button>
@@ -591,8 +591,8 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
   return (
     <div className="p-6 space-y-6 overflow-y-auto h-full">
       <div>
-        <h2 className={`${isLight ? 'text-[#1a1f28]' : 'text-white'} font-semibold text-lg mb-1`}>Settings</h2>
-        <p className={`${isLight ? 'text-[#374152]/50' : 'text-[#d2d7e0]/40'} text-sm`}>
+        <h2 className={`${isLight ? 'text-[#0F172A]' : 'text-white'} font-semibold text-lg mb-1`}>Settings</h2>
+        <p className={`${isLight ? 'text-[#334155]/50' : 'text-[#CBD5E1]/40'} text-sm`}>
           Manage your account and security preferences.
         </p>
       </div>
@@ -600,7 +600,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
       <div className="grid grid-cols-1 md:grid-cols-[220px,1fr] gap-4">
         <aside className={`${cardClass} border rounded-xl p-3 h-fit`}>
           <div className="md:hidden mb-2">
-            <label className={`${isLight ? 'text-[#374152]/55' : 'text-[#d2d7e0]/45'} text-xs block mb-1.5`}>Section</label>
+            <label className={`${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'} text-xs block mb-1.5`}>Section</label>
             <select
               value={activeSection}
               onChange={(event) => onSectionChange(event.target.value as SettingsSection)}
@@ -625,10 +625,10 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
                   onClick={() => onSectionChange(item.id)}
                   className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                     selected
-                      ? 'bg-[#4a6fa5]/15 text-[#5a7fa5]'
+                      ? 'bg-[#017BC8]/15 text-[#017BC8]'
                       : isLight
-                        ? 'text-[#374152]/65 hover:bg-[#1a1f28]/[0.05] hover:text-[#1a1f28]'
-                        : 'text-[#d2d7e0]/60 hover:bg-white/[0.05] hover:text-white'
+                        ? 'text-[#334155]/65 hover:bg-[#0F172A]/[0.05] hover:text-[#0F172A]'
+                        : 'text-[#CBD5E1]/60 hover:bg-white/[0.05] hover:text-white'
                   }`}
                 >
                   <Icon size={14} />
@@ -717,15 +717,15 @@ export default function Dashboard({
     };
   }, [mode, activeProtocolId, resolvedActiveTab]);
 
-  const pageBg = isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]';
-  const tabBarBg = isLight ? 'border-[#e2e8ee] bg-[#f5f7fa]/80' : 'border-white/5 bg-[#0d1118]/80';
+  const pageBg = isLight ? 'bg-[#F8FAFC]' : 'bg-[#020617]';
+  const tabBarBg = isLight ? 'border-[#E2E8F0] bg-[#F8FAFC]/80' : 'border-white/5 bg-[#020617]/80';
   const activeTabClass = isLight
-    ? 'text-[#1a1f28] bg-white border border-[#e2e8ee]'
+    ? 'text-[#0F172A] bg-white border border-[#E2E8F0]'
     : 'text-white bg-white/[0.06] border border-white/10';
   const inactiveTabClass = isLight
-    ? 'text-[#374152]/40 hover:text-[#374152]/70 hover:bg-[#1a1f28]/[0.03]'
-    : 'text-[#d2d7e0]/40 hover:text-[#d2d7e0]/70 hover:bg-white/[0.03]';
-  const panelBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
+    ? 'text-[#334155]/40 hover:text-[#334155]/70 hover:bg-[#0F172A]/[0.03]'
+    : 'text-[#CBD5E1]/40 hover:text-[#CBD5E1]/70 hover:bg-white/[0.03]';
+  const panelBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
 
   const renderContent = () => {
     switch (resolvedActiveTab) {
@@ -884,7 +884,7 @@ export default function Dashboard({
                     isActive ? activeTabClass : inactiveTabClass
                   }`}
                 >
-                  <Icon size={15} className={isActive ? 'text-[#6e8fb5]' : ''} />
+                  <Icon size={15} className={isActive ? 'text-[#74B4DC]' : ''} />
                   {tab.label}
                   {showAwaitingBadge && (
                     <span

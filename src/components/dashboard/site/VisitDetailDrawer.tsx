@@ -111,15 +111,15 @@ export default function VisitDetailDrawer({
   const procedures = visit.procedures ?? [];
   const allChecked = procedures.length > 0 && checked.size === procedures.length;
 
-  const bg = isLight ? 'bg-white' : 'bg-[#131a22]';
-  const border = isLight ? 'border-[#e2e8ee]' : 'border-white/5';
+  const bg = isLight ? 'bg-white' : 'bg-[#0F172A]';
+  const border = isLight ? 'border-[#E2E8F0]' : 'border-white/5';
   const headingColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
   const sectionHeader = 'text-fg-label';
   const chip = isLight ? colors.chipLight : colors.chipDark;
   const panelBg = isLight
-    ? 'bg-[#f9fafc] border-[#eef2f6]'
+    ? 'bg-[#F8FAFC] border-[#F2F2F2]'
     : 'bg-white/[0.02] border-white/[0.04]';
   const deviationBg = isLight
     ? 'bg-amber-50 border-amber-200/80'
@@ -128,17 +128,17 @@ export default function VisitDetailDrawer({
     ? 'bg-red-50 border-red-200/80'
     : 'bg-red-500/[0.06] border-red-500/15';
   const buttonPrimary = isLight
-    ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
-    : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]';
+    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
+    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]';
   const buttonSecondary = isLight
-    ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-    : 'bg-[#131a22] border border-white/5 text-[#d2d7e0] hover:bg-white/[0.04]';
+    ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+    : 'bg-[#0F172A] border border-white/5 text-[#CBD5E1] hover:bg-white/[0.04]';
   const checkboxIdle = isLight
-    ? 'border-[#cbd2db] bg-white'
-    : 'border-white/20 bg-[#1a2230]';
+    ? 'border-[#CBD5E1] bg-white'
+    : 'border-white/20 bg-[#1E293B]';
   const checkboxDone = isLight
-    ? 'border-[#4a6fa5] bg-[#4a6fa5]'
-    : 'border-[#6e8fb5] bg-[#6e8fb5]';
+    ? 'border-[#017BC8] bg-[#017BC8]'
+    : 'border-[#74B4DC] bg-[#74B4DC]';
 
   const toggleCheck = (i: number) => {
     setChecked((prev) => {
@@ -335,7 +335,7 @@ export default function VisitDetailDrawer({
                     <li key={i} className={`text-sm flex items-start gap-2 ${headingColor}`}>
                       <span
                         className={`mt-1.5 w-1 h-1 rounded-full flex-shrink-0 ${
-                          isLight ? 'bg-[#4a6fa5]/50' : 'bg-[#6e8fb5]/60'
+                          isLight ? 'bg-[#017BC8]/50' : 'bg-[#74B4DC]/60'
                         }`}
                       />
                       {p}
@@ -438,7 +438,7 @@ export default function VisitDetailDrawer({
                     allChecked
                       ? isLight
                         ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                        : 'bg-emerald-500 text-[#0d1118] hover:bg-emerald-400'
+                        : 'bg-emerald-500 text-[#020617] hover:bg-emerald-400'
                       : buttonPrimary
                   }`}
                 >
@@ -489,7 +489,7 @@ export default function VisitDetailDrawer({
               <button
                 type="button"
                 onClick={() => setShowProfile(true)}
-                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors ${isLight ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]' : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]'}`}
+                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors ${isLight ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]' : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]'}`}
               >
                 <Users size={14} />
                 View participant profile

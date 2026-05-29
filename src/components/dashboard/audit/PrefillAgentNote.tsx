@@ -72,13 +72,13 @@ export default function PrefillAgentNote({ storageKey, message, headline }: Prop
       data-testid="prefill-agent-note"
       className={`flex items-start gap-3 rounded-lg border px-4 py-3 ${
         isLight
-          ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]'
-          : 'bg-white/[0.04] border-white/10 text-[#d2d7e0]'
+          ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]'
+          : 'bg-white/[0.04] border-white/10 text-[#CBD5E1]'
       }`}
     >
       <Sparkles
         size={14}
-        className={`mt-0.5 flex-shrink-0 ${isLight ? 'text-[#4a6fa5]' : 'text-[#6e8fb5]'}`}
+        className={`mt-0.5 flex-shrink-0 ${isLight ? 'text-[#017BC8]' : 'text-[#74B4DC]'}`}
         aria-hidden
       />
       <p className="text-sm leading-relaxed flex-1 min-w-0">
@@ -91,8 +91,8 @@ export default function PrefillAgentNote({ storageKey, message, headline }: Prop
         aria-label="Dismiss this note"
         className={`inline-flex items-center justify-center w-6 h-6 rounded-md flex-shrink-0 ${
           isLight
-            ? 'text-[#374152]/55 hover:text-[#1a1f28] hover:bg-white/60'
-            : 'text-[#d2d7e0]/55 hover:text-white hover:bg-white/[0.06]'
+            ? 'text-[#334155]/55 hover:text-[#0F172A] hover:bg-white/60'
+            : 'text-[#CBD5E1]/55 hover:text-white hover:bg-white/[0.06]'
         }`}
       >
         <X size={12} />

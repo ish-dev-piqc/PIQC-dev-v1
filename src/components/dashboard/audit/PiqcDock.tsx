@@ -85,19 +85,19 @@ export default function PiqcDock({ onOpen, hidden, hasSignals = false }: Props) 
         // the workspace's neutral chrome. Warmer in light mode, lifted
         // panel-on-panel feel in dark.
         isLight
-          ? 'bg-white border border-[#4a6fa5]/25 text-[#374152] shadow-[0_8px_24px_-8px_rgba(74,111,165,0.35)] hover:shadow-[0_12px_32px_-8px_rgba(74,111,165,0.45)] hover:border-[#4a6fa5]/40'
-          : 'bg-[#131a22] border border-[#4a6fa5]/30 text-[#d2d7e0] shadow-[0_8px_24px_-8px_rgba(0,0,0,0.6)] hover:shadow-[0_12px_32px_-8px_rgba(0,0,0,0.7)] hover:border-[#4a6fa5]/50',
+          ? 'bg-white border border-[#017BC8]/25 text-[#334155] shadow-[0_8px_24px_-8px_rgba(74,111,165,0.35)] hover:shadow-[0_12px_32px_-8px_rgba(74,111,165,0.45)] hover:border-[#017BC8]/40'
+          : 'bg-[#0F172A] border border-[#017BC8]/30 text-[#CBD5E1] shadow-[0_8px_24px_-8px_rgba(0,0,0,0.6)] hover:shadow-[0_12px_32px_-8px_rgba(0,0,0,0.7)] hover:border-[#017BC8]/50',
         // Mark is brand-tinted; the label stays in the workspace's text
         // colour so it doesn't shout. Whimsy lives in the icon + shadow.
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a6fa5]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#f5f7fa] dark:focus-visible:ring-offset-[#0d1118]',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#017BC8]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#F8FAFC] dark:focus-visible:ring-offset-[#020617]',
       ].join(' ')}
     >
       <span
         data-testid="piqc-dock-mark"
         className={`relative inline-flex items-center justify-center w-7 h-7 rounded-full ${
           isLight
-            ? 'bg-[#4a6fa5]/10 text-[#4a6fa5]'
-            : 'bg-[#4a6fa5]/15 text-[#6e8fb5]'
+            ? 'bg-[#017BC8]/10 text-[#017BC8]'
+            : 'bg-[#017BC8]/15 text-[#74B4DC]'
         }`}
       >
         <PiqcMark size={14} />
@@ -114,7 +114,7 @@ export default function PiqcDock({ onOpen, hidden, hasSignals = false }: Props) 
             className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ${
               isLight
                 ? 'bg-amber-500 ring-white'
-                : 'bg-amber-400 ring-[#131a22]'
+                : 'bg-amber-400 ring-[#0F172A]'
             }`}
           />
         )}

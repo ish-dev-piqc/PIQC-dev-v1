@@ -103,22 +103,22 @@ export default function TrustAssessmentForm({
   const headingColor = 'text-fg-heading';
   const labelColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
-  const inputBg = isLight ? 'bg-white' : 'bg-[#131a22]';
+  const inputBg = isLight ? 'bg-white' : 'bg-[#0F172A]';
   const inputBorder = isLight
-    ? 'border-[#cbd2db] focus:border-[#4a6fa5] focus:ring-1 focus:ring-[#4a6fa5]/30'
-    : 'border-white/15 focus:border-[#6e8fb5] focus:ring-1 focus:ring-[#6e8fb5]/30';
+    ? 'border-[#CBD5E1] focus:border-[#017BC8] focus:ring-1 focus:ring-[#017BC8]/30'
+    : 'border-white/15 focus:border-[#74B4DC] focus:ring-1 focus:ring-[#74B4DC]/30';
   const radioActive = isLight
-    ? 'bg-[#4a6fa5]/10 border-[#4a6fa5] text-[#4a6fa5]'
-    : 'bg-[#4a6fa5]/15 border-[#6e8fb5] text-[#6e8fb5]';
+    ? 'bg-[#017BC8]/10 border-[#017BC8] text-[#017BC8]'
+    : 'bg-[#017BC8]/15 border-[#74B4DC] text-[#74B4DC]';
   const radioInactive = isLight
-    ? 'bg-white border-[#e2e8ee] text-[#374152]/65 hover:border-[#cbd2db] hover:text-[#1a1f28]'
-    : 'bg-[#131a22] border-white/10 text-[#d2d7e0]/55 hover:border-white/20 hover:text-[#d2d7e0]';
+    ? 'bg-white border-[#E2E8F0] text-[#334155]/65 hover:border-[#CBD5E1] hover:text-[#0F172A]'
+    : 'bg-[#0F172A] border-white/10 text-[#CBD5E1]/55 hover:border-white/20 hover:text-[#CBD5E1]';
   const buttonPrimary = isLight
-    ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
-    : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]';
+    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
+    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]';
   const buttonSecondary = isLight
-    ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-    : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]';
+    ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+    : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]';
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -216,7 +216,7 @@ export default function TrustAssessmentForm({
         />
       </div>
 
-      <div className={`flex items-center gap-2 pt-2 border-t ${isLight ? 'border-[#e2e8ee]' : 'border-white/5'}`}>
+      <div className={`flex items-center gap-2 pt-2 border-t ${isLight ? 'border-[#E2E8F0]' : 'border-white/5'}`}>
         <button
           type="submit"
           disabled={submitting}
@@ -335,14 +335,14 @@ function ChipListField({
   };
 
   const chipBg = isLight
-    ? 'bg-[#eef2f6] border-[#cbd2db] text-[#1a1f28]'
-    : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]';
+    ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#0F172A]'
+    : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]';
   const chipRemoveBtn = isLight
-    ? 'text-[#374152]/55 hover:text-red-600'
-    : 'text-[#d2d7e0]/55 hover:text-red-400';
+    ? 'text-[#334155]/55 hover:text-red-600'
+    : 'text-[#CBD5E1]/55 hover:text-red-400';
   const addButton = isLight
-    ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
-    : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]';
+    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
+    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]';
 
   return (
     <div>

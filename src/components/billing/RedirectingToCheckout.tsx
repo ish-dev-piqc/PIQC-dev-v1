@@ -20,7 +20,7 @@ export default function RedirectingToCheckout() {
   const { message } = useCheckoutRedirect();
   const isLight = theme === 'light';
 
-  const pageBg = isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]';
+  const pageBg = isLight ? 'bg-[#F8FAFC]' : 'bg-[#020617]';
 
   return (
     <div className={`min-h-screen ${pageBg} flex flex-col items-center justify-center px-4 relative overflow-hidden`}>
@@ -34,7 +34,7 @@ export default function RedirectingToCheckout() {
       />
       <div className="relative z-10 flex flex-col items-center">
         <div className="flex items-center gap-3">
-          <Loader2 size={22} className="animate-spin text-[#4a6fa5]" />
+          <Loader2 size={22} className="animate-spin text-[#017BC8]" />
           <span className="text-sm font-semibold text-fg-heading">
             {message}
           </span>

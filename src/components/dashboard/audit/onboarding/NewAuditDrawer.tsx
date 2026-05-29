@@ -114,20 +114,20 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
   const labelColor = 'text-fg-heading';
   const mutedColor = 'text-fg-muted';
   const sectionHeader = 'text-fg-label';
-  const inputBg = isLight ? 'bg-white' : 'bg-[#131a22]';
+  const inputBg = isLight ? 'bg-white' : 'bg-[#0F172A]';
   const inputBorder = isLight
-    ? 'border-[#cbd2db] focus:border-[#4a6fa5] focus:ring-1 focus:ring-[#4a6fa5]/30'
-    : 'border-white/15 focus:border-[#6e8fb5] focus:ring-1 focus:ring-[#6e8fb5]/30';
+    ? 'border-[#CBD5E1] focus:border-[#017BC8] focus:ring-1 focus:ring-[#017BC8]/30'
+    : 'border-white/15 focus:border-[#74B4DC] focus:ring-1 focus:ring-[#74B4DC]/30';
   const buttonPrimary = isLight
-    ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f] disabled:bg-[#cbd2db]'
-    : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5] disabled:bg-white/10 disabled:text-white/35';
+    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF] disabled:bg-[#CBD5E1]'
+    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE] disabled:bg-white/10 disabled:text-white/35';
   const buttonSecondary = isLight
-    ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-    : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]';
-  const tabActive = isLight ? 'border-[#4a6fa5] text-[#4a6fa5]' : 'border-[#6e8fb5] text-[#6e8fb5]';
+    ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+    : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]';
+  const tabActive = isLight ? 'border-[#017BC8] text-[#017BC8]' : 'border-[#74B4DC] text-[#74B4DC]';
   const tabInactive = isLight
-    ? 'border-transparent text-[#374152]/60 hover:text-[#1a1f28]'
-    : 'border-transparent text-[#d2d7e0]/55 hover:text-white';
+    ? 'border-transparent text-[#334155]/60 hover:text-[#0F172A]'
+    : 'border-transparent text-[#CBD5E1]/55 hover:text-white';
 
   // ---------------------------------------------------------------------------
   // Submit
@@ -239,8 +239,8 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
         ref={panelRef}
         className={`relative w-full max-w-xl h-full overflow-y-auto shadow-xl border-l ${
           isLight
-            ? 'bg-[#f5f7fa] border-[#e2e8ee]'
-            : 'bg-[#0d1118] border-white/5'
+            ? 'bg-[#F8FAFC] border-[#E2E8F0]'
+            : 'bg-[#020617] border-white/5'
         }`}
       >
         {/* Header — "PIQC Clinical · Audit" framing keeps this surface
@@ -248,8 +248,8 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
         <div
           className={`sticky top-0 z-10 px-5 py-3.5 border-b backdrop-blur ${
             isLight
-              ? 'bg-[#f5f7fa]/95 border-[#e2e8ee]'
-              : 'bg-[#0d1118]/95 border-white/5'
+              ? 'bg-[#F8FAFC]/95 border-[#E2E8F0]'
+              : 'bg-[#020617]/95 border-white/5'
           }`}
         >
           <div className="flex items-center justify-between gap-3">
@@ -266,7 +266,7 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
               onClick={onClose}
               disabled={submitting}
               aria-label="Close"
-              className={`inline-flex items-center justify-center w-7 h-7 rounded-md ${mutedColor} hover:bg-[#e2e8ee] dark:hover:bg-white/[0.06] disabled:opacity-40`}
+              className={`inline-flex items-center justify-center w-7 h-7 rounded-md ${mutedColor} hover:bg-[#E2E8F0] dark:hover:bg-white/[0.06] disabled:opacity-40`}
             >
               <X size={14} />
             </button>
@@ -315,7 +315,7 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
             ) : (
               <div
                 className={`space-y-2 p-3 rounded-md border ${
-                  isLight ? 'bg-white border-[#e2e8ee]' : 'bg-white/[0.02] border-white/10'
+                  isLight ? 'bg-white border-[#E2E8F0]' : 'bg-white/[0.02] border-white/10'
                 }`}
               >
                 <input
@@ -372,7 +372,7 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
               <FileText size={12} className={mutedColor} />
               Protocol <span className="text-red-500 dark:text-red-400">*</span>
             </label>
-            <div className={`border-b mb-3 ${isLight ? 'border-[#e2e8ee]' : 'border-white/5'}`}>
+            <div className={`border-b mb-3 ${isLight ? 'border-[#E2E8F0]' : 'border-white/5'}`}>
               <div className="flex gap-4">
                 <ProtocolTabButton
                   active={protocolMode === 'existing'}
@@ -424,8 +424,8 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
                 <label
                   className={`flex items-center justify-center gap-2 w-full px-3 py-4 rounded-md border border-dashed cursor-pointer transition-colors ${
                     isLight
-                      ? 'border-[#cbd2db] hover:border-[#4a6fa5]/40 hover:bg-white text-[#374152]/75'
-                      : 'border-white/15 hover:border-[#6e8fb5]/40 hover:bg-white/[0.03] text-[#d2d7e0]/70'
+                      ? 'border-[#CBD5E1] hover:border-[#017BC8]/40 hover:bg-white text-[#334155]/75'
+                      : 'border-white/15 hover:border-[#74B4DC]/40 hover:bg-white/[0.03] text-[#CBD5E1]/70'
                   }`}
                 >
                   <Upload size={14} className={mutedColor} />
@@ -502,7 +502,7 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
                   <p
                     data-testid="upload-cached-indicator"
                     className={`text-[11px] inline-flex items-center gap-1 ${
-                      isLight ? 'text-[#4a6fa5]' : 'text-[#6e8fb5]'
+                      isLight ? 'text-[#017BC8]' : 'text-[#74B4DC]'
                     }`}
                   >
                     <CheckCircle2 size={11} />
@@ -528,11 +528,11 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
                       className={`text-center rounded-md border px-2 py-1.5 text-xs font-semibold transition-colors ${
                         active
                           ? isLight
-                            ? 'bg-[#4a6fa5]/10 border-[#4a6fa5] text-[#4a6fa5]'
-                            : 'bg-[#4a6fa5]/15 border-[#6e8fb5] text-[#6e8fb5]'
+                            ? 'bg-[#017BC8]/10 border-[#017BC8] text-[#017BC8]'
+                            : 'bg-[#017BC8]/15 border-[#74B4DC] text-[#74B4DC]'
                           : isLight
-                            ? 'bg-white border-[#e2e8ee] text-[#374152]/65 hover:border-[#cbd2db]'
-                            : 'bg-[#131a22] border-white/10 text-[#d2d7e0]/55 hover:border-white/20'
+                            ? 'bg-white border-[#E2E8F0] text-[#334155]/65 hover:border-[#CBD5E1]'
+                            : 'bg-[#0F172A] border-white/10 text-[#CBD5E1]/55 hover:border-white/20'
                       }`}
                     >
                       {AUDIT_TYPE_LABELS[t]}
@@ -572,8 +572,8 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
             <div
               className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${
                 isLight
-                  ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]'
-                  : 'bg-white/[0.04] border-white/10 text-[#d2d7e0]'
+                  ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]'
+                  : 'bg-white/[0.04] border-white/10 text-[#CBD5E1]'
               }`}
             >
               <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -586,8 +586,8 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
         <div
           className={`sticky bottom-0 z-10 px-5 py-3 border-t backdrop-blur flex justify-end gap-2 ${
             isLight
-              ? 'bg-[#f5f7fa]/95 border-[#e2e8ee]'
-              : 'bg-[#0d1118]/95 border-white/5'
+              ? 'bg-[#F8FAFC]/95 border-[#E2E8F0]'
+              : 'bg-[#020617]/95 border-white/5'
           }`}
         >
           <button

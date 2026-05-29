@@ -109,26 +109,26 @@ export default function Login({ onViewChange }: LoginProps) {
     setError('');
   };
 
-  const pageBg = isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]';
+  const pageBg = isLight ? 'bg-[#F8FAFC]' : 'bg-[#020617]';
   const logoText = 'text-fg-heading';
   const headingColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
-  const backColor = isLight ? 'text-[#374152]/40 hover:text-[#374152]/70' : 'text-[#d2d7e0]/40 hover:text-[#d2d7e0]/70';
-  const labelColor = isLight ? 'text-[#374152]/70' : 'text-[#d2d7e0]/70';
+  const backColor = isLight ? 'text-[#334155]/40 hover:text-[#334155]/70' : 'text-[#CBD5E1]/40 hover:text-[#CBD5E1]/70';
+  const labelColor = isLight ? 'text-[#334155]/70' : 'text-[#CBD5E1]/70';
   const inputBg = isLight
-    ? 'bg-white border-[#d8dfe8] text-[#1a1f28] placeholder-[#374152]/20 focus:border-[#4a6fa5]/60 focus:ring-[#4a6fa5]/30'
-    : 'bg-[#131a22] border-white/[0.08] text-white placeholder-[#d2d7e0]/20 focus:border-[#4a6fa5]/60 focus:ring-[#4a6fa5]/30';
-  const eyeColor = isLight ? 'text-[#374152]/30 hover:text-[#374152]/60' : 'text-[#d2d7e0]/30 hover:text-[#d2d7e0]/60';
-  const footerColor = isLight ? 'text-[#374152]/40' : 'text-[#d2d7e0]/40';
-  const dividerLine = isLight ? 'bg-[#d8dfe8]' : 'bg-white/[0.08]';
-  const dividerText = isLight ? 'text-[#374152]/40 bg-[#f5f7fa]' : 'text-[#d2d7e0]/40 bg-[#0d1118]';
+    ? 'bg-white border-[#E2E8F0] text-[#0F172A] placeholder-[#334155]/20 focus:border-[#017BC8]/60 focus:ring-[#017BC8]/30'
+    : 'bg-[#0F172A] border-white/[0.08] text-white placeholder-[#CBD5E1]/20 focus:border-[#017BC8]/60 focus:ring-[#017BC8]/30';
+  const eyeColor = isLight ? 'text-[#334155]/30 hover:text-[#334155]/60' : 'text-[#CBD5E1]/30 hover:text-[#CBD5E1]/60';
+  const footerColor = isLight ? 'text-[#334155]/40' : 'text-[#CBD5E1]/40';
+  const dividerLine = isLight ? 'bg-[#E2E8F0]' : 'bg-white/[0.08]';
+  const dividerText = isLight ? 'text-[#334155]/40 bg-[#F8FAFC]' : 'text-[#CBD5E1]/40 bg-[#020617]';
   const magicButtonBg = isLight
-    ? 'bg-white border-[#d8dfe8] hover:bg-[#f5f7fa] text-[#1a1f28]'
-    : 'bg-[#131a22] border-white/[0.08] hover:bg-[#1a2230] text-white';
+    ? 'bg-white border-[#E2E8F0] hover:bg-[#F8FAFC] text-[#0F172A]'
+    : 'bg-[#0F172A] border-white/[0.08] hover:bg-[#1E293B] text-white';
   const magicCardBg = isLight
-    ? 'bg-white border-[#d8dfe8]'
-    : 'bg-[#131a22] border-white/[0.08]';
-  const linkColor = 'text-[#6e8fb5] hover:text-[#87b5c7]';
+    ? 'bg-white border-[#E2E8F0]'
+    : 'bg-[#0F172A] border-white/[0.08]';
+  const linkColor = 'text-[#74B4DC] hover:text-[#87b5c7]';
 
   return (
     <div className={`min-h-screen ${pageBg} flex flex-col items-center justify-center px-4 relative overflow-hidden`}>
@@ -151,11 +151,11 @@ export default function Login({ onViewChange }: LoginProps) {
         </button>
 
         <div className="flex items-center gap-2.5 mb-8">
-          <div className="w-8 h-8 rounded-lg bg-[#4a6fa5] flex items-center justify-center shadow-btn">
+          <div className="w-8 h-8 rounded-lg bg-[#017BC8] flex items-center justify-center shadow-btn">
             <Activity className="w-4 h-4 text-white" strokeWidth={2.5} />
           </div>
           <span className={`text-[15px] font-semibold ${logoText} tracking-tight`}>
-            PIQ<span className="text-[#6e8fb5]">Clinical</span>
+            PIQ<span className="text-[#74B4DC]">Clinical</span>
           </span>
         </div>
 
@@ -205,7 +205,7 @@ export default function Login({ onViewChange }: LoginProps) {
               <button
                 type="submit"
                 disabled={magicLoading || !magicEmail}
-                className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-all duration-150 shadow-btn hover:shadow-btn-hover disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-all duration-150 shadow-btn hover:shadow-btn-hover disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {magicLoading ? 'Sending...' : 'Send link'}
               </button>
@@ -285,7 +285,7 @@ export default function Login({ onViewChange }: LoginProps) {
               <button
                 type="button"
                 onClick={() => onViewChange('forgot-password')}
-                className="text-xs text-[#6e8fb5] hover:text-[#87b5c7] transition-colors font-medium"
+                className="text-xs text-[#74B4DC] hover:text-[#87b5c7] transition-colors font-medium"
               >
                 Forgot password?
               </button>
@@ -319,7 +319,7 @@ export default function Login({ onViewChange }: LoginProps) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-[#4a6fa5] rounded-lg hover:bg-[#5b82b8] transition-all duration-150 shadow-btn hover:shadow-btn-hover disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+            className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-all duration-150 shadow-btn hover:shadow-btn-hover disabled:opacity-50 disabled:cursor-not-allowed mt-2"
           >
             {loading ? 'Signing in...' : 'Sign in'}
           </button>

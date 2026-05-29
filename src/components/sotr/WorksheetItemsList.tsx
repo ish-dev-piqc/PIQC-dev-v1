@@ -68,9 +68,9 @@ export default function WorksheetItemsList({ studyId, studyCode, onPick }: Props
   return (
     <div
       data-testid="sotr-worksheet-items-list"
-      className="bg-white dark:bg-[#131a22] border border-[#e2e8ee] dark:border-white/5 rounded-xl overflow-hidden"
+      className="bg-white dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-white/5 rounded-xl overflow-hidden"
     >
-      <div className="px-5 py-3.5 border-b border-[#f0f3f6] dark:border-white/[0.04] flex items-center justify-between gap-3 flex-wrap">
+      <div className="px-5 py-3.5 border-b border-[#F2F2F2] dark:border-white/[0.04] flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <ListChecks size={14} className="text-fg-muted" />
           <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold">
@@ -159,7 +159,7 @@ function Grouped({ items, onViewSource, onPick }: GroupedProps) {
     <>
       {Array.from(groups.entries()).map(([fieldType, rows]) => (
         <section key={fieldType} data-field-type={fieldType}>
-          <header className="px-5 py-2 bg-[#f5f7fa] dark:bg-white/[0.02] border-b border-[#f0f3f6] dark:border-white/[0.04]">
+          <header className="px-5 py-2 bg-[#F8FAFC] dark:bg-white/[0.02] border-b border-[#F2F2F2] dark:border-white/[0.04]">
             <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold">
               {FIELD_TYPE_LABELS[fieldType] ?? fieldType}
               <span className="ml-2 text-fg-muted normal-case font-normal tracking-normal">
@@ -167,7 +167,7 @@ function Grouped({ items, onViewSource, onPick }: GroupedProps) {
               </span>
             </p>
           </header>
-          <div className="divide-y divide-[#f0f3f6] dark:divide-white/[0.04]">
+          <div className="divide-y divide-[#F2F2F2] dark:divide-white/[0.04]">
             {rows.map((row) => (
               <WorksheetItemRow
                 key={row.id}

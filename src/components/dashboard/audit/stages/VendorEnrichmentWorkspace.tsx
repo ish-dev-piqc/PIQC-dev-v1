@@ -406,11 +406,11 @@ function SectionCard({
   isLight,
   children,
 }: SectionCardProps) {
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const headingColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
   const sectionHeader = 'text-fg-label';
-  const borderTone = isLight ? 'border-[#eef2f6]' : 'border-white/5';
+  const borderTone = isLight ? 'border-[#F2F2F2]' : 'border-white/5';
 
   const opacity = status === 'locked' ? 'opacity-60' : '';
 
@@ -442,8 +442,8 @@ function StatusBadge({ status, isLight }: { status: SectionStatus; isLight: bool
       ? 'bg-amber-50 border-amber-200 text-amber-700'
       : 'bg-amber-500/15 border-amber-500/30 text-amber-400',
     locked: isLight
-      ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]/60'
-      : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]/50',
+      ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/60'
+      : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/50',
   };
   const labels: Record<SectionStatus, string> = {
     done: 'Defined',
@@ -477,8 +477,8 @@ function ServiceSummary({ service, isLight, onEdit, onHistoryClick }: ServiceSum
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
   const buttonSecondary = isLight
-    ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-    : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]';
+    ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+    : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]';
   const typeLabel =
     SERVICE_TYPE_OPTIONS.find((o) => o.value === service.service_type)?.label ??
     service.service_type;
@@ -494,8 +494,8 @@ function ServiceSummary({ service, isLight, onEdit, onHistoryClick }: ServiceSum
             <span
               className={`inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded border ${
                 isLight
-                  ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]/70'
-                  : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]/65'
+                  ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/70'
+                  : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/65'
               }`}
             >
               {typeLabel}
@@ -556,11 +556,11 @@ function TrustAssessmentSummary({
   const mutedColor = 'text-fg-muted';
   const sectionHeader = 'text-fg-label';
   const chipBg = isLight
-    ? 'bg-[#eef2f6] border-[#cbd2db] text-[#1a1f28]'
-    : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]';
+    ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#0F172A]'
+    : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]';
   const buttonSecondary = isLight
-    ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-    : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]';
+    ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+    : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]';
 
   return (
     <div className="space-y-4">
@@ -619,7 +619,7 @@ function TrustAssessmentSummary({
               <li key={i} className={`text-sm flex items-start gap-2 ${headingColor}`}>
                 <span
                   className={`mt-1.5 w-1 h-1 rounded-full flex-shrink-0 ${
-                    isLight ? 'bg-[#4a6fa5]/55' : 'bg-[#6e8fb5]/55'
+                    isLight ? 'bg-[#017BC8]/55' : 'bg-[#74B4DC]/55'
                   }`}
                 />
                 {h}
@@ -675,18 +675,18 @@ function PostureSummary({ label, value, rawValue, isLight }: PostureSummaryProps
   const isUnknown = rawValue === 'UNKNOWN';
   const cardBg = isUnknown
     ? isLight
-      ? 'bg-[#f9fafc] border-[#e2e8ee]'
+      ? 'bg-[#F8FAFC] border-[#E2E8F0]'
       : 'bg-white/[0.02] border-white/5'
     : isLight
-    ? 'bg-[#4a6fa5]/[0.06] border-[#4a6fa5]/20'
-    : 'bg-[#4a6fa5]/[0.10] border-[#6e8fb5]/30';
+    ? 'bg-[#017BC8]/[0.06] border-[#017BC8]/20'
+    : 'bg-[#017BC8]/[0.10] border-[#74B4DC]/30';
   const sectionHeader = 'text-fg-label';
   const valueColor = isUnknown
     ? isLight
-      ? 'text-[#374152]/55'
-      : 'text-[#d2d7e0]/45'
+      ? 'text-[#334155]/55'
+      : 'text-[#CBD5E1]/45'
     : isLight
-    ? 'text-[#1a1f28]'
+    ? 'text-[#0F172A]'
     : 'text-white';
 
   return (

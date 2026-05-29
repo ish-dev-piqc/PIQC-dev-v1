@@ -12,7 +12,7 @@ function AssistantAvatar({ size = 'sm' }: { size?: 'sm' | 'md' }) {
   const dim = size === 'md' ? 'w-8 h-8' : 'w-7 h-7';
   const icon = size === 'md' ? 'w-4 h-4' : 'w-3.5 h-3.5';
   return (
-    <div className={`${dim} rounded-full bg-gradient-to-br from-[#6e8fb5] to-[#4a6fa5] flex items-center justify-center flex-shrink-0 shadow-md`}>
+    <div className={`${dim} rounded-full bg-gradient-to-br from-[#74B4DC] to-[#017BC8] flex items-center justify-center flex-shrink-0 shadow-md`}>
       <Stethoscope className={`${icon} text-white`} strokeWidth={2} />
     </div>
   );
@@ -22,10 +22,10 @@ function UserAvatar({ isLight }: { isLight: boolean }) {
   return (
     <div className={`w-7 h-7 rounded-full border flex items-center justify-center flex-shrink-0 ${
       isLight
-        ? 'bg-gradient-to-br from-[#e8eef4] to-[#d8e4ee] border-[#c8d8e4]'
-        : 'bg-gradient-to-br from-[#3c3c3c] to-[#2a2a2a] border-white/10'
+        ? 'bg-gradient-to-br from-[#e8eef4] to-[#E2E8F0] border-[#CBD5E1]'
+        : 'bg-gradient-to-br from-[#334155] to-[#2a2a2a] border-white/10'
     }`}>
-      <UserCircle className={`w-5 h-5 ${isLight ? 'text-[#374152]/50' : 'text-[#d2d7e0]/60'}`} strokeWidth={1.5} />
+      <UserCircle className={`w-5 h-5 ${isLight ? 'text-[#334155]/50' : 'text-[#CBD5E1]/60'}`} strokeWidth={1.5} />
     </div>
   );
 }
@@ -35,12 +35,12 @@ function TypingIndicator({ isLight }: { isLight: boolean }) {
     <div className="flex items-end gap-2.5">
       <AssistantAvatar />
       <div className={`rounded-2xl rounded-bl-sm px-4 py-3 border ${
-        isLight ? 'bg-[#f5f7fa] border-[#e2e8ee]' : 'bg-[#161d25] border-white/[0.07]'
+        isLight ? 'bg-[#F8FAFC] border-[#E2E8F0]' : 'bg-[#0F172A] border-white/[0.07]'
       }`}>
         <div className="flex gap-1 items-center h-4">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#6e8fb5]/60 animate-bounce [animation-delay:0ms]" />
-          <span className="w-1.5 h-1.5 rounded-full bg-[#6e8fb5]/60 animate-bounce [animation-delay:150ms]" />
-          <span className="w-1.5 h-1.5 rounded-full bg-[#6e8fb5]/60 animate-bounce [animation-delay:300ms]" />
+          <span className="w-1.5 h-1.5 rounded-full bg-[#74B4DC]/60 animate-bounce [animation-delay:0ms]" />
+          <span className="w-1.5 h-1.5 rounded-full bg-[#74B4DC]/60 animate-bounce [animation-delay:150ms]" />
+          <span className="w-1.5 h-1.5 rounded-full bg-[#74B4DC]/60 animate-bounce [animation-delay:300ms]" />
         </div>
       </div>
     </div>
@@ -75,10 +75,10 @@ function MessageBubble({ message, streaming, isLight }: BubbleProps) {
       <div
         className={`max-w-[78%] px-4 py-2.5 text-sm leading-relaxed ${
           isUser
-            ? 'bg-[#4a6fa5] text-white rounded-2xl rounded-br-sm'
+            ? 'bg-[#017BC8] text-white rounded-2xl rounded-br-sm'
             : isLight
-            ? 'bg-[#f5f7fa] border border-[#e2e8ee] text-[#374152]/90 rounded-2xl rounded-bl-sm'
-            : 'bg-[#161d25] border border-white/[0.07] text-[#d2d7e0]/90 rounded-2xl rounded-bl-sm'
+            ? 'bg-[#F8FAFC] border border-[#E2E8F0] text-[#334155]/90 rounded-2xl rounded-bl-sm'
+            : 'bg-[#0F172A] border border-white/[0.07] text-[#CBD5E1]/90 rounded-2xl rounded-bl-sm'
         }`}
       >
         {message.content.split('\n').map((line, i, arr) => (
@@ -88,7 +88,7 @@ function MessageBubble({ message, streaming, isLight }: BubbleProps) {
           </span>
         ))}
         {streaming && (
-          <span className="inline-block w-0.5 h-3.5 bg-[#6e8fb5]/60 ml-0.5 align-middle animate-pulse" />
+          <span className="inline-block w-0.5 h-3.5 bg-[#74B4DC]/60 ml-0.5 align-middle animate-pulse" />
         )}
       </div>
     </div>
@@ -209,15 +209,15 @@ export default function Chatbot() {
         {open && (
           <div className={`w-[360px] sm:w-[400px] h-[520px] flex flex-col rounded-2xl shadow-2xl border overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-200 ${
             isLight
-              ? 'border-[#e2e8ee] bg-white shadow-[#1a1f28]/10'
-              : 'border-white/[0.08] bg-[#0d1118]'
+              ? 'border-[#E2E8F0] bg-white shadow-[#0F172A]/10'
+              : 'border-white/[0.08] bg-[#020617]'
           }`}>
             <div className={`flex items-center gap-3 px-4 py-3.5 border-b flex-shrink-0 ${
-              isLight ? 'bg-[#f5f7fa] border-[#e2e8ee]' : 'bg-[#131a22] border-white/[0.07]'
+              isLight ? 'bg-[#F8FAFC] border-[#E2E8F0]' : 'bg-[#0F172A] border-white/[0.07]'
             }`}>
               <AssistantAvatar size="md" />
               <div className="flex-1 min-w-0">
-                <p className={`text-sm font-semibold leading-none ${isLight ? 'text-[#1a1f28]' : 'text-white'}`}>PIQClinical Assistant</p>
+                <p className={`text-sm font-semibold leading-none ${isLight ? 'text-[#0F172A]' : 'text-white'}`}>PIQClinical Assistant</p>
                 <p className="text-xs text-blue-500 mt-0.5 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block" />
                   Online
@@ -227,8 +227,8 @@ export default function Chatbot() {
                 onClick={() => setOpen(false)}
                 className={`p-1.5 rounded-lg transition-colors ${
                   isLight
-                    ? 'text-[#374152]/50 hover:text-[#1a1f28] hover:bg-[#1a1f28]/[0.06]'
-                    : 'text-[#d2d7e0]/50 hover:text-white hover:bg-white/[0.07]'
+                    ? 'text-[#334155]/50 hover:text-[#0F172A] hover:bg-[#0F172A]/[0.06]'
+                    : 'text-[#CBD5E1]/50 hover:text-white hover:bg-white/[0.07]'
                 }`}
                 aria-label="Close chat"
               >
@@ -257,12 +257,12 @@ export default function Chatbot() {
             </div>
 
             <div className={`px-4 py-3 border-t flex-shrink-0 ${
-              isLight ? 'bg-[#f5f7fa] border-[#e2e8ee]' : 'bg-[#131a22] border-white/[0.07]'
+              isLight ? 'bg-[#F8FAFC] border-[#E2E8F0]' : 'bg-[#0F172A] border-white/[0.07]'
             }`}>
               <div className={`flex items-end gap-2 border rounded-xl px-3 py-2 transition-colors ${
                 isLight
-                  ? 'bg-white border-[#e2e8ee] focus-within:border-[#4a6fa5]/50'
-                  : 'bg-[#161d25] border-white/[0.08] focus-within:border-[#4a6fa5]/50'
+                  ? 'bg-white border-[#E2E8F0] focus-within:border-[#017BC8]/50'
+                  : 'bg-[#0F172A] border-white/[0.08] focus-within:border-[#017BC8]/50'
               }`}>
                 <textarea
                   ref={textareaRef}
@@ -273,20 +273,20 @@ export default function Chatbot() {
                   placeholder="Ask about PIQClinical…"
                   rows={1}
                   className={`flex-1 bg-transparent text-sm outline-none resize-none overflow-y-auto disabled:opacity-50 leading-relaxed py-0.5 ${
-                    isLight ? 'text-[#1a1f28] placeholder-[#374152]/30' : 'text-white placeholder-[#3c3c3c]'
+                    isLight ? 'text-[#0F172A] placeholder-[#334155]/30' : 'text-white placeholder-[#334155]'
                   }`}
                   style={{ maxHeight: '140px' }}
                 />
                 <button
                   onClick={sendMessage}
                   disabled={!input.trim() || loading}
-                  className="p-1.5 rounded-lg bg-[#4a6fa5] text-white hover:bg-[#5b82b8] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0 mb-0.5"
+                  className="p-1.5 rounded-lg bg-[#017BC8] text-white hover:bg-[#1595D1] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0 mb-0.5"
                   aria-label="Send message"
                 >
                   <Send className="w-3.5 h-3.5" />
                 </button>
               </div>
-              <p className={`text-[10px] text-center mt-2 ${isLight ? 'text-[#374152]/30' : 'text-[#d2d7e0]/25'}`}>
+              <p className={`text-[10px] text-center mt-2 ${isLight ? 'text-[#334155]/30' : 'text-[#CBD5E1]/25'}`}>
                 Enter to send · Shift+Enter for new line
               </p>
             </div>
@@ -298,9 +298,9 @@ export default function Chatbot() {
           className={`w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-200 ${
             open
               ? isLight
-                ? 'bg-[#f0f4f8] border border-[#d8e4ee] text-[#374152]/60 hover:text-[#1a1f28]'
-                : 'bg-[#161d25] border border-white/[0.1] text-[#d2d7e0]/70 hover:text-white'
-              : 'bg-[#4a6fa5] hover:bg-[#5b82b8] text-white shadow-[#4a6fa5]/30'
+                ? 'bg-[#F2F2F2] border border-[#E2E8F0] text-[#334155]/60 hover:text-[#0F172A]'
+                : 'bg-[#0F172A] border border-white/[0.1] text-[#CBD5E1]/70 hover:text-white'
+              : 'bg-[#017BC8] hover:bg-[#1595D1] text-white shadow-[#017BC8]/30'
           }`}
           aria-label={open ? 'Close chat' : 'Open chat'}
         >

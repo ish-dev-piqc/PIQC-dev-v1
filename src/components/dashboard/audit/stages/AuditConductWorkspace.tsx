@@ -262,16 +262,16 @@ export default function AuditConductWorkspace() {
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
   const sectionHeader = 'text-fg-label';
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const formCardBg = isLight
-    ? 'bg-[#f9fafc] border-[#e2e8ee]'
+    ? 'bg-[#F8FAFC] border-[#E2E8F0]'
     : 'bg-white/[0.02] border-white/5';
   const emptyBg = isLight
-    ? 'border-[#e2e8ee] bg-[#f9fafc]/40'
+    ? 'border-[#E2E8F0] bg-[#F8FAFC]/40'
     : 'border-white/5 bg-white/[0.01]';
   const buttonPrimary = isLight
-    ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
-    : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]';
+    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
+    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]';
 
   const inForm = mode !== 'list';
   const canSave = !!form.vendor_domain.trim() && !!form.observation_text.trim();
@@ -325,7 +325,7 @@ export default function AuditConductWorkspace() {
             onOpenViewSource={() => setViewSourceOpen(true)}
             onClearSource={handleClearSource}
           />
-          <div className={`flex items-center gap-2 pt-4 mt-4 border-t ${isLight ? 'border-[#e2e8ee]' : 'border-white/5'}`}>
+          <div className={`flex items-center gap-2 pt-4 mt-4 border-t ${isLight ? 'border-[#E2E8F0]' : 'border-white/5'}`}>
             <button
               type="button"
               onClick={saveEntry}
@@ -339,8 +339,8 @@ export default function AuditConductWorkspace() {
               onClick={cancel}
               className={`text-sm font-medium px-3.5 py-2 rounded-md transition-colors ${
                 isLight
-                  ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-                  : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]'
+                  ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+                  : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]'
               }`}
             >
               Cancel
@@ -449,8 +449,8 @@ export default function AuditConductWorkspace() {
             disabled={entries.length === 0 || alreadyAdvanced}
             className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${
               isLight
-                ? 'bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-[#cbd2db]'
-                : 'bg-emerald-500 text-[#0d1118] hover:bg-emerald-400 disabled:bg-white/10 disabled:text-white/35'
+                ? 'bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-[#CBD5E1]'
+                : 'bg-emerald-500 text-[#020617] hover:bg-emerald-400 disabled:bg-white/10 disabled:text-white/35'
             }`}
           >
             Advance to Report drafting
@@ -493,16 +493,16 @@ function EntryForm({
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
   const headingColor = 'text-fg-heading';
-  const inputBg = isLight ? 'bg-white' : 'bg-[#131a22]';
+  const inputBg = isLight ? 'bg-white' : 'bg-[#0F172A]';
   const inputBorder = isLight
-    ? 'border-[#cbd2db] focus:border-[#4a6fa5] focus:ring-1 focus:ring-[#4a6fa5]/30'
-    : 'border-white/15 focus:border-[#6e8fb5] focus:ring-1 focus:ring-[#6e8fb5]/30';
+    ? 'border-[#CBD5E1] focus:border-[#017BC8] focus:ring-1 focus:ring-[#017BC8]/30'
+    : 'border-white/15 focus:border-[#74B4DC] focus:ring-1 focus:ring-[#74B4DC]/30';
   const radioActive = isLight
-    ? 'bg-[#4a6fa5]/10 border-[#4a6fa5] text-[#4a6fa5]'
-    : 'bg-[#4a6fa5]/15 border-[#6e8fb5] text-[#6e8fb5]';
+    ? 'bg-[#017BC8]/10 border-[#017BC8] text-[#017BC8]'
+    : 'bg-[#017BC8]/15 border-[#74B4DC] text-[#74B4DC]';
   const radioInactive = isLight
-    ? 'bg-white border-[#e2e8ee] text-[#374152]/65 hover:border-[#cbd2db] hover:text-[#1a1f28]'
-    : 'bg-[#131a22] border-white/10 text-[#d2d7e0]/55 hover:border-white/20 hover:text-[#d2d7e0]';
+    ? 'bg-white border-[#E2E8F0] text-[#334155]/65 hover:border-[#CBD5E1] hover:text-[#0F172A]'
+    : 'bg-[#0F172A] border-white/10 text-[#CBD5E1]/55 hover:border-white/20 hover:text-[#CBD5E1]';
 
   const linkedRisk = form.protocol_risk_id
     ? protocolRisks.find((r) => r.id === form.protocol_risk_id) ?? null
@@ -574,7 +574,7 @@ function EntryForm({
             <div
               data-testid="conduct-source-link-chip"
               className={`flex items-center gap-2 flex-wrap rounded-md border px-2.5 py-1.5 ${
-                isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/10'
+                isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/10'
               }`}
             >
               <Link2 size={11} className={mutedColor} />
@@ -589,8 +589,8 @@ function EntryForm({
                 onClick={onOpenViewSource}
                 className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded transition-colors ${
                   isLight
-                    ? 'text-[#374152]/75 hover:bg-[#f5f7fa]'
-                    : 'text-[#d2d7e0]/70 hover:bg-white/[0.04]'
+                    ? 'text-[#334155]/75 hover:bg-[#F8FAFC]'
+                    : 'text-[#CBD5E1]/70 hover:bg-white/[0.04]'
                 }`}
               >
                 <FileSearch size={10} />
@@ -602,8 +602,8 @@ function EntryForm({
                 aria-label="Remove protocol source link"
                 className={`inline-flex items-center justify-center w-5 h-5 rounded transition-colors ${
                   isLight
-                    ? 'text-[#374152]/55 hover:bg-[#f5f7fa]'
-                    : 'text-[#d2d7e0]/55 hover:bg-white/[0.04]'
+                    ? 'text-[#334155]/55 hover:bg-[#F8FAFC]'
+                    : 'text-[#CBD5E1]/55 hover:bg-white/[0.04]'
                 }`}
               >
                 <XIcon size={10} />
@@ -616,8 +616,8 @@ function EntryForm({
               onClick={onOpenSourcePicker}
               className={`inline-flex items-center gap-1.5 text-[11px] rounded-md border border-dashed px-2.5 py-1 transition-colors ${
                 isLight
-                  ? 'border-[#cbd2db] hover:border-[#4a6fa5]/40 hover:bg-[#f5f7fa] text-[#374152]/70'
-                  : 'border-white/15 hover:border-[#6e8fb5]/40 hover:bg-white/[0.03] text-[#d2d7e0]/60'
+                  ? 'border-[#CBD5E1] hover:border-[#017BC8]/40 hover:bg-[#F8FAFC] text-[#334155]/70'
+                  : 'border-white/15 hover:border-[#74B4DC]/40 hover:bg-white/[0.03] text-[#CBD5E1]/60'
               }`}
             >
               <FileSearch size={11} />
@@ -728,8 +728,8 @@ function EntryRow({
   mutedColor,
 }: EntryRowProps) {
   const buttonSecondary = isLight
-    ? 'bg-white border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-    : 'bg-[#131a22] border border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]';
+    ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+    : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]';
 
   return (
     <div className={`${cardBg} border rounded-lg p-4`}>
@@ -857,14 +857,14 @@ function ImpactChip({ impact, isLight }: { impact: ProvisionalImpact; isLight: b
       ? 'bg-amber-50 border-amber-200 text-amber-700'
       : 'bg-amber-500/15 border-amber-500/30 text-amber-300',
     MINOR: isLight
-      ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/25 text-[#4a6fa5]'
-      : 'bg-[#6e8fb5]/15 border-[#6e8fb5]/30 text-[#6e8fb5]',
+      ? 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]'
+      : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]',
     OBSERVATION: isLight
-      ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/25 text-[#4a6fa5]'
-      : 'bg-[#6e8fb5]/15 border-[#6e8fb5]/30 text-[#6e8fb5]',
+      ? 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]'
+      : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]',
     NONE: isLight
-      ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]/65'
-      : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]/55',
+      ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/65'
+      : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/55',
   };
   return (
     <span
@@ -887,14 +887,14 @@ function ClassificationChip({
       ? 'bg-amber-50 border-amber-200 text-amber-700'
       : 'bg-amber-500/15 border-amber-500/30 text-amber-300',
     OBSERVATION: isLight
-      ? 'bg-[#4a6fa5]/10 border-[#4a6fa5]/25 text-[#4a6fa5]'
-      : 'bg-[#6e8fb5]/15 border-[#6e8fb5]/30 text-[#6e8fb5]',
+      ? 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]'
+      : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]',
     OPPORTUNITY_FOR_IMPROVEMENT: isLight
-      ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]/65'
-      : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]/55',
+      ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/65'
+      : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/55',
     NOT_YET_CLASSIFIED: isLight
-      ? 'bg-[#eef2f6] border-[#cbd2db] text-[#374152]/55'
-      : 'bg-white/[0.06] border-white/10 text-[#d2d7e0]/45',
+      ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/55'
+      : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/45',
   };
   return (
     <span

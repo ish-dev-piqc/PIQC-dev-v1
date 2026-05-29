@@ -49,8 +49,8 @@ export default function VisitNavigator({
   const isLight = theme === 'light';
 
   const navBg = isLight
-    ? 'bg-[#f9fafc] border-[#e2e8ee]'
-    : 'bg-[#0e141b] border-white/5';
+    ? 'bg-[#F8FAFC] border-[#E2E8F0]'
+    : 'bg-[#020617] border-white/5';
 
   // Sprint 7: memoize per-visit confidence so the rollup doesn't recompute
   // on every nav re-render (e.g., on each review-status mutation).
@@ -70,7 +70,7 @@ export default function VisitNavigator({
       data-testid="vew-navigator"
       className={`${navBg} border-r flex-shrink-0 w-72 overflow-y-auto hidden md:flex md:flex-col`}
     >
-      <div className={`px-4 pt-5 pb-3 border-b ${isLight ? 'border-[#e2e8ee]' : 'border-white/5'}`}>
+      <div className={`px-4 pt-5 pb-3 border-b ${isLight ? 'border-[#E2E8F0]' : 'border-white/5'}`}>
         <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold">
           Visit
         </p>
@@ -109,10 +109,10 @@ export default function VisitNavigator({
                 className={`w-full text-left px-4 py-3 border-l-[3px] transition-colors ${
                   isSelected
                     ? isLight
-                      ? 'bg-white border-[#1f2937]'
+                      ? 'bg-white border-[#1E293B]'
                       : 'bg-white/[0.06] border-white'
                     : isLight
-                      ? 'border-transparent hover:bg-[#f0f3f6]'
+                      ? 'border-transparent hover:bg-[#F2F2F2]'
                       : 'border-transparent hover:bg-white/[0.02]'
                 }`}
               >

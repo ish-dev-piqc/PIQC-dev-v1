@@ -127,10 +127,10 @@ export default function ParticipantProfileDrawer({ participantId, protocols, onC
     onClose();
   };
 
-  const bg = isLight ? 'bg-white' : 'bg-[#131a22]';
-  const border = isLight ? 'border-[#e2e8ee]' : 'border-white/5';
-  const rowBorder = isLight ? 'border-[#f0f3f6]' : 'border-white/[0.04]';
-  const panelBg = isLight ? 'bg-[#f9fafc] border-[#eef2f6]' : 'bg-white/[0.02] border-white/[0.04]';
+  const bg = isLight ? 'bg-white' : 'bg-[#0F172A]';
+  const border = isLight ? 'border-[#E2E8F0]' : 'border-white/5';
+  const rowBorder = isLight ? 'border-[#F2F2F2]' : 'border-white/[0.04]';
+  const panelBg = isLight ? 'bg-[#F8FAFC] border-[#F2F2F2]' : 'bg-white/[0.02] border-white/[0.04]';
   const deviationBg = isLight ? 'bg-amber-50 border-amber-200' : 'bg-amber-400/[0.08] border-amber-400/20';
 
   return (
@@ -172,7 +172,7 @@ export default function ParticipantProfileDrawer({ participantId, protocols, onC
                 <button
                   type="button"
                   onClick={() => setEditing(true)}
-                  className={`p-1.5 rounded-md transition-colors ${isLight ? 'hover:bg-[#f0f3f6]' : 'hover:bg-white/[0.06]'}`}
+                  className={`p-1.5 rounded-md transition-colors ${isLight ? 'hover:bg-[#F2F2F2]' : 'hover:bg-white/[0.06]'}`}
                   aria-label="Edit participant"
                   title="Edit"
                 >
@@ -184,7 +184,7 @@ export default function ParticipantProfileDrawer({ participantId, protocols, onC
                   className={`p-1.5 rounded-md transition-colors ${
                     confirmingDelete
                       ? isLight ? 'bg-rose-100 text-rose-700' : 'bg-rose-500/15 text-rose-300'
-                      : isLight ? 'hover:bg-[#f0f3f6] text-fg-sub' : 'hover:bg-white/[0.06] text-fg-sub'
+                      : isLight ? 'hover:bg-[#F2F2F2] text-fg-sub' : 'hover:bg-white/[0.06] text-fg-sub'
                   }`}
                   aria-label={confirmingDelete ? 'Cancel delete' : 'Delete participant'}
                   title={confirmingDelete ? 'Cancel' : 'Delete'}
@@ -196,7 +196,7 @@ export default function ParticipantProfileDrawer({ participantId, protocols, onC
             <button
               type="button"
               onClick={onClose}
-              className={`p-1.5 rounded-md transition-colors ${isLight ? 'hover:bg-[#f0f3f6]' : 'hover:bg-white/[0.06]'}`}
+              className={`p-1.5 rounded-md transition-colors ${isLight ? 'hover:bg-[#F2F2F2]' : 'hover:bg-white/[0.06]'}`}
               aria-label="Close"
             >
               <X size={16} className="text-fg-muted" />

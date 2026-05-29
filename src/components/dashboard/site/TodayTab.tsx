@@ -282,7 +282,7 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
   const headingColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
 
   const displayName =
     (user?.user_metadata?.full_name as string)?.split(' ')[0] ??
@@ -363,8 +363,8 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
             onClick={() => setFilterPanelOpen((v) => !v)}
             className={`md:hidden inline-flex items-center justify-center w-8 h-8 rounded-lg border ${
               isLight
-                ? 'bg-white border-[#e2e8ee] text-[#374152]/65 hover:bg-[#f5f7fa]'
-                : 'bg-[#131a22] border-white/5 text-[#d2d7e0]/65 hover:bg-white/[0.02]'
+                ? 'bg-white border-[#E2E8F0] text-[#334155]/65 hover:bg-[#F8FAFC]'
+                : 'bg-[#0F172A] border-white/5 text-[#CBD5E1]/65 hover:bg-white/[0.02]'
             }`}
             aria-label="Toggle filters"
           >
@@ -375,8 +375,8 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
             onClick={handlePrev}
             className={`inline-flex items-center justify-center w-8 h-8 rounded-lg border ${
               isLight
-                ? 'bg-white border-[#e2e8ee] text-[#374152]/65 hover:bg-[#f5f7fa]'
-                : 'bg-[#131a22] border-white/5 text-[#d2d7e0]/65 hover:bg-white/[0.02]'
+                ? 'bg-white border-[#E2E8F0] text-[#334155]/65 hover:bg-[#F8FAFC]'
+                : 'bg-[#0F172A] border-white/5 text-[#CBD5E1]/65 hover:bg-white/[0.02]'
             }`}
             aria-label="Previous"
           >
@@ -387,8 +387,8 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
             onClick={handleToday}
             className={`px-3 h-8 rounded-lg border text-xs font-medium ${
               isLight
-                ? 'bg-white border-[#e2e8ee] text-[#374152]/75 hover:bg-[#f5f7fa]'
-                : 'bg-[#131a22] border-white/5 text-[#d2d7e0]/75 hover:bg-white/[0.02]'
+                ? 'bg-white border-[#E2E8F0] text-[#334155]/75 hover:bg-[#F8FAFC]'
+                : 'bg-[#0F172A] border-white/5 text-[#CBD5E1]/75 hover:bg-white/[0.02]'
             }`}
           >
             Today
@@ -398,8 +398,8 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
             onClick={handleNext}
             className={`inline-flex items-center justify-center w-8 h-8 rounded-lg border ${
               isLight
-                ? 'bg-white border-[#e2e8ee] text-[#374152]/65 hover:bg-[#f5f7fa]'
-                : 'bg-[#131a22] border-white/5 text-[#d2d7e0]/65 hover:bg-white/[0.02]'
+                ? 'bg-white border-[#E2E8F0] text-[#334155]/65 hover:bg-[#F8FAFC]'
+                : 'bg-[#0F172A] border-white/5 text-[#CBD5E1]/65 hover:bg-white/[0.02]'
             }`}
             aria-label="Next"
           >
@@ -413,7 +413,7 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
         <div className="flex items-center gap-2">
           <div
             className={`inline-flex items-center rounded-lg border p-0.5 ${
-              isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5'
+              isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5'
             }`}
           >
             {(['week', 'month'] as ViewMode[]).map((v) => {
@@ -426,11 +426,11 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
                   className={`px-3 h-7 rounded-md text-xs font-medium capitalize transition-colors ${
                     active
                       ? isLight
-                        ? 'bg-[#eef2f6] text-[#1a1f28]'
+                        ? 'bg-[#F2F2F2] text-[#0F172A]'
                         : 'bg-white/[0.06] text-white'
                       : isLight
-                      ? 'text-[#374152]/65 hover:text-[#1a1f28]'
-                      : 'text-[#d2d7e0]/55 hover:text-white'
+                      ? 'text-[#334155]/65 hover:text-[#0F172A]'
+                      : 'text-[#CBD5E1]/55 hover:text-white'
                   }`}
                 >
                   {v}
@@ -473,15 +473,15 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
       {!isHome && templateCount > 0 && activeProtocol.demoAnchorDate && scopedVisits.length === 0 && (
         <div
           className={`mx-6 mt-3 flex items-start gap-2 border rounded-md px-3 py-2 ${
-            isLight ? 'bg-[#4a6fa5]/[0.05] border-[#4a6fa5]/20' : 'bg-[#6e8fb5]/[0.06] border-[#6e8fb5]/25'
+            isLight ? 'bg-[#017BC8]/[0.05] border-[#017BC8]/20' : 'bg-[#74B4DC]/[0.06] border-[#74B4DC]/25'
           }`}
         >
-          <CalendarDays size={13} className={`flex-shrink-0 mt-0.5 ${isLight ? 'text-[#4a6fa5]' : 'text-[#6e8fb5]'}`} />
+          <CalendarDays size={13} className={`flex-shrink-0 mt-0.5 ${isLight ? 'text-[#017BC8]' : 'text-[#74B4DC]'}`} />
           <div className="flex-1 min-w-0 text-xs">
             <p className="text-fg-heading font-medium">
               Templates and anchor set, but no visits projected yet
             </p>
-            <p className={`${isLight ? 'text-[#374152]/65' : 'text-[#d2d7e0]/55'}`}>
+            <p className={`${isLight ? 'text-[#334155]/65' : 'text-[#CBD5E1]/55'}`}>
               Click re-project to populate visits for every enrolled participant.
             </p>
           </div>
@@ -495,7 +495,7 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
               if (r.ok) refresh();
             }}
             className={`flex-shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-md text-white disabled:opacity-50 ${
-              isLight ? 'bg-[#4a6fa5] hover:bg-[#3a5f95]' : 'bg-[#6e8fb5] hover:bg-[#7e9fc5]'
+              isLight ? 'bg-[#017BC8] hover:bg-[#0477BF]' : 'bg-[#74B4DC] hover:bg-[#3CACF4]'
             }`}
           >
             {reprojecting ? 'Projecting…' : 'Re-project'}
@@ -749,10 +749,10 @@ function NeedsAttentionBand({ items, isLight, isHome, protocols, onItemClick }: 
     ? 'bg-amber-50 border-amber-200/80'
     : 'bg-amber-500/[0.04] border-amber-500/15';
   const labelColor = isLight ? 'text-amber-700' : 'text-amber-400';
-  const textColor = isLight ? 'text-[#1a1f28]/85' : 'text-[#d2d7e0]/85';
+  const textColor = isLight ? 'text-[#0F172A]/85' : 'text-[#CBD5E1]/85';
   const mutedColor = 'text-fg-muted';
-  const popoverBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
-  const rowHover = isLight ? 'hover:bg-[#f5f7fa]' : 'hover:bg-white/[0.03]';
+  const popoverBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
+  const rowHover = isLight ? 'hover:bg-[#F8FAFC]' : 'hover:bg-white/[0.03]';
   const moreChip = isLight
     ? 'bg-amber-100/60 border-amber-300/60 text-amber-800 hover:bg-amber-100'
     : 'bg-amber-500/[0.08] border-amber-500/25 text-amber-300 hover:bg-amber-500/[0.12]';
@@ -864,14 +864,14 @@ function NeedsAttentionBand({ items, isLight, isHome, protocols, onItemClick }: 
           ref={popoverRef}
           className={`absolute right-3 left-3 md:left-auto top-full mt-1 md:w-80 max-w-[calc(100vw-2rem)] z-30 border rounded-lg shadow-lg ${popoverBg} overflow-hidden`}
         >
-          <div className={`px-3 py-2 border-b ${isLight ? 'border-[#eef2f6]' : 'border-white/5'}`}>
+          <div className={`px-3 py-2 border-b ${isLight ? 'border-[#F2F2F2]' : 'border-white/5'}`}>
             <div className={`text-[11px] uppercase tracking-wider font-semibold ${labelColor}`}>
               {popoverMode === 'all'
                 ? `${popoverItems.length} ${popoverItems.length === 1 ? 'item' : 'items'}`
                 : `${popoverItems.length} more ${popoverItems.length === 1 ? 'item' : 'items'}`}
             </div>
           </div>
-          <div className={`max-h-80 overflow-y-auto divide-y ${isLight ? 'divide-[#f0f4f8]' : 'divide-white/[0.03]'}`}>
+          <div className={`max-h-80 overflow-y-auto divide-y ${isLight ? 'divide-[#F2F2F2]' : 'divide-white/[0.03]'}`}>
             {popoverItems.map(renderItemPopover)}
           </div>
         </div>
@@ -925,7 +925,7 @@ function CalendarFilters({
   open,
   onClose,
 }: CalendarFiltersProps) {
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const sectionHeader = 'text-fg-label';
   const textColor = 'text-fg-heading';
   const mutedColor = 'text-fg-muted';
@@ -990,8 +990,8 @@ function CalendarFilters({
                       className={`inline-block w-3.5 h-3.5 rounded-sm ${
                         protoHidden
                           ? isLight
-                            ? 'bg-white border border-[#cbd2db]'
-                            : 'bg-[#0d1118] border border-white/15'
+                            ? 'bg-white border border-[#CBD5E1]'
+                            : 'bg-[#020617] border border-white/15'
                           : dotCls
                       }`}
                     />
@@ -1038,11 +1038,11 @@ function CalendarFilters({
                             className={`inline-block w-3 h-3 rounded-sm border ${
                               partHidden
                                 ? isLight
-                                  ? 'bg-white border-[#cbd2db]'
-                                  : 'bg-[#0d1118] border-white/15'
+                                  ? 'bg-white border-[#CBD5E1]'
+                                  : 'bg-[#020617] border-white/15'
                                 : isLight
-                                ? 'bg-[#4a6fa5]/60 border-[#4a6fa5]/60'
-                                : 'bg-[#6e8fb5]/50 border-[#6e8fb5]/50'
+                                ? 'bg-[#017BC8]/60 border-[#017BC8]/60'
+                                : 'bg-[#74B4DC]/50 border-[#74B4DC]/50'
                             }`}
                           />
                           <span className="truncate">{pid}</span>
@@ -1079,13 +1079,13 @@ function WeekView({ isLight, isHome, anchorDate, today, visitsByDate, protocols,
   const start = startOfWeek(anchorDate);
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
 
-  const headerBg = isLight ? 'bg-[#f9fafc]' : 'bg-[#0e141b]';
+  const headerBg = isLight ? 'bg-[#F8FAFC]' : 'bg-[#020617]';
   const headerText = 'text-fg-label';
-  const dayBorder = isLight ? 'border-[#eef2f6]' : 'border-white/[0.04]';
-  const todayTint = isLight ? 'bg-[#4a6fa5]/[0.04]' : 'bg-[#6e8fb5]/[0.04]';
+  const dayBorder = isLight ? 'border-[#F2F2F2]' : 'border-white/[0.04]';
+  const todayTint = isLight ? 'bg-[#017BC8]/[0.04]' : 'bg-[#74B4DC]/[0.04]';
   const numberColor = 'text-fg-heading';
-  const todayNumber = isLight ? 'bg-[#4a6fa5] text-white' : 'bg-[#6e8fb5] text-[#1a1f28]';
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
+  const todayNumber = isLight ? 'bg-[#017BC8] text-white' : 'bg-[#74B4DC] text-[#0F172A]';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -1248,7 +1248,7 @@ function WeekVisitRow({
   const colors = getProtocolColorsById(visit.protocolId, protocols);
   const accent = isLight ? colors.accentLight : colors.accentDark;
   const chip = isLight ? colors.chipLight : colors.chipDark;
-  const rowBg = isLight ? 'bg-white hover:bg-[#f5f7fa]' : 'bg-[#131a22] hover:bg-white/[0.03]';
+  const rowBg = isLight ? 'bg-white hover:bg-[#F8FAFC]' : 'bg-[#0F172A] hover:bg-white/[0.03]';
   const textColor = 'text-fg-heading';
   const mutedColor = 'text-fg-muted';
 
@@ -1302,13 +1302,13 @@ function MonthView({ isLight, isHome, anchorDate, today, visitsByDate, protocols
   const gridStart = startOfWeek(monthStart);
   const days = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
 
-  const headerBg = isLight ? 'bg-[#f9fafc]' : 'bg-[#0e141b]';
+  const headerBg = isLight ? 'bg-[#F8FAFC]' : 'bg-[#020617]';
   const headerText = 'text-fg-label';
-  const dayBorder = isLight ? 'border-[#eef2f6]' : 'border-white/[0.04]';
-  const todayTint = isLight ? 'bg-[#4a6fa5]/[0.04]' : 'bg-[#6e8fb5]/[0.04]';
+  const dayBorder = isLight ? 'border-[#F2F2F2]' : 'border-white/[0.04]';
+  const todayTint = isLight ? 'bg-[#017BC8]/[0.04]' : 'bg-[#74B4DC]/[0.04]';
   const numberColor = 'text-fg-heading';
-  const todayNumber = isLight ? 'bg-[#4a6fa5] text-white' : 'bg-[#6e8fb5] text-[#1a1f28]';
-  const outsideMonth = isLight ? 'text-[#374152]/25' : 'text-[#d2d7e0]/20';
+  const todayNumber = isLight ? 'bg-[#017BC8] text-white' : 'bg-[#74B4DC] text-[#0F172A]';
+  const outsideMonth = isLight ? 'text-[#334155]/25' : 'text-[#CBD5E1]/20';
   const mutedColor = 'text-fg-muted';
 
   const weekdayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -1373,7 +1373,7 @@ function MonthView({ isLight, isHome, anchorDate, today, visitsByDate, protocols
                         onVisitClick(v);
                       }}
                       className={`w-full text-left border-l-2 ${accent} px-1 text-[10px] truncate hover:opacity-75 ${
-                        isLight ? 'text-[#1a1f28]' : 'text-[#d2d7e0]'
+                        isLight ? 'text-[#0F172A]' : 'text-[#CBD5E1]'
                       }`}
                     >
                       {v.time && <span className="font-semibold mr-1">{v.time.replace(':00', '')}</span>}
@@ -1431,8 +1431,8 @@ function DayDetailDrawer({ isLight, isHome, day, today, visits, protocols, onClo
   useOverlay({ isOpen: true, onClose, containerRef: panelRef });
   const swipe = useSwipeDismiss({ onClose });
   const past = isPast(day, today);
-  const bg = isLight ? 'bg-white' : 'bg-[#131a22]';
-  const border = isLight ? 'border-[#e2e8ee]' : 'border-white/5';
+  const bg = isLight ? 'bg-white' : 'bg-[#0F172A]';
+  const border = isLight ? 'border-[#E2E8F0]' : 'border-white/5';
   const headingColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
@@ -1479,7 +1479,7 @@ function DayDetailDrawer({ isLight, isHome, day, today, visits, protocols, onClo
                   type="button"
                   onClick={() => onVisitClick(v)}
                   className={`w-full text-left border-l-2 ${accent} ${
-                    isLight ? 'bg-[#f9fafc] hover:bg-[#f0f3f7]' : 'bg-white/[0.02] hover:bg-white/[0.04]'
+                    isLight ? 'bg-[#F8FAFC] hover:bg-[#f0f3f7]' : 'bg-white/[0.02] hover:bg-white/[0.04]'
                   } rounded-md px-3 py-2.5 transition-colors`}
                 >
                   <div className="flex items-center gap-2 mb-1">
@@ -1536,7 +1536,7 @@ function CalendarEmptyBanner({
     <div
       className={`flex items-center justify-between gap-3 px-4 py-2.5 border-b text-xs ${
         isLight
-          ? 'bg-[#f5f7fa] border-[#e2e8ee]'
+          ? 'bg-[#F8FAFC] border-[#E2E8F0]'
           : 'bg-white/[0.02] border-white/5'
       }`}
     >
@@ -1558,8 +1558,8 @@ function CalendarEmptyBanner({
           onClick={onClearFilters}
           className={`flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border ${
             isLight
-              ? 'bg-white border-[#e2e8ee] text-[#374152] hover:bg-[#eef2f6]'
-              : 'bg-[#131a22] border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]'
+              ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F2F2F2]'
+              : 'bg-[#0F172A] border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]'
           }`}
         >
           Clear filters

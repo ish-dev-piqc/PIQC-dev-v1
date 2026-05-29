@@ -185,14 +185,14 @@ export default function Pricing({ onViewChange }: PricingProps) {
   // -------------------------------------------------------------------------
   // Theme tokens
   // -------------------------------------------------------------------------
-  const bg = isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]';
-  const border = isLight ? 'border-[#e2e8ee]' : 'border-white/[0.05]';
+  const bg = isLight ? 'bg-[#F8FAFC]' : 'bg-[#020617]';
+  const border = isLight ? 'border-[#E2E8F0]' : 'border-white/[0.05]';
   const cardBg = isLight
-    ? 'bg-white border-[#e2e8ee]'
-    : 'bg-[#161d25] border-white/[0.07]';
+    ? 'bg-white border-[#E2E8F0]'
+    : 'bg-[#0F172A] border-white/[0.07]';
   const featuredCardBg = isLight
-    ? 'bg-[#1a1f28] border-[#1a1f28]'
-    : 'bg-[#4a6fa5]/20 border-[#4a6fa5]/40';
+    ? 'bg-[#0F172A] border-[#0F172A]'
+    : 'bg-[#017BC8]/20 border-[#017BC8]/40';
   const headingColor = 'text-fg-heading';
   const bodyColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
@@ -205,7 +205,7 @@ export default function Pricing({ onViewChange }: PricingProps) {
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="text-center mb-14">
-          <p className="text-xs font-semibold text-[#6e8fb5] uppercase tracking-widest mb-4">
+          <p className="text-xs font-semibold text-[#74B4DC] uppercase tracking-widest mb-4">
             Pricing
           </p>
           <h2
@@ -234,31 +234,31 @@ export default function Pricing({ onViewChange }: PricingProps) {
             const titleTone = isFeatured
               ? isLight
                 ? 'text-white/80'
-                : 'text-[#d2d7e0]/70'
+                : 'text-[#CBD5E1]/70'
               : mutedColor;
             const priceTone = isFeatured ? 'text-white' : headingColor;
             const descTone = isFeatured
               ? isLight
                 ? 'text-white/55'
-                : 'text-[#d2d7e0]/50'
+                : 'text-[#CBD5E1]/50'
               : bodyColor;
             const featTone = isFeatured
               ? isLight
                 ? 'text-white/75'
-                : 'text-[#d2d7e0]/70'
+                : 'text-[#CBD5E1]/70'
               : bodyColor;
             const checkTone = isFeatured
               ? isLight
-                ? 'text-[#6e8fb5]'
+                ? 'text-[#74B4DC]'
                 : 'text-[#7aafd4]'
-              : 'text-[#6e8fb5]';
+              : 'text-[#74B4DC]';
             const buttonClasses = isFeatured
               ? isLight
-                ? 'bg-white text-[#1a1f28] hover:bg-[#f0f4f8]'
+                ? 'bg-white text-[#0F172A] hover:bg-[#F2F2F2]'
                 : 'bg-white/[0.12] text-white hover:bg-white/[0.18] border border-white/[0.12]'
               : isLight
-              ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
-              : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]';
+              ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
+              : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]';
 
             return (
               <div
@@ -287,8 +287,8 @@ export default function Pricing({ onViewChange }: PricingProps) {
                         <span
                           className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
                             isLight
-                              ? 'bg-[#6e8fb5]/30 text-[#d0dff0]'
-                              : 'bg-[#6e8fb5]/25 text-[#a8c0d8]'
+                              ? 'bg-[#74B4DC]/30 text-[#d0dff0]'
+                              : 'bg-[#74B4DC]/25 text-[#a8c0d8]'
                           }`}
                         >
                           {p.badge}
@@ -304,7 +304,7 @@ export default function Pricing({ onViewChange }: PricingProps) {
                           isFeatured
                             ? isLight
                               ? 'text-white/50'
-                              : 'text-[#d2d7e0]/45'
+                              : 'text-[#CBD5E1]/45'
                             : mutedColor
                         }`}
                       >
@@ -379,8 +379,8 @@ export default function Pricing({ onViewChange }: PricingProps) {
                     : ''
                 } ${
                   isLight
-                    ? 'border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-                    : 'border border-white/[0.1] text-[#d2d7e0] hover:bg-white/[0.04]'
+                    ? 'border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+                    : 'border border-white/[0.1] text-[#CBD5E1] hover:bg-white/[0.04]'
                 }`}
               >
                 {pendingKind === p.kind && (
@@ -412,8 +412,8 @@ export default function Pricing({ onViewChange }: PricingProps) {
                 onClick={ctaActionFor(enterprise)}
                 className={`mt-auto inline-flex items-center justify-center gap-2 text-xs font-semibold px-3 py-2 rounded-md transition-colors ${
                   isLight
-                    ? 'border border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-                    : 'border border-white/[0.1] text-[#d2d7e0] hover:bg-white/[0.04]'
+                    ? 'border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+                    : 'border border-white/[0.1] text-[#CBD5E1] hover:bg-white/[0.04]'
                 }`}
               >
                 {enterprise.ctaLabel}

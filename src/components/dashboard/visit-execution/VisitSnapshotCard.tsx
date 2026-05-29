@@ -110,7 +110,7 @@ export default function VisitSnapshotCard({
 }: Props) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
 
   const needsReviewCount = Math.max(0, totalItems - reviewedCount);
   const chips = buildChips(snapshot, needsReviewCount);
@@ -124,7 +124,7 @@ export default function VisitSnapshotCard({
       <div className="flex items-start gap-3">
         <div
           className={`mt-0.5 inline-flex items-center justify-center w-7 h-7 rounded-md ${
-            isLight ? 'bg-[#eef2f6] text-[#4a6fa5]' : 'bg-white/[0.04] text-[#6e8fb5]'
+            isLight ? 'bg-[#F2F2F2] text-[#017BC8]' : 'bg-white/[0.04] text-[#74B4DC]'
           }`}
           aria-hidden
         >
@@ -202,7 +202,7 @@ export default function VisitSnapshotCard({
           coordinator's progress on this visit. Amendment row pinned right
           stays subtle — non-zero amendment is informational, not action. */}
       <div
-        className={`pt-3 border-t ${isLight ? 'border-[#eef2f6]' : 'border-white/[0.04]'}`}
+        className={`pt-3 border-t ${isLight ? 'border-[#F2F2F2]' : 'border-white/[0.04]'}`}
         data-testid="vew-snapshot-stats"
       >
         <div className="grid grid-cols-3 gap-2">

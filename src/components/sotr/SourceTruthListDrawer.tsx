@@ -69,9 +69,9 @@ export default function SourceTruthListDrawer({
       <div
         ref={panelRef}
         {...swipe}
-        className="relative w-full max-w-xl h-full bg-[#f5f7fa] dark:bg-[#0d1118] shadow-xl border-l border-[#e2e8ee] dark:border-white/5 overflow-y-auto"
+        className="relative w-full max-w-xl h-full bg-[#F8FAFC] dark:bg-[#020617] shadow-xl border-l border-[#E2E8F0] dark:border-white/5 overflow-y-auto"
       >
-        <div className="sticky top-0 z-10 bg-[#f5f7fa]/95 dark:bg-[#0d1118]/95 backdrop-blur px-5 py-3.5 border-b border-[#e2e8ee] dark:border-white/5 flex items-center justify-between gap-3">
+        <div className="sticky top-0 z-10 bg-[#F8FAFC]/95 dark:bg-[#020617]/95 backdrop-blur px-5 py-3.5 border-b border-[#E2E8F0] dark:border-white/5 flex items-center justify-between gap-3">
           <h2 className="text-fg-heading text-sm font-semibold">
             {onPick ? 'Pick a protocol source item' : 'Protocol source items'}
           </h2>
@@ -79,7 +79,7 @@ export default function SourceTruthListDrawer({
             type="button"
             onClick={onClose}
             aria-label="Close protocol source panel"
-            className="inline-flex items-center justify-center w-7 h-7 rounded-md text-fg-sub hover:bg-[#e2e8ee] dark:hover:bg-white/[0.06]"
+            className="inline-flex items-center justify-center w-7 h-7 rounded-md text-fg-sub hover:bg-[#E2E8F0] dark:hover:bg-white/[0.06]"
           >
             <X size={14} />
           </button>

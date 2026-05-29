@@ -64,8 +64,8 @@ export default function EntitlementGate({ decision, children }: EntitlementGateP
     ? 'bg-amber-50 border-amber-200/80'
     : 'bg-amber-500/[0.06] border-amber-500/20';
   const buttonClasses = isLight
-    ? 'bg-[#4a6fa5] text-white hover:bg-[#3d5e8f]'
-    : 'bg-[#6e8fb5] text-[#1a1f28] hover:bg-[#5e7fa5]';
+    ? 'bg-[#017BC8] text-white hover:bg-[#0477BF]'
+    : 'bg-[#74B4DC] text-[#0F172A] hover:bg-[#026BBE]';
 
   return (
     <div className={`${cardBg} border rounded-lg p-4 flex items-start gap-3`}>

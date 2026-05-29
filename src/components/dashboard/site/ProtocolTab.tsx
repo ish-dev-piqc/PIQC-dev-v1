@@ -29,9 +29,9 @@ export default function ProtocolTab() {
   const [materializing, setMaterializing] = useState(false);
   const [statusToast, setStatusToast] = useState<string | null>(null);
 
-  const pageBg = isLight ? 'bg-[#f5f7fa]' : 'bg-[#0d1118]';
-  const cardBg = isLight ? 'bg-white border-[#e2e8ee]' : 'bg-[#131a22] border-white/5';
-  const divideColor = isLight ? 'divide-[#f0f3f6]' : 'divide-white/[0.04]';
+  const pageBg = isLight ? 'bg-[#F8FAFC]' : 'bg-[#020617]';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
+  const divideColor = isLight ? 'divide-[#F2F2F2]' : 'divide-white/[0.04]';
   const mutedColor = 'text-fg-muted';
   const subColor = 'text-fg-sub';
 
@@ -115,7 +115,7 @@ export default function ProtocolTab() {
         <div className={`${cardBg} border rounded-xl overflow-hidden`}>
           <div
             className={`px-5 py-3.5 border-b flex items-center justify-between gap-3 flex-wrap ${
-              isLight ? 'border-[#f0f3f6]' : 'border-white/[0.04]'
+              isLight ? 'border-[#F2F2F2]' : 'border-white/[0.04]'
             }`}
           >
             <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold">
@@ -127,8 +127,8 @@ export default function ProtocolTab() {
                 onClick={() => setShowAnchorModal(true)}
                 className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-md border transition-colors ${
                   isLight
-                    ? 'bg-white border-[#e2e8ee] text-[#374152] hover:bg-[#f5f7fa]'
-                    : 'bg-[#131a22] border-white/10 text-[#d2d7e0] hover:bg-white/[0.04]'
+                    ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+                    : 'bg-[#0F172A] border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]'
                 }`}
               >
                 <CalendarRange size={11} />
@@ -140,7 +140,7 @@ export default function ProtocolTab() {
                   onClick={handleMaterialize}
                   disabled={materializing}
                   className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-md text-white transition-colors disabled:opacity-50 ${
-                    isLight ? 'bg-[#4a6fa5] hover:bg-[#3a5f95]' : 'bg-[#6e8fb5] hover:bg-[#7e9fc5]'
+                    isLight ? 'bg-[#017BC8] hover:bg-[#0477BF]' : 'bg-[#74B4DC] hover:bg-[#3CACF4]'
                   }`}
                 >
                   <RefreshCw size={11} className={materializing ? 'animate-spin' : ''} />
@@ -152,7 +152,7 @@ export default function ProtocolTab() {
 
           {/* Anchor + status row */}
           <div className={`px-5 py-3 border-b flex flex-wrap items-center gap-x-6 gap-y-1 ${
-            isLight ? 'border-[#f0f3f6]' : 'border-white/[0.04]'
+            isLight ? 'border-[#F2F2F2]' : 'border-white/[0.04]'
           }`}>
             <div>
               <p className={`${mutedColor} text-[10px] uppercase tracking-wider font-semibold`}>Day 0 anchor</p>
@@ -237,7 +237,7 @@ export default function ProtocolTab() {
 
         {/* Documents */}
         <div className={`${cardBg} border rounded-xl overflow-hidden`}>
-          <div className={`px-5 py-3.5 border-b ${isLight ? 'border-[#f0f3f6]' : 'border-white/[0.04]'}`}>
+          <div className={`px-5 py-3.5 border-b ${isLight ? 'border-[#F2F2F2]' : 'border-white/[0.04]'}`}>
             <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold">
               Documents
             </p>
@@ -261,7 +261,7 @@ export default function ProtocolTab() {
                   <div className="flex items-start gap-3">
                     <FileText
                       size={14}
-                      className={`mt-0.5 flex-shrink-0 ${isLight ? 'text-[#374152]/35' : 'text-[#d2d7e0]/30'}`}
+                      className={`mt-0.5 flex-shrink-0 ${isLight ? 'text-[#334155]/35' : 'text-[#CBD5E1]/30'}`}
                     />
                     <div className="min-w-0 flex-1">
                       <p className="text-fg-heading text-sm font-medium truncate">{d.title || d.source}</p>
@@ -308,12 +308,12 @@ interface MetaRowProps {
 function MetaRow({ icon, label, value, isLight }: MetaRowProps) {
   return (
     <div className="px-5 py-4 flex items-center gap-4">
-      <span className={`flex-shrink-0 ${isLight ? 'text-[#374152]/35' : 'text-[#d2d7e0]/30'}`}>
+      <span className={`flex-shrink-0 ${isLight ? 'text-[#334155]/35' : 'text-[#CBD5E1]/30'}`}>
         {icon}
       </span>
       <div className="flex-1 min-w-0 flex items-center justify-between gap-4 flex-wrap">
         <span className="text-fg-label text-xs uppercase tracking-wider font-semibold">{label}</span>
-        <span className={`text-sm ${isLight ? 'text-[#1a1f28]' : 'text-[#d2d7e0]'} text-right max-w-[60%] break-words`}>{value}</span>
+        <span className={`text-sm ${isLight ? 'text-[#0F172A]' : 'text-[#CBD5E1]'} text-right max-w-[60%] break-words`}>{value}</span>
       </div>
     </div>
   );
