@@ -87,7 +87,7 @@ export default function ProtocolOnboarding({ onTabChange }: ProtocolOnboardingPr
   const headingColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
-  const stepIconBg = isLight ? 'bg-[#017BC8]/10 border-[#017BC8]/20' : 'bg-[#017BC8]/15 border-[#017BC8]/25';
+  const stepIconBg = isLight ? 'bg-brand-600/10 border-brand-600/20' : 'bg-brand-600/15 border-brand-600/25';
 
   return (
     <div className={`min-h-screen ${pageBg} pt-20 pb-16 px-4 sm:px-6`}>
@@ -95,7 +95,7 @@ export default function ProtocolOnboarding({ onTabChange }: ProtocolOnboardingPr
         <div className="flex items-center gap-2.5 mb-8">
           <img src="/PIQC_Logo.png" alt="" className="w-8 h-8 object-contain" />
           <span className={`text-[15px] font-semibold ${headingColor} tracking-tight`}>
-            <span className="text-[#017BC8]">PIQC</span>linical
+            <span className="text-brand-600">PIQC</span>linical
           </span>
         </div>
 
@@ -114,7 +114,7 @@ export default function ProtocolOnboarding({ onTabChange }: ProtocolOnboardingPr
             {STEPS.map(({ icon: Icon, title, detail }, idx) => (
               <div key={title} className="flex gap-4">
                 <div className={`flex-shrink-0 w-9 h-9 rounded-xl ${stepIconBg} border flex items-center justify-center`}>
-                  <Icon className="w-4 h-4 text-[#74B4DC]" strokeWidth={1.75} />
+                  <Icon className="w-4 h-4 text-brand-300" strokeWidth={1.75} />
                 </div>
                 <div className="flex-1 pt-0.5">
                   <p className={`text-[11px] font-semibold ${mutedColor} tracking-widest uppercase mb-1`}>
@@ -169,7 +169,7 @@ export default function ProtocolOnboarding({ onTabChange }: ProtocolOnboardingPr
               Still stuck? Email{' '}
               <a
                 href="mailto:contact@piqclinical.com"
-                className="text-[#74B4DC] hover:text-[#87b5c7] underline underline-offset-2"
+                className="text-brand-300 hover:text-[#87b5c7] underline underline-offset-2"
               >
                 contact@piqclinical.com
               </a>{' '}

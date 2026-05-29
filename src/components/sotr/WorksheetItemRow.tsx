@@ -63,7 +63,7 @@ export default function WorksheetItemRow({ item, onViewSource, onPick }: Props) 
             type="button"
             onClick={() => onPick(item)}
             data-testid="sotr-attach-button"
-            className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-md bg-[#017BC8] text-white hover:bg-[#0477BF] dark:bg-[#74B4DC] dark:text-[#0F172A] dark:hover:bg-[#026BBE]"
+            className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-md bg-brand-600 text-white hover:bg-brand-800 dark:bg-brand-300 dark:text-[#0F172A] dark:hover:bg-brand-700"
           >
             <Link2 size={11} />
             Attach

@@ -473,10 +473,10 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
       {!isHome && templateCount > 0 && activeProtocol.demoAnchorDate && scopedVisits.length === 0 && (
         <div
           className={`mx-6 mt-3 flex items-start gap-2 border rounded-md px-3 py-2 ${
-            isLight ? 'bg-[#017BC8]/[0.05] border-[#017BC8]/20' : 'bg-[#74B4DC]/[0.06] border-[#74B4DC]/25'
+            isLight ? 'bg-brand-600/[0.05] border-brand-600/20' : 'bg-brand-300/[0.06] border-brand-300/25'
           }`}
         >
-          <CalendarDays size={13} className={`flex-shrink-0 mt-0.5 ${isLight ? 'text-[#017BC8]' : 'text-[#74B4DC]'}`} />
+          <CalendarDays size={13} className={`flex-shrink-0 mt-0.5 ${isLight ? 'text-brand-600' : 'text-brand-300'}`} />
           <div className="flex-1 min-w-0 text-xs">
             <p className="text-fg-heading font-medium">
               Templates and anchor set, but no visits projected yet
@@ -495,7 +495,7 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
               if (r.ok) refresh();
             }}
             className={`flex-shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-md text-white disabled:opacity-50 ${
-              isLight ? 'bg-[#017BC8] hover:bg-[#0477BF]' : 'bg-[#74B4DC] hover:bg-[#3CACF4]'
+              isLight ? 'bg-brand-600 hover:bg-brand-800' : 'bg-brand-300 hover:bg-brand-400'
             }`}
           >
             {reprojecting ? 'Projecting…' : 'Re-project'}
@@ -1041,8 +1041,8 @@ function CalendarFilters({
                                   ? 'bg-white border-[#CBD5E1]'
                                   : 'bg-[#020617] border-white/15'
                                 : isLight
-                                ? 'bg-[#017BC8]/60 border-[#017BC8]/60'
-                                : 'bg-[#74B4DC]/50 border-[#74B4DC]/50'
+                                ? 'bg-brand-600/60 border-brand-600/60'
+                                : 'bg-brand-300/50 border-brand-300/50'
                             }`}
                           />
                           <span className="truncate">{pid}</span>
@@ -1082,9 +1082,9 @@ function WeekView({ isLight, isHome, anchorDate, today, visitsByDate, protocols,
   const headerBg = isLight ? 'bg-[#F8FAFC]' : 'bg-[#020617]';
   const headerText = 'text-fg-label';
   const dayBorder = isLight ? 'border-[#F2F2F2]' : 'border-white/[0.04]';
-  const todayTint = isLight ? 'bg-[#017BC8]/[0.04]' : 'bg-[#74B4DC]/[0.04]';
+  const todayTint = isLight ? 'bg-brand-600/[0.04]' : 'bg-brand-300/[0.04]';
   const numberColor = 'text-fg-heading';
-  const todayNumber = isLight ? 'bg-[#017BC8] text-white' : 'bg-[#74B4DC] text-[#0F172A]';
+  const todayNumber = isLight ? 'bg-brand-600 text-white' : 'bg-brand-300 text-[#0F172A]';
   const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
 
   return (
@@ -1305,9 +1305,9 @@ function MonthView({ isLight, isHome, anchorDate, today, visitsByDate, protocols
   const headerBg = isLight ? 'bg-[#F8FAFC]' : 'bg-[#020617]';
   const headerText = 'text-fg-label';
   const dayBorder = isLight ? 'border-[#F2F2F2]' : 'border-white/[0.04]';
-  const todayTint = isLight ? 'bg-[#017BC8]/[0.04]' : 'bg-[#74B4DC]/[0.04]';
+  const todayTint = isLight ? 'bg-brand-600/[0.04]' : 'bg-brand-300/[0.04]';
   const numberColor = 'text-fg-heading';
-  const todayNumber = isLight ? 'bg-[#017BC8] text-white' : 'bg-[#74B4DC] text-[#0F172A]';
+  const todayNumber = isLight ? 'bg-brand-600 text-white' : 'bg-brand-300 text-[#0F172A]';
   const outsideMonth = isLight ? 'text-[#334155]/25' : 'text-[#CBD5E1]/20';
   const mutedColor = 'text-fg-muted';
 

@@ -12,7 +12,7 @@ function AssistantAvatar({ size = 'sm' }: { size?: 'sm' | 'md' }) {
   const dim = size === 'md' ? 'w-8 h-8' : 'w-7 h-7';
   const icon = size === 'md' ? 'w-4 h-4' : 'w-3.5 h-3.5';
   return (
-    <div className={`${dim} rounded-full bg-gradient-to-br from-[#74B4DC] to-[#017BC8] flex items-center justify-center flex-shrink-0 shadow-md`}>
+    <div className={`${dim} rounded-full bg-gradient-to-br from-brand-300 to-brand-600 flex items-center justify-center flex-shrink-0 shadow-md`}>
       <Stethoscope className={`${icon} text-white`} strokeWidth={2} />
     </div>
   );
@@ -38,9 +38,9 @@ function TypingIndicator({ isLight }: { isLight: boolean }) {
         isLight ? 'bg-[#F8FAFC] border-[#E2E8F0]' : 'bg-[#0F172A] border-white/[0.07]'
       }`}>
         <div className="flex gap-1 items-center h-4">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#74B4DC]/60 animate-bounce [animation-delay:0ms]" />
-          <span className="w-1.5 h-1.5 rounded-full bg-[#74B4DC]/60 animate-bounce [animation-delay:150ms]" />
-          <span className="w-1.5 h-1.5 rounded-full bg-[#74B4DC]/60 animate-bounce [animation-delay:300ms]" />
+          <span className="w-1.5 h-1.5 rounded-full bg-brand-300/60 animate-bounce [animation-delay:0ms]" />
+          <span className="w-1.5 h-1.5 rounded-full bg-brand-300/60 animate-bounce [animation-delay:150ms]" />
+          <span className="w-1.5 h-1.5 rounded-full bg-brand-300/60 animate-bounce [animation-delay:300ms]" />
         </div>
       </div>
     </div>
@@ -75,7 +75,7 @@ function MessageBubble({ message, streaming, isLight }: BubbleProps) {
       <div
         className={`max-w-[78%] px-4 py-2.5 text-sm leading-relaxed ${
           isUser
-            ? 'bg-[#017BC8] text-white rounded-2xl rounded-br-sm'
+            ? 'bg-brand-600 text-white rounded-2xl rounded-br-sm'
             : isLight
             ? 'bg-[#F8FAFC] border border-[#E2E8F0] text-[#334155]/90 rounded-2xl rounded-bl-sm'
             : 'bg-[#0F172A] border border-white/[0.07] text-[#CBD5E1]/90 rounded-2xl rounded-bl-sm'
@@ -88,7 +88,7 @@ function MessageBubble({ message, streaming, isLight }: BubbleProps) {
           </span>
         ))}
         {streaming && (
-          <span className="inline-block w-0.5 h-3.5 bg-[#74B4DC]/60 ml-0.5 align-middle animate-pulse" />
+          <span className="inline-block w-0.5 h-3.5 bg-brand-300/60 ml-0.5 align-middle animate-pulse" />
         )}
       </div>
     </div>
@@ -218,8 +218,8 @@ export default function Chatbot() {
               <AssistantAvatar size="md" />
               <div className="flex-1 min-w-0">
                 <p className={`text-sm font-semibold leading-none ${isLight ? 'text-[#0F172A]' : 'text-white'}`}>PIQClinical Assistant</p>
-                <p className="text-xs text-blue-500 mt-0.5 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block" />
+                <p className="text-xs text-brand-500 mt-0.5 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand-400 inline-block" />
                   Online
                 </p>
               </div>
@@ -261,8 +261,8 @@ export default function Chatbot() {
             }`}>
               <div className={`flex items-end gap-2 border rounded-xl px-3 py-2 transition-colors ${
                 isLight
-                  ? 'bg-white border-[#E2E8F0] focus-within:border-[#017BC8]/50'
-                  : 'bg-[#0F172A] border-white/[0.08] focus-within:border-[#017BC8]/50'
+                  ? 'bg-white border-[#E2E8F0] focus-within:border-brand-600/50'
+                  : 'bg-[#0F172A] border-white/[0.08] focus-within:border-brand-600/50'
               }`}>
                 <textarea
                   ref={textareaRef}
@@ -280,7 +280,7 @@ export default function Chatbot() {
                 <button
                   onClick={sendMessage}
                   disabled={!input.trim() || loading}
-                  className="p-1.5 rounded-lg bg-[#017BC8] text-white hover:bg-[#1595D1] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0 mb-0.5"
+                  className="p-1.5 rounded-lg bg-brand-600 text-white hover:bg-brand-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0 mb-0.5"
                   aria-label="Send message"
                 >
                   <Send className="w-3.5 h-3.5" />
@@ -300,7 +300,7 @@ export default function Chatbot() {
               ? isLight
                 ? 'bg-[#F2F2F2] border border-[#E2E8F0] text-[#334155]/60 hover:text-[#0F172A]'
                 : 'bg-[#0F172A] border border-white/[0.1] text-[#CBD5E1]/70 hover:text-white'
-              : 'bg-[#017BC8] hover:bg-[#1595D1] text-white shadow-[#017BC8]/30'
+              : 'bg-brand-600 hover:bg-brand-500 text-white shadow-brand-600/30'
           }`}
           aria-label={open ? 'Close chat' : 'Open chat'}
         >

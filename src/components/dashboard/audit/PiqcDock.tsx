@@ -85,19 +85,19 @@ export default function PiqcDock({ onOpen, hidden, hasSignals = false }: Props) 
         // the workspace's neutral chrome. Warmer in light mode, lifted
         // panel-on-panel feel in dark.
         isLight
-          ? 'bg-white border border-[#02BBB8]/25 text-[#334155] shadow-[0_8px_24px_-8px_rgba(2,187,184,0.35)] hover:shadow-[0_12px_32px_-8px_rgba(2,187,184,0.45)] hover:border-[#02BBB8]/40'
-          : 'bg-[#0F172A] border border-[#02BBB8]/30 text-[#CBD5E1] shadow-[0_8px_24px_-8px_rgba(0,0,0,0.6)] hover:shadow-[0_12px_32px_-8px_rgba(0,0,0,0.7)] hover:border-[#02BBB8]/50',
+          ? 'bg-white border border-brand-600/25 text-[#334155] shadow-[0_8px_24px_-8px_rgb(var(--brand-600) / 0.35)] hover:shadow-[0_12px_32px_-8px_rgb(var(--brand-600) / 0.45)] hover:border-brand-600/40'
+          : 'bg-[#0F172A] border border-brand-600/30 text-[#CBD5E1] shadow-[0_8px_24px_-8px_rgba(0,0,0,0.6)] hover:shadow-[0_12px_32px_-8px_rgba(0,0,0,0.7)] hover:border-brand-600/50',
         // Mark is brand-tinted; the label stays in the workspace's text
         // colour so it doesn't shout. Whimsy lives in the icon + shadow.
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#02BBB8]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#F8FAFC] dark:focus-visible:ring-offset-[#020617]',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#F8FAFC] dark:focus-visible:ring-offset-[#020617]',
       ].join(' ')}
     >
       <span
         data-testid="piqc-dock-mark"
         className={`relative inline-flex items-center justify-center w-7 h-7 rounded-full ${
           isLight
-            ? 'bg-[#02BBB8]/10 text-[#02BBB8]'
-            : 'bg-[#02BBB8]/15 text-[#6FC9C7]'
+            ? 'bg-brand-600/10 text-brand-600'
+            : 'bg-brand-600/15 text-brand-300'
         }`}
       >
         <PiqcMark size={14} />

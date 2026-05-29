@@ -380,11 +380,11 @@ export default function ReportDraftingWorkspace({
   const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const inputBg = isLight ? 'bg-white' : 'bg-[#0F172A]';
   const inputBorder = isLight
-    ? 'border-[#CBD5E1] focus:border-[#02BBB8] focus:ring-1 focus:ring-[#02BBB8]/30'
-    : 'border-white/15 focus:border-[#6FC9C7] focus:ring-1 focus:ring-[#6FC9C7]/30';
+    ? 'border-[#CBD5E1] focus:border-brand-600 focus:ring-1 focus:ring-brand-600/30'
+    : 'border-white/15 focus:border-brand-300 focus:ring-1 focus:ring-brand-300/30';
   const buttonPrimary = isLight
-    ? 'bg-[#02BBB8] text-white hover:bg-[#016663]'
-    : 'bg-[#6FC9C7] text-[#0F172A] hover:bg-[#028E8B]';
+    ? 'bg-brand-600 text-white hover:bg-brand-800'
+    : 'bg-brand-300 text-[#0F172A] hover:bg-brand-700';
   const buttonSecondary = isLight
     ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
     : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]';
@@ -447,7 +447,7 @@ export default function ReportDraftingWorkspace({
               className={`${mutedColor} text-[11px] mt-1 inline-flex items-center gap-1`}
               title="Drafted from approved Stage 4 risk summary + Stage 6 workspace entries"
             >
-              <Sparkles size={10} className={isLight ? 'text-[#02BBB8]' : 'text-[#6FC9C7]'} />
+              <Sparkles size={10} className={isLight ? 'text-brand-600' : 'text-brand-300'} />
               Started from: risk summary focus areas + audit observations
             </p>
           )}
@@ -1036,8 +1036,8 @@ function SourceChip({
         data-source="refining"
         className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
           isLight
-            ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#02BBB8]'
-            : 'bg-white/[0.04] border-white/10 text-[#6FC9C7]'
+            ? 'bg-[#F2F2F2] border-[#CBD5E1] text-brand-600'
+            : 'bg-white/[0.04] border-white/10 text-brand-300'
         }`}
       >
         <Loader2 size={9} className="animate-spin" />
@@ -1054,8 +1054,8 @@ function SourceChip({
   const tone = (() => {
     if (source === 'llm') {
       return isLight
-        ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#02BBB8]'
-        : 'bg-white/[0.04] border-white/10 text-[#6FC9C7]';
+        ? 'bg-[#F2F2F2] border-[#CBD5E1] text-brand-600'
+        : 'bg-white/[0.04] border-white/10 text-brand-300';
     }
     if (source === 'auditor_edited') {
       return isLight
@@ -1175,7 +1175,7 @@ function PiqcLandingNote({
       }`}
     >
       <span
-        className={`mt-0.5 flex-shrink-0 ${isLight ? 'text-[#02BBB8]' : 'text-[#6FC9C7]'}`}
+        className={`mt-0.5 flex-shrink-0 ${isLight ? 'text-brand-600' : 'text-brand-300'}`}
         aria-hidden
       >
         <PiqcMark size={12} />

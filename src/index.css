@@ -25,6 +25,41 @@
     --fg-sub:     rgba(51, 65, 85, 0.65);   /* slate-700 @ 65% — sub-text, descriptions */
     --fg-muted:   rgba(51, 65, 85, 0.40);   /* slate-700 @ 40% — hints, metadata, separators */
     --fg-label:   rgba(51, 65, 85, 0.45);   /* slate-700 @ 45% — uppercase tracking labels */
+
+    /* Brand color palette — mode-aware. Default values are the blue scale
+       (Site Mode / SOTR / landing / auth). The .mode-audit class below
+       overrides these to the teal scale. RGB components are space-separated
+       so they work with Tailwind's `rgb(var(--brand-N) / <alpha-value>)`
+       opacity modifier syntax in tailwind.config.js. */
+    --brand-50:  240 249 254;   /* #F0F9FE */
+    --brand-100: 214 239 255;   /* #D6EFFF */
+    --brand-200: 174 224 252;   /* #AEE0FC */
+    --brand-300: 116 180 220;   /* #74B4DC */
+    --brand-400:  60 172 244;   /* #3CACF4 */
+    --brand-500:  21 149 209;   /* #1595D1 — anchor (Site Mode) */
+    --brand-600:   1 123 200;   /* #017BC8 — primary CTA */
+    --brand-700:   2 107 190;   /* #026BBE */
+    --brand-800:   4 119 191;   /* #0477BF */
+    --brand-900:   3  62 128;   /* #033E80 */
+    --brand-950:   2  31  64;   /* #021F40 */
+  }
+
+  /* Audit Mode — swaps brand variables to the teal scale. Any element
+     inside a `.mode-audit` ancestor renders brand-N classes as teal-N
+     equivalents. Site Mode and SOTR keep the default blue scale until
+     SOTR's color anchor decision lands. */
+  .mode-audit {
+    --brand-50:  236 247 246;  /* #ECF7F6 */
+    --brand-100: 220 237 235;  /* #DCEDEB */
+    --brand-200: 159 215 214;  /* #9FD7D6 */
+    --brand-300: 111 201 199;  /* #6FC9C7 */
+    --brand-400:  44 204 200;  /* #2CCCC8 */
+    --brand-500:   6 191 173;  /* #06BFAD — anchor (Audit Mode) */
+    --brand-600:   2 187 184;  /* #02BBB8 — primary CTA */
+    --brand-700:   2 142 139;  /* #028E8B */
+    --brand-800:   1 102  99;  /* #016663 */
+    --brand-900:   1  68  66;  /* #014442 */
+    --brand-950:   0  34  33;  /* #002221 */
   }
 
   html.dark {
@@ -57,25 +92,29 @@
     text-wrap: balance;
   }
 
-  /* Hero glow tint at brand blue-500 (#1595D1 = rgb(21,149,209)). Mirrors
-     `bg-hero-glow` in tailwind.config.js but lets components opt into the
-     utility class directly. */
+  /* Hero glow tint — mode-aware via the `--brand-500` CSS variable.
+     Renders blue in Site Mode / SOTR / landing, teal in Audit Mode. */
   .bg-hero-glow {
-    background-image: radial-gradient(ellipse 90% 55% at 50% -5%, rgba(21,149,209,0.22) 0%, transparent 68%);
+    background-image: radial-gradient(ellipse 90% 55% at 50% -5%, rgb(var(--brand-500) / 0.22) 0%, transparent 68%);
   }
 
   .card-border {
     border: 1px solid rgba(255,255,255,0.07);
   }
 
-  /* Subtle blue-tinted card border using the new brand blue. */
-  .card-border-blue {
-    border: 1px solid rgba(21,149,209,0.2);
+  /* Subtle brand-tinted card border — mode-aware. The legacy
+     `.card-border-blue` / `.card-border-teal` are merged into this
+     single class since the brand color now switches automatically. */
+  .card-border-brand {
+    border: 1px solid rgb(var(--brand-500) / 0.2);
   }
-
-  /* Teal-tinted card border for Audit Mode surfaces (brand teal-500 =
-     #06BFAD = rgb(6,191,173)). */
+  /* Legacy aliases retained for one PR cycle while components migrate
+     to `.card-border-brand`. Both now resolve to the mode-aware color
+     because they reference the same variable. */
+  .card-border-blue {
+    border: 1px solid rgb(var(--brand-500) / 0.2);
+  }
   .card-border-teal {
-    border: 1px solid rgba(6,191,173,0.2);
+    border: 1px solid rgb(var(--brand-500) / 0.2);
   }
 }

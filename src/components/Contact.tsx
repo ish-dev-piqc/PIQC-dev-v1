@@ -45,7 +45,7 @@ export default function Contact() {
   const iconCardBg = isLight ? 'bg-[#F2F2F2] border-[#E2E8F0]' : 'bg-[#0F172A] border-white/[0.07]';
   const inputBg = isLight ? 'bg-[#F8FAFC] border-[#E2E8F0] text-[#0F172A] placeholder-[#334155]/30' : 'bg-[#020617] border-white/[0.1] text-white placeholder-[#334155]';
   const labelColor = isLight ? 'text-[#334155]/60' : 'text-[#CBD5E1]/50';
-  const contactTextColor = isLight ? 'text-[#334155]/80 hover:text-[#0F172A]' : 'text-[#CBD5E1]/80 hover:text-[#74B4DC]';
+  const contactTextColor = isLight ? 'text-[#334155]/80 hover:text-[#0F172A]' : 'text-[#CBD5E1]/80 hover:text-brand-300';
   const contactSubColor = isLight ? 'text-[#334155]/40' : 'text-[#CBD5E1]/40';
 
   return (
@@ -63,7 +63,7 @@ export default function Contact() {
             <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <div className={`w-9 h-9 rounded-xl ${iconCardBg} border flex items-center justify-center flex-shrink-0`}>
-                  <Mail className="w-4 h-4 text-[#74B4DC]" strokeWidth={1.75} />
+                  <Mail className="w-4 h-4 text-brand-300" strokeWidth={1.75} />
                 </div>
                 <div>
                   <p className={`text-xs ${contactSubColor} font-medium mb-0.5`}>Email us</p>
@@ -78,7 +78,7 @@ export default function Contact() {
 
               <div className="flex items-center gap-3">
                 <div className={`w-9 h-9 rounded-xl ${iconCardBg} border flex items-center justify-center flex-shrink-0`}>
-                  <Building className="w-4 h-4 text-[#74B4DC]" strokeWidth={1.75} />
+                  <Building className="w-4 h-4 text-brand-300" strokeWidth={1.75} />
                 </div>
                 <div>
                   <p className={`text-xs ${contactSubColor} font-medium mb-0.5`}>Enterprise Solutions</p>
@@ -92,14 +92,14 @@ export default function Contact() {
             <div
               className="absolute inset-0 pointer-events-none rounded-2xl"
               style={{
-                background: 'radial-gradient(ellipse 80% 40% at 50% -5%, rgba(1,123,200,0.08) 0%, transparent 60%)',
+                background: 'radial-gradient(ellipse 80% 40% at 50% -5%, rgb(var(--brand-600) / 0.08) 0%, transparent 60%)',
               }}
             />
 
             {submitted ? (
               <div className="relative z-10 py-12 flex flex-col items-center justify-center text-center">
-                <div className="w-14 h-14 rounded-full bg-[#017BC8]/15 border border-[#017BC8]/25 flex items-center justify-center mb-4">
-                  <CheckCircle className="w-7 h-7 text-[#74B4DC]" strokeWidth={1.75} />
+                <div className="w-14 h-14 rounded-full bg-brand-600/15 border border-brand-600/25 flex items-center justify-center mb-4">
+                  <CheckCircle className="w-7 h-7 text-brand-300" strokeWidth={1.75} />
                 </div>
                 <h3 className={`text-xl font-bold ${headingColor} mb-2`}>Message sent!</h3>
                 <p className={`text-[14px] ${bodyColor} max-w-xs leading-relaxed`}>
@@ -134,7 +134,7 @@ export default function Contact() {
                     value={form.name}
                     onChange={handleChange}
                     placeholder="Your name"
-                    className={`w-full px-4 py-2.5 text-sm ${inputBg} border rounded-xl outline-none focus:border-[#017BC8]/50 focus:ring-1 focus:ring-[#017BC8]/30 transition-all`}
+                    className={`w-full px-4 py-2.5 text-sm ${inputBg} border rounded-xl outline-none focus:border-brand-600/50 focus:ring-1 focus:ring-brand-600/30 transition-all`}
                   />
                 </div>
 
@@ -150,7 +150,7 @@ export default function Contact() {
                     value={form.email}
                     onChange={handleChange}
                     placeholder="your@email.com"
-                    className={`w-full px-4 py-2.5 text-sm ${inputBg} border rounded-xl outline-none focus:border-[#017BC8]/50 focus:ring-1 focus:ring-[#017BC8]/30 transition-all`}
+                    className={`w-full px-4 py-2.5 text-sm ${inputBg} border rounded-xl outline-none focus:border-brand-600/50 focus:ring-1 focus:ring-brand-600/30 transition-all`}
                   />
                 </div>
 
@@ -165,7 +165,7 @@ export default function Contact() {
                     value={form.company}
                     onChange={handleChange}
                     placeholder="Your company"
-                    className={`w-full px-4 py-2.5 text-sm ${inputBg} border rounded-xl outline-none focus:border-[#017BC8]/50 focus:ring-1 focus:ring-[#017BC8]/30 transition-all`}
+                    className={`w-full px-4 py-2.5 text-sm ${inputBg} border rounded-xl outline-none focus:border-brand-600/50 focus:ring-1 focus:ring-brand-600/30 transition-all`}
                   />
                 </div>
 
@@ -181,14 +181,14 @@ export default function Contact() {
                     value={form.message}
                     onChange={handleChange}
                     placeholder="Tell us about your needs..."
-                    className={`w-full px-4 py-2.5 text-sm ${inputBg} border rounded-xl outline-none focus:border-[#017BC8]/50 focus:ring-1 focus:ring-[#017BC8]/30 transition-all resize-none`}
+                    className={`w-full px-4 py-2.5 text-sm ${inputBg} border rounded-xl outline-none focus:border-brand-600/50 focus:ring-1 focus:ring-brand-600/30 transition-all resize-none`}
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold text-white bg-[#017BC8] rounded-xl hover:bg-[#1595D1] disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-200 shadow-btn hover:shadow-btn-hover group mt-2"
+                  className="w-full flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold text-white bg-brand-600 rounded-xl hover:bg-brand-500 disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-200 shadow-btn hover:shadow-btn-hover group mt-2"
                 >
                   {loading ? (
                     <span className="flex items-center gap-2">

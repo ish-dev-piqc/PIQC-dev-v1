@@ -24,8 +24,8 @@ export default function StagePlaceholder({ stage }: StagePlaceholderProps) {
   const mutedColor = 'text-fg-muted';
   const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const iconBg = isLight
-    ? 'bg-[#02BBB8]/10 border-[#02BBB8]/20 text-[#02BBB8]'
-    : 'bg-[#02BBB8]/15 border-[#02BBB8]/30 text-[#6FC9C7]';
+    ? 'bg-brand-600/10 border-brand-600/20 text-brand-600'
+    : 'bg-brand-600/15 border-brand-600/30 text-brand-300';
 
   return (
     <div className="p-6 max-w-3xl mx-auto">

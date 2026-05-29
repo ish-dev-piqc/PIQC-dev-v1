@@ -18,8 +18,8 @@ export default function Hero({ onViewChange }: HeroProps) {
         className="absolute inset-0 pointer-events-none"
         style={{
           background: isLight
-            ? 'radial-gradient(ellipse 90% 55% at 50% -5%, rgba(1,123,200,0.12) 0%, transparent 68%)'
-            : 'radial-gradient(ellipse 90% 55% at 50% -5%, rgba(1,123,200,0.22) 0%, transparent 68%)',
+            ? 'radial-gradient(ellipse 90% 55% at 50% -5%, rgb(var(--brand-600) / 0.12) 0%, transparent 68%)'
+            : 'radial-gradient(ellipse 90% 55% at 50% -5%, rgb(var(--brand-600) / 0.22) 0%, transparent 68%)',
         }}
       />
 
@@ -52,7 +52,7 @@ export default function Hero({ onViewChange }: HeroProps) {
         <div className="flex flex-col items-center gap-3">
           <button
             onClick={() => onViewChange('login')}
-            className="inline-flex items-center gap-2 px-7 py-3.5 text-sm font-semibold text-white bg-[#017BC8] rounded-xl hover:bg-[#1595D1] transition-all duration-200 shadow-btn hover:shadow-btn-hover group"
+            className="inline-flex items-center gap-2 px-7 py-3.5 text-sm font-semibold text-white bg-brand-600 rounded-xl hover:bg-brand-500 transition-all duration-200 shadow-btn hover:shadow-btn-hover group"
           >
             Get Started
             <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />

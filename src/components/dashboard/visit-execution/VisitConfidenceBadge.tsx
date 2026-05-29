@@ -84,7 +84,7 @@ export default function VisitConfidenceBadge({
         case 'high':
           return isLight ? 'bg-emerald-500' : 'bg-emerald-400';
         case 'medium':
-          return isLight ? 'bg-blue-500' : 'bg-blue-400';
+          return isLight ? 'bg-brand-500' : 'bg-brand-400';
         case 'low':
           return isLight ? 'bg-amber-500' : 'bg-amber-400';
         case 'needs_review':
@@ -111,7 +111,7 @@ export default function VisitConfidenceBadge({
       case 'high':
         return 'text-emerald-700 dark:text-emerald-400 bg-transparent border-transparent';
       case 'medium':
-        return 'text-blue-700 dark:text-blue-400 bg-transparent border-transparent';
+        return 'text-brand-700 dark:text-brand-400 bg-transparent border-transparent';
       case 'low':
         return isLight
           ? 'text-amber-700 bg-amber-50 border-amber-200'

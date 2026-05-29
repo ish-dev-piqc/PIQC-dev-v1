@@ -255,7 +255,7 @@ function SourceCard({
         {source.source_text ? (
           <blockquote
             data-testid="sotr-quoted-text"
-            className="border-l-2 border-[#017BC8] dark:border-[#74B4DC] pl-3 text-fg-body text-sm leading-relaxed whitespace-pre-wrap"
+            className="border-l-2 border-brand-600 dark:border-brand-300 pl-3 text-fg-body text-sm leading-relaxed whitespace-pre-wrap"
           >
             {source.source_text}
           </blockquote>

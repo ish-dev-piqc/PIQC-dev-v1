@@ -107,8 +107,8 @@ export default function ProfileCompletion() {
   const pageBg = isLight ? 'bg-[#F8FAFC]' : 'bg-[#020617]';
   const labelColor = isLight ? 'text-[#334155]/70' : 'text-[#CBD5E1]/70';
   const inputBg = isLight
-    ? 'bg-white border-[#E2E8F0] text-[#0F172A] placeholder-[#334155]/20 focus:border-[#017BC8]/60 focus:ring-[#017BC8]/30'
-    : 'bg-[#0F172A] border-white/[0.08] text-white placeholder-[#CBD5E1]/20 focus:border-[#017BC8]/60 focus:ring-[#017BC8]/30';
+    ? 'bg-white border-[#E2E8F0] text-[#0F172A] placeholder-[#334155]/20 focus:border-brand-600/60 focus:ring-brand-600/30'
+    : 'bg-[#0F172A] border-white/[0.08] text-white placeholder-[#CBD5E1]/20 focus:border-brand-600/60 focus:ring-brand-600/30';
   const subColor = isLight ? 'text-[#334155]/60' : 'text-[#CBD5E1]/60';
   const backColor = isLight ? 'text-[#334155]/40 hover:text-[#334155]/70' : 'text-[#CBD5E1]/40 hover:text-[#CBD5E1]/70';
 
@@ -118,8 +118,8 @@ export default function ProfileCompletion() {
         className="absolute inset-0 pointer-events-none"
         style={{
           background: isLight
-            ? 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(1,123,200,0.10) 0%, transparent 65%)'
-            : 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(1,123,200,0.18) 0%, transparent 65%)',
+            ? 'radial-gradient(ellipse 80% 50% at 50% -10%, rgb(var(--brand-600) / 0.10) 0%, transparent 65%)'
+            : 'radial-gradient(ellipse 80% 50% at 50% -10%, rgb(var(--brand-600) / 0.18) 0%, transparent 65%)',
         }}
       />
 
@@ -136,7 +136,7 @@ export default function ProfileCompletion() {
         <div className="flex items-center gap-2.5 mb-8">
           <img src="/PIQC_Logo.png" alt="" className="w-8 h-8 object-contain" />
           <span className="text-[15px] font-semibold text-fg-heading tracking-tight">
-            <span className="text-[#017BC8]">PIQC</span>linical
+            <span className="text-brand-600">PIQC</span>linical
           </span>
         </div>
 
@@ -221,7 +221,7 @@ export default function ProfileCompletion() {
           <button
             type="submit"
             disabled={!isValid || submitting}
-            className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-all duration-150 shadow-btn hover:shadow-btn-hover disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+            className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-all duration-150 shadow-btn hover:shadow-btn-hover disabled:opacity-50 disabled:cursor-not-allowed mt-2"
           >
             {submitting ? 'Saving...' : 'Continue to dashboard'}
           </button>

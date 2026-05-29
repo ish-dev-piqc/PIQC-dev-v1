@@ -59,13 +59,13 @@ const SOURCE_TONES: Record<
     label: 'Pending',
   },
   AUDITOR_PREFILL_WEB: {
-    light: 'bg-[#02BBB8]/10 border-[#02BBB8]/25 text-[#02BBB8]',
-    dark: 'bg-[#6FC9C7]/15 border-[#6FC9C7]/30 text-[#6FC9C7]',
+    light: 'bg-brand-600/10 border-brand-600/25 text-brand-600',
+    dark: 'bg-brand-300/15 border-brand-300/30 text-brand-300',
     label: 'Web pre-fill',
   },
   AUDITOR_PREFILL_PRIOR_AUDIT: {
-    light: 'bg-[#02BBB8]/10 border-[#02BBB8]/25 text-[#02BBB8]',
-    dark: 'bg-[#6FC9C7]/15 border-[#6FC9C7]/30 text-[#6FC9C7]',
+    light: 'bg-brand-600/10 border-brand-600/25 text-brand-600',
+    dark: 'bg-brand-300/15 border-brand-300/30 text-brand-300',
     label: 'Prior audit',
   },
   AUDITOR_AUTHORED: {
@@ -160,8 +160,8 @@ export default function QuestionnaireReviewWorkspace() {
   const sectionHeader = 'text-fg-label';
   const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const buttonPrimary = isLight
-    ? 'bg-[#02BBB8] text-white hover:bg-[#016663]'
-    : 'bg-[#6FC9C7] text-[#0F172A] hover:bg-[#028E8B]';
+    ? 'bg-brand-600 text-white hover:bg-brand-800'
+    : 'bg-brand-300 text-[#0F172A] hover:bg-brand-700';
   const buttonSecondary = isLight
     ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
     : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]';
@@ -570,8 +570,8 @@ function LifecycleStepper({ status, isLight }: LifecycleStepperProps) {
           const isFuture = i > idx;
           const tone = isCurrent
             ? isLight
-              ? 'bg-[#02BBB8] text-white border-[#02BBB8]'
-              : 'bg-[#6FC9C7] text-[#0F172A] border-[#6FC9C7]'
+              ? 'bg-brand-600 text-white border-brand-600'
+              : 'bg-brand-300 text-[#0F172A] border-brand-300'
             : isDone
             ? isLight
               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -627,8 +627,8 @@ function QuestionRow({ question, response, onUpdate, isLight, readOnly }: Questi
   const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const inputBg = isLight ? 'bg-white' : 'bg-[#0F172A]';
   const inputBorder = isLight
-    ? 'border-[#CBD5E1] focus:border-[#02BBB8] focus:ring-1 focus:ring-[#02BBB8]/30'
-    : 'border-white/15 focus:border-[#6FC9C7] focus:ring-1 focus:ring-[#6FC9C7]/30';
+    ? 'border-[#CBD5E1] focus:border-brand-600 focus:ring-1 focus:ring-brand-600/30'
+    : 'border-white/15 focus:border-brand-300 focus:ring-1 focus:ring-brand-300/30';
   const buttonSecondary = isLight
     ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
     : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]';
@@ -812,8 +812,8 @@ function Tag({
       ? 'bg-amber-50 border-amber-200 text-amber-700'
       : 'bg-amber-500/15 border-amber-500/30 text-amber-300',
     blue: isLight
-      ? 'bg-[#02BBB8]/10 border-[#02BBB8]/25 text-[#02BBB8]'
-      : 'bg-[#6FC9C7]/15 border-[#6FC9C7]/30 text-[#6FC9C7]',
+      ? 'bg-brand-600/10 border-brand-600/25 text-brand-600'
+      : 'bg-brand-300/15 border-brand-300/30 text-brand-300',
     neutral: isLight
       ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/65'
       : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/55',

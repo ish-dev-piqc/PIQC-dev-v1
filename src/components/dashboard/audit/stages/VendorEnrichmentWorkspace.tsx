@@ -619,7 +619,7 @@ function TrustAssessmentSummary({
               <li key={i} className={`text-sm flex items-start gap-2 ${headingColor}`}>
                 <span
                   className={`mt-1.5 w-1 h-1 rounded-full flex-shrink-0 ${
-                    isLight ? 'bg-[#02BBB8]/55' : 'bg-[#6FC9C7]/55'
+                    isLight ? 'bg-brand-600/55' : 'bg-brand-300/55'
                   }`}
                 />
                 {h}
@@ -678,8 +678,8 @@ function PostureSummary({ label, value, rawValue, isLight }: PostureSummaryProps
       ? 'bg-[#F8FAFC] border-[#E2E8F0]'
       : 'bg-white/[0.02] border-white/5'
     : isLight
-    ? 'bg-[#02BBB8]/[0.06] border-[#02BBB8]/20'
-    : 'bg-[#02BBB8]/[0.10] border-[#6FC9C7]/30';
+    ? 'bg-brand-600/[0.06] border-brand-600/20'
+    : 'bg-brand-600/[0.10] border-brand-300/30';
   const sectionHeader = 'text-fg-label';
   const valueColor = isUnknown
     ? isLight

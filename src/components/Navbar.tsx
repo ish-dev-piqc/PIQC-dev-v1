@@ -68,8 +68,8 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
       {modeOptions.map(({ id, label }) => {
         const active = mode === id;
         const activeClass = isLight
-          ? 'bg-[#017BC8] text-white shadow-sm'
-          : 'bg-[#017BC8] text-white shadow-sm';
+          ? 'bg-brand-600 text-white shadow-sm'
+          : 'bg-brand-600 text-white shadow-sm';
         const inactiveClass = isLight
           ? 'text-[#334155]/60 hover:text-[#0F172A]'
           : 'text-[#CBD5E1]/60 hover:text-white';
@@ -119,7 +119,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                 }}
                 className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors ${
                   active
-                    ? 'bg-[#017BC8] text-white'
+                    ? 'bg-brand-600 text-white'
                     : isLight
                     ? 'text-[#334155]/70 hover:bg-[#0F172A]/[0.05]'
                     : 'text-[#CBD5E1]/70 hover:bg-white/[0.05]'
@@ -149,9 +149,9 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
         title={isHomeScope ? 'All protocols — combined view' : activeProtocol.name}
       >
         {isHomeScope ? (
-          <Home size={12} className={`flex-shrink-0 ${isLight ? 'text-[#017BC8]' : 'text-[#74B4DC]'}`} />
+          <Home size={12} className={`flex-shrink-0 ${isLight ? 'text-brand-600' : 'text-brand-300'}`} />
         ) : (
-          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isLight ? 'bg-[#017BC8]' : 'bg-[#74B4DC]'}`} />
+          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isLight ? 'bg-brand-600' : 'bg-brand-300'}`} />
         )}
         <span className="truncate max-w-[110px]">{isHomeScope ? 'All protocols' : activeProtocol.code}</span>
         <ChevronDown size={12} className={`transition-transform duration-150 flex-shrink-0 ${protocolMenuOpen ? 'rotate-180' : ''}`} />
@@ -175,8 +175,8 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
             className={`w-full text-left px-3 py-2.5 transition-colors flex items-start gap-2.5 ${
               isHomeScope
                 ? isLight
-                  ? 'bg-[#017BC8]/10'
-                  : 'bg-[#017BC8]/15'
+                  ? 'bg-brand-600/10'
+                  : 'bg-brand-600/15'
                 : isLight
                 ? 'hover:bg-[#0F172A]/[0.04]'
                 : 'hover:bg-white/[0.04]'
@@ -184,9 +184,9 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
             role="option"
             aria-selected={isHomeScope}
           >
-            <Home size={14} className={`mt-0.5 flex-shrink-0 ${isHomeScope ? (isLight ? 'text-[#017BC8]' : 'text-[#74B4DC]') : isLight ? 'text-[#334155]/50' : 'text-[#CBD5E1]/45'}`} />
+            <Home size={14} className={`mt-0.5 flex-shrink-0 ${isHomeScope ? (isLight ? 'text-brand-600' : 'text-brand-300') : isLight ? 'text-[#334155]/50' : 'text-[#CBD5E1]/45'}`} />
             <div className="min-w-0">
-              <div className={`text-xs font-semibold ${isHomeScope ? (isLight ? 'text-[#017BC8]' : 'text-[#74B4DC]') : isLight ? 'text-[#0F172A]' : 'text-white'}`}>
+              <div className={`text-xs font-semibold ${isHomeScope ? (isLight ? 'text-brand-600' : 'text-brand-300') : isLight ? 'text-[#0F172A]' : 'text-white'}`}>
                 All protocols
               </div>
               <div className={`text-[11px] mt-0.5 ${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'}`}>
@@ -220,8 +220,8 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                 className={`w-full text-left px-3 py-2.5 transition-colors ${
                   active
                     ? isLight
-                      ? 'bg-[#017BC8]/10'
-                      : 'bg-[#017BC8]/15'
+                      ? 'bg-brand-600/10'
+                      : 'bg-brand-600/15'
                     : isLight
                     ? 'hover:bg-[#0F172A]/[0.04]'
                     : 'hover:bg-white/[0.04]'
@@ -233,8 +233,8 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                   className={`text-xs font-semibold ${
                     active
                       ? isLight
-                        ? 'text-[#017BC8]'
-                        : 'text-[#74B4DC]'
+                        ? 'text-brand-600'
+                        : 'text-brand-300'
                       : isLight
                       ? 'text-[#0F172A]'
                       : 'text-white'
@@ -257,8 +257,8 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
               }}
               className={`w-full text-left px-3 py-2.5 flex items-center gap-2 transition-colors ${
                 isLight
-                  ? 'text-[#017BC8] hover:bg-[#017BC8]/[0.06]'
-                  : 'text-[#74B4DC] hover:bg-white/[0.04]'
+                  ? 'text-brand-600 hover:bg-brand-600/[0.06]'
+                  : 'text-brand-300 hover:bg-white/[0.04]'
               }`}
             >
               <Plus size={13} />
@@ -281,7 +281,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
         title={activeAudit ? activeAudit.audit_name : 'No audit selected'}
       >
         {activeAudit ? (
-          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isLight ? 'bg-[#017BC8]' : 'bg-[#74B4DC]'}`} />
+          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isLight ? 'bg-brand-600' : 'bg-brand-300'}`} />
         ) : (
           <ClipboardList size={12} className={`flex-shrink-0 ${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'}`} />
         )}
@@ -318,8 +318,8 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                   className={`w-full text-left px-3 py-2.5 transition-colors ${
                     active
                       ? isLight
-                        ? 'bg-[#017BC8]/10'
-                        : 'bg-[#017BC8]/15'
+                        ? 'bg-brand-600/10'
+                        : 'bg-brand-600/15'
                       : isLight
                       ? 'hover:bg-[#0F172A]/[0.04]'
                       : 'hover:bg-white/[0.04]'
@@ -331,8 +331,8 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                     className={`text-xs font-semibold truncate ${
                       active
                         ? isLight
-                          ? 'text-[#017BC8]'
-                          : 'text-[#74B4DC]'
+                          ? 'text-brand-600'
+                          : 'text-brand-300'
                         : isLight
                         ? 'text-[#0F172A]'
                         : 'text-white'
@@ -429,7 +429,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
   // Mode-aware brand color for the wordmark "PIQC" prefix:
   // - Audit Mode → brand teal (`#02BBB8`), matches audit-mode component recolor.
   // - Site Mode / SOTR / landing / auth → brand blue (`#017BC8`).
-  const brandTextColor = isDashboard && mode === 'audit' ? 'text-[#02BBB8]' : 'text-[#017BC8]';
+  const brandTextColor = isDashboard && mode === 'audit' ? 'text-brand-600' : 'text-brand-600';
 
   return (
     <>
@@ -472,8 +472,8 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-150 group ${isLight ? 'hover:bg-[#0F172A]/[0.06]' : 'hover:bg-white/[0.06]'}`}
                 >
-                  <div className="w-7 h-7 rounded-full bg-[#017BC8]/20 border border-[#017BC8]/30 flex items-center justify-center">
-                    <User size={13} className="text-[#74B4DC]" />
+                  <div className="w-7 h-7 rounded-full bg-brand-600/20 border border-brand-600/30 flex items-center justify-center">
+                    <User size={13} className="text-brand-300" />
                   </div>
                   <span className={`text-sm ${isLight ? 'text-[#334155]/60 group-hover:text-[#0F172A]' : 'text-[#CBD5E1]/60 group-hover:text-white'} transition-colors max-w-[140px] truncate`}>
                     {user?.email ?? 'Account'}
@@ -548,8 +548,8 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                         <span className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
                           heatmapEnabled
                             ? isLight
-                              ? 'bg-[#017BC8]/10 border-[#017BC8]/25 text-[#017BC8]'
-                              : 'bg-[#74B4DC]/15 border-[#74B4DC]/30 text-[#74B4DC]'
+                              ? 'bg-brand-600/10 border-brand-600/25 text-brand-600'
+                              : 'bg-brand-300/15 border-brand-300/30 text-brand-300'
                             : isLight
                             ? 'bg-[#F2F2F2] border-[#CBD5E1] text-[#334155]/55'
                             : 'bg-white/[0.06] border-white/10 text-[#CBD5E1]/45'
@@ -612,7 +612,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
               {isLoggedIn ? (
                 <button
                   onClick={() => onViewChange('dashboard')}
-                  className="ml-2 px-4 py-2 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-all duration-150 shadow-btn hover:shadow-btn-hover"
+                  className="ml-2 px-4 py-2 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-all duration-150 shadow-btn hover:shadow-btn-hover"
                 >
                   Dashboard
                 </button>
@@ -626,7 +626,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                   </button>
                   <button
                     onClick={() => onViewChange('login')}
-                    className="ml-2 px-4 py-2 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-all duration-150 shadow-btn hover:shadow-btn-hover"
+                    className="ml-2 px-4 py-2 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-all duration-150 shadow-btn hover:shadow-btn-hover"
                   >
                     Get Started
                   </button>
@@ -708,7 +708,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
               {isLoggedIn ? (
                 <button
                   onClick={() => { onViewChange('dashboard'); setMobileOpen(false); }}
-                  className="mt-2 w-full text-center px-4 py-2.5 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-colors block"
+                  className="mt-2 w-full text-center px-4 py-2.5 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-colors block"
                 >
                   Dashboard
                 </button>
@@ -722,7 +722,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                   </button>
                   <button
                     onClick={() => { onViewChange('login'); setMobileOpen(false); }}
-                    className="mt-2 w-full text-center px-4 py-2.5 text-sm font-semibold text-white bg-[#017BC8] rounded-lg hover:bg-[#1595D1] transition-colors"
+                    className="mt-2 w-full text-center px-4 py-2.5 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-colors"
                   >
                     Get Started
                   </button>

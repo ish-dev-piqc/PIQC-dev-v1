@@ -73,7 +73,7 @@ export default function FlagSourceButton({
           onChange={(e) => setNote(e.target.value)}
           rows={2}
           placeholder="What's wrong with this citation?"
-          className="w-full text-xs rounded-md border border-[#E2E8F0] dark:border-white/10 bg-white dark:bg-[#0F172A] px-2.5 py-1.5 text-fg-body focus:outline-none focus:ring-1 focus:ring-[#017BC8]"
+          className="w-full text-xs rounded-md border border-[#E2E8F0] dark:border-white/10 bg-white dark:bg-[#0F172A] px-2.5 py-1.5 text-fg-body focus:outline-none focus:ring-1 focus:ring-brand-600"
         />
         <div className="flex items-center gap-2">
           <button

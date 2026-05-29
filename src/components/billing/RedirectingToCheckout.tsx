@@ -28,13 +28,13 @@ export default function RedirectingToCheckout() {
         className="absolute inset-0 pointer-events-none"
         style={{
           background: isLight
-            ? 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(1,123,200,0.08) 0%, transparent 65%)'
-            : 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(1,123,200,0.14) 0%, transparent 65%)',
+            ? 'radial-gradient(ellipse 80% 50% at 50% -10%, rgb(var(--brand-600) / 0.08) 0%, transparent 65%)'
+            : 'radial-gradient(ellipse 80% 50% at 50% -10%, rgb(var(--brand-600) / 0.14) 0%, transparent 65%)',
         }}
       />
       <div className="relative z-10 flex flex-col items-center">
         <div className="flex items-center gap-3">
-          <Loader2 size={22} className="animate-spin text-[#017BC8]" />
+          <Loader2 size={22} className="animate-spin text-brand-600" />
           <span className="text-sm font-semibold text-fg-heading">
             {message}
           </span>

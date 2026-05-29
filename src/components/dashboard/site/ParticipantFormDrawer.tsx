@@ -160,8 +160,8 @@ export default function ParticipantFormDrawer({
   const border = isLight ? 'border-[#E2E8F0]' : 'border-white/5';
   const inputBg = isLight ? 'bg-white' : 'bg-[#020617]';
   const inputBorder = isLight
-    ? 'border-[#CBD5E1] focus:border-[#017BC8] focus:ring-1 focus:ring-[#017BC8]/30'
-    : 'border-white/15 focus:border-[#74B4DC] focus:ring-1 focus:ring-[#74B4DC]/30';
+    ? 'border-[#CBD5E1] focus:border-brand-600 focus:ring-1 focus:ring-brand-600/30'
+    : 'border-white/15 focus:border-brand-300 focus:ring-1 focus:ring-brand-300/30';
   const labelColor = 'text-fg-label';
   const headingColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
@@ -327,7 +327,7 @@ export default function ParticipantFormDrawer({
             onClick={(e) => submit(e as unknown as React.FormEvent)}
             disabled={submitting}
             className={`text-xs font-semibold px-4 py-1.5 rounded-md text-white transition-colors disabled:opacity-50 ${
-              isLight ? 'bg-[#017BC8] hover:bg-[#0477BF]' : 'bg-[#74B4DC] hover:bg-[#3CACF4]'
+              isLight ? 'bg-brand-600 hover:bg-brand-800' : 'bg-brand-300 hover:bg-brand-400'
             }`}
           >
             {submitting ? 'Saving…' : mode === 'create' ? 'Create participant' : 'Save changes'}

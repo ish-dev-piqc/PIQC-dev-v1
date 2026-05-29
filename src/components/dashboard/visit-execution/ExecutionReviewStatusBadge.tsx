@@ -41,7 +41,7 @@ const TONES: Record<ExecutionReviewStatus, string> = {
   // Secondary states: text-color only — preserves semantic differentiation
   // (blue = edited, indigo = note added) without competing with the filled
   // primary pair.
-  edited:          'text-blue-700 dark:text-blue-400 bg-transparent border-transparent',
+  edited:          'text-brand-700 dark:text-brand-400 bg-transparent border-transparent',
   site_note_added: 'text-indigo-700 dark:text-indigo-400 bg-transparent border-transparent',
 };
 

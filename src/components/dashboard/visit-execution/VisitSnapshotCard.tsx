@@ -94,8 +94,8 @@ function buildChips(snapshot: VisitSnapshot, needsReviewCount: number): Chip[] {
       label: 'Needs review',
       count: needsReviewCount,
       icon: <ClipboardCheck size={11} aria-hidden />,
-      toneLight: 'text-blue-700 bg-blue-50 border-blue-200',
-      toneDark: 'dark:text-blue-400 dark:bg-blue-400/10 dark:border-blue-400/20',
+      toneLight: 'text-brand-700 bg-brand-50 border-brand-200',
+      toneDark: 'dark:text-brand-400 dark:bg-brand-400/10 dark:border-brand-400/20',
     });
   }
 
@@ -124,7 +124,7 @@ export default function VisitSnapshotCard({
       <div className="flex items-start gap-3">
         <div
           className={`mt-0.5 inline-flex items-center justify-center w-7 h-7 rounded-md ${
-            isLight ? 'bg-[#F2F2F2] text-[#017BC8]' : 'bg-white/[0.04] text-[#74B4DC]'
+            isLight ? 'bg-[#F2F2F2] text-brand-600' : 'bg-white/[0.04] text-brand-300'
           }`}
           aria-hidden
         >

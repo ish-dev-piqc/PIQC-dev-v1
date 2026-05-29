@@ -106,8 +106,8 @@ function renderLine(
               isUser
                 ? 'bg-white/25 text-white hover:bg-white/40'
                 : isLight
-                ? 'bg-[#017BC8]/15 text-[#017BC8] hover:bg-[#017BC8]/30'
-                : 'bg-[#017BC8]/20 text-[#6a9fc8] hover:bg-[#017BC8]/40'
+                ? 'bg-brand-600/15 text-brand-600 hover:bg-brand-600/30'
+                : 'bg-brand-600/20 text-[#6a9fc8] hover:bg-brand-600/40'
             }`}
           >
             {n}
@@ -151,7 +151,7 @@ function SourceDetailPanel({
         <div className="flex items-center gap-1.5 min-w-0">
           <span
             className={`inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded text-[9px] font-bold flex-shrink-0 ${
-              isLight ? 'bg-[#017BC8]/15 text-[#017BC8]' : 'bg-[#017BC8]/20 text-[#6a9fc8]'
+              isLight ? 'bg-brand-600/15 text-brand-600' : 'bg-brand-600/20 text-[#6a9fc8]'
             }`}
           >
             {source.n}
@@ -177,8 +177,8 @@ function SourceDetailPanel({
         <p
           className={`text-[11px] leading-relaxed italic border-l-2 pl-2 ${
             isLight
-              ? 'border-[#017BC8]/30 text-[#334155]/70'
-              : 'border-[#017BC8]/30 text-[#a0b0c0]'
+              ? 'border-brand-600/30 text-[#334155]/70'
+              : 'border-brand-600/30 text-[#a0b0c0]'
           }`}
         >
           "{source.chunk_preview.trim()}…"
@@ -192,7 +192,7 @@ function RagStatusTag({ ragStatus, ragError, isLight }: { ragStatus: RagStatus; 
   if (ragStatus === 'found') {
     return (
       <div className={`flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full w-fit text-[10px] font-medium ${
-        isLight ? 'text-[#3a5a85]/70 bg-[#017BC8]/08' : 'text-[#6a8fb8]/60 bg-[#017BC8]/10'
+        isLight ? 'text-[#3a5a85]/70 bg-brand-600/08' : 'text-[#6a8fb8]/60 bg-brand-600/10'
       }`}>
         <Database size={9} />
         <span>Answered from knowledge base</span>
@@ -241,14 +241,14 @@ function MessageBubble({ msg, isLight }: { msg: ExtendedMessage; isLight: boolea
     <div className={`flex gap-3 group ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
       <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-sm ${
         isUser
-          ? 'bg-gradient-to-br from-[#1595D1] to-[#017BC8]'
+          ? 'bg-gradient-to-br from-brand-500 to-brand-600'
           : isLight
           ? 'bg-gradient-to-br from-[#e8f0f6] to-[#d4e4ee] border border-[#c8dce4]'
           : 'bg-gradient-to-br from-[#1e2b35] to-[#141d22] border border-[#334155]'
       }`}>
         {isUser
           ? <User size={14} className="text-white" />
-          : <BookOpen size={14} className="text-[#017BC8]" />
+          : <BookOpen size={14} className="text-brand-600" />
         }
       </div>
 
@@ -262,7 +262,7 @@ function MessageBubble({ msg, isLight }: { msg: ExtendedMessage; isLight: boolea
         </span>
         <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
           isUser
-            ? 'bg-gradient-to-br from-[#1595D1] to-[#017BC8] text-white rounded-tr-sm'
+            ? 'bg-gradient-to-br from-brand-500 to-brand-600 text-white rounded-tr-sm'
             : isLight
             ? 'bg-white text-[#334155] rounded-tl-sm border border-[#E2E8F0] shadow-[0_1px_4px_rgba(0,0,0,0.06)]'
             : 'bg-[#171f25] text-[#CBD5E1] rounded-tl-sm border border-white/[0.07] shadow-[0_1px_4px_rgba(0,0,0,0.3)]'
@@ -279,7 +279,7 @@ function MessageBubble({ msg, isLight }: { msg: ExtendedMessage; isLight: boolea
             if (line.startsWith('- ')) {
               return (
                 <div key={i} className="flex gap-2 my-1">
-                  <span className={`mt-1.5 flex-shrink-0 w-1.5 h-1.5 rounded-full ${isUser ? 'bg-white/70' : 'bg-[#017BC8]'}`} />
+                  <span className={`mt-1.5 flex-shrink-0 w-1.5 h-1.5 rounded-full ${isUser ? 'bg-white/70' : 'bg-brand-600'}`} />
                   <span>{rendered}</span>
                 </div>
               );
@@ -291,7 +291,7 @@ function MessageBubble({ msg, isLight }: { msg: ExtendedMessage; isLight: boolea
             );
           })}
           {msg.streaming && (
-            <span className="inline-block w-0.5 h-4 ml-0.5 bg-[#017BC8] animate-pulse rounded-full align-middle" />
+            <span className="inline-block w-0.5 h-4 ml-0.5 bg-brand-600 animate-pulse rounded-full align-middle" />
           )}
         </div>
 
@@ -322,7 +322,7 @@ function TypingIndicator({ retrieving, isLight }: { retrieving?: boolean; isLigh
           ? 'bg-gradient-to-br from-[#e8f0f6] to-[#d4e4ee] border border-[#c8dce4]'
           : 'bg-gradient-to-br from-[#1e2b35] to-[#141d22] border border-[#334155]'
       }`}>
-        <BookOpen size={14} className="text-[#017BC8]" />
+        <BookOpen size={14} className="text-brand-600" />
       </div>
       <div className="flex flex-col gap-1 items-start">
         <span className={`text-[10px] font-medium tracking-wide uppercase px-1 ${isLight ? 'text-[#334155]/40' : 'text-[#CBD5E1]/30'}`}>
@@ -335,14 +335,14 @@ function TypingIndicator({ retrieving, isLight }: { retrieving?: boolean; isLigh
         }`}>
           {retrieving ? (
             <>
-              <Search size={13} className="text-[#017BC8] animate-pulse flex-shrink-0" />
+              <Search size={13} className="text-brand-600 animate-pulse flex-shrink-0" />
               <span className={`text-xs ${isLight ? 'text-[#334155]/50' : 'text-[#CBD5E1]/40'}`}>Searching knowledge base...</span>
             </>
           ) : (
             <div className="flex gap-1.5 items-center">
-              <span className="w-2 h-2 rounded-full bg-[#017BC8]/70 animate-bounce" style={{ animationDelay: '0ms' }} />
-              <span className="w-2 h-2 rounded-full bg-[#017BC8]/70 animate-bounce" style={{ animationDelay: '160ms' }} />
-              <span className="w-2 h-2 rounded-full bg-[#017BC8]/70 animate-bounce" style={{ animationDelay: '320ms' }} />
+              <span className="w-2 h-2 rounded-full bg-brand-600/70 animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-2 h-2 rounded-full bg-brand-600/70 animate-bounce" style={{ animationDelay: '160ms' }} />
+              <span className="w-2 h-2 rounded-full bg-brand-600/70 animate-bounce" style={{ animationDelay: '320ms' }} />
             </div>
           )}
         </div>
@@ -404,7 +404,7 @@ function DocumentSelector({ selectedDocIds, onSelectionChange, isLight }: Docume
         onClick={() => setOpen(o => !o)}
         className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all duration-150 ${
           selectedDocIds.length > 0
-            ? 'bg-[#017BC8]/15 border-[#017BC8]/40 text-[#017BC8]'
+            ? 'bg-brand-600/15 border-brand-600/40 text-brand-600'
             : isLight
             ? 'bg-transparent border-[#E2E8F0] text-[#334155]/50 hover:text-[#334155]/80 hover:border-[#CBD5E1]'
             : 'bg-transparent border-white/10 text-[#CBD5E1]/40 hover:text-[#CBD5E1]/70 hover:border-white/15'
@@ -463,13 +463,13 @@ function DocumentSelector({ selectedDocIds, onSelectionChange, isLight }: Docume
                     onClick={() => toggle(doc.id)}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${
                       selected
-                        ? isLight ? 'bg-[#017BC8]/08' : 'bg-[#017BC8]/12'
+                        ? isLight ? 'bg-brand-600/08' : 'bg-brand-600/12'
                         : isLight ? 'hover:bg-[#f5f9fc]' : 'hover:bg-white/[0.04]'
                     }`}
                   >
                     <div className={`flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors ${
                       selected
-                        ? 'bg-[#017BC8] border-[#017BC8]'
+                        ? 'bg-brand-600 border-brand-600'
                         : isLight ? 'border-[#CBD5E1] bg-transparent' : 'border-white/20 bg-transparent'
                     }`}>
                       {selected && <Check size={9} className="text-white" />}
@@ -662,7 +662,7 @@ export default function DashboardChat({
 
   const statusColor = loading
     ? 'bg-amber-400'
-    : 'bg-blue-400';
+    : 'bg-brand-400';
 
   return (
     <div className={`flex flex-col h-full ${isLight ? 'bg-[#fafcfd]' : 'bg-[#0c1118]'}`}>
@@ -712,7 +712,7 @@ export default function DashboardChat({
                 }`}>
                   <Stethoscope size={28} className="text-[#4a7aa8]" />
                 </div>
-                <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gradient-to-br from-[#1595D1] to-[#017BC8] flex items-center justify-center shadow-sm">
+                <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center shadow-sm">
                   <Sparkles size={10} className="text-white" />
                 </div>
               </div>
@@ -732,11 +732,11 @@ export default function DashboardChat({
                       onClick={() => handleSend(text)}
                       className={`text-left text-xs px-3 py-3 rounded-xl border transition-all duration-150 group ${
                         isLight
-                          ? 'bg-white border-[#E2E8F0] text-[#334155]/65 hover:border-[#017BC8]/40 hover:bg-[#f4fbfd] hover:text-[#334155]'
-                          : 'bg-[#0F172A] border-white/[0.07] text-[#94A3B8] hover:border-[#017BC8]/30 hover:bg-[#192027] hover:text-[#b0c0cc]'
+                          ? 'bg-white border-[#E2E8F0] text-[#334155]/65 hover:border-brand-600/40 hover:bg-[#f4fbfd] hover:text-[#334155]'
+                          : 'bg-[#0F172A] border-white/[0.07] text-[#94A3B8] hover:border-brand-600/30 hover:bg-[#192027] hover:text-[#b0c0cc]'
                       }`}
                     >
-                      <Icon size={14} className="text-[#017BC8] mb-2 group-hover:scale-110 transition-transform" />
+                      <Icon size={14} className="text-brand-600 mb-2 group-hover:scale-110 transition-transform" />
                       <span className="leading-snug">{text}</span>
                     </button>
                   ))}
@@ -752,12 +752,12 @@ export default function DashboardChat({
                       onClick={() => handleSend(prompt)}
                       className={`w-full text-left text-xs px-3.5 py-2.5 rounded-xl border transition-all duration-150 leading-relaxed group ${
                         isLight
-                          ? 'bg-white border-[#E2E8F0] text-[#334155]/70 hover:border-[#017BC8]/40 hover:bg-[#f0f8fb] hover:text-[#334155]'
-                          : 'bg-[#0F172A] border-white/[0.07] text-[#a0b0c4] hover:border-[#017BC8]/30 hover:bg-[#1a242a] hover:text-[#c0d0dc]'
+                          ? 'bg-white border-[#E2E8F0] text-[#334155]/70 hover:border-brand-600/40 hover:bg-[#f0f8fb] hover:text-[#334155]'
+                          : 'bg-[#0F172A] border-white/[0.07] text-[#a0b0c4] hover:border-brand-600/30 hover:bg-[#1a242a] hover:text-[#c0d0dc]'
                       }`}
                     >
                       <span className="flex items-start gap-2">
-                        <span className="text-[#017BC8] mt-0.5 flex-shrink-0 group-hover:translate-x-0.5 transition-transform">›</span>
+                        <span className="text-brand-600 mt-0.5 flex-shrink-0 group-hover:translate-x-0.5 transition-transform">›</span>
                         {prompt}
                       </span>
                     </button>
@@ -771,11 +771,11 @@ export default function DashboardChat({
                       onClick={() => handleSend(text)}
                       className={`text-left text-xs px-3 py-3 rounded-xl border transition-all duration-150 group ${
                         isLight
-                          ? 'bg-white border-[#E2E8F0] text-[#334155]/65 hover:border-[#017BC8]/40 hover:bg-[#f4fbfd] hover:text-[#334155]'
-                          : 'bg-[#0F172A] border-white/[0.07] text-[#94A3B8] hover:border-[#017BC8]/30 hover:bg-[#192027] hover:text-[#b0c0cc]'
+                          ? 'bg-white border-[#E2E8F0] text-[#334155]/65 hover:border-brand-600/40 hover:bg-[#f4fbfd] hover:text-[#334155]'
+                          : 'bg-[#0F172A] border-white/[0.07] text-[#94A3B8] hover:border-brand-600/30 hover:bg-[#192027] hover:text-[#b0c0cc]'
                       }`}
                     >
-                      <Icon size={14} className="text-[#017BC8] mb-2 group-hover:scale-110 transition-transform" />
+                      <Icon size={14} className="text-brand-600 mb-2 group-hover:scale-110 transition-transform" />
                       <span className="leading-snug">{text}</span>
                     </button>
                   ))}
@@ -830,8 +830,8 @@ export default function DashboardChat({
       }`}>
         <div className={`rounded-2xl border transition-all duration-200 ${
           isLight
-            ? 'bg-[#f5f9fc] border-[#d8e8f0] focus-within:border-[#017BC8]/60 focus-within:shadow-[0_0_0_3px_rgba(1,123,200,0.08)]'
-            : 'bg-[#0F172A] border-white/[0.08] focus-within:border-[#017BC8]/40 focus-within:shadow-[0_0_0_3px_rgba(1,123,200,0.06)]'
+            ? 'bg-[#f5f9fc] border-[#d8e8f0] focus-within:border-brand-600/60 focus-within:shadow-[0_0_0_3px_rgb(var(--brand-600) / 0.08)]'
+            : 'bg-[#0F172A] border-white/[0.08] focus-within:border-brand-600/40 focus-within:shadow-[0_0_0_3px_rgb(var(--brand-600) / 0.06)]'
         }`}>
 
           <div className="px-4 pt-3 pb-2">
@@ -881,7 +881,7 @@ export default function DashboardChat({
                 <button
                   onClick={() => handleSend()}
                   disabled={!input.trim()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-br from-[#1595D1] to-[#017BC8] text-white hover:from-[#62a8c4] hover:to-[#456ea8] disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs font-medium shadow-sm"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-br from-brand-500 to-brand-600 text-white hover:from-[#62a8c4] hover:to-[#456ea8] disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs font-medium shadow-sm"
                 >
                   <Send size={12} />
                   Send

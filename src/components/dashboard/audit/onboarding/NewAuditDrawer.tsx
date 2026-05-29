@@ -116,15 +116,15 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
   const sectionHeader = 'text-fg-label';
   const inputBg = isLight ? 'bg-white' : 'bg-[#0F172A]';
   const inputBorder = isLight
-    ? 'border-[#CBD5E1] focus:border-[#02BBB8] focus:ring-1 focus:ring-[#02BBB8]/30'
-    : 'border-white/15 focus:border-[#6FC9C7] focus:ring-1 focus:ring-[#6FC9C7]/30';
+    ? 'border-[#CBD5E1] focus:border-brand-600 focus:ring-1 focus:ring-brand-600/30'
+    : 'border-white/15 focus:border-brand-300 focus:ring-1 focus:ring-brand-300/30';
   const buttonPrimary = isLight
-    ? 'bg-[#02BBB8] text-white hover:bg-[#016663] disabled:bg-[#CBD5E1]'
-    : 'bg-[#6FC9C7] text-[#0F172A] hover:bg-[#028E8B] disabled:bg-white/10 disabled:text-white/35';
+    ? 'bg-brand-600 text-white hover:bg-brand-800 disabled:bg-[#CBD5E1]'
+    : 'bg-brand-300 text-[#0F172A] hover:bg-brand-700 disabled:bg-white/10 disabled:text-white/35';
   const buttonSecondary = isLight
     ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
     : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]';
-  const tabActive = isLight ? 'border-[#02BBB8] text-[#02BBB8]' : 'border-[#6FC9C7] text-[#6FC9C7]';
+  const tabActive = isLight ? 'border-brand-600 text-brand-600' : 'border-brand-300 text-brand-300';
   const tabInactive = isLight
     ? 'border-transparent text-[#334155]/60 hover:text-[#0F172A]'
     : 'border-transparent text-[#CBD5E1]/55 hover:text-white';
@@ -424,8 +424,8 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
                 <label
                   className={`flex items-center justify-center gap-2 w-full px-3 py-4 rounded-md border border-dashed cursor-pointer transition-colors ${
                     isLight
-                      ? 'border-[#CBD5E1] hover:border-[#02BBB8]/40 hover:bg-white text-[#334155]/75'
-                      : 'border-white/15 hover:border-[#6FC9C7]/40 hover:bg-white/[0.03] text-[#CBD5E1]/70'
+                      ? 'border-[#CBD5E1] hover:border-brand-600/40 hover:bg-white text-[#334155]/75'
+                      : 'border-white/15 hover:border-brand-300/40 hover:bg-white/[0.03] text-[#CBD5E1]/70'
                   }`}
                 >
                   <Upload size={14} className={mutedColor} />
@@ -502,7 +502,7 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
                   <p
                     data-testid="upload-cached-indicator"
                     className={`text-[11px] inline-flex items-center gap-1 ${
-                      isLight ? 'text-[#02BBB8]' : 'text-[#6FC9C7]'
+                      isLight ? 'text-brand-600' : 'text-brand-300'
                     }`}
                   >
                     <CheckCircle2 size={11} />
@@ -528,8 +528,8 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
                       className={`text-center rounded-md border px-2 py-1.5 text-xs font-semibold transition-colors ${
                         active
                           ? isLight
-                            ? 'bg-[#02BBB8]/10 border-[#02BBB8] text-[#02BBB8]'
-                            : 'bg-[#02BBB8]/15 border-[#6FC9C7] text-[#6FC9C7]'
+                            ? 'bg-brand-600/10 border-brand-600 text-brand-600'
+                            : 'bg-brand-600/15 border-brand-300 text-brand-300'
                           : isLight
                             ? 'bg-white border-[#E2E8F0] text-[#334155]/65 hover:border-[#CBD5E1]'
                             : 'bg-[#0F172A] border-white/10 text-[#CBD5E1]/55 hover:border-white/20'

@@ -52,7 +52,7 @@ export default function FAQ() {
     >
       <div className="max-w-3xl mx-auto">
         <div className="text-center mb-12">
-          <p className="text-xs font-semibold text-[#74B4DC] uppercase tracking-widest mb-4">
+          <p className="text-xs font-semibold text-brand-300 uppercase tracking-widest mb-4">
             FAQ
           </p>
           <h2 className="text-3xl sm:text-4xl font-bold text-fg-heading leading-tight">

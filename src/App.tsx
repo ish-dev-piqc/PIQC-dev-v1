@@ -13,7 +13,7 @@ import ForgotPassword from './components/auth/ForgotPassword';
 import ProfileCompletion from './components/auth/ProfileCompletion';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
-import { ModeProvider } from './context/ModeContext';
+import { ModeProvider, useMode } from './context/ModeContext';
 import { DemoModeProvider } from './context/DemoModeContext';
 import { ProtocolProvider } from './context/ProtocolContext';
 import { SiteDataProvider } from './context/SiteDataContext';
@@ -35,6 +35,13 @@ function AppContent() {
   const { session, loading, profile, profileLoading } = useAuth();
   const { theme } = useTheme();
   const { isRedirecting } = useCheckoutRedirect();
+  const { mode } = useMode();
+  // Mode-aware class consumed by CSS variables in src/index.css. Applied
+  // unconditionally so the brand-color variables resolve correctly even
+  // outside the dashboard view (landing / auth default to mode-site →
+  // blue brand). Audit Mode users see teal brand colors everywhere
+  // inside the .mode-audit subtree.
+  const modeClass = `mode-${mode}`;
 
   const profileComplete = !!profile?.profile_completed_at;
   const needsProfileCompletion = !!session && !profileLoading && !profileComplete;
@@ -123,7 +130,7 @@ function AppContent() {
   if (loading || (session && profileLoading && !profile)) {
     return (
       <div className={`min-h-screen ${theme === 'light' ? 'bg-[#F8FAFC]' : 'bg-[#020617]'} flex items-center justify-center`}>
-        <div className="w-6 h-6 border-2 border-[#017BC8] border-t-transparent rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -158,7 +165,7 @@ function AppContent() {
 
   if (view === 'dashboard') {
     return (
-      <div className={`min-h-screen ${pageBg} ${textColor} antialiased`}>
+      <div className={`${modeClass} min-h-screen ${pageBg} ${textColor} antialiased`}>
         <Navbar
           view={view}
           onViewChange={handleViewChange}
@@ -176,7 +183,7 @@ function AppContent() {
   }
 
   return (
-    <div className={`min-h-screen ${pageBg} ${textColor} antialiased`}>
+    <div className={`${modeClass} min-h-screen ${pageBg} ${textColor} antialiased`}>
       <Navbar
         view={view}
         onViewChange={handleViewChange}
