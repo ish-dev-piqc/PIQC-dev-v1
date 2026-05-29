@@ -426,6 +426,10 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
     : 'border-t border-white/[0.06] bg-[#020617] px-4 pb-4 pt-2 shadow-lg';
 
   const logoTextColor = 'text-fg-heading';
+  // Mode-aware brand color for the wordmark "PIQC" prefix:
+  // - Audit Mode → brand teal (`#02BBB8`), matches audit-mode component recolor.
+  // - Site Mode / SOTR / landing / auth → brand blue (`#017BC8`).
+  const brandTextColor = isDashboard && mode === 'audit' ? 'text-[#02BBB8]' : 'text-[#017BC8]';
 
   return (
     <>
@@ -451,7 +455,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                 className="w-8 h-8 object-contain group-hover:scale-105 transition-transform"
               />
               <span className={`text-[15px] font-semibold ${logoTextColor} tracking-tight`}>
-                <span className="text-[#017BC8]">PIQC</span>linical
+                <span className={brandTextColor}>PIQC</span>linical
               </span>
             </button>
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Activity, FileText, Layers, Workflow, HelpCircle } from 'lucide-react';
+import { FileText, Layers, Workflow, HelpCircle } from 'lucide-react';
 import { UploadForm } from '../KnowledgeBase';
 import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
@@ -93,11 +93,9 @@ export default function ProtocolOnboarding({ onTabChange }: ProtocolOnboardingPr
     <div className={`min-h-screen ${pageBg} pt-20 pb-16 px-4 sm:px-6`}>
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center gap-2.5 mb-8">
-          <div className="w-8 h-8 rounded-lg bg-[#017BC8] flex items-center justify-center shadow-btn">
-            <Activity className="w-4 h-4 text-white" strokeWidth={2.5} />
-          </div>
+          <img src="/PIQC_Logo.png" alt="" className="w-8 h-8 object-contain" />
           <span className={`text-[15px] font-semibold ${headingColor} tracking-tight`}>
-            PIQ<span className="text-[#74B4DC]">Clinical</span>
+            <span className="text-[#017BC8]">PIQC</span>linical
           </span>
         </div>
 
