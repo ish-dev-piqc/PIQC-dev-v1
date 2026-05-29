@@ -7,6 +7,7 @@ import { useProtocol } from '../context/ProtocolContext';
 import { useAudit } from '../context/AuditContext';
 import { useHeatmap } from '../context/HeatmapContext';
 import { useDemoMode } from '../context/DemoModeContext';
+import { getProtocolColors } from '../lib/site/protocolColors';
 import OrgSettingsDrawer from './dashboard/site/OrgSettingsDrawer';
 import ProtocolUploadModal from './dashboard/site/ProtocolUploadModal';
 import type { AuditStage } from '../types/audit';
@@ -151,7 +152,16 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
         {isHomeScope ? (
           <Home size={12} className={`flex-shrink-0 ${isLight ? 'text-brand-600' : 'text-brand-300'}`} />
         ) : (
-          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isLight ? 'bg-brand-600' : 'bg-brand-300'}`} />
+          (() => {
+            const colors = getProtocolColors(activeProtocol.code);
+            return (
+              <span
+                className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                  isLight ? colors.dotLight : colors.dotDark
+                }`}
+              />
+            );
+          })()
         )}
         <span className="truncate max-w-[110px]">{isHomeScope ? 'All protocols' : activeProtocol.code}</span>
         <ChevronDown size={12} className={`transition-transform duration-150 flex-shrink-0 ${protocolMenuOpen ? 'rotate-180' : ''}`} />
@@ -209,6 +219,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
             </div>
           ) : protocols.map((p) => {
             const active = !isHomeScope && p.id === activeProtocol.id;
+            const colors = getProtocolColors(p.code);
             return (
               <button
                 key={p.id}
@@ -229,20 +240,27 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                 role="option"
                 aria-selected={active}
               >
-                <div
-                  className={`text-xs font-semibold ${
-                    active
-                      ? isLight
-                        ? 'text-brand-600'
-                        : 'text-brand-300'
-                      : isLight
-                      ? 'text-[#0F172A]'
-                      : 'text-white'
-                  }`}
-                >
-                  {p.code}
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                      isLight ? colors.dotLight : colors.dotDark
+                    }`}
+                  />
+                  <div
+                    className={`text-xs font-semibold ${
+                      active
+                        ? isLight
+                          ? 'text-brand-600'
+                          : 'text-brand-300'
+                        : isLight
+                        ? 'text-[#0F172A]'
+                        : 'text-white'
+                    }`}
+                  >
+                    {p.code}
+                  </div>
                 </div>
-                <div className={`text-[11px] mt-0.5 truncate ${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'}`}>
+                <div className={`text-[11px] mt-0.5 ml-4 truncate ${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'}`}>
                   {p.sponsor} · {p.phase}
                 </div>
               </button>
@@ -281,7 +299,16 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
         title={activeAudit ? activeAudit.audit_name : 'No audit selected'}
       >
         {activeAudit ? (
-          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isLight ? 'bg-brand-600' : 'bg-brand-300'}`} />
+          (() => {
+            const colors = getProtocolColors(activeAudit.protocol_code);
+            return (
+              <span
+                className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                  isLight ? colors.dotLight : colors.dotDark
+                }`}
+              />
+            );
+          })()
         ) : (
           <ClipboardList size={12} className={`flex-shrink-0 ${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'}`} />
         )}
@@ -307,6 +334,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
           ) : (
             audits.map((a) => {
               const active = activeAudit?.id === a.id;
+              const colors = getProtocolColors(a.protocol_code);
               return (
                 <button
                   key={a.id}
@@ -327,23 +355,30 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                   role="option"
                   aria-selected={active}
                 >
-                  <div
-                    className={`text-xs font-semibold truncate ${
-                      active
-                        ? isLight
-                          ? 'text-brand-600'
-                          : 'text-brand-300'
-                        : isLight
-                        ? 'text-[#0F172A]'
-                        : 'text-white'
-                    }`}
-                  >
-                    {a.audit_name}
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                        isLight ? colors.dotLight : colors.dotDark
+                      }`}
+                    />
+                    <div
+                      className={`text-xs font-semibold truncate ${
+                        active
+                          ? isLight
+                            ? 'text-brand-600'
+                            : 'text-brand-300'
+                          : isLight
+                          ? 'text-[#0F172A]'
+                          : 'text-white'
+                      }`}
+                    >
+                      {a.audit_name}
+                    </div>
                   </div>
-                  <div className={`text-[11px] mt-0.5 truncate ${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'}`}>
+                  <div className={`text-[11px] mt-0.5 ml-4 truncate ${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'}`}>
                     {a.vendor_name} · {a.protocol_code}
                   </div>
-                  <div className={`text-[10px] mt-0.5 uppercase tracking-wider font-medium ${isLight ? 'text-[#334155]/45' : 'text-[#CBD5E1]/40'}`}>
+                  <div className={`text-[10px] mt-0.5 ml-4 uppercase tracking-wider font-medium ${isLight ? 'text-[#334155]/45' : 'text-[#CBD5E1]/40'}`}>
                     {STAGE_LABELS[a.current_stage]}
                   </div>
                 </button>
