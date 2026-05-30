@@ -27,7 +27,12 @@ interface TeamFormDrawerProps {
   onClose: () => void;
 }
 
-export default function TeamFormDrawer({ mode, protocolId, initial, onClose }: TeamFormDrawerProps) {
+// `protocolId` stays on the interface for callers that pass it (e.g. the
+// VisitsTab footer Add-team-member button), but the drawer itself doesn't
+// need it — the team-member operations route through TeamContext using the
+// active protocol from elsewhere. Destructured-but-unused warnings would
+// fire, so we don't destructure it.
+export default function TeamFormDrawer({ mode, initial, onClose }: TeamFormDrawerProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
   const overlay = useRef<HTMLDivElement>(null);

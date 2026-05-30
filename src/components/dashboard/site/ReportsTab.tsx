@@ -334,7 +334,7 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
             </div>
             <div className="divide-y divide-inherit">
               {protocolRows.map(({ protocol, enrolled, completed, missed, deviation, rate, total }) => {
-                const colors = getProtocolColors(protocol);
+                const colors = getProtocolColors(protocol.code);
                 return (
                   <div
                     key={protocol.id}
@@ -403,7 +403,7 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
             <div className="divide-y divide-inherit">
               {deviationLog.map((v) => {
                 const protocol = protocols.find((p) => p.id === v.protocolId);
-                const colors = protocol ? getProtocolColors(protocol) : null;
+                const colors = protocol ? getProtocolColors(protocol.code) : null;
                 return (
                   <button
                     key={v.id}
@@ -456,7 +456,7 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
             <div className="divide-y divide-inherit">
               {missedLog.map((v) => {
                 const protocol = protocols.find((p) => p.id === v.protocolId);
-                const colors = protocol ? getProtocolColors(protocol) : null;
+                const colors = protocol ? getProtocolColors(protocol.code) : null;
                 return (
                   <button
                     key={v.id}
