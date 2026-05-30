@@ -23,7 +23,27 @@ export default function OrgSwitcher() {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  if (myOrgs.length <= 1) return null;
+  // No org at all → render nothing.
+  if (myOrgs.length === 0) return null;
+
+  const bg = isLight ? 'bg-white' : 'bg-[#0F172A]';
+  const border = isLight ? 'border-[#E2E8F0]' : 'border-white/5';
+  const hoverBg = isLight ? 'hover:bg-slate-50' : 'hover:bg-white/[0.04]';
+
+  // Single org → there's nothing to switch to, so show it as a static label
+  // (Building2 + name, no chevron, not clickable) instead of hiding it.
+  if (myOrgs.length === 1) {
+    const only = myOrgs[0];
+    return (
+      <div
+        className={`inline-flex items-center gap-1.5 text-xs rounded-md px-2.5 py-1.5 border ${border} ${bg} text-fg-body`}
+        title={only.name}
+      >
+        <Building2 size={12} />
+        <span className="truncate max-w-[140px]">{activeOrg?.name ?? only.name}</span>
+      </div>
+    );
+  }
 
   function close() {
     setOpen(false);
@@ -33,10 +53,6 @@ export default function OrgSwitcher() {
     setActiveOrg(orgId);
     close();
   }
-
-  const bg = isLight ? 'bg-white' : 'bg-[#0F172A]';
-  const border = isLight ? 'border-[#E2E8F0]' : 'border-white/5';
-  const hoverBg = isLight ? 'hover:bg-slate-50' : 'hover:bg-white/[0.04]';
 
   return (
     <div ref={rootRef} className="relative">
