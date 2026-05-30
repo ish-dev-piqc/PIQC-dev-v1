@@ -20,11 +20,18 @@ This PR adds a **Collaborate** tab inside the protocol view (`/protocol/:id/coll
 
 ### Migrations
 
-- `supabase/migrations/20260601000000_protocol_messages_table.sql` (NEW)
-- `supabase/migrations/20260601000100_protocol_files_table.sql` (NEW)
-- `supabase/migrations/20260601000200_protocol_file_audit_log.sql` (NEW)
-- `supabase/migrations/20260601000300_protocol_files_storage_bucket.sql` (NEW — creates the `protocol-files` Supabase Storage bucket with policy bound to `user_can_access_protocol`)
-- `supabase/migrations/20260601000400_collaborate_rls.sql` (NEW — RLS for messages, files, audit log)
+Timestamps assume this plan ships AFTER org-workspaces (latest `20260618000700`). Update on rebase.
+
+- `supabase/migrations/2026XXX0000_protocol_messages_table.sql` (NEW — includes decision capture columns + message_kind/system_event_* columns + acknowledgment_requested_from)
+- `supabase/migrations/2026XXX0100_protocol_files_table.sql` (NEW)
+- `supabase/migrations/2026XXX0200_protocol_file_audit_log.sql` (NEW)
+- `supabase/migrations/2026XXX0300_protocol_files_storage_bucket.sql` (NEW — creates the `protocol-files` Supabase Storage bucket with policy bound to `user_can_access_protocol`)
+- `supabase/migrations/2026XXX0400_protocol_message_refs.sql` (NEW — cross-mode reference chips)
+- `supabase/migrations/2026XXX0500_protocol_message_acknowledgments.sql` (NEW — read-confirmation table)
+- `supabase/migrations/2026XXX0600_post_system_event_helper.sql` (NEW — SECURITY DEFINER helper that other modes' triggers call to drop auto-import events into chat)
+- `supabase/migrations/2026XXX0700_seed_system_user.sql` (NEW — seeds the `auth.users` row that owns system messages)
+- `supabase/migrations/2026XXX0800_collaborate_rls.sql` (NEW — RLS for messages, files, audit log, refs, acknowledgments)
+- `supabase/migrations/2026XXX0900_example_system_event_triggers.sql` (NEW — ONE or TWO example triggers proving the pattern; other modes add their own in their PRs)
 
 ### Types
 
@@ -44,9 +51,15 @@ This PR adds a **Collaborate** tab inside the protocol view (`/protocol/:id/coll
 
 ### Components
 
-- `src/components/dashboard/collaborate/CollaborateTab.tsx` (NEW — top-level tab content)
-- `src/components/dashboard/collaborate/MessageList.tsx` (NEW)
-- `src/components/dashboard/collaborate/MessageComposer.tsx` (NEW)
+- `src/components/dashboard/collaborate/CollaborateTab.tsx` (NEW — top-level tab content, holds two sub-tabs: "Chat" and "Decisions")
+- `src/components/dashboard/collaborate/MessageList.tsx` (NEW — renders user + system messages with ref chips, ack banners, decision banners)
+- `src/components/dashboard/collaborate/MessageComposer.tsx` (NEW — includes @-trigger for cross-mode ref search, optional "require acknowledgment from…" picker)
+- `src/components/dashboard/collaborate/CrossModeRefPicker.tsx` (NEW — popover that searches across modes when @ is triggered)
+- `src/components/dashboard/collaborate/RefChip.tsx` (NEW — renders a cross-mode ref pill, click-to-jump)
+- `src/components/dashboard/collaborate/PromoteToDecisionModal.tsx` (NEW — coordinator-only)
+- `src/components/dashboard/collaborate/DecisionsTab.tsx` (NEW — filtered list of decision-promoted messages)
+- `src/components/dashboard/collaborate/AcknowledgmentBanner.tsx` (NEW — orange "X acknowledged" header on messages with requested ack)
+- `src/components/dashboard/collaborate/SystemEventMessage.tsx` (NEW — distinct rendering for message_kind='system_event')
 - `src/components/dashboard/collaborate/FileUploadDropzone.tsx` (NEW)
 - `src/components/dashboard/collaborate/FileCard.tsx` (NEW — renders fingerprint warning badge)
 - `src/components/dashboard/collaborate/ContaminationWarningBanner.tsx` (NEW)
@@ -61,16 +74,120 @@ This PR adds a **Collaborate** tab inside the protocol view (`/protocol/:id/coll
 - `docs/CODEOWNERS.md` — add `/src/lib/collaborate/`, `/src/components/dashboard/collaborate/`, `/src/types/collaborate/` → `@ki-dev-piqc`. Add `/src/lib/parser-utils/` as 2-reviewer because it's shared across modes.
 - `plans/kiara/protocol-collaboration.md` (this file)
 
+## Trial-specific features (v1 scope)
+
+What separates this from "Slack inside PIQC" is purpose-built coordination primitives. Four features are in v1 scope, each tied to schema additions in the migrations:
+
+### 1. Decision capture
+
+A coordinator can promote any message to "decision" status with a one-line summary. Decisions render in a dedicated "Decisions" tab inside the protocol view and form the audit trail of what was agreed when.
+
+- Column additions to `protocol_messages`:
+  - `decision_summary TEXT` (NULL when not a decision)
+  - `decision_promoted_at TIMESTAMPTZ`
+  - `decision_promoted_by UUID REFERENCES auth.users(id)`
+- Filter view: `SELECT … WHERE decision_summary IS NOT NULL ORDER BY decision_promoted_at DESC`.
+- UI: each message gets a "Promote to decision" action (coordinator-only); the modal captures the summary text. Decisions are visually marked in the message stream (gavel icon + summary banner).
+- Decisions can be demoted (clears the three columns) but every promote/demote writes an audit log row.
+
+### 2. Cross-mode references
+
+A message can link to specific objects in Site, Audit, SOTR, or Visit Execution mode. Renders as an inline chip ("→ Visit 4 (Day 14)" or "→ Audit Finding #12") that jumps to the source on click. This is the feature that makes the chat *part of* the trial coordination, not adjacent to it.
+
+- New table:
+  ```sql
+  protocol_message_refs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    message_id UUID NOT NULL REFERENCES protocol_messages(id) ON DELETE CASCADE,
+    ref_kind TEXT NOT NULL CHECK (ref_kind IN (
+      'site_visit', 'site_participant', 'site_deviation',
+      'audit_finding', 'audit_signal',
+      'sotr_item',
+      'visit_signal'
+    )),
+    ref_id UUID NOT NULL,
+    ref_label_snapshot TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  CREATE INDEX protocol_message_refs_message_idx ON protocol_message_refs(message_id);
+  CREATE INDEX protocol_message_refs_ref_idx ON protocol_message_refs(ref_kind, ref_id);
+  ```
+- `ref_label_snapshot` caches the human-readable label ("Visit 4 — Day 14 ±3") so the chat doesn't have to re-fetch the source object on every render. Refreshes when the source changes via a trigger (out of scope; manual refresh affordance for v1).
+- UI: composer detects `@` followed by a search trigger ("@visit", "@finding") and opens a cross-mode search popover. Selecting a result inserts a ref pill.
+- RLS: `protocol_message_refs` SELECT scoped via the parent message's protocol_id through `user_can_access_protocol`. Writes only by message author.
+
+### 3. Read confirmation for compliance
+
+An author can mark a message as requiring explicit acknowledgment from specific recipients (e.g., a monitor's letter that needs each coordinator to confirm receipt). The UI surfaces an orange banner asking the named users to click "I acknowledge"; their acknowledgments are recorded with timestamp and optional signature text. This is the regulatory backbone — eventually it can extend to 21 CFR Part 11-style e-signatures.
+
+- New table:
+  ```sql
+  protocol_message_acknowledgments (
+    message_id UUID NOT NULL REFERENCES protocol_messages(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    acknowledged_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    signature_text TEXT,
+    PRIMARY KEY (message_id, user_id)
+  );
+  ```
+- Column addition to `protocol_messages`:
+  - `acknowledgment_requested_from JSONB` — array of user IDs the author wants confirmation from. NULL = no acknowledgment requested.
+- UI: when composing, an "Require acknowledgment from…" picker lets the author select members of the protocol. The resulting message renders with an orange "X out of Y acknowledged" header. Each unacknowledged named user sees the "I acknowledge" button.
+- v1 ships without cryptographic signatures; `signature_text` is a free-text "Acknowledged by name+date" string captured client-side. 21 CFR Part 11-grade signing is a follow-up.
+- Audit log entry on every acknowledgment.
+
+### 4. Auto-import events
+
+System events from other modes auto-post into the protocol's chat — for example, "Audit signal raised: missing source for Visit 4" appears as a system message that the team can react to inline. Turns chat from a parallel conversation channel into the single timeline of *everything that's happened on this protocol*.
+
+- Column additions to `protocol_messages`:
+  - `message_kind TEXT NOT NULL DEFAULT 'user' CHECK (message_kind IN ('user', 'system_event'))`
+  - `system_event_type TEXT` (NULL for user messages; values like `'visit_deviation'`, `'audit_finding_raised'`, `'sotr_conflict_detected'`)
+  - `system_event_payload JSONB`
+- For `message_kind='system_event'`, `user_id` references a special system user (`auth.users` row seeded by migration) and `body` is the rendered prose summary; the `system_event_payload` carries structured data the UI uses to link back to the source.
+- Server-side: one trigger per event type, defined in the mode that owns the source table:
+  - Visit Execution: trigger on `visit_completeness_signals` INSERT
+  - Audit: trigger on `audit_findings` INSERT (or stage-advance, TBD with Karl)
+  - SOTR: trigger on `sotr_conflicts` flagged (TBD with Ishika)
+  - Site: trigger on `site_visits.status='deviation'` UPDATE
+- Each trigger calls a single SECURITY DEFINER helper `post_system_event(protocol_id, event_type, payload)` that inserts the system message.
+- v1 scope: ship the helper + UI rendering + at most TWO event types (deviation + audit finding); add more iteratively. Other modes' owners (Karl, Ishika) need to add their triggers in their own PRs.
+- UI: system messages render with a distinct icon + muted styling; they're reactable and can be promoted to decisions (which is the killer combo: an auto-flagged deviation can be promoted into a decision about how to handle it).
+
 ## Out of scope (files forbidden)
 
-- `src/components/dashboard/site/**`, `src/components/dashboard/audit/**`, `src/components/dashboard/sotr/**`, `src/components/dashboard/visit-execution/**` — mode isolation
+- `src/components/dashboard/site/**`, `src/components/dashboard/audit/**`, `src/components/dashboard/sotr/**`, `src/components/dashboard/visit-execution/**` — mode isolation. (Cross-mode refs jump to those views via routing; collaborate doesn't import their components.)
 - `src/lib/sotr/**` — we extract a *new* `parser-utils/protocolFingerprint.ts` rather than importing from `src/lib/sotr/` (mode isolation rule). The extraction is a pure refactor; SOTR continues to import the utility from its new home.
-- Top-level `/collaborate` route or org-level "all conversations" inbox — future enhancement; this PR is per-protocol only
-- Notifications, email digests, push — future
-- Threading deeper than one level (replies-as-quote pattern is sufficient for v1)
-- Reactions / emoji / mentions — future
-- File preview rendering for non-PDF types — v1 shows filename + download link; PDF preview only if cheap to add
-- Anything in `src/lib/orgs/**` — that's `plans/kiara/org-workspaces.md`
+- Other modes' system-event triggers — Visit Execution / Audit / SOTR triggers are owned by their codeowners and ship in their PRs. This plan defines the `post_system_event` helper + one or two example triggers to prove the pattern.
+- Anything in `src/lib/orgs/**` — that's `plans/kiara/org-workspaces.md`.
+- File preview rendering for non-PDF types — v1 shows filename + download link; PDF preview only if cheap to add.
+
+## v1.5 follow-up scope (tracked, separate plan)
+
+Per Kiara's call: all of the following are desired but split out so the v1 PR is reviewable. Each gets its own plan MD when scheduled.
+
+### Bedrock chat features
+- @mentions with notification dots
+- Reactions (single emoji set)
+- Pinned messages (per protocol)
+- Markdown rendering (lists, links, code, bold/italic)
+- Threading > 1 level deep
+
+### Audit-grade edit history
+- `protocol_message_versions` table — every edit creates a new version row with `edited_at`, `edited_by`, prior `body`. The current `protocol_messages.body` is always the latest. Regulatory-grade chain of custody for what a message said when.
+- "Show edit history" affordance on edited messages.
+
+### Quality of life
+- In-chat search (full-text on `body` + ref labels)
+- Local draft persistence (composer text survives tab close — `localStorage` keyed by protocol_id)
+- Typing indicator (Supabase presence channel)
+- Top-level "All conversations" inbox aggregator across protocols
+- Notifications, email digests, push
+
+### Compliance hardening
+- Cryptographic e-signatures on acknowledgments (21 CFR Part 11)
+- Tamper-evident audit log (append-only on hash chain)
+- Per-protocol retention policy enforcement
 
 ## Architecture layers touched
 

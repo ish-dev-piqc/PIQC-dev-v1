@@ -9,7 +9,8 @@ import {
   removeProtocolMember,
   updateProtocolMemberRole,
 } from '../../../lib/orgs/orgsApi';
-import { listOrgMembers as listOrgMembersWithProfile, type OrgMember as OrgMemberWithProfile } from '../../../lib/orgs/orgApi';
+import { listOrgMembersWithProfile } from '../../../lib/orgs/orgsApi';
+import type { OrgMemberWithProfile } from '../../../types/orgs';
 import type { ProtocolMember, ProtocolMemberRole } from '../../../types/orgs';
 import AccessRequestsList from './AccessRequestsList';
 

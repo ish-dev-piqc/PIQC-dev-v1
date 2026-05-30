@@ -8,7 +8,7 @@ import { useAudit } from '../context/AuditContext';
 import { useHeatmap } from '../context/HeatmapContext';
 import { useDemoMode } from '../context/DemoModeContext';
 import { getProtocolColors } from '../lib/site/protocolColors';
-import OrgSettingsDrawer from './dashboard/site/OrgSettingsDrawer';
+import OrgSettingsDrawer from './dashboard/orgs/OrgSettingsDrawer';
 import ProtocolUploadModal from './dashboard/site/ProtocolUploadModal';
 import type { AuditStage } from '../types/audit';
 import type { AppView } from '../App';

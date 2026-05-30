@@ -36,6 +36,14 @@ export interface Org {
   updated_at: string;
 }
 
+/** Subset shape used by the legacy fetchCurrentUserOrg surface — has no updated_at. */
+export interface OrgRow {
+  id: string;
+  name: string;
+  slug: string;
+  created_at: string;
+}
+
 export interface OrgMember {
   org_id: string;
   user_id: string;
@@ -43,9 +51,25 @@ export interface OrgMember {
   joined_at: string;
 }
 
+/** OrgMember joined with user_profiles name + email for roster rendering. */
+export interface OrgMemberWithProfile extends OrgMember {
+  name: string;
+  email: string | null;
+}
+
 /** Org joined with the caller's membership row for convenience. */
 export interface OrgWithMembership extends Org {
   my_role: OrgRole;
+}
+
+/** Pending org-level invite row. */
+export interface OrgInvite {
+  id: string;
+  email: string;
+  role: OrgRole;
+  token: string;
+  expires_at: string;
+  created_at: string;
 }
 
 

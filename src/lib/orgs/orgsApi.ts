@@ -1,32 +1,32 @@
 // =============================================================================
-// Orgs API (plural) — Result<T> facade over Supabase for the org-workspaces
-// domain. Complementary to `orgApi.ts` (singular), which covers org-level
-// operations (fetchCurrentUserOrg, listOrgMembers-with-joined-names, invites).
-// This file handles the *new* protocol-level surface introduced by the
-// org-workspaces feature: protocol_members, access_requests, guests, plus a
-// listMyOrgs helper for multi-org users (extends fetchCurrentUserOrg's
-// single-primary-org reply).
+// Orgs API — Result<T> facade over Supabase for org membership + protocol-
+// level access control.
+//
+// Consolidates the previous orgApi.ts (org-level: fetchCurrentUserOrg,
+// listOrgMembers-with-profile-join, invites, role management) and the
+// org-workspaces additions (multi-org listing, protocol_members, access
+// requests, guests). One canonical API file for the orgs domain.
 //
 // Surface:
-//   Multi-org helper ................ listMyOrgs
-//   Protocol members (CRUD) ......... listProtocolMembers, addProtocolMember,
-//                                     updateProtocolMemberRole, removeProtocolMember
-//   Access requests ................. listMyAccessRequests, listProtocolAccessRequests,
-//                                     createAccessRequest, withdrawAccessRequest,
-//                                     denyAccessRequest, approveAccessRequest (RPC)
-//   Guests .......................... listProtocolGuests, inviteGuest, revokeGuest,
-//                                     acceptGuestInvite (RPC)
-//
-// For org member rosters with name/email joined, use `orgApi.listOrgMembers`.
-// This file's `OrgMember` type intentionally mirrors only the raw row.
-//
-// Result<T> shape matches src/lib/site/repos/types.ts so consumers can use
-// uniform `if (!res.ok) return …` patterns.
+//   Org-level
+//     fetchCurrentUserOrg, listMyOrgs, listOrgMembersWithProfile,
+//     currentUserIsOrgAdmin, updateOrgMemberRole, removeOrgMember
+//   Org invites (legacy email-token flow)
+//     createOrgInvite, acceptOrgInvite, listOrgInvites, buildInviteUrl
+//   Protocol members
+//     listProtocolMembers, addProtocolMember,
+//     updateProtocolMemberRole, removeProtocolMember
+//   Access requests
+//     listMyAccessRequests, listProtocolAccessRequests,
+//     createAccessRequest, withdrawAccessRequest,
+//     denyAccessRequest, approveAccessRequest (RPC)
+//   Guests
+//     listProtocolGuests, inviteGuest, revokeGuest,
+//     acceptGuestInvite (RPC)
 //
 // Token generation for guest invites uses crypto.randomUUID() client-side.
-// For v1 this is sufficient — invites expire in 30 days and aren't
-// privilege-bearing beyond the protocol they're scoped to. If we tighten
-// security later, move generation to a server-side RPC.
+// Sufficient for 30-day single-protocol-scoped invites; move to server-side
+// RPC if we tighten security later.
 // =============================================================================
 
 import { supabase } from '../supabase';
@@ -35,6 +35,10 @@ import type {
   NewProtocolGuestInput,
   NewProtocolMemberInput,
   Org,
+  OrgInvite,
+  OrgMemberWithProfile,
+  OrgRole,
+  OrgRow,
   OrgWithMembership,
   ProtocolAccessRequest,
   ProtocolGuest,
@@ -53,11 +57,45 @@ function err<T>(message: string): Result<T> {
   return { ok: false, error: message };
 }
 
+function fail<T>(label: string, error: unknown): Result<T> {
+  const msg = error instanceof Error ? error.message : String(error);
+  console.error(`[orgsApi] ${label}:`, error);
+  return { ok: false, error: msg };
+}
 
-// ---------------------------------------------------------------------------
-// Orgs (reads — Ishika's existing tables, no writes from this domain)
-// ---------------------------------------------------------------------------
 
+// ===========================================================================
+// Org-level
+// ===========================================================================
+
+/** Fetch the single org linked from user_profiles.org_id. Legacy single-org path. */
+export async function fetchCurrentUserOrg(): Promise<Result<OrgRow | null>> {
+  try {
+    const { data: sessionData } = await supabase.auth.getUser();
+    const userId = sessionData?.user?.id;
+    if (!userId) return err('Not authenticated.');
+
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('org_id')
+      .eq('id', userId)
+      .maybeSingle();
+    if (profileError) throw profileError;
+    if (!profile?.org_id) return { ok: true, data: null };
+
+    const { data: org, error: orgError } = await supabase
+      .from('orgs')
+      .select('id, name, slug, created_at')
+      .eq('id', profile.org_id)
+      .maybeSingle();
+    if (orgError) throw orgError;
+    return { ok: true, data: org as OrgRow | null };
+  } catch (e) {
+    return fail('fetchCurrentUserOrg', e);
+  }
+}
+
+/** List every org the caller is a member of (multi-org support). */
 export async function listMyOrgs(): Promise<Result<OrgWithMembership[]>> {
   const { data, error } = await supabase
     .from('org_members')
@@ -70,23 +108,167 @@ export async function listMyOrgs(): Promise<Result<OrgWithMembership[]>> {
   // 1:1 (org_members.org_id → orgs.id), so cast through unknown to land on
   // the actual single-org shape.
   const rows = data as unknown as Array<{
-    role: 'admin' | 'member';
+    role: OrgRole;
     orgs: Org | null;
   }>;
 
   const orgs: OrgWithMembership[] = rows
-    .filter((r): r is { role: 'admin' | 'member'; orgs: Org } => r.orgs !== null)
+    .filter((r): r is { role: OrgRole; orgs: Org } => r.orgs !== null)
     .map((r) => ({ ...r.orgs, my_role: r.role }));
 
   return { ok: true, data: orgs };
 }
 
-// For listOrgMembers (with joined name/email), use `orgApi.listOrgMembers`.
+/** List org members with user_profiles.name joined. RLS scopes to org members only. */
+export async function listOrgMembersWithProfile(
+  orgId: string,
+): Promise<Result<OrgMemberWithProfile[]>> {
+  try {
+    const { data, error } = await supabase
+      .from('org_members')
+      .select('org_id, user_id, role, joined_at, user_profiles!inner(name)')
+      .eq('org_id', orgId);
+    if (error) throw error;
+
+    // user_profiles doesn't expose email — auth.users.email lives elsewhere.
+    // Future: pull from auth.users via an RPC.
+    const rows: OrgMemberWithProfile[] = (data ?? []).map((row) => {
+      const profile = Array.isArray(row.user_profiles) ? row.user_profiles[0] : row.user_profiles;
+      return {
+        org_id: row.org_id as string,
+        user_id: row.user_id as string,
+        role: row.role as OrgRole,
+        joined_at: row.joined_at as string,
+        name: (profile as { name: string } | null)?.name ?? '(unknown user)',
+        email: null,
+      };
+    });
+    return { ok: true, data: rows };
+  } catch (e) {
+    return fail('listOrgMembersWithProfile', e);
+  }
+}
+
+export async function currentUserIsOrgAdmin(orgId: string): Promise<boolean> {
+  const { data: sessionData } = await supabase.auth.getUser();
+  const userId = sessionData?.user?.id;
+  if (!userId) return false;
+  const { data } = await supabase
+    .from('org_members')
+    .select('role')
+    .eq('org_id', orgId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  return data?.role === 'admin';
+}
+
+export async function updateOrgMemberRole(
+  orgId: string,
+  userId: string,
+  role: OrgRole,
+): Promise<Result<void>> {
+  try {
+    const { error } = await supabase
+      .from('org_members')
+      .update({ role })
+      .eq('org_id', orgId)
+      .eq('user_id', userId);
+    if (error) throw error;
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return fail('updateOrgMemberRole', e);
+  }
+}
+
+export async function removeOrgMember(
+  orgId: string,
+  userId: string,
+): Promise<Result<void>> {
+  try {
+    const { error } = await supabase
+      .from('org_members')
+      .delete()
+      .eq('org_id', orgId)
+      .eq('user_id', userId);
+    if (error) throw error;
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return fail('removeOrgMember', e);
+  }
+}
 
 
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Org invites (legacy email-token flow from PR #95)
+// ===========================================================================
+
+export async function createOrgInvite(
+  orgId: string,
+  email: string,
+  role: OrgRole,
+): Promise<Result<{ id: string; token: string; expires_at: string }>> {
+  try {
+    const { data, error } = await supabase.rpc('create_org_invite', {
+      p_org_id: orgId,
+      p_email: email,
+      p_role: role,
+    });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row?.token) throw new Error('RPC returned no token');
+    return {
+      ok: true,
+      data: { id: row.id, token: row.token, expires_at: row.expires_at },
+    };
+  } catch (e) {
+    return fail('createOrgInvite', e);
+  }
+}
+
+export async function acceptOrgInvite(
+  token: string,
+): Promise<Result<{ org_id: string; org_name: string; role: OrgRole }>> {
+  try {
+    const { data, error } = await supabase.rpc('accept_org_invite', { p_token: token });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row?.org_id) throw new Error('RPC returned no org_id');
+    return {
+      ok: true,
+      data: {
+        org_id: row.org_id,
+        org_name: row.org_name,
+        role: row.role as OrgRole,
+      },
+    };
+  } catch (e) {
+    return fail('acceptOrgInvite', e);
+  }
+}
+
+export async function listOrgInvites(orgId: string): Promise<Result<OrgInvite[]>> {
+  try {
+    const { data, error } = await supabase.rpc('list_org_invites', { p_org_id: orgId });
+    if (error) throw error;
+    return { ok: true, data: (data ?? []) as OrgInvite[] };
+  } catch (e) {
+    return fail('listOrgInvites', e);
+  }
+}
+
+/** Build a shareable invite URL from a token. Uses location.origin so it
+ *  works in dev, staging, and prod automatically. */
+export function buildInviteUrl(token: string): string {
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const base = typeof window !== 'undefined' ? window.location.pathname : '/';
+  const rootPath = base.replace(/\/+$/, '').replace(/\/[^/]+$/, '/');
+  return `${origin}${rootPath}?invite=${encodeURIComponent(token)}`;
+}
+
+
+// ===========================================================================
 // Protocol members
-// ---------------------------------------------------------------------------
+// ===========================================================================
 
 export async function listProtocolMembers(
   protocolId: string,
@@ -151,9 +333,9 @@ export async function removeProtocolMember(
 }
 
 
-// ---------------------------------------------------------------------------
+// ===========================================================================
 // Access requests
-// ---------------------------------------------------------------------------
+// ===========================================================================
 
 export async function listMyAccessRequests(): Promise<Result<ProtocolAccessRequest[]>> {
   const { data: { user } } = await supabase.auth.getUser();
@@ -264,9 +446,9 @@ export async function approveAccessRequest(
 }
 
 
-// ---------------------------------------------------------------------------
+// ===========================================================================
 // Guests
-// ---------------------------------------------------------------------------
+// ===========================================================================
 
 export async function listProtocolGuests(
   protocolId: string,
@@ -281,9 +463,6 @@ export async function listProtocolGuests(
     .order('created_at', { ascending: false });
 
   if (error) return err(error.message);
-  // supabase-js's inferred row type carries GenericStringError when select
-  // is built from a string literal; cast through unknown to the adapter's
-  // expected shape.
   return {
     ok: true,
     data: adaptGuests((data ?? []) as unknown as Parameters<typeof adaptGuests>[0]),
@@ -296,8 +475,6 @@ export async function inviteGuest(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return err('Not authenticated');
 
-  // Token generation is client-side for v1. crypto.randomUUID is 122 bits
-  // of entropy — enough for a 30-day, single-protocol-scoped invite.
   const token = crypto.randomUUID();
 
   const { data, error } = await supabase

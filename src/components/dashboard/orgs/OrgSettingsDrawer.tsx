@@ -9,13 +9,16 @@ import {
   currentUserIsOrgAdmin,
   fetchCurrentUserOrg,
   listOrgInvites,
-  listOrgMembers,
+  listOrgMembersWithProfile,
   removeOrgMember,
   updateOrgMemberRole,
-  type OrgInvite,
-  type OrgMember,
-  type OrgRow,
-} from '../../../lib/orgs/orgApi';
+} from '../../../lib/orgs/orgsApi';
+import type {
+  OrgInvite,
+  OrgMemberWithProfile,
+  OrgRole,
+  OrgRow,
+} from '../../../types/orgs';
 
 // =============================================================================
 // OrgSettingsDrawer — view/manage the current user's primary org.
@@ -26,6 +29,9 @@ import {
 //
 // Demo mode: read-only "demo mode — org settings are local-only" banner;
 // the drawer doesn't touch Supabase.
+//
+// Moved from src/components/dashboard/site/ as part of the org-workspaces
+// refactor — this surface is org management, not Site Mode.
 // =============================================================================
 
 interface OrgSettingsDrawerProps {
@@ -41,7 +47,7 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
   const { demoActive } = useDemoMode();
 
   const [org, setOrg] = useState<OrgRow | null>(null);
-  const [members, setMembers] = useState<OrgMember[]>([]);
+  const [members, setMembers] = useState<OrgMemberWithProfile[]>([]);
   const [invites, setInvites] = useState<OrgInvite[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -49,7 +55,7 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
 
   // Invite-create form state
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'admin' | 'member'>('member');
+  const [inviteRole, setInviteRole] = useState<OrgRole>('member');
   const [creatingInvite, setCreatingInvite] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
@@ -70,7 +76,7 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
     setOrg(orgResult.data);
 
     const [membersResult, adminFlag] = await Promise.all([
-      listOrgMembers(orgResult.data.id),
+      listOrgMembersWithProfile(orgResult.data.id),
       currentUserIsOrgAdmin(orgResult.data.id),
     ]);
     if (!membersResult.ok) setError(membersResult.error);
@@ -115,7 +121,7 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
     refresh();
   };
 
-  const handleRoleChange = async (member: OrgMember, role: 'admin' | 'member') => {
+  const handleRoleChange = async (member: OrgMemberWithProfile, role: OrgRole) => {
     if (!org) return;
     const result = await updateOrgMemberRole(org.id, member.user_id, role);
     if (!result.ok) {
@@ -125,7 +131,7 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
     refresh();
   };
 
-  const handleRemove = async (member: OrgMember) => {
+  const handleRemove = async (member: OrgMemberWithProfile) => {
     if (!org) return;
     const confirmed = window.confirm(`Remove ${member.name} from ${org.name}?`);
     if (!confirmed) return;
@@ -269,7 +275,7 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
                       />
                       <select
                         value={inviteRole}
-                        onChange={(e) => setInviteRole(e.target.value as 'admin' | 'member')}
+                        onChange={(e) => setInviteRole(e.target.value as OrgRole)}
                         className={`px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-brand-600/30`}
                         disabled={creatingInvite}
                       >
