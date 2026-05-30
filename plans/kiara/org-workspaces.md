@@ -60,6 +60,10 @@ The schema layers on top of Ishika's `orgs` + `org_members` + `protocols.owner_o
 - `src/lib/orgs/protocolMembersAdapter.ts` (NEW)
 - `src/lib/orgs/accessRequestsAdapter.ts` (NEW)
 - `src/lib/orgs/guestsAdapter.ts` (NEW)
+- `src/lib/orgs/__tests__/orgsApi.test.ts` (NEW)
+- `src/lib/orgs/__tests__/protocolMembersAdapter.test.ts` (NEW)
+- `src/lib/orgs/__tests__/accessRequestsAdapter.test.ts` (NEW)
+- `src/lib/orgs/__tests__/guestsAdapter.test.ts` (NEW)
 
 ### Context
 
