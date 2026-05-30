@@ -21,7 +21,8 @@ dist-ssr
 *.sln
 *.sw?
 .env
-.env.local
+.env.*
+!.env.example
 supabase/.temp/
 
 # Renamed-out stale folders (sandbox FUSE mount can't unlink — delete manually on host)

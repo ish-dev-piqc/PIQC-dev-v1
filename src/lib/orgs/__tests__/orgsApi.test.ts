@@ -28,9 +28,9 @@ vi.mock('../../supabase', () => ({
   },
 }));
 
-// Cast through unknown to skirt globalThis crypto typing in test env.
-const cryptoStub = { randomUUID: () => 'mock-uuid-0000' };
-(globalThis as unknown as { crypto: typeof cryptoStub }).crypto = cryptoStub;
+// crypto.randomUUID is available natively in the vitest runtime — no stub
+// needed. inviteGuest exercises it; none of these tests assert the UUID
+// value so the real implementation is fine.
 
 describe('orgsApi public surface', () => {
   beforeEach(() => {
