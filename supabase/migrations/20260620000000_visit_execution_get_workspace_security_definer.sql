@@ -1,0 +1,25 @@
+-- =============================================================================
+-- visit_execution_get_workspace — flip to SECURITY DEFINER for performance.
+--
+-- Problem: on protocols with many visit templates (e.g. a 138-template parse),
+-- the workspace load took ~6s and tripped the statement timeout
+-- ("canceling statement due to statement timeout"). The function runs ~12
+-- correlated subqueries PER template, and as SECURITY INVOKER each one
+-- re-evaluated the visit_requirements RLS policy (which joins
+-- protocol_visit_templates -> protocols). That per-row RLS cost compounded
+-- across templates x subqueries.
+--
+-- Fix: the function already gates access at the top — it returns an empty
+-- workspace list unless the caller owns the protocol or is a member of its
+-- owning org. Running it SECURITY DEFINER lets the internal reads skip
+-- per-row RLS WITHOUT widening what a caller can retrieve (the top gate is
+-- unchanged). search_path is already pinned (SET search_path = public in the
+-- function body), so the definer context is safe.
+--
+-- NOTE for follow-up: the top gate uses the legacy owner_id / owner-org check,
+-- not user_can_access_protocol(), so a protocol *member* (added via
+-- protocol_members but not the owner / owner-org) is not yet covered here.
+-- Tracked separately with the RLS-v3 reconciliation.
+-- =============================================================================
+
+ALTER FUNCTION public.visit_execution_get_workspace(uuid) SECURITY DEFINER;
