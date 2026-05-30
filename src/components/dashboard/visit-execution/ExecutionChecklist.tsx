@@ -55,7 +55,9 @@ export type ChecklistItemAction =
   | 'open_edit'
   | 'open_note'
   /** Sprint 4c: opens the read-only edit-log timeline drawer for the row. */
-  | 'view_history';
+  | 'view_history'
+  /** Delete the requirement (with confirm in the parent). */
+  | 'delete';
 
 interface Props {
   workspace: VisitExecutionWorkspace;
@@ -551,11 +553,12 @@ function ChecklistItemRow({
                     }`}
                   >
                     {([
-                      { label: 'Edit text',                action: 'open_edit'                as ChecklistItemAction },
-                      { label: 'Add site note',            action: 'open_note'                as ChecklistItemAction },
-                      { label: 'Flag for review',          action: 'flag_for_review'          as ChecklistItemAction },
-                      { label: 'Mark needs clarification', action: 'mark_needs_clarification' as ChecklistItemAction },
-                      { label: 'View edit history',        action: 'view_history'             as ChecklistItemAction },
+                      { label: 'Edit text',                action: 'open_edit'                as ChecklistItemAction, danger: false },
+                      { label: 'Add site note',            action: 'open_note'                as ChecklistItemAction, danger: false },
+                      { label: 'Flag for review',          action: 'flag_for_review'          as ChecklistItemAction, danger: false },
+                      { label: 'Mark needs clarification', action: 'mark_needs_clarification' as ChecklistItemAction, danger: false },
+                      { label: 'View edit history',        action: 'view_history'             as ChecklistItemAction, danger: false },
+                      { label: 'Delete requirement',       action: 'delete'                   as ChecklistItemAction, danger: true },
                     ]).map((opt) => (
                       <button
                         key={opt.label}
@@ -566,7 +569,13 @@ function ChecklistItemRow({
                           setMenuOpen(false);
                         }}
                         className={`w-full text-left text-xs px-3 py-2 ${
-                          isLight ? 'text-fg-body hover:bg-[#F8FAFC]' : 'text-fg-body hover:bg-white/[0.04]'
+                          opt.danger
+                            ? isLight
+                              ? 'text-rose-700 hover:bg-rose-50 border-t border-[#E2E8F0]'
+                              : 'text-rose-300 hover:bg-rose-500/10 border-t border-white/10'
+                            : isLight
+                              ? 'text-fg-body hover:bg-[#F8FAFC]'
+                              : 'text-fg-body hover:bg-white/[0.04]'
                         }`}
                       >
                         {opt.label}
