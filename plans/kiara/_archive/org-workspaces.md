@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: org-workspaces
-status: active
+status: merged
+merged: 2026-05-30
 started: 2026-05-29
-target_pr:
+target_pr: #178
 ---
 
 # Org workspaces — explicit protocol-level membership, guests, and Organization tier
