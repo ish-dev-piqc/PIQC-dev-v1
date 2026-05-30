@@ -12,12 +12,16 @@
 // =============================================================================
 
 export type PlanKind =
-  | 'pilot'              // $25 one-time, 30 days
-  | 'workspace_monthly'  // $59/mo
-  | 'workspace_annual'   // $599/yr
-  | 'addon_protocol'     // $29/mo per protocol (quantity multiplies)
-  | 'addon_seats'        // $19/mo per 5-user pack (quantity multiplies)
-  | 'enterprise';        // sales-led; no Stripe product
+  | 'pilot'                  // $25 one-time, 30 days
+  | 'workspace_monthly'      // $59/mo
+  | 'workspace_annual'       // $599/yr
+  | 'addon_protocol'         // $29/mo per protocol (quantity multiplies)
+  | 'addon_seats'            // $19/mo per 5-user pack (quantity multiplies)
+  | 'addon_guest_seats'      // per-guest paid seat over the free per-protocol cap
+  | 'addon_viewer_seats'     // per-viewer paid seat over the free per-protocol cap
+  | 'enterprise';            // sales-led; no Stripe product. Covers Site Network /
+                             // SMO AND multi-org/sponsor-mode usage. Higher quotas,
+                             // unlocks sponsor mode placeholder when feature ships.
 
 export type BillingInterval = 'one_time' | 'month' | 'year' | 'custom';
 
@@ -173,14 +177,51 @@ export const stripeProducts: StripeProduct[] = [
     grantsUsersPerUnit: 5,
   },
 
-  // 6. Enterprise — no Stripe product, just a sales-led tile
+  // 6. Add-on — guest seat pack (recurring; quantity multiplies)
+  // Created by Roger; priceId/productId TODO until Stripe is updated.
+  {
+    kind: 'addon_guest_seats',
+    productId: '',
+    priceId: '',
+    name: 'Additional Guest Seats',
+    description:
+      'External collaborators on a single protocol, beyond the free 5-per-protocol cap.',
+    priceDisplay: 'TBD',
+    intervalDisplay: 'month / 5 guest seats',
+    interval: 'month',
+    mode: 'subscription',
+    ctaLabel: 'Add Guest Seats',
+    features: ['+5 guest seats', 'Per-protocol; no org-roster impact'],
+    grantsUsersPerUnit: 5,
+  },
+
+  // 7. Add-on — viewer seat pack (recurring; quantity multiplies)
+  // Created by Roger; priceId/productId TODO until Stripe is updated.
+  {
+    kind: 'addon_viewer_seats',
+    productId: '',
+    priceId: '',
+    name: 'Additional Viewer Seats',
+    description:
+      'Read-only protocol members beyond the free 10-per-protocol cap.',
+    priceDisplay: 'TBD',
+    intervalDisplay: 'month / 10 viewer seats',
+    interval: 'month',
+    mode: 'subscription',
+    ctaLabel: 'Add Viewer Seats',
+    features: ['+10 viewer seats', 'Read-only protocol access'],
+    grantsUsersPerUnit: 10,
+  },
+
+  // 8. Enterprise — no Stripe product, just a sales-led tile.
+  // Covers Site Network / SMO AND multi-org/sponsor-mode customers.
   {
     kind: 'enterprise',
     productId: '',
     priceId: '',
     name: 'Site Network / SMO',
     description:
-      'For site networks and SMOs managing multiple sites or higher protocol volume.',
+      'For site networks, SMOs, and sponsor organizations needing oversight across sites.',
     priceDisplay: 'Custom',
     intervalDisplay: '',
     interval: 'custom',
@@ -189,6 +230,7 @@ export const stripeProducts: StripeProduct[] = [
     features: [
       'Custom users',
       'Custom protocols',
+      'Multi-org / sponsor-mode access (when shipped)',
       'Admin support',
       'Onboarding',
       'Invoice options',
@@ -216,4 +258,9 @@ export const PRIMARY_PLAN_KINDS: PlanKind[] = [
 ];
 
 // Cards rendered in the add-on row.
-export const ADDON_KINDS: PlanKind[] = ['addon_protocol', 'addon_seats'];
+export const ADDON_KINDS: PlanKind[] = [
+  'addon_protocol',
+  'addon_seats',
+  'addon_guest_seats',
+  'addon_viewer_seats',
+];

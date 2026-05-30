@@ -120,3 +120,114 @@ export function pilotDaysRemaining(subscription: Subscription | null): number {
   const diff = expires - Date.now();
   return Math.max(0, Math.ceil(diff / (24 * 60 * 60 * 1000)));
 }
+
+
+// =============================================================================
+// Org-workspaces entitlements (added 2026-05-29).
+//
+// Guest + viewer caps are per-protocol, not org-wide. Caps are constants
+// here; the source of truth is the Stripe addon product's grant metadata
+// once Roger creates the products. Until then, defaults documented in
+// plans/kiara/org-workspaces.md.
+// =============================================================================
+
+/** Free guests allowed per protocol before the org needs addon_guest_seats. */
+export const FREE_GUESTS_PER_PROTOCOL = 5;
+
+/** Free read-only viewers allowed per protocol before the org needs addon_viewer_seats. */
+export const FREE_VIEWERS_PER_PROTOCOL = 10;
+
+/**
+ * Whether the subscription includes a paid-overage addon of the given kind.
+ *
+ * v1 limitation: the `addon_guest_seats` and `addon_viewer_seats` Stripe
+ * products don't exist yet (Roger creates them out-of-band). Until they do,
+ * `Subscription` doesn't carry a count for them, so this returns `false`
+ * for those kinds — meaning the cap-reached UI always blocks. That's the
+ * fail-safe behaviour we want until billing wiring lands.
+ *
+ * When Roger creates the products:
+ *   1. Stripe webhook populates new fields on Subscription (e.g.
+ *      addonGuestSeats, addonViewerSeats — see useSubscription.ts).
+ *   2. Update this function to read `subscription.addonGuestSeats > 0` etc.
+ *   3. The InviteGuestModal cap-warning becomes an upsell instead of a block
+ *      for orgs that hold the addon.
+ */
+function hasAddon(subscription: Subscription | null, kind: PlanKind): boolean {
+  if (!subscription) return false;
+  // Existing counted addons are already on the Subscription shape; extend
+  // here as new ones get wired.
+  if (kind === 'addon_seats') return (subscription.addonSeatPacks ?? 0) > 0;
+  if (kind === 'addon_protocol') return (subscription.addonProtocols ?? 0) > 0;
+  // addon_guest_seats / addon_viewer_seats: not yet wired on Subscription.
+  // See TODO in this function's docstring.
+  return false;
+}
+
+/**
+ * Can the caller invite another guest to a protocol?
+ * `currentFreeGuestCount` is the count of accepted, non-expired, non-paid guests
+ * on the protocol (use countActiveFreeGuests from guestsAdapter).
+ */
+export function canInviteGuest(
+  subscription: Subscription | null,
+  currentFreeGuestCount: number,
+): EntitlementDecision {
+  if (currentFreeGuestCount < FREE_GUESTS_PER_PROTOCOL) {
+    return { allowed: true };
+  }
+  if (hasAddon(subscription, 'addon_guest_seats')) {
+    return { allowed: true };
+  }
+  return {
+    allowed: false,
+    reason: `This protocol has reached ${FREE_GUESTS_PER_PROTOCOL} free guests. Add a guest seat pack to invite more.`,
+    addonProductKind: 'addon_guest_seats',
+  };
+}
+
+/**
+ * Can the caller add another viewer-role member to a protocol?
+ * `currentFreeViewerCount` is the count of viewer-role protocol_members.
+ */
+export function canInviteViewer(
+  subscription: Subscription | null,
+  currentFreeViewerCount: number,
+): EntitlementDecision {
+  if (currentFreeViewerCount < FREE_VIEWERS_PER_PROTOCOL) {
+    return { allowed: true };
+  }
+  if (hasAddon(subscription, 'addon_viewer_seats')) {
+    return { allowed: true };
+  }
+  return {
+    allowed: false,
+    reason: `This protocol has reached ${FREE_VIEWERS_PER_PROTOCOL} free viewers. Add a viewer seat pack to invite more.`,
+    addonProductKind: 'addon_viewer_seats',
+  };
+}
+
+/**
+ * Is the caller's plan in the family that unlocks multi-org / sponsor-mode features?
+ * v1 returns false unless the subscription is 'enterprise'; flips to true once we
+ * ship the sponsor-mode admin UI gated behind this entitlement.
+ */
+export function canUseSponsorMode(
+  subscription: Subscription | null,
+): EntitlementDecision {
+  if (!subscription || subscription.kind === null) {
+    return {
+      allowed: false,
+      reason: 'No active plan. Sponsor Mode requires the enterprise tier.',
+      addonProductKind: null,
+    };
+  }
+  if (subscription.kind === 'enterprise') {
+    return { allowed: true };
+  }
+  return {
+    allowed: false,
+    reason: 'Sponsor Mode requires the enterprise tier. Talk to PIQC to upgrade.',
+    addonProductKind: null,
+  };
+}
