@@ -52,12 +52,9 @@ CREATE INDEX IF NOT EXISTS protocol_guests_email_idx       ON public.protocol_gu
 
 -- Count active (accepted + not expired) guests per protocol — used by the
 -- canInviteGuest entitlement check.
--- NOTE: index predicates must be IMMUTABLE — NOW() is not allowed (SQLSTATE
--- 42P17). Partial on accepted guests only, with expires_at as an index column;
--- the not-expired filter is applied at query time in the entitlement check.
 CREATE INDEX IF NOT EXISTS protocol_guests_active_count_idx
-  ON public.protocol_guests(protocol_id, is_paid_seat, expires_at)
-  WHERE accepted_at IS NOT NULL;
+  ON public.protocol_guests(protocol_id, is_paid_seat)
+  WHERE accepted_at IS NOT NULL AND (expires_at IS NULL OR expires_at > NOW());
 
 ALTER TABLE public.protocol_guests ENABLE ROW LEVEL SECURITY;
 
