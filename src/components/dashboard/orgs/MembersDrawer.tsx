@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { X, UserPlus, Crown, User as UserIcon, Eye, Trash2 } from 'lucide-react';
+import { X, UserPlus, Crown, User as UserIcon, Eye, Trash2, Mail } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useOverlay } from '../../../hooks/useOverlay';
 import { useOrg } from '../../../context/OrgContext';
@@ -13,6 +13,7 @@ import { listOrgMembersWithProfile } from '../../../lib/orgs/orgsApi';
 import type { OrgMemberWithProfile } from '../../../types/orgs';
 import type { ProtocolMember, ProtocolMemberRole } from '../../../types/orgs';
 import AccessRequestsList from './AccessRequestsList';
+import InviteGuestModal from './InviteGuestModal';
 
 // =============================================================================
 // MembersDrawer — per-protocol member management.
@@ -49,6 +50,7 @@ export default function MembersDrawer({ onClose }: MembersDrawerProps) {
   const [inviteRole, setInviteRole] = useState<ProtocolMemberRole>('member');
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [inviteGuestOpen, setInviteGuestOpen] = useState(false);
 
   const callerIsCoordinator = useMemo(
     () =>
@@ -272,8 +274,31 @@ export default function MembersDrawer({ onClose }: MembersDrawerProps) {
 
           {/* Pending access requests (coordinator-only) */}
           {callerIsCoordinator && <AccessRequestsList />}
+
+          {/* Invite guest — coordinator only */}
+          {callerIsCoordinator && (
+            <div className="p-5">
+              <h3 className="text-fg-label text-[10px] uppercase tracking-wider font-semibold mb-3">
+                External collaborators
+              </h3>
+              <button
+                type="button"
+                onClick={() => setInviteGuestOpen(true)}
+                className={`text-sm rounded-md px-3 py-2 inline-flex items-center gap-1.5 ${buttonPrimary}`}
+              >
+                <Mail size={14} />
+                Invite guest
+              </button>
+              <p className="text-fg-muted text-[11px] mt-2">
+                Guests get access to this protocol only, without an org seat. Up to 5 free per protocol.
+              </p>
+            </div>
+          )}
         </div>
       </div>
+      {inviteGuestOpen && (
+        <InviteGuestModal onClose={() => setInviteGuestOpen(false)} />
+      )}
     </div>
   );
 }

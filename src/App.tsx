@@ -69,7 +69,7 @@ function AppContent() {
 
     let cancelled = false;
     (async () => {
-      const { acceptOrgInvite } = await import('./lib/orgs/orgApi');
+      const { acceptOrgInvite } = await import('./lib/orgs/orgsApi');
       const result = await acceptOrgInvite(token);
       if (cancelled) return;
       if (result.ok) {

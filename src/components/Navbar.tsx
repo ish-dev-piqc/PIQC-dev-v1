@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Menu, X, LogOut, ChevronDown, User, Home, Sun, Moon, ClipboardList, Flame, UserCircle2, CreditCard, Beaker, Building2, Plus } from 'lucide-react';
+import { Menu, X, LogOut, ChevronDown, User, Home, Sun, Moon, ClipboardList, Flame, UserCircle2, CreditCard, Beaker, Building2, Plus, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useMode, type DashboardMode } from '../context/ModeContext';
@@ -9,6 +9,8 @@ import { useHeatmap } from '../context/HeatmapContext';
 import { useDemoMode } from '../context/DemoModeContext';
 import { getProtocolColors } from '../lib/site/protocolColors';
 import OrgSettingsDrawer from './dashboard/orgs/OrgSettingsDrawer';
+import MembersDrawer from './dashboard/orgs/MembersDrawer';
+import OrgSwitcher from './dashboard/orgs/OrgSwitcher';
 import ProtocolUploadModal from './dashboard/site/ProtocolUploadModal';
 import type { AuditStage } from '../types/audit';
 import type { AppView } from '../App';
@@ -26,6 +28,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [orgDrawerOpen, setOrgDrawerOpen] = useState(false);
+  const [membersDrawerOpen, setMembersDrawerOpen] = useState(false);
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [protocolMenuOpen, setProtocolMenuOpen] = useState(false);
   const [addProtocolOpen, setAddProtocolOpen] = useState(false);
@@ -267,6 +270,23 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
             );
           })}
           <div className={`border-t ${isLight ? 'border-[#E2E8F0]' : 'border-white/[0.06]'}`}>
+            {!isHomeScope && (
+              <button
+                type="button"
+                onClick={() => {
+                  setProtocolMenuOpen(false);
+                  setMembersDrawerOpen(true);
+                }}
+                className={`w-full text-left px-3 py-2.5 flex items-center gap-2 transition-colors ${
+                  isLight
+                    ? 'text-[#334155] hover:bg-[#0F172A]/[0.04]'
+                    : 'text-[#CBD5E1] hover:bg-white/[0.04]'
+                }`}
+              >
+                <Users size={13} />
+                <span className="text-xs font-semibold">Manage members</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
@@ -498,6 +518,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
             {isDashboard && <div className="md:hidden">{renderModeDropdown()}</div>}
             {isDashboard && mode === 'site' && renderProtocolPicker()}
             {isDashboard && mode === 'audit' && renderAuditPicker()}
+            {isDashboard && <OrgSwitcher />}
           </div>
 
           {isDashboard ? (
@@ -830,6 +851,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
     </header>
     {addProtocolOpen && <ProtocolUploadModal onClose={() => setAddProtocolOpen(false)} />}
     {orgDrawerOpen && <OrgSettingsDrawer onClose={() => setOrgDrawerOpen(false)} />}
+    {membersDrawerOpen && <MembersDrawer onClose={() => setMembersDrawerOpen(false)} />}
     </>
   );
 }
