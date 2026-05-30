@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: typecheck-cleanup
-status: active
+status: merged
+merged: 2026-05-30
 started: 2026-05-30
-target_pr:
+target_pr: #180
 ---
 
 # Typecheck cleanup — Site Mode + askPrompts.test + low-risk cross-domain fixes
