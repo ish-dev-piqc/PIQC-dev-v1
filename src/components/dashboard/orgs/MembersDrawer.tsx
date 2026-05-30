@@ -31,7 +31,7 @@ interface MembersDrawerProps {
 
 const ROLE_OPTIONS: { value: ProtocolMemberRole; label: string; icon: typeof Crown }[] = [
   { value: 'coordinator', label: 'Coordinator', icon: Crown },
-  { value: 'member', label: 'Member', icon: UserIcon },
+  { value: 'member', label: 'Team member', icon: UserIcon },
   { value: 'viewer', label: 'Viewer', icon: Eye },
 ];
 

@@ -37,10 +37,12 @@ import type {
   Org,
   OrgInvite,
   OrgMemberWithProfile,
+  OrgProtocolSummary,
   OrgRole,
   OrgRow,
   OrgWithMembership,
   ProtocolAccessRequest,
+  ProtocolAssignment,
   ProtocolGuest,
   ProtocolMember,
   ProtocolMemberPatch,
@@ -206,12 +208,14 @@ export async function createOrgInvite(
   orgId: string,
   email: string,
   role: OrgRole,
+  protocolAssignments: ProtocolAssignment[] = [],
 ): Promise<Result<{ id: string; token: string; expires_at: string }>> {
   try {
     const { data, error } = await supabase.rpc('create_org_invite', {
       p_org_id: orgId,
       p_email: email,
       p_role: role,
+      p_protocol_assignments: protocolAssignments,
     });
     if (error) throw error;
     const row = Array.isArray(data) ? data[0] : data;
@@ -227,7 +231,7 @@ export async function createOrgInvite(
 
 export async function acceptOrgInvite(
   token: string,
-): Promise<Result<{ org_id: string; org_name: string; role: OrgRole }>> {
+): Promise<Result<{ org_id: string; org_name: string; role: OrgRole; protocol_count: number }>> {
   try {
     const { data, error } = await supabase.rpc('accept_org_invite', { p_token: token });
     if (error) throw error;
@@ -239,11 +243,30 @@ export async function acceptOrgInvite(
         org_id: row.org_id,
         org_name: row.org_name,
         role: row.role as OrgRole,
+        protocol_count: row.protocol_count ?? 0,
       },
     };
   } catch (e) {
     return fail('acceptOrgInvite', e);
   }
+}
+
+/** List the protocols owned by an org. Used by the invite form to let admins
+ *  pick which protocols to add a new user to at invite time. */
+export async function listProtocolsByOrg(
+  orgId: string,
+): Promise<Result<OrgProtocolSummary[]>> {
+  const { data, error } = await supabase
+    .from('protocols')
+    .select('id, code, name, sponsor')
+    .eq('owner_org_id', orgId)
+    .order('code', { ascending: true });
+
+  if (error) return err(error.message);
+  return {
+    ok: true,
+    data: (data ?? []) as unknown as OrgProtocolSummary[],
+  };
 }
 
 export async function listOrgInvites(orgId: string): Promise<Result<OrgInvite[]>> {

@@ -62,6 +62,12 @@ export interface OrgWithMembership extends Org {
   my_role: OrgRole;
 }
 
+/** A single protocol assignment to bundle with an invite. */
+export interface ProtocolAssignment {
+  protocol_id: string;
+  role: ProtocolMemberRole;
+}
+
 /** Pending org-level invite row. */
 export interface OrgInvite {
   id: string;
@@ -70,6 +76,15 @@ export interface OrgInvite {
   token: string;
   expires_at: string;
   created_at: string;
+  protocol_assignments?: ProtocolAssignment[];
+}
+
+/** Minimal protocol shape used by the org-level "pick protocols to invite into" picker. */
+export interface OrgProtocolSummary {
+  id: string;
+  code: string;
+  name: string;
+  sponsor: string | null;
 }
 
 

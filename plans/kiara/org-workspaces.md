@@ -10,11 +10,27 @@ target_pr:
 
 ## Context
 
-PIQC's collaboration model needs three properties the current schema doesn't enforce:
+**Product framing:** the organization (a clinical site, a CRO, a sponsor) provides protocols to its users. Protocols are owned by the org, not by individuals. A site administrator runs the org and decides who has access to which protocols. The schema below makes that explicit.
+
+PIQC's collaboration model needs four properties the current schema doesn't enforce:
 
 1. **A user belongs to one identity but possibly multiple orgs.** Coordinators move between sponsors/CROs and shouldn't have to sign up twice; each org bills for their own seat.
-2. **Joining an org grants zero protocol access.** Members only see protocols they were explicitly added to. This is the inverse of `feature/ish-landing`'s in-review simplification (PRs #94/95), where any org-member sees every protocol owned by that org. Ishika confirmed that v1 behaviour was a simplification, not a target end state.
+2. **Joining an org grants zero protocol access *for site members*.** Regular site members only see protocols they were explicitly added to. **Site administrators are the exception** — they have implicit data access to every protocol the org owns, because they're the authority over the org's protocol catalog.
 3. **External collaborators (guests) can be invited per-protocol without holding an org seat.** Free up to a per-protocol cap, then paid via a guest-pack addon.
+4. **Invite flow assigns protocols at invite time.** When the site admin invites a new team member, they pick which protocols that user joins (and what role on each). Without this, new invitees land in an unreachable "I'm in the org but can't see anything" state. The accept-invite RPC inserts both the org_members row and the protocol_members rows atomically.
+
+## Role hierarchy
+
+| Tier | Role | Stored as | What they can do |
+|---|---|---|---|
+| Org | **Site administrator** | `org_members.role = 'admin'` | Full control over the org. Implicit data access to every protocol the org owns. Can manage org membership, change roles, invite new users with protocol assignments. Can promote others to administrator. |
+| Org | **Site member** | `org_members.role = 'member'` | Belongs to the org. Sees the org's protocol roster (metadata) but zero data access until added to specific protocols as coordinator/team member/viewer. |
+| Protocol | **Coordinator** | `protocol_members.role = 'coordinator'` | Manages a single protocol's roster — add/remove members, change protocol roles, handle access requests, invite external guests. Full read/write on protocol data. |
+| Protocol | **Team member** | `protocol_members.role = 'member'` | Standard protocol access — full read/write on the protocol's data. No membership-management. UI label: "Team member" (the DB enum keeps `'member'` for simplicity). |
+| Protocol | **Viewer** | `protocol_members.role = 'viewer'` | Read-only access to protocol data. Counted against the viewer-seat cap (10 free per protocol; addon_viewer_seats for overage). |
+| Protocol | **Guest** | `protocol_guests` row | External collaborator with access to one specific protocol. No org seat. Cap-aware (5 free per protocol; addon_guest_seats for overage). |
+
+Site administrators *also* appear in `org_members` only — they do not need `protocol_members` rows because clause (d) of `user_can_access_protocol` grants them access via their org-admin status directly.
 
 The schema layers on top of Ishika's `orgs` + `org_members` + `protocols.owner_org_id` foundation (PRs #90/94) without modifying her tables. Her org-scoped RLS becomes a *prerequisite* check; we add an **additional** protocol-scoped check on top. The new authorisation primitive is a single SQL function `user_can_access_protocol(uid, protocol_id)` so future modes (sponsor mode read-across-protocols) extend it without touching every policy.
 
@@ -30,6 +46,8 @@ The schema layers on top of Ishika's `orgs` + `org_members` + `protocols.owner_o
 - `supabase/migrations/20260618000500_protocol_rls_v3_membership.sql` (NEW — rewrites `site_*` RLS to call the access fn; `protocols` metadata SELECT stays as-is)
 - `supabase/migrations/20260618000600_protocol_member_first_owner_trigger.sql` (NEW — on `protocols` INSERT, auto-add the inserting user to `protocol_members` as `coordinator`)
 - `supabase/migrations/20260618000700_org_workspace_rpcs.sql` (NEW — `approve_protocol_access_request`, `accept_protocol_guest_invite`)
+- `supabase/migrations/20260618000800_user_can_access_protocol_site_admin.sql` (NEW — REPLACE the access fn to add clause (d): site administrators of the owning org get implicit data access to all org protocols)
+- `supabase/migrations/20260618000900_org_invite_protocol_assignments.sql` (NEW — ALTER `org_invites` ADD `protocol_assignments JSONB`; REPLACE `create_org_invite` + `accept_org_invite` to bundle protocol membership into invite acceptance)
 
 ### Types
 
@@ -49,11 +67,17 @@ The schema layers on top of Ishika's `orgs` + `org_members` + `protocols.owner_o
 
 ### Components
 
-- `src/components/dashboard/orgs/MembersDrawer.tsx` (NEW) — per-protocol member roster + add/remove
+- `src/components/dashboard/orgs/MembersDrawer.tsx` (NEW) — per-protocol member roster + add/remove. Role labels: Coordinator / Team member / Viewer.
 - `src/components/dashboard/orgs/AccessRequestsList.tsx` (NEW) — pending requests list for coordinators
-- `src/components/dashboard/orgs/RequestAccessButton.tsx` (NEW) — appears on protocols you can see metadata of but aren't a member of
+- `src/components/dashboard/orgs/RequestAccessButton.tsx` (NEW) — edge-case fallback for non-members; primary invite path inserts membership at invite time so this should rarely fire
 - `src/components/dashboard/orgs/InviteGuestModal.tsx` (NEW) — guest invite by email, scoped to current protocol_id from URL
 - `src/components/dashboard/orgs/OrgSwitcher.tsx` (NEW) — dropdown in Navbar for users in >1 org
+- `src/components/dashboard/orgs/OrgSettingsDrawer.tsx` (MOVED from `dashboard/site/` — extended with the protocol-assignment picker in the invite form). Role labels: Site administrator / Site member.
+
+UI wiring (Navbar.tsx):
+- `OrgSwitcher` rendered next to the protocol picker
+- "Manage members" button in the protocol picker dropdown opens `MembersDrawer`
+- `InviteGuestModal` launched from inside `MembersDrawer` (coordinator-only section)
 
 ### Shared infra (requires 2 reviewers)
 
@@ -157,7 +181,7 @@ RETURNS BOOLEAN LANGUAGE SQL STABLE SECURITY DEFINER AS $$
     -- (a) explicit protocol member
     EXISTS (SELECT 1 FROM protocol_members WHERE protocol_id = pid AND user_id = uid)
     OR
-    -- (b) accepted guest
+    -- (b) accepted, non-expired guest
     EXISTS (
       SELECT 1 FROM protocol_guests
       WHERE protocol_id = pid AND user_id = uid AND accepted_at IS NOT NULL
@@ -171,11 +195,21 @@ RETURNS BOOLEAN LANGUAGE SQL STABLE SECURITY DEFINER AS $$
       JOIN sponsor_relationships sr ON sr.sponsor_org_id = om.org_id
       JOIN protocols p ON p.id = pid
       WHERE om.user_id = uid AND sr.site_org_id = p.owner_org_id
+    )
+    OR
+    -- (d) site administrator of the protocol's owning org — implicit access
+    -- to every protocol the org owns. Matches the "org provides protocols
+    -- to its users" framing; the admin is the authority over the catalog.
+    EXISTS (
+      SELECT 1
+      FROM org_members om
+      JOIN protocols p ON p.id = pid
+      WHERE om.user_id = uid AND om.org_id = p.owner_org_id AND om.role = 'admin'
     );
 $$;
 ```
 
-RLS on `protocols`, `site_visits`, `site_participants`, `site_team_members`, and all collaborate tables becomes `USING (user_can_access_protocol(auth.uid(), protocol_id))`. Single point of authorisation; sponsor mode lights up when rows appear in `sponsor_relationships`.
+RLS on `protocols`, `site_visits`, `site_participants`, `site_team_members`, and all collaborate tables becomes `USING (user_can_access_protocol(auth.uid(), protocol_id))`. Single point of authorisation; sponsor mode lights up when rows appear in `sponsor_relationships`; site admins get implicit access via clause (d).
 
 ### Visibility model
 
@@ -188,11 +222,13 @@ This means `protocols` gets its own simpler RLS policy (`auth.uid() IN (SELECT u
 
 ### Access flow
 
-- **First member** of a protocol is the creator. The `protocol_member_first_owner_trigger` adds them as `coordinator` on insert. Without this trigger a protocol would be invisible to its own creator the moment RLS v3 kicks in.
-- **Adding members** — coordinators can add any user from any of the protocol-owning org's `org_members`. UI only shows members of the owning org.
-- **Requesting access** — a user in the same org as a protocol can request access (they can see the protocol *name* in a public-within-org listing but no participant data). RLS allows the access-request RPC to insert, but reads of the protocol's data fail until they're added to `protocol_members`.
-- **Inviting guests** — coordinator submits an email; if that email already has a `user_profiles` row in the same org, fall back to adding as a regular member. Otherwise, generate a token, insert into `protocol_guests`, and surface a copy-link affordance. (No email send in v1; matches Ishika's invite pattern.)
-- **Guests don't appear in org_members.** They have a Supabase auth user (created on token acceptance) but no `org_members` row. They only have `protocol_guests` rows. This is what makes them not count toward the org's seat quota.
+- **First member** of a protocol is the creator. The `protocol_member_first_owner_trigger` adds them as `coordinator` on insert. Without this trigger a protocol would be invisible to its own creator the moment RLS v3 kicks in (unless they're a site admin, in which case clause (d) covers them).
+- **Inviting a new user (the normal path)** — site administrator opens the org settings drawer, fills in email + org role + picks which protocols to add them to (with a role on each). The `create_org_invite` RPC stores assignments in `org_invites.protocol_assignments` (JSONB). When the invitee accepts via token, `accept_org_invite` inserts the `org_members` row AND the `protocol_members` rows in one transaction. New users land directly inside the protocols they need to work on — no empty-state, no separate request flow.
+- **Adding members to an existing protocol** — coordinators can add any user from the protocol-owning org's `org_members`. UI only shows members of the owning org. Same DB shape as the invite-time path; just a separate UI surface.
+- **Requesting access (edge-case fallback)** — used when a user landed in the org without being added to a protocol they need (e.g., coordinator removed them; protocol created after they joined; guest later becomes full member). Site member sees the protocol name in the org-roster view; clicks Request Access; coordinator approves via `approve_protocol_access_request` RPC which atomically inserts the `protocol_members` row.
+- **Inviting guests** — coordinator submits an email; if that email already has a `user_profiles` row in the same org, fall back to adding as a regular `protocol_members` row. Otherwise, generate a token, insert into `protocol_guests`, and surface a copy-link affordance. No email send in v1.
+- **Guests don't appear in `org_members`.** They have a Supabase auth user (created on token acceptance) but no `org_members` row. They only have `protocol_guests` rows. This is what makes them not count toward the org's seat quota.
+- **Site administrators bypass `protocol_members` entirely.** Their data access is via clause (d) of `user_can_access_protocol`. They show up only in `org_members.role = 'admin'`. If you want a site admin to appear in a per-protocol roster (e.g., as a coordinator), explicitly add them via the same flow as any other user.
 
 ## Pricing decisions
 
