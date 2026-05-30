@@ -74,10 +74,11 @@ The schema layers on top of Ishika's `orgs` + `org_members` + `protocols.owner_o
 - `src/components/dashboard/orgs/OrgSwitcher.tsx` (NEW) — dropdown in Navbar for users in >1 org
 - `src/components/dashboard/orgs/OrgSettingsDrawer.tsx` (MOVED from `dashboard/site/` — extended with the protocol-assignment picker in the invite form). Role labels: Site administrator / Site member.
 
-UI wiring (Navbar.tsx):
-- `OrgSwitcher` rendered next to the protocol picker
-- "Manage members" button in the protocol picker dropdown opens `MembersDrawer`
-- `InviteGuestModal` launched from inside `MembersDrawer` (coordinator-only section)
+### App wire-up
+
+- `src/App.tsx` — wire `OrgProvider` into the provider chain
+- `src/components/Navbar.tsx` — render `OrgSwitcher`; add "Manage members" launcher in protocol picker dropdown; mount `MembersDrawer` at app root; `InviteGuestModal` launched from inside `MembersDrawer` (coordinator-only section)
+- `src/components/dashboard/site/OrgSettingsDrawer.tsx` (DELETED — moved to `src/components/dashboard/orgs/OrgSettingsDrawer.tsx`)
 
 ### Shared infra (requires 2 reviewers)
 
@@ -103,7 +104,7 @@ UI wiring (Navbar.tsx):
 
 ## Architecture layers touched
 
-- [x] migration (7 new files)
+- [x] migration (10 new files)
 - [x] RPC (`user_can_access_protocol(uid, protocol_id)`, access-request RPCs, guest-invite RPCs)
 - [x] adapter (`src/lib/orgs/`)
 - [x] context (`OrgContext`)
