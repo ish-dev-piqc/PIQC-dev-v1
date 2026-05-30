@@ -9,13 +9,20 @@ import {
   currentUserIsOrgAdmin,
   fetchCurrentUserOrg,
   listOrgInvites,
-  listOrgMembers,
+  listOrgMembersWithProfile,
+  listProtocolsByOrg,
   removeOrgMember,
   updateOrgMemberRole,
-  type OrgInvite,
-  type OrgMember,
-  type OrgRow,
-} from '../../../lib/orgs/orgApi';
+} from '../../../lib/orgs/orgsApi';
+import type {
+  OrgInvite,
+  OrgMemberWithProfile,
+  OrgProtocolSummary,
+  OrgRole,
+  OrgRow,
+  ProtocolAssignment,
+  ProtocolMemberRole,
+} from '../../../types/orgs';
 
 // =============================================================================
 // OrgSettingsDrawer — view/manage the current user's primary org.
@@ -26,6 +33,9 @@ import {
 //
 // Demo mode: read-only "demo mode — org settings are local-only" banner;
 // the drawer doesn't touch Supabase.
+//
+// Moved from src/components/dashboard/site/ as part of the org-workspaces
+// refactor — this surface is org management, not Site Mode.
 // =============================================================================
 
 interface OrgSettingsDrawerProps {
@@ -41,7 +51,7 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
   const { demoActive } = useDemoMode();
 
   const [org, setOrg] = useState<OrgRow | null>(null);
-  const [members, setMembers] = useState<OrgMember[]>([]);
+  const [members, setMembers] = useState<OrgMemberWithProfile[]>([]);
   const [invites, setInvites] = useState<OrgInvite[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -49,9 +59,14 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
 
   // Invite-create form state
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'admin' | 'member'>('member');
+  const [inviteRole, setInviteRole] = useState<OrgRole>('member');
   const [creatingInvite, setCreatingInvite] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+
+  // Protocol-assignment picker state — admin selects which protocols the
+  // invitee joins, and what role on each, at invite time.
+  const [orgProtocols, setOrgProtocols] = useState<OrgProtocolSummary[]>([]);
+  const [assignments, setAssignments] = useState<Map<string, ProtocolMemberRole>>(new Map());
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -70,7 +85,7 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
     setOrg(orgResult.data);
 
     const [membersResult, adminFlag] = await Promise.all([
-      listOrgMembers(orgResult.data.id),
+      listOrgMembersWithProfile(orgResult.data.id),
       currentUserIsOrgAdmin(orgResult.data.id),
     ]);
     if (!membersResult.ok) setError(membersResult.error);
@@ -78,8 +93,12 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
     setIsAdmin(adminFlag);
 
     if (adminFlag) {
-      const invitesResult = await listOrgInvites(orgResult.data.id);
+      const [invitesResult, protocolsResult] = await Promise.all([
+        listOrgInvites(orgResult.data.id),
+        listProtocolsByOrg(orgResult.data.id),
+      ]);
       setInvites(invitesResult.ok ? invitesResult.data : []);
+      setOrgProtocols(protocolsResult.ok ? protocolsResult.data : []);
     }
     setLoading(false);
   }, []);
@@ -97,7 +116,15 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
     if (!org || creatingInvite || !inviteEmail.trim()) return;
     setCreatingInvite(true);
     setError(null);
-    const result = await createOrgInvite(org.id, inviteEmail.trim(), inviteRole);
+    const protocolAssignments: ProtocolAssignment[] = Array.from(assignments.entries()).map(
+      ([protocol_id, role]) => ({ protocol_id, role }),
+    );
+    const result = await createOrgInvite(
+      org.id,
+      inviteEmail.trim(),
+      inviteRole,
+      protocolAssignments,
+    );
     setCreatingInvite(false);
     if (!result.ok) {
       setError(result.error);
@@ -112,10 +139,28 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
       /* ignore — user can copy from the listing below */
     }
     setInviteEmail('');
+    setAssignments(new Map());
     refresh();
   };
 
-  const handleRoleChange = async (member: OrgMember, role: 'admin' | 'member') => {
+  function toggleAssignment(protocolId: string) {
+    setAssignments((prev) => {
+      const next = new Map(prev);
+      if (next.has(protocolId)) next.delete(protocolId);
+      else next.set(protocolId, 'member');
+      return next;
+    });
+  }
+
+  function setAssignmentRole(protocolId: string, role: ProtocolMemberRole) {
+    setAssignments((prev) => {
+      const next = new Map(prev);
+      if (next.has(protocolId)) next.set(protocolId, role);
+      return next;
+    });
+  }
+
+  const handleRoleChange = async (member: OrgMemberWithProfile, role: OrgRole) => {
     if (!org) return;
     const result = await updateOrgMemberRole(org.id, member.user_id, role);
     if (!result.ok) {
@@ -125,7 +170,7 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
     refresh();
   };
 
-  const handleRemove = async (member: OrgMember) => {
+  const handleRemove = async (member: OrgMemberWithProfile) => {
     if (!org) return;
     const confirmed = window.confirm(`Remove ${member.name} from ${org.name}?`);
     if (!confirmed) return;
@@ -224,18 +269,18 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
                         )}
                         <span className={`${headingColor} text-sm font-medium truncate`}>{m.name}</span>
                         <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${m.role === 'admin' ? (isLight ? 'bg-amber-100 text-amber-800' : 'bg-amber-500/15 text-amber-300') : (isLight ? 'bg-[#F2F2F2] text-[#334155]/65' : 'bg-white/[0.06] text-[#CBD5E1]/55')}`}>
-                          {m.role}
+                          {m.role === 'admin' ? 'Site administrator' : 'Site member'}
                         </span>
                       </div>
                       {isAdmin && (
                         <div className="flex items-center gap-1">
                           {m.role === 'admin' ? (
                             <button type="button" onClick={() => handleRoleChange(m, 'member')} className={`text-[11px] px-2 py-1 rounded ${isLight ? 'text-[#334155]/70 hover:bg-[#0F172A]/[0.05]' : 'text-[#CBD5E1]/60 hover:bg-white/[0.05]'}`}>
-                              Make member
+                              Make site member
                             </button>
                           ) : (
                             <button type="button" onClick={() => handleRoleChange(m, 'admin')} className={`text-[11px] px-2 py-1 rounded ${isLight ? 'text-[#334155]/70 hover:bg-[#0F172A]/[0.05]' : 'text-[#CBD5E1]/60 hover:bg-white/[0.05]'}`}>
-                              Make admin
+                              Make site administrator
                             </button>
                           )}
                           <button type="button" onClick={() => handleRemove(m)} className={`inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded ${isLight ? 'text-red-600 hover:bg-red-500/[0.06]' : 'text-red-400 hover:bg-red-500/[0.08]'}`} aria-label={`Remove ${m.name}`}>
@@ -269,14 +314,67 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
                       />
                       <select
                         value={inviteRole}
-                        onChange={(e) => setInviteRole(e.target.value as 'admin' | 'member')}
+                        onChange={(e) => setInviteRole(e.target.value as OrgRole)}
                         className={`px-3 py-2 text-sm rounded-md border ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-brand-600/30`}
                         disabled={creatingInvite}
                       >
-                        <option value="member">Member</option>
-                        <option value="admin">Admin</option>
+                        <option value="member">Site member</option>
+                        <option value="admin">Site administrator</option>
                       </select>
                     </div>
+
+                    {/* Protocol-assignment picker: pick which protocols the
+                        invitee joins on accept, and what role on each. Without
+                        this, joining the org alone grants zero protocol access. */}
+                    {orgProtocols.length > 0 && (
+                      <div className="space-y-1.5 pt-1">
+                        <p className={`${labelColor} text-[10px] uppercase tracking-wider font-semibold`}>
+                          Add to protocols
+                        </p>
+                        {orgProtocols.map((p) => {
+                          const checked = assignments.has(p.id);
+                          const role = assignments.get(p.id) ?? 'member';
+                          return (
+                            <label
+                              key={p.id}
+                              className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md border ${border} cursor-pointer ${
+                                checked ? (isLight ? 'bg-brand-600/[0.04]' : 'bg-brand-600/[0.08]') : ''
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleAssignment(p.id)}
+                                className="flex-shrink-0"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className={`${headingColor} text-xs font-medium truncate`}>{p.code}</p>
+                                <p className={`${mutedColor} text-[10px] truncate`}>{p.name}</p>
+                              </div>
+                              {checked && (
+                                <select
+                                  value={role}
+                                  onChange={(e) =>
+                                    setAssignmentRole(p.id, e.target.value as ProtocolMemberRole)
+                                  }
+                                  onClick={(e) => e.stopPropagation()}
+                                  className={`text-[11px] rounded border px-1.5 py-0.5 ${inputBg} ${headingColor}`}
+                                >
+                                  <option value="coordinator">Coordinator</option>
+                                  <option value="member">Team member</option>
+                                  <option value="viewer">Viewer</option>
+                                </select>
+                              )}
+                            </label>
+                          );
+                        })}
+                        <p className={`${mutedColor} text-[10px] mt-1`}>
+                          Site administrators get implicit access to all org protocols, so this list is
+                          ignored when the role above is set to "Site administrator."
+                        </p>
+                      </div>
+                    )}
+
                     <button type="submit" disabled={creatingInvite || !inviteEmail.trim()} className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${buttonPrimary}`}>
                       {creatingInvite ? 'Creating…' : 'Create invite + copy link'}
                     </button>
