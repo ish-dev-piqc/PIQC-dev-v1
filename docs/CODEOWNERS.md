@@ -29,6 +29,16 @@
 /src/lib/site/                    @ki-dev-piqc
 /src/components/dashboard/site/   @ki-dev-piqc
 
+# Org workspaces — Kiara
+# Note: takes ownership of pre-existing /src/lib/orgs/orgApi.ts (Ishika's PR #95).
+# Ishika can opt out by adding a narrower override above this line.
+/src/lib/orgs/                    @ki-dev-piqc
+/src/components/dashboard/orgs/   @ki-dev-piqc
+/src/types/orgs/                  @ki-dev-piqc
+
+# Sponsor Mode placeholder — 2 reviewers (cross-mode forward-compat)
+/src/types/sponsor/               @ki-dev-piqc @ish-dev-piqc
+
 # Audit Mode — Karl
 /src/lib/audit/                   @karl-dev-piqc
 /src/components/dashboard/audit/  @karl-dev-piqc

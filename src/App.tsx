@@ -16,6 +16,7 @@ import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { ModeProvider, useMode } from './context/ModeContext';
 import { DemoModeProvider } from './context/DemoModeContext';
 import { ProtocolProvider } from './context/ProtocolContext';
+import { OrgProvider } from './context/OrgContext';
 import { SiteDataProvider } from './context/SiteDataContext';
 import { AuditProvider } from './context/AuditContext';
 import { AuditDataProvider } from './context/AuditDataContext';
@@ -211,15 +212,17 @@ export default function App() {
         <DemoModeProvider>
           <ModeProvider>
             <ProtocolProvider>
-              <SiteDataProvider>
-                <AuditProvider>
-                  <AuditDataProvider>
-                    <HeatmapProvider>
-                      <AppContent />
-                    </HeatmapProvider>
-                  </AuditDataProvider>
-                </AuditProvider>
-              </SiteDataProvider>
+              <OrgProvider>
+                <SiteDataProvider>
+                  <AuditProvider>
+                    <AuditDataProvider>
+                      <HeatmapProvider>
+                        <AppContent />
+                      </HeatmapProvider>
+                    </AuditDataProvider>
+                  </AuditProvider>
+                </SiteDataProvider>
+              </OrgProvider>
             </ProtocolProvider>
           </ModeProvider>
         </DemoModeProvider>

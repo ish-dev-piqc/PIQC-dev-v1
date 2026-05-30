@@ -22,13 +22,14 @@ The schema layers on top of Ishika's `orgs` + `org_members` + `protocols.owner_o
 
 ### Migrations
 
-- `supabase/migrations/20260529000000_protocol_members_table.sql` (NEW)
-- `supabase/migrations/20260529000100_protocol_access_requests.sql` (NEW)
-- `supabase/migrations/20260529000200_protocol_guests.sql` (NEW)
-- `supabase/migrations/20260529000300_user_can_access_protocol_fn.sql` (NEW)
-- `supabase/migrations/20260529000400_protocol_rls_v3_membership.sql` (NEW — rewrites `protocols` + `site_*` RLS to call the access fn)
-- `supabase/migrations/20260529000500_sponsor_relationships_stub.sql` (NEW — empty table referenced by the access fn for forward-compat; no UI)
-- `supabase/migrations/20260529000600_protocol_member_first_owner_trigger.sql` (NEW — on `protocols` INSERT, auto-add the inserting user to `protocol_members` as `coordinator`)
+- `supabase/migrations/20260618000000_protocol_members_table.sql` (NEW)
+- `supabase/migrations/20260618000100_protocol_access_requests.sql` (NEW)
+- `supabase/migrations/20260618000200_protocol_guests.sql` (NEW)
+- `supabase/migrations/20260618000300_sponsor_relationships_stub.sql` (NEW — empty table referenced by the access fn for forward-compat; no UI)
+- `supabase/migrations/20260618000400_user_can_access_protocol_fn.sql` (NEW)
+- `supabase/migrations/20260618000500_protocol_rls_v3_membership.sql` (NEW — rewrites `site_*` RLS to call the access fn; `protocols` metadata SELECT stays as-is)
+- `supabase/migrations/20260618000600_protocol_member_first_owner_trigger.sql` (NEW — on `protocols` INSERT, auto-add the inserting user to `protocol_members` as `coordinator`)
+- `supabase/migrations/20260618000700_org_workspace_rpcs.sql` (NEW — `approve_protocol_access_request`, `accept_protocol_guest_invite`)
 
 ### Types
 
