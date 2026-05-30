@@ -1,6 +1,7 @@
 # Visit Prep — ingest → execution pipeline fixes
 
-status: active
+status: merged
+merged: 2026-05-30
 Approved-by: Roger (required — touches `supabase/functions/` + `supabase/migrations/`)
 
 ## Context
