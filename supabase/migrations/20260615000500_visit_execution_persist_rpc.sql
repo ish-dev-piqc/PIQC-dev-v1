@@ -96,8 +96,12 @@ LANGUAGE sql
 IMMUTABLE
 PARALLEL SAFE
 AS $$
+  -- Schema-qualified: pgcrypto lives in the `extensions` schema and the
+  -- migration runner's search_path does not include it, so a bare digest()
+  -- fails with 42883. Qualifying doesn't change the hash output, so the
+  -- fingerprint stays in sync with the TS-side fingerprintRequirement().
   SELECT encode(
-    digest(
+    extensions.digest(
       p_visit_template_id::text || '|' || _vew_normalize_derived_text(p_derived_text),
       'sha256'
     ),
