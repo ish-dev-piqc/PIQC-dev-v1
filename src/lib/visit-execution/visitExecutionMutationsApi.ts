@@ -338,3 +338,76 @@ export async function resolveSignal(
     },
   };
 }
+
+// =============================================================================
+// Add / delete requirements (Visit Prep — coordinator-authored items).
+// Wrap visit_execution_add_requirement / visit_execution_delete_requirement.
+// Added rows are origin='human_added'; both flow into get_workspace + the
+// export worksheet automatically (those read straight from visit_requirements).
+// =============================================================================
+
+export interface VisitRequirementAddResult {
+  id: string;
+  visit_template_id: string;
+  ordinal: number;
+}
+
+export async function addRequirement(
+  visitTemplateId: string,
+  text: string,
+  phase: string = 'assessment',
+  roleHint?: string | null,
+): Promise<Result<VisitRequirementAddResult>> {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) {
+    return { ok: false, error: 'A requirement needs some text.' };
+  }
+
+  if (isMockEnabled()) {
+    return {
+      ok: true,
+      data: { id: `mock-req-add-${visitTemplateId}-${trimmed.length}`, visit_template_id: visitTemplateId, ordinal: 0 },
+    };
+  }
+
+  const { data, error } = await supabase.rpc('visit_execution_add_requirement', {
+    p_visit_template_id: visitTemplateId,
+    p_text: trimmed,
+    p_phase: phase,
+    p_role_hint: roleHint ?? null,
+  });
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  const payload = data as Partial<VisitRequirementAddResult> | null;
+  if (!payload || typeof payload.id !== 'string') {
+    return { ok: false, error: 'malformed RPC response' };
+  }
+  return {
+    ok: true,
+    data: {
+      id: payload.id,
+      visit_template_id:
+        typeof payload.visit_template_id === 'string' ? payload.visit_template_id : visitTemplateId,
+      ordinal: typeof payload.ordinal === 'number' ? payload.ordinal : 0,
+    },
+  };
+}
+
+export async function deleteRequirement(
+  requirementId: string,
+): Promise<Result<{ deleted: number }>> {
+  if (isMockEnabled()) {
+    return { ok: true, data: { deleted: 1 } };
+  }
+  const { data, error } = await supabase.rpc('visit_execution_delete_requirement', {
+    p_requirement_id: requirementId,
+  });
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+  const payload = data as { deleted?: number } | null;
+  return { ok: true, data: { deleted: typeof payload?.deleted === 'number' ? payload.deleted : 1 } };
+}

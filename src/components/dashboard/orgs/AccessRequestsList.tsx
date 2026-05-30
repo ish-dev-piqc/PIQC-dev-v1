@@ -12,7 +12,13 @@ import { approveAccessRequest, denyAccessRequest } from '../../../lib/orgs/orgsA
 // insert + status flip are atomic. Denial is a plain UPDATE (status='denied').
 // =============================================================================
 
-export default function AccessRequestsList() {
+interface AccessRequestsListProps {
+  // Resolves a requester's user_id to a display name (via the org roster the
+  // parent drawer already loaded). Falls back to the raw id if not provided.
+  resolveName?: (userId: string) => string;
+}
+
+export default function AccessRequestsList({ resolveName }: AccessRequestsListProps = {}) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
   const { accessRequests, refresh } = useOrg();
@@ -74,7 +80,7 @@ export default function AccessRequestsList() {
           >
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm text-fg-body truncate" title={r.user_id}>
-                {r.user_id}
+                {resolveName ? resolveName(r.user_id) : r.user_id}
               </p>
               <div className="flex items-center gap-1">
                 <button

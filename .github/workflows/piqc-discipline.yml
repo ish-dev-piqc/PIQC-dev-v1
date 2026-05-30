@@ -6,7 +6,12 @@ on:
 
 jobs:
   mechanical-checks:
-    if: ${{ !startsWith(github.head_ref, 'archive/') }}
+    # NB: do NOT skip this job on archive/* branches. `main` requires the
+    # `mechanical-checks` status check, and a job skipped via a job-level `if`
+    # never posts its check context — so auto-merge on the bot-opened
+    # `archive/pr-N` PRs would wait forever for a check that never arrives.
+    # Archive PRs only move a plan MD into _archive/, so every check here
+    # passes trivially; running it is what lets those PRs actually merge.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

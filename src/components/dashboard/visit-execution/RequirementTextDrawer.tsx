@@ -37,7 +37,7 @@ import { useTheme } from '../../../context/ThemeContext';
 // stays open until success or user dismisses.
 // =============================================================================
 
-export type RequirementTextDrawerMode = 'edit' | 'note' | 'promote_signal';
+export type RequirementTextDrawerMode = 'edit' | 'note' | 'promote_signal' | 'add';
 
 /**
  * Generic display payload for the drawer. The owner of the drawer's state
@@ -113,6 +113,16 @@ const COPY: Record<RequirementTextDrawerMode, ModeCopy> = {
     icon: Plus,
     textareaLabel: 'Requirement text',
     placeholder: 'Refine the wording before adding…',
+    saveLabel: 'Add requirement',
+    emptyHint: "Requirement text can't be empty.",
+  },
+  add: {
+    headerLabel: 'Add requirement',
+    description:
+      'Add a new requirement to this visit. It is marked as coordinator-added and appears in the checklist and the exported worksheet.',
+    icon: Plus,
+    textareaLabel: 'Requirement text',
+    placeholder: 'e.g. Confirm fasting status before draw…',
     saveLabel: 'Add requirement',
     emptyHint: "Requirement text can't be empty.",
   },

@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ChevronDown,
   ChevronRight,
   Clock,
   FileText,
   GitFork,
+  Info,
   MoreHorizontal,
   User,
 } from 'lucide-react';
@@ -53,7 +55,9 @@ export type ChecklistItemAction =
   | 'open_edit'
   | 'open_note'
   /** Sprint 4c: opens the read-only edit-log timeline drawer for the row. */
-  | 'view_history';
+  | 'view_history'
+  /** Delete the requirement (with confirm in the parent). */
+  | 'delete';
 
 interface Props {
   workspace: VisitExecutionWorkspace;
@@ -259,6 +263,8 @@ function ChecklistItemRow({
 
   const [conditionsOpen, setConditionsOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
   const [driftOpen, setDriftOpen] = useState(false);
 
   const hasConditions = item.conditions.length > 0;
@@ -489,13 +495,29 @@ function ChecklistItemRow({
             }`}
             data-testid="vew-traceability-link"
           >
-            <span aria-hidden className="text-sm font-serif font-semibold leading-none">§</span>
+            <Info size={14} aria-hidden />
           </button>
 
-          <div className="relative">
+          <div>
             <button
+              ref={menuBtnRef}
               type="button"
-              onClick={() => setMenuOpen((p) => !p)}
+              onClick={() =>
+                setMenuOpen((p) => {
+                  const next = !p;
+                  if (next && menuBtnRef.current) {
+                    const r = menuBtnRef.current.getBoundingClientRect();
+                    // ~5 items; flip above the trigger when there's no room below.
+                    const estHeight = 196;
+                    const openUp = r.bottom + estHeight > window.innerHeight;
+                    setMenuPos({
+                      top: openUp ? Math.max(8, r.top - estHeight - 4) : r.bottom + 4,
+                      right: Math.max(8, window.innerWidth - r.right),
+                    });
+                  }
+                  return next;
+                })
+              }
               aria-label={`More actions for ${item.label}`}
               aria-haspopup="menu"
               aria-expanded={menuOpen}
@@ -505,58 +527,64 @@ function ChecklistItemRow({
             >
               <MoreHorizontal size={13} aria-hidden />
             </button>
-            {menuOpen && (
-              <>
-                <button
-                  type="button"
-                  aria-hidden
-                  tabIndex={-1}
-                  onClick={() => setMenuOpen(false)}
-                  className="fixed inset-0 z-10 cursor-default"
-                />
-                <div
-                  role="menu"
-                  data-testid="vew-item-overflow-menu"
-                  className={`absolute right-0 top-full mt-1 w-44 z-20 rounded-md border shadow-lg overflow-hidden ${
-                    isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/10'
-                  }`}
-                >
+            {menuOpen && menuPos &&
+              createPortal(
+                <>
+                  <button
+                    type="button"
+                    aria-hidden
+                    tabIndex={-1}
+                    onClick={() => setMenuOpen(false)}
+                    className="fixed inset-0 z-[60] cursor-default"
+                  />
                   {/*
-                   * Sprint 4b: full menu restored. Each item dispatches via
-                   * the action discriminator so the parent calls the right
-                   * RPC variant (flag_for_review vs mark_needs_clarification
-                   * both set review_status='needs_review' but the audit log
-                   * distinguishes them). Edit + Note items open the
-                   * RequirementTextDrawer in the matching mode.
+                   * Portaled to <body> with fixed positioning (computed off the
+                   * trigger's rect, right-aligned, flips up near the bottom) so
+                   * the menu is NEVER clipped by the phase card's overflow-hidden
+                   * or the scrollable workspace pane. Each item dispatches via the
+                   * action discriminator so the parent calls the right RPC variant.
                    */}
-                  {([
-                    { label: 'Edit text',                action: 'open_edit'                as ChecklistItemAction },
-                    { label: 'Add site note',            action: 'open_note'                as ChecklistItemAction },
-                    { label: 'Flag for review',          action: 'flag_for_review'          as ChecklistItemAction },
-                    { label: 'Mark needs clarification', action: 'mark_needs_clarification' as ChecklistItemAction },
-                    // Sprint 4c: read-only audit-log drawer. Last in the list
-                    // since it's a "view" action, distinct from the four
-                    // "do something" actions above.
-                    { label: 'View edit history',        action: 'view_history'             as ChecklistItemAction },
-                  ]).map((opt) => (
-                    <button
-                      key={opt.label}
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        onItemAction(item, opt.action);
-                        setMenuOpen(false);
-                      }}
-                      className={`w-full text-left text-xs px-3 py-2 ${
-                        isLight ? 'text-fg-body hover:bg-[#F8FAFC]' : 'text-fg-body hover:bg-white/[0.04]'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+                  <div
+                    role="menu"
+                    data-testid="vew-item-overflow-menu"
+                    style={{ position: 'fixed', top: menuPos.top, right: menuPos.right }}
+                    className={`w-44 z-[61] rounded-md border shadow-lg overflow-hidden ${
+                      isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/10'
+                    }`}
+                  >
+                    {([
+                      { label: 'Edit text',                action: 'open_edit'                as ChecklistItemAction, danger: false },
+                      { label: 'Add site note',            action: 'open_note'                as ChecklistItemAction, danger: false },
+                      { label: 'Flag for review',          action: 'flag_for_review'          as ChecklistItemAction, danger: false },
+                      { label: 'Mark needs clarification', action: 'mark_needs_clarification' as ChecklistItemAction, danger: false },
+                      { label: 'View edit history',        action: 'view_history'             as ChecklistItemAction, danger: false },
+                      { label: 'Delete requirement',       action: 'delete'                   as ChecklistItemAction, danger: true },
+                    ]).map((opt) => (
+                      <button
+                        key={opt.label}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          onItemAction(item, opt.action);
+                          setMenuOpen(false);
+                        }}
+                        className={`w-full text-left text-xs px-3 py-2 ${
+                          opt.danger
+                            ? isLight
+                              ? 'text-rose-700 hover:bg-rose-50 border-t border-[#E2E8F0]'
+                              : 'text-rose-300 hover:bg-rose-500/10 border-t border-white/10'
+                            : isLight
+                              ? 'text-fg-body hover:bg-[#F8FAFC]'
+                              : 'text-fg-body hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </>,
+                document.body,
+              )}
           </div>
         </div>
       </div>

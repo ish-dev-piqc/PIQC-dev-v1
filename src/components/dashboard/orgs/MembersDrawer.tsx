@@ -86,6 +86,13 @@ export default function MembersDrawer({ onClose }: MembersDrawerProps) {
     [orgRoster, memberUserIds],
   );
 
+  // Resolve a user_id to a display name via the org roster. Never surface the
+  // raw UUID — fall back to a readable placeholder while the roster loads or
+  // when the user isn't in the owning org's roster.
+  const resolveName = (userId: string) =>
+    orgRoster.find((o) => o.user_id === userId)?.name ??
+    (orgRosterLoaded ? '(unknown user)' : 'Loading…');
+
   async function handleAdd() {
     if (!activeProtocol || !inviteUserId || working) return;
     setWorking(true);
@@ -115,8 +122,7 @@ export default function MembersDrawer({ onClose }: MembersDrawerProps) {
 
   async function handleRemove(member: ProtocolMember) {
     if (!activeProtocol || working) return;
-    const profileName = orgRoster.find((o) => o.user_id === member.user_id)?.name ?? member.user_id;
-    if (!window.confirm(`Remove ${profileName} from this protocol?`)) return;
+    if (!window.confirm(`Remove ${resolveName(member.user_id)} from this protocol?`)) return;
     setError(null);
     const res = await removeProtocolMember(activeProtocol.id, member.user_id);
     if (!res.ok) setError(res.error);
@@ -228,14 +234,13 @@ export default function MembersDrawer({ onClose }: MembersDrawerProps) {
             </h3>
             <ul className="space-y-1.5">
               {protocolMembers.map((m) => {
-                const profile = orgRoster.find((o) => o.user_id === m.user_id);
                 return (
                   <li
                     key={m.user_id}
                     className={`flex items-center justify-between gap-3 px-3 py-2 rounded-md border ${border}`}
                   >
                     <div className="min-w-0 flex items-center gap-2">
-                      <p className="text-sm text-fg-body truncate">{profile?.name ?? m.user_id}</p>
+                      <p className="text-sm text-fg-body truncate">{resolveName(m.user_id)}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       {callerIsCoordinator ? (
@@ -273,7 +278,7 @@ export default function MembersDrawer({ onClose }: MembersDrawerProps) {
           </div>
 
           {/* Pending access requests (coordinator-only) */}
-          {callerIsCoordinator && <AccessRequestsList />}
+          {callerIsCoordinator && <AccessRequestsList resolveName={resolveName} />}
 
           {/* Invite guest — coordinator only */}
           {callerIsCoordinator && (

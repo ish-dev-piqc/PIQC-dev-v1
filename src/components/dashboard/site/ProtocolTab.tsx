@@ -264,9 +264,9 @@ export default function ProtocolTab() {
                       className={`mt-0.5 flex-shrink-0 ${isLight ? 'text-[#334155]/35' : 'text-[#CBD5E1]/30'}`}
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="text-fg-heading text-sm font-medium truncate">{d.title || d.source}</p>
-                      <p className={`${mutedColor} text-[11px] mt-0.5`}>
-                        {d.source} · ingested {formatDate(d.created_at)}
+                      <p className="text-fg-heading text-sm font-medium truncate">{d.title || d.filename}</p>
+                      <p className={`${mutedColor} text-[11px] mt-0.5 truncate`}>
+                        {d.filename ? `${d.filename} · ` : ''}ingested {formatDate(d.created_at)}
                       </p>
                     </div>
                   </div>

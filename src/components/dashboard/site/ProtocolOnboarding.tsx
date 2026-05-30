@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { FileText, Layers, Workflow, HelpCircle } from 'lucide-react';
+import { FileText, Layers, Workflow, HelpCircle, ArrowRight } from 'lucide-react';
 import { UploadForm } from '../KnowledgeBase';
 import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
@@ -144,6 +144,29 @@ export default function ProtocolOnboarding({ onTabChange }: ProtocolOnboardingPr
           Parse typically takes 30–90 seconds. If extraction has low confidence,
           you'll be routed to the Source of Truth Reviewer to verify the fields.
         </p>
+
+        {/* Fallback CTA: this wall normally unmounts itself when ProtocolContext's
+            realtime fires on the new protocol row (0 → 1). Realtime is not always
+            reliable, which can strand the user here even though the protocol is
+            ready in the DB. This button force-refreshes so they can reach the
+            dashboard without waiting on (or being blocked by) a missed event. */}
+        <div className="flex flex-col items-center gap-2 mb-4">
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2.5 border transition-colors ${
+              isLight
+                ? 'bg-white border-[#E2E8F0] text-fg-heading hover:bg-[#F2F2F2]'
+                : 'bg-[#0F172A] border-white/10 text-fg-heading hover:bg-[#1E293B]'
+            }`}
+          >
+            Already uploaded? Go to dashboard
+            <ArrowRight size={14} strokeWidth={2} />
+          </button>
+          <span className={`${mutedColor} text-[11px]`}>
+            Once your protocol is parsed, this takes you to your populated workspace.
+          </span>
+        </div>
 
         <details className={`${cardBg} border rounded-xl group`}>
           <summary

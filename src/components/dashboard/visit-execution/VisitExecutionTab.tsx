@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, FlaskConical, X, AlertTriangle } from 'lucide-react';
+import { Loader2, FlaskConical, X, AlertTriangle, Plus } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useTheme } from '../../../context/ThemeContext';
 import { fetchVisitExecutionWorkspaces, isMockEnabled } from '../../../lib/visit-execution/visitExecutionApi';
 import {
+  addRequirement,
   addSiteNote,
+  deleteRequirement,
   editText,
   flagForReview,
   markNeedsClarification,
@@ -439,6 +441,38 @@ export default function VisitExecutionTab() {
         case 'view_history':
           setEditLogItem(item);
           return;
+        case 'delete': {
+          if (
+            !window.confirm(
+              `Delete requirement “${item.label}”? This removes it from the checklist and the exported worksheet.`,
+            )
+          ) {
+            return;
+          }
+          void deleteRequirement(item.id).then((r) => {
+            if (!r.ok) {
+              console.error('[vew] delete_requirement_failed', { itemId: item.id, error: r.error });
+              setMutationError({ kind: 'item', message: humanizeRpcError(r.error), itemLabel: item.label });
+              return;
+            }
+            // Splice the row out of local state; export + workspace read from
+            // the same table, so the deletion is already reflected server-side.
+            setWorkspaces((prev) =>
+              prev.map((ws) => {
+                if (!ws.items.some((i) => i.id === item.id)) return ws;
+                return {
+                  ...ws,
+                  items: ws.items.filter((i) => i.id !== item.id),
+                  snapshot: {
+                    ...ws.snapshot,
+                    item_count: Math.max(0, ws.snapshot.item_count - 1),
+                  },
+                };
+              }),
+            );
+          });
+          return;
+        }
         default: {
           // Exhaustive-check helper. If a new ChecklistItemAction is added
           // without updating this switch, TypeScript flags `_exhaustive` as
@@ -740,6 +774,79 @@ export default function VisitExecutionTab() {
     [selectedWorkspace, dropSignal, withInFlightSignal],
   );
 
+  // Add-requirement: opens the text drawer in 'add' mode (empty draft).
+  const handleOpenAdd = useCallback(() => {
+    if (!selectedWorkspace) return;
+    setTextDrawerItem(null);
+    setTextDrawerSignal(null);
+    setTextDrawerMode('add');
+    setTextDrawerSubject({
+      title: selectedWorkspace.snapshot.visit_name,
+      initialDraft: '',
+      driftFromText: null,
+    });
+  }, [selectedWorkspace]);
+
+  // Add-mode save: create a coordinator-authored requirement, then splice it
+  // into local state (mirrors appendRequirementFromSignal's row shape). The
+  // export worksheet picks it up automatically (reads visit_requirements).
+  const handleAddSave = useCallback(
+    async (text: string): Promise<{ ok: true } | { ok: false; error: string }> => {
+      if (!selectedWorkspace) return { ok: false, error: 'no visit selected' };
+      const visitTemplateId = selectedWorkspace.visit_template_id;
+      const result = await addRequirement(visitTemplateId, text);
+      if (!result.ok) {
+        console.error('[vew] add_requirement_failed', { visitTemplateId, error: result.error });
+        return { ok: false, error: humanizeRpcError(result.error) };
+      }
+      const label = text.trim();
+      const newId = result.data.id;
+      setWorkspaces((prev) =>
+        prev.map((ws) => {
+          if (ws.visit_template_id !== visitTemplateId) return ws;
+          const newItem: VisitExecutionItem = {
+            id: newId,
+            extracted_item_id: null,
+            label,
+            derived_text: label,
+            description: null,
+            phase: 'assessment',
+            classification: 'required',
+            conditions: [],
+            timing: null,
+            source_fields: [],
+            traceability: {
+              soa_column: null,
+              protocol_section: null,
+              protocol_page: null,
+              amendment_version: null,
+              source_evidence_id: null,
+              cross_reference_source_section: null,
+              cross_reference_page: null,
+              cross_reference_snippet: null,
+            },
+            role_hint: null,
+            review_status: 'not_reviewed',
+            review_note: null,
+            confidence_state: null,
+          };
+          return {
+            ...ws,
+            items: [...ws.items, newItem],
+            snapshot: {
+              ...ws.snapshot,
+              item_count: ws.snapshot.item_count + 1,
+              needs_review_count: ws.snapshot.needs_review_count + 1,
+            },
+          };
+        }),
+      );
+      closeTextDrawer();
+      return { ok: true };
+    },
+    [selectedWorkspace, closeTextDrawer],
+  );
+
   // Pick the right save handler based on mode. Memoized so the drawer's
   // prop identity stays stable across unrelated parent re-renders.
   const drawerOnSave = useMemo(() => {
@@ -747,8 +854,9 @@ export default function VisitExecutionTab() {
       case 'edit':           return handleEditSave;
       case 'note':           return handleNoteSave;
       case 'promote_signal': return handlePromoteSignalSave;
+      case 'add':            return handleAddSave;
     }
-  }, [textDrawerMode, handleEditSave, handleNoteSave, handlePromoteSignalSave]);
+  }, [textDrawerMode, handleEditSave, handleNoteSave, handlePromoteSignalSave, handleAddSave]);
 
 
   if (loading) {
@@ -822,6 +930,47 @@ export default function VisitExecutionTab() {
                 derivedConfidence={derivedVisitConfidence}
               />
 
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleOpenAdd}
+                  className={`inline-flex items-center gap-1.5 text-xs font-medium rounded-md px-3 py-1.5 border ${
+                    isLight
+                      ? 'border-[#E2E8F0] text-fg-body hover:bg-[#F2F2F2]'
+                      : 'border-white/10 text-fg-body hover:bg-white/[0.04]'
+                  }`}
+                >
+                  <Plus size={13} aria-hidden /> Add requirement
+                </button>
+              </div>
+
+              {selectedWorkspace.items.length === 0 ? (
+                /* Visits loaded (templates exist) but no requirements were
+                   extracted — the per-visit execution items never got written
+                   to visit_requirements. Make this state honest + actionable
+                   instead of rendering a bare 0-item checklist that reads as
+                   "broken". */
+                <div
+                  data-testid="vew-no-requirements"
+                  className={`rounded-lg border px-4 py-6 text-center ${
+                    isLight
+                      ? 'bg-[#FFFBEB] border-[#FDE68A]'
+                      : 'bg-[#422006]/40 border-[#854D0E]'
+                  }`}
+                >
+                  <FlaskConical size={18} className="mx-auto text-fg-muted mb-2" aria-hidden />
+                  <p className="text-fg-heading text-sm font-semibold mb-1">
+                    Requirements not extracted yet for this visit
+                  </p>
+                  <p className="text-fg-sub text-xs leading-relaxed max-w-md mx-auto">
+                    The protocol&rsquo;s visit schedule loaded, but the per-visit
+                    execution requirements (procedures, roles, timing) haven&rsquo;t
+                    been generated. Re-ingest this protocol from the Protocol tab so
+                    the parser extracts requirements from the source document.
+                  </p>
+                </div>
+              ) : (
+                <>
               {selectedWorkspace.snapshot.completeness_signals.length > 0 && (
                 <CompletenessSignalsPanel
                   signals={selectedWorkspace.snapshot.completeness_signals}
@@ -909,6 +1058,8 @@ export default function VisitExecutionTab() {
                   filteredCount={roleFilteredCount}
                 />
               </div>
+                </>
+              )}
             </>
           ) : (
             <p className="text-fg-sub text-sm">Select a visit on the left to begin.</p>

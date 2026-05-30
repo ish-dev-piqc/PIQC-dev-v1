@@ -10,6 +10,7 @@ export function getDemoDocuments(): ProtocolDocument[] {
       id: 'demo-doc-001',
       title: 'BRIGHTEN-2 — Protocol v4.0',
       source: 'Demo protocol PDF',
+      filename: 'brighten-2_protocol_v4.0.pdf',
       created_at: addDays(-30),
       status: 'ready',
       extracted_fields: {
@@ -27,6 +28,7 @@ export function getDemoDocuments(): ProtocolDocument[] {
       id: 'demo-doc-001-lab',
       title: 'BRIGHTEN-2 — Central Lab Manual v1.3',
       source: 'Demo supplemental PDF',
+      filename: 'brighten-2_central_lab_manual_v1.3.pdf',
       created_at: addDays(-25),
       status: 'ready',
       extracted_fields: { protocol_number: 'BRIGHTEN-2' },
@@ -35,6 +37,7 @@ export function getDemoDocuments(): ProtocolDocument[] {
       id: 'demo-doc-001-pharm',
       title: 'BRIGHTEN-2 — Pharmacy Manual v1.1',
       source: 'Demo supplemental PDF',
+      filename: 'brighten-2_pharmacy_manual_v1.1.pdf',
       created_at: addDays(-25),
       status: 'ready',
       extracted_fields: { protocol_number: 'BRIGHTEN-2' },
@@ -43,6 +46,7 @@ export function getDemoDocuments(): ProtocolDocument[] {
       id: 'demo-doc-002',
       title: 'CARDIAC-7 — Protocol v2.1',
       source: 'Demo protocol PDF',
+      filename: 'cardiac-7_protocol_v2.1.pdf',
       created_at: addDays(-18),
       status: 'ready',
       extracted_fields: {
@@ -56,6 +60,7 @@ export function getDemoDocuments(): ProtocolDocument[] {
       id: 'demo-doc-003',
       title: 'IMMUNE-14 — Protocol v1.0',
       source: 'Demo protocol PDF',
+      filename: 'immune-14_protocol_v1.0.pdf',
       created_at: addDays(-22),
       status: 'ready',
       extracted_fields: {
