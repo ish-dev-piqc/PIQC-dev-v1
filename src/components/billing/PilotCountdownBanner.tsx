@@ -11,7 +11,7 @@
 // =============================================================================
 
 import { useState } from 'react';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2, Sparkles, X } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useCheckout } from '../../hooks/useCheckout';
 import { useAuth } from '../../context/AuthContext';
@@ -19,6 +19,12 @@ import { useSubscription } from '../../hooks/useSubscription';
 import { useCheckoutRedirect } from '../../context/CheckoutRedirectContext';
 import { pilotStatus, pilotDaysRemaining } from '../../lib/entitlements';
 import { findProductByKind } from '../../stripe-config';
+
+// Snooze the banner for a day when the user dismisses it. We store the dismiss
+// timestamp (not a permanent '1' flag like PrefillAgentNote) so the nudge comes
+// back after 24h — enough to clear it for the day without losing the reminder.
+const SNOOZE_KEY = 'piq-pilot-banner-snoozed-v1';
+const SNOOZE_MS = 24 * 60 * 60 * 1000;
 
 export default function PilotCountdownBanner() {
   const { theme } = useTheme();
@@ -29,10 +35,27 @@ export default function PilotCountdownBanner() {
   const { setRedirecting } = useCheckoutRedirect();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [snoozed, setSnoozed] = useState<boolean>(() => {
+    try {
+      const ts = Number(localStorage.getItem(SNOOZE_KEY));
+      return ts > 0 && Date.now() - ts < SNOOZE_MS;
+    } catch {
+      return false;
+    }
+  });
 
   const status = pilotStatus(subscription);
-  if (status === 'none') return null;
+  if (status === 'none' || snoozed) return null;
   const daysLeft = pilotDaysRemaining(subscription);
+
+  const handleDismiss = () => {
+    try {
+      localStorage.setItem(SNOOZE_KEY, String(Date.now()));
+    } catch {
+      /* ignore — banner just re-renders next time, no infinite loop */
+    }
+    setSnoozed(true);
+  };
 
   const upgrade = findProductByKind('workspace_monthly');
 
@@ -106,6 +129,15 @@ export default function PilotCountdownBanner() {
       >
         {pending && <Loader2 size={12} className="animate-spin" />}
         Upgrade — $59 / month
+      </button>
+      <button
+        type="button"
+        onClick={handleDismiss}
+        aria-label="Dismiss for today"
+        title="Dismiss for today"
+        className="flex-shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md opacity-60 hover:opacity-100 transition-opacity"
+      >
+        <X size={14} />
       </button>
       {error && (
         <p className="mt-2 text-[11px] text-rose-600 basis-full">{error}</p>
