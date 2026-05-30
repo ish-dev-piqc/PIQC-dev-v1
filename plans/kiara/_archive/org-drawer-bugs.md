@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: org-drawer-bugs
-status: active
+status: merged
+merged: 2026-05-30
 started: 2026-05-30
-target_pr:
+target_pr: #182
 ---
 
 # Org drawer bugs — fix three failing calls + improve error rendering
