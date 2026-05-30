@@ -60,7 +60,23 @@ function err<T>(message: string): Result<T> {
 }
 
 function fail<T>(label: string, error: unknown): Result<T> {
-  const msg = error instanceof Error ? error.message : String(error);
+  // PostgrestError (and most Supabase error shapes) are plain objects with a
+  // .message field — they're not `instanceof Error`. The pre-existing impl
+  // would `String(error)` them to "[object Object]", which is what users saw
+  // rendered in the OrgSettingsDrawer banner. Unpack the message explicitly.
+  let msg: string;
+  if (error instanceof Error) {
+    msg = error.message;
+  } else if (
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error &&
+    typeof (error as { message: unknown }).message === 'string'
+  ) {
+    msg = (error as { message: string }).message;
+  } else {
+    msg = String(error);
+  }
   console.error(`[orgsApi] ${label}:`, error);
   return { ok: false, error: msg };
 }
@@ -126,25 +142,46 @@ export async function listOrgMembersWithProfile(
   orgId: string,
 ): Promise<Result<OrgMemberWithProfile[]>> {
   try {
-    const { data, error } = await supabase
+    // Can't use PostgREST's `user_profiles!inner(name)` embed: there's no
+    // direct FK between org_members and user_profiles (both link to
+    // auth.users.id but that's transitive, not a direct relationship).
+    // Two queries + client-side join.
+    const { data: members, error: membersErr } = await supabase
       .from('org_members')
-      .select('org_id, user_id, role, joined_at, user_profiles!inner(name)')
+      .select('org_id, user_id, role, joined_at')
       .eq('org_id', orgId);
-    if (error) throw error;
+    if (membersErr) throw membersErr;
+    if (!members || members.length === 0) return { ok: true, data: [] };
+
+    const userIds = (members as Array<{ user_id: string }>).map((m) => m.user_id);
+    const { data: profiles, error: profilesErr } = await supabase
+      .from('user_profiles')
+      .select('id, name')
+      .in('id', userIds);
+    if (profilesErr) throw profilesErr;
+
+    const nameByUserId = new Map<string, string>(
+      ((profiles ?? []) as Array<{ id: string; name: string | null }>).map((p) => [
+        p.id,
+        p.name ?? '(unknown user)',
+      ]),
+    );
 
     // user_profiles doesn't expose email — auth.users.email lives elsewhere.
-    // Future: pull from auth.users via an RPC.
-    const rows: OrgMemberWithProfile[] = (data ?? []).map((row) => {
-      const profile = Array.isArray(row.user_profiles) ? row.user_profiles[0] : row.user_profiles;
-      return {
-        org_id: row.org_id as string,
-        user_id: row.user_id as string,
-        role: row.role as OrgRole,
-        joined_at: row.joined_at as string,
-        name: (profile as { name: string } | null)?.name ?? '(unknown user)',
-        email: null,
-      };
-    });
+    // Future: pull from auth.users via a SECURITY DEFINER RPC if we need it.
+    const rows: OrgMemberWithProfile[] = (members as Array<{
+      org_id: string;
+      user_id: string;
+      role: string;
+      joined_at: string;
+    }>).map((m) => ({
+      org_id: m.org_id,
+      user_id: m.user_id,
+      role: m.role as OrgRole,
+      joined_at: m.joined_at,
+      name: nameByUserId.get(m.user_id) ?? '(unknown user)',
+      email: null,
+    }));
     return { ok: true, data: rows };
   } catch (e) {
     return fail('listOrgMembersWithProfile', e);
@@ -252,15 +289,20 @@ export async function acceptOrgInvite(
 }
 
 /** List the protocols owned by an org. Used by the invite form to let admins
- *  pick which protocols to add a new user to at invite time. */
+ *  pick which protocols to add a new user to at invite time.
+ *
+ *  Note: the DB columns are `study_number` and `title`; the `Protocol.code` /
+ *  `Protocol.name` TS fields are frontend aliases set elsewhere when protocols
+ *  load. We alias them here so the OrgProtocolSummary shape matches what
+ *  components expect without each caller having to remap. */
 export async function listProtocolsByOrg(
   orgId: string,
 ): Promise<Result<OrgProtocolSummary[]>> {
   const { data, error } = await supabase
     .from('protocols')
-    .select('id, code, name, sponsor')
+    .select('id, code:study_number, name:title, sponsor')
     .eq('owner_org_id', orgId)
-    .order('code', { ascending: true });
+    .order('study_number', { ascending: true });
 
   if (error) return err(error.message);
   return {
