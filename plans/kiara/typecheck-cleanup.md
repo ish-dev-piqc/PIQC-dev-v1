@@ -46,15 +46,16 @@ Ishika confirmed by audio that the `confidence_state` removal was deliberate ("I
 - `src/lib/visit-execution/visitExecutionExportApi.ts` — restore the `deriveVisitConfidence(packet.snapshot, filteredItems)` call at line 519, restore the "PIQC confidence: …" PDF rendering block. Restore `CONFIDENCE_SHORT_LABELS` / `deriveVisitConfidence` imports. Add the two new snapshot fields + per-item `confidence_state` to the demo-mode packet builder so demo exports show real values.
 - `src/lib/visit-execution/__tests__/visitExecutionExportApi.test.ts` — restore the Sprint 7 confidence-visibility test group. Update the test fixture's snapshot and items to include the new required fields (`confidence_state: 'high'` on fixture items as a sensible default; `confidence_state: null` + `completeness_signal_count: 0` on the snapshot to exercise the derived-from-items fallback).
 
-## Follow-up for Roger
+## RPC update — surfaced in this PR (was originally deferred)
 
-The export RPC (`supabase/migrations/20260617000000_visit_execution_export_rpc.sql`) doesn't currently return `confidence_state` / `completeness_signal_count` on the snapshot or `confidence_state` on per-item rows. With Story A's types in place, real-mode exports will compute confidence purely from undefined fallbacks (deriveVisitConfidence handles null snapshot confidence + null item confidence — see Sprint 4 decision-debt #2 in `deriveVisitConfidence.ts`). For richer confidence rollups in production, Roger should extend the RPC to populate:
+The export RPC `visit_execution_export_worksheet` in `supabase/migrations/20260617000000_visit_execution_export_rpc.sql` didn't previously populate the confidence fields. To make Story A end-to-end (types AND real-mode data flow), we add a new migration that `CREATE OR REPLACE`s the function with the same name + signature, extending the packet:
 
-- `confidence_state` (text, nullable) from `protocol_visit_templates.confidence_state`
-- `completeness_signal_count` (int, default 0) from the visit's pending completeness signals
-- Per-item `confidence_state` from `protocol_extracted_items.confidence_state`
+- `supabase/migrations/20260618001000_visit_execution_export_rpc_confidence_fields.sql` (NEW)
+  - `snapshot.confidence_state` ← `protocol_visit_templates.confidence_state` (NULL today; LLM passes populate it later)
+  - `snapshot.completeness_signal_count` ← `COUNT(*) FROM visit_completeness_signals WHERE visit_template_id = t.id AND resolution = 'pending'`
+  - Per-item `confidence_state` ← `protocol_extracted_items.confidence_state` via `LEFT JOIN` on `visit_requirements.extracted_item_id` (NULL when the requirement was created via signal promotion rather than ingest extraction)
 
-Tracked as a separate ticket; not blocking this PR.
+No new columns are added — both source columns already exist (`protocol_visit_templates.confidence_state` from `20260615000000_visit_templates_add_purpose.sql`; `protocol_extracted_items.confidence_state` pre-existing). This is purely a function-body change exposing already-stored data.
 
 ## Architecture layers touched
 
@@ -76,6 +77,7 @@ None.
 
 - `@karl-dev-piqc` — for the one-line `seenUnknownFieldTypes` Set declaration in `src/lib/audit/signalsApi.ts`. The file's existing inline comment documents the variable's intent; the fix restores what was clearly removed in an incomplete edit. Flag Karl on the PR.
 - `@ish-dev-piqc` — for the Visit Execution Story A fixes. Ishika confirmed by audio (2026-05-30) that her removal of `confidence_state` from `VisitWorksheetExportSnapshot` was deliberate ("I didn't want people to know we weren't very confident") and gave explicit latitude ("you can do whichever one feels right because I am working on that feature right now"). Kiara took the product call to restore the indicator: the Sprint 7 design ("the coordinator handing off the worksheet should KNOW PIQC's confidence") matches PIQC's review-first ethos, and hiding the signal while extraction confidence is being improved would treat a symptom. Flag Ishika on the PR — her in-progress rewrite can adjust further if she disagrees, but the restored types + render are additive over what she had.
+- `@rv61` — for the new export-RPC migration `20260618001000_visit_execution_export_rpc_confidence_fields.sql`. `supabase/migrations/` is Roger's domain. The migration is a pure `CREATE OR REPLACE` of an existing function with no schema additions and no removed fields — purely additive at the JSON level. Flag Roger on the PR.
 
 ## Design
 
