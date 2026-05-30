@@ -158,7 +158,7 @@ export function getProtocolColors(code: string | null | undefined): ProtocolColo
 // -----------------------------------------------------------------------------
 export function getProtocolColorsById(
   protocolId: string,
-  protocols: Protocol[],
+  protocols: ReadonlyArray<Pick<Protocol, 'id' | 'code'>>,
 ): ProtocolColors {
   const found = protocols.find((p) => p.id === protocolId);
   return getProtocolColors(found?.code ?? protocolId);

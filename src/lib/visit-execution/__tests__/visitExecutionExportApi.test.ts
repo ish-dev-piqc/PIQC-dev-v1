@@ -45,6 +45,8 @@ function makePacket(overrides: Partial<VisitWorksheetExportPacket> = {}): VisitW
       reviewed_count: 1,
       needs_review_count: 1,
       amendment_version: 'Amendment 2.1',
+      confidence_state: null,
+      completeness_signal_count: 0,
     },
     items: [
       {
@@ -65,6 +67,7 @@ function makePacket(overrides: Partial<VisitWorksheetExportPacket> = {}): VisitW
           { field_label: 'BP', field_type: 'number', units: 'mmHg', normal_range: null, is_required: true },
           { field_label: 'HR', field_type: 'number', units: 'bpm', normal_range: null, is_required: true },
         ],
+        confidence_state: 'high',
         traceability: {
           soa_column: 'V4',
           protocol_section: '7.2 Vital Signs',
@@ -94,6 +97,7 @@ function makePacket(overrides: Partial<VisitWorksheetExportPacket> = {}): VisitW
         ],
         timing: null,
         source_fields: [],
+        confidence_state: 'high',
         traceability: {
           soa_column: 'V4',
           protocol_section: '8.3 Safety',

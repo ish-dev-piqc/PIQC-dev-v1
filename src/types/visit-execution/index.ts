@@ -545,6 +545,12 @@ export interface VisitWorksheetExportRow {
   conditions: ConditionalRule[];
   timing: AssessmentTimingConstraint | null;
   source_fields: SourceFieldScaffold[];
+  /**
+   * Per-item confidence — feeds the deriveVisitConfidence rollup (when
+   * snapshot-level confidence is null) and the PDF's per-item confidence
+   * column per Sprint 7. Nullable until the export RPC populates it.
+   */
+  confidence_state: VisitConfidenceState | null;
   /** Subset of VisitItemTraceability — only the fields the worksheet renders. */
   traceability: {
     soa_column: string | null;
@@ -555,9 +561,22 @@ export interface VisitWorksheetExportRow {
 }
 
 /**
- * Trimmed snapshot for the exported worksheet. Excludes attention-chip
- * derivatives (completeness_signals, conditional_item_count, etc.) — those
- * are workspace affordances, not deliverable content.
+ * Trimmed snapshot for the exported worksheet. Excludes workspace-only
+ * attention-chip arrays (completeness_signals[], conditional rules, etc.)
+ * — those are workspace affordances, not deliverable content.
+ *
+ * KEEPS `confidence_state` (nullable) and `completeness_signal_count`:
+ *   - Sprint 7 surfaces a "PIQC confidence: <state>" label in the PDF; the
+ *     coordinator handing off the worksheet should KNOW the system's
+ *     confidence in the extraction, not have to guess. Hiding the indicator
+ *     because confidence is currently low would treat a symptom, not the
+ *     cause — the right fix is improving per-item extraction confidence
+ *     (in progress).
+ *   - `deriveVisitConfidence` (see src/lib/visit-execution/deriveVisitConfidence.ts)
+ *     trusts server-stamped `confidence_state` when present and otherwise
+ *     derives a pessimistic rollup from per-item confidence. Server-stamped
+ *     visit-level confidence is NULL until Sprint 7.5+; nullable here
+ *     matches that bridge state.
  */
 export interface VisitWorksheetExportSnapshot {
   visit_name: string;
@@ -572,6 +591,8 @@ export interface VisitWorksheetExportSnapshot {
   reviewed_count: number;
   needs_review_count: number;
   amendment_version: string | null;
+  confidence_state: VisitConfidenceState | null;
+  completeness_signal_count: number;
 }
 
 /**

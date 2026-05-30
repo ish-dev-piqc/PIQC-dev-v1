@@ -11,6 +11,7 @@ function makeProtocol(overrides: Partial<Protocol> = {}): Protocol {
     sponsor: 'Acme Pharma',
     phase: 'Phase 1',
     demoAnchorDate: null,
+    timezone: null,
     ...overrides,
   };
 }
@@ -21,9 +22,10 @@ function makeMember(overrides: Partial<SiteTeamMember> = {}): SiteTeamMember {
     protocol_id: 'p1',
     name: 'Test Member',
     role: 'COORDINATOR',
-    email: null,
+    email: '',
     delegated_tasks: [],
     certified_through: '2030-01-01',
+    added_at: '2026-01-01',
     status: 'ACTIVE',
     notes: null,
     ...overrides,
