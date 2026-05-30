@@ -26,6 +26,7 @@ Plus a meta-bug surfacing all three: `fail()` did `error instanceof Error ? erro
 
 - `src/lib/orgs/orgsApi.ts` — fix `fail()` to unpack PostgrestError; rewrite `listOrgMembersWithProfile` to two queries + client-side join; alias columns in `listProtocolsByOrg` to match the DB schema.
 - `supabase/migrations/20260619000000_list_org_invites_qualify_columns.sql` (NEW) — `CREATE OR REPLACE` the function with `org_members.role` qualified in the admin check. No schema change.
+- `supabase/migrations/20260619100000_accept_org_invite_drop_recreate.sql` (NEW) — DROP + CREATE `accept_org_invite` to handle the OUT-parameter-shape change from `20260618000900`. The previous migration's `CREATE OR REPLACE` fails on upgrade paths (`ERROR 42P13: cannot change return type`); this follow-up reinstalls the function with the new 4-column return shape. Function body identical.
 - `plans/kiara/org-drawer-bugs.md` — this file.
 
 ## Out of scope (files forbidden)
