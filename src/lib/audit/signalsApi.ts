@@ -87,6 +87,8 @@ const SOTR_FIELD_TYPE_LABELS: Record<string, string> = {
 // Module-level set; never drained. Bounded in practice by the SOTR
 // field_type enum size (5 values today, plus any drift), so this is a
 // log-once dedup not a leak.
+const seenUnknownFieldTypes = new Set<string>();
+
 /**
  * Maps a field_type value to its human label, or `null` for unknown /
  * missing values. Returning `null` (rather than a sentinel like "other")

@@ -221,6 +221,8 @@ function buildMockPacket(visitTemplateId: string): VisitWorksheetExportPacket | 
       reviewed_count: workspace.snapshot.reviewed_count,
       needs_review_count: workspace.snapshot.needs_review_count,
       amendment_version: workspace.snapshot.amendment_version,
+      confidence_state: workspace.snapshot.confidence_state,
+      completeness_signal_count: workspace.snapshot.completeness_signal_count,
     },
     items: workspace.items.map((item, idx) => ({
       id: item.id,
@@ -238,6 +240,7 @@ function buildMockPacket(visitTemplateId: string): VisitWorksheetExportPacket | 
       conditions: item.conditions,
       timing: item.timing,
       source_fields: item.source_fields,
+      confidence_state: item.confidence_state,
       traceability: {
         soa_column: item.traceability.soa_column,
         protocol_section: item.traceability.protocol_section,
@@ -516,6 +519,11 @@ export function buildVisitWorksheetPdf(
   // and again in the title block when the rollup is non-'high' (cognitive-
   // load discipline). Per-item confidence renders in the autotable column
   // below.
+  //
+  // Coordinator-facing intent (re-confirmed 2026-05-30): the coordinator
+  // handing off the worksheet should KNOW PIQC's confidence in the
+  // underlying extraction, not have to guess. Hiding the indicator while
+  // per-item confidence is improving would treat a symptom.
   const visitConfidence = deriveVisitConfidence(packet.snapshot, filteredItems);
 
   // `isFiltered` already implies `roleFilter !== 'all'`; second check

@@ -54,7 +54,7 @@ export interface VisitCrossReference {
   source_section: string;       // e.g. "7.4 Safety monitoring"
   snippet: string;              // verbatim passage that adds context
   page?: number;                // page number if known
-  document_id?: string;         // source doc; null = same doc that produced SoA
+  document_id?: string | null;  // source doc; null = same doc that produced SoA
   document_title?: string;      // populated frontend-side via documents join
 }
 
