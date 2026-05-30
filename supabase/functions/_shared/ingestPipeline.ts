@@ -606,7 +606,12 @@ export async function extractClinicalFields(
             "When extracting schedule_of_events, prefer the inline visit-description sections " +
             "(commonly numbered like '6.3.x Visit N (Week X, Day Y±Z)' or similar narrative " +
             "subsections under 'Study Procedures' / 'Visit Schedule') over the Schedule-of-" +
-            "Assessments (SoA) table for ± window notation.",
+            "Assessments (SoA) table for ± window notation.\n\n" +
+            "For each procedure in procedures_structured, set role_hint to the staff role " +
+            "responsible when the protocol states or clearly implies one (e.g. 'Coordinator', " +
+            "'Nurse', 'Phlebotomist', 'Pharmacist', 'Investigator', 'Lab'). Use null only when " +
+            "no role is stated or implied — do not guess. Accurate role_hint drives the " +
+            "role-filtered execution views downstream.",
         },
         settings: {
           citations: { enabled: true, numerical_confidence: false },
@@ -1454,7 +1459,11 @@ function pickVisitSectionText(entry: ScheduleEntry): string {
 function normalizeStructuredProcedures(raw: unknown): StructuredProcedureRaw[] {
   if (!Array.isArray(raw)) return [];
   return (raw as unknown[]).filter(
-    (x): x is StructuredProcedureRaw => !!x && typeof x === "object",
+    (x): x is StructuredProcedureRaw =>
+      !!x &&
+      typeof x === "object" &&
+      typeof (x as { label?: unknown }).label === "string" &&
+      (x as { label: string }).label.trim().length > 0,
   );
 }
 
@@ -1675,6 +1684,15 @@ async function persistVisitExecutionWorkspaces(
 
   if (visitsPayload.length === 0) return;
 
+  const proceduresInPayload = visitsPayload.reduce(
+    (n, v) =>
+      n +
+      (Array.isArray((v as { procedures?: unknown[] }).procedures)
+        ? (v as { procedures: unknown[] }).procedures.length
+        : 0),
+    0,
+  );
+
   const { data, error: rpcError } = await supabase.rpc(
     "visit_execution_persist_parsed_workspace",
     {
@@ -1686,6 +1704,19 @@ async function persistVisitExecutionWorkspaces(
   if (rpcError) {
     console.error("[ingest] vew_persist_rpc_failed", { error: rpcError.message });
     return;
+  }
+  // Surface the silent-empty case: the RPC "succeeded" but wrote no
+  // requirements despite a non-empty payload. Previously this read as a
+  // healthy ingest while Visit Prep stayed blank (the "no error, empty tab"
+  // symptom). Warn loudly so it lands in the function logs.
+  const requirementsWritten =
+    (data as { requirements_written?: number } | null)?.requirements_written ?? 0;
+  if (proceduresInPayload > 0 && requirementsWritten === 0) {
+    console.warn("[ingest] vew_persist_zero_requirements", {
+      protocol_id: args.protocolId,
+      procedures_in_payload: proceduresInPayload,
+      rpc_result: data,
+    });
   }
   console.log("[ingest] vew_persist_succeeded", { protocol_id: args.protocolId, result: data });
 }
@@ -2001,14 +2032,24 @@ export async function processIngestCompletion(
             source_document_id: docId,
           }));
 
-        if (rows.length > 0) {
+        // Dedup within the batch by (visit_name, study_day) BEFORE upsert.
+        // Postgres ON CONFLICT cannot affect the same row twice in one
+        // statement, so an input batch containing duplicate visits (Reducto
+        // sometimes emits repeated Schedule-of-Events rows) either errors or —
+        // across repeated ingests — multiplies templates (the 138-vs-21 bug).
+        // Collapse to one row per key (last occurrence wins) first.
+        const dedupedRows = Array.from(
+          new Map(rows.map((r) => [`${r.visit_name}|${r.study_day}`, r])).values(),
+        );
+
+        if (dedupedRows.length > 0) {
           const { error: tplError } = await supabase
             .from("protocol_visit_templates")
-            .upsert(rows, { onConflict: "protocol_id,visit_name,study_day" });
+            .upsert(dedupedRows, { onConflict: "protocol_id,visit_name,study_day" });
           if (tplError) {
             console.error("[ingest] template_upsert_failed", { error: tplError.message });
           } else {
-            result.templatesInserted = rows.length;
+            result.templatesInserted = dedupedRows.length;
 
             const { data: protoRow } = await supabase
               .from("protocols")

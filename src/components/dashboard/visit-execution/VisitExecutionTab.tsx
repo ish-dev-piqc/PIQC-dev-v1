@@ -822,6 +822,33 @@ export default function VisitExecutionTab() {
                 derivedConfidence={derivedVisitConfidence}
               />
 
+              {selectedWorkspace.items.length === 0 ? (
+                /* Visits loaded (templates exist) but no requirements were
+                   extracted — the per-visit execution items never got written
+                   to visit_requirements. Make this state honest + actionable
+                   instead of rendering a bare 0-item checklist that reads as
+                   "broken". */
+                <div
+                  data-testid="vew-no-requirements"
+                  className={`rounded-lg border px-4 py-6 text-center ${
+                    isLight
+                      ? 'bg-[#FFFBEB] border-[#FDE68A]'
+                      : 'bg-[#422006]/40 border-[#854D0E]'
+                  }`}
+                >
+                  <FlaskConical size={18} className="mx-auto text-fg-muted mb-2" aria-hidden />
+                  <p className="text-fg-heading text-sm font-semibold mb-1">
+                    Requirements not extracted yet for this visit
+                  </p>
+                  <p className="text-fg-sub text-xs leading-relaxed max-w-md mx-auto">
+                    The protocol&rsquo;s visit schedule loaded, but the per-visit
+                    execution requirements (procedures, roles, timing) haven&rsquo;t
+                    been generated. Re-ingest this protocol from the Protocol tab so
+                    the parser extracts requirements from the source document.
+                  </p>
+                </div>
+              ) : (
+                <>
               {selectedWorkspace.snapshot.completeness_signals.length > 0 && (
                 <CompletenessSignalsPanel
                   signals={selectedWorkspace.snapshot.completeness_signals}
@@ -909,6 +936,8 @@ export default function VisitExecutionTab() {
                   filteredCount={roleFilteredCount}
                 />
               </div>
+                </>
+              )}
             </>
           ) : (
             <p className="text-fg-sub text-sm">Select a visit on the left to begin.</p>
