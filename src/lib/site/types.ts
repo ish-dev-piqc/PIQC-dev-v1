@@ -134,6 +134,7 @@ export interface ProtocolDocument {
   id: string;
   title: string;
   source: string;
+  filename: string | null;
   created_at: string;
   status: string;
   extracted_fields: Record<string, unknown> | null;

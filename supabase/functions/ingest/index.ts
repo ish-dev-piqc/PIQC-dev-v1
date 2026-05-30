@@ -124,7 +124,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.json();
-    const { title, source, content, pdf_base64, protocol_id } = body;
+    const { title, source, filename, content, pdf_base64, protocol_id } = body;
 
     const callerProtocolId =
       typeof protocol_id === "string" && protocol_id.length > 0 ? protocol_id : null;
@@ -190,7 +190,8 @@ Deno.serve(async (req: Request) => {
         .from("documents")
         .insert({
           title: title ?? "",
-          source: source ?? "",
+          source: source ?? "Protocol upload",
+          filename: filename ?? null,
           user_id: userId,
           content_hash: contentHash,
           ...(callerProtocolId ? { protocol_id: callerProtocolId } : {}),

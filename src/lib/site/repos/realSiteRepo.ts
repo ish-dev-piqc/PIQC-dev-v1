@@ -423,7 +423,7 @@ async function fetchProtocolDocuments(protocolId: string): Promise<Result<Protoc
   try {
     const { data, error } = await supabase
       .from('documents')
-      .select('id, title, source, created_at, status, extracted_fields')
+      .select('id, title, source, filename, created_at, status, extracted_fields')
       .eq('protocol_id', protocolId)
       .eq('status', 'ready')
       .order('created_at', { ascending: false });
