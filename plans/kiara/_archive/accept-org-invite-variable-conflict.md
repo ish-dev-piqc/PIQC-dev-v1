@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: accept-org-invite-variable-conflict
-status: active
+status: merged
+merged: 2026-05-31
 started: 2026-05-30
-target_pr:
+target_pr: #194
 ---
 
 # `accept_org_invite` — add `#variable_conflict use_column` directive
