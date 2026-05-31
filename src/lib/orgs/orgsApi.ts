@@ -321,6 +321,15 @@ export async function listOrgInvites(orgId: string): Promise<Result<OrgInvite[]>
   }
 }
 
+/** Revoke a pending org invite. RLS (`org_invites_admin_all`) requires the
+ *  caller to be an admin of the inviting org. Hard delete — invite tokens
+ *  are operational state, not audit-bearing. */
+export async function revokeOrgInvite(inviteId: string): Promise<Result<void>> {
+  const { error } = await supabase.from('org_invites').delete().eq('id', inviteId);
+  if (error) return err(error.message);
+  return { ok: true, data: undefined };
+}
+
 /** Build a shareable invite URL from a token.
  *
  *  Uses Vite's configured `BASE_URL` so the link always points at the app

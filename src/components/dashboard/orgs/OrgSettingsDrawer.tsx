@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X, UserPlus, Crown, User as UserIcon, Trash2, Copy, Check, AlertTriangle } from 'lucide-react';
+import { X, UserPlus, Crown, User as UserIcon, Trash2, Copy, Check, AlertTriangle, XCircle } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useOverlay } from '../../../hooks/useOverlay';
 import { useDemoMode } from '../../../context/DemoModeContext';
@@ -12,6 +12,7 @@ import {
   listOrgMembersWithProfile,
   listProtocolsByOrg,
   removeOrgMember,
+  revokeOrgInvite,
   updateOrgMemberRole,
 } from '../../../lib/orgs/orgsApi';
 import type {
@@ -190,6 +191,16 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
     } catch {
       /* ignore */
     }
+  };
+
+  const handleRevokeInvite = async (invite: OrgInvite) => {
+    if (!window.confirm(`Cancel the pending invite to ${invite.email}?`)) return;
+    const result = await revokeOrgInvite(invite.id);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    refresh();
   };
 
   const bg = isLight ? 'bg-white' : 'bg-[#0F172A]';
@@ -392,10 +403,16 @@ export default function OrgSettingsDrawer({ onClose }: OrgSettingsDrawerProps) {
                               <p className={`${headingColor} text-sm truncate`}>{inv.email}</p>
                               <p className={`${mutedColor} text-[11px]`}>{inv.role} · expires {new Date(inv.expires_at).toLocaleDateString()}</p>
                             </div>
-                            <button type="button" onClick={() => copyInviteUrl(inv.token)} className={`inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded ${isLight ? 'text-brand-600 hover:bg-brand-600/[0.06]' : 'text-brand-300 hover:bg-white/[0.04]'}`}>
-                              {copiedToken === inv.token ? <Check size={11} /> : <Copy size={11} />}
-                              {copiedToken === inv.token ? 'Copied' : 'Copy link'}
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button type="button" onClick={() => copyInviteUrl(inv.token)} className={`inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded ${isLight ? 'text-brand-600 hover:bg-brand-600/[0.06]' : 'text-brand-300 hover:bg-white/[0.04]'}`}>
+                                {copiedToken === inv.token ? <Check size={11} /> : <Copy size={11} />}
+                                {copiedToken === inv.token ? 'Copied' : 'Copy link'}
+                              </button>
+                              <button type="button" onClick={() => handleRevokeInvite(inv)} className={`inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded ${isLight ? 'text-red-600 hover:bg-red-500/[0.06]' : 'text-red-400 hover:bg-red-500/[0.08]'}`} aria-label={`Cancel invite to ${inv.email}`}>
+                                <XCircle size={11} />
+                                Cancel
+                              </button>
+                            </div>
                           </li>
                         ))}
                       </ul>
