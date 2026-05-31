@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useMode, type DashboardMode } from '../context/ModeContext';
 import { useProtocol } from '../context/ProtocolContext';
+import { useOrg } from '../context/OrgContext';
 import { useAudit } from '../context/AuditContext';
 import { useHeatmap } from '../context/HeatmapContext';
 import { useDemoMode } from '../context/DemoModeContext';
@@ -11,6 +12,7 @@ import { getProtocolColors } from '../lib/site/protocolColors';
 import OrgSettingsDrawer from './dashboard/orgs/OrgSettingsDrawer';
 import MembersDrawer from './dashboard/orgs/MembersDrawer';
 import OrgSwitcher from './dashboard/orgs/OrgSwitcher';
+import RequestAccessButton from './dashboard/orgs/RequestAccessButton';
 import ProtocolUploadModal from './dashboard/site/ProtocolUploadModal';
 import type { AuditStage } from '../types/audit';
 import type { AppView } from '../App';
@@ -44,6 +46,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
   const { theme, toggleTheme } = useTheme();
   const { mode, setMode } = useMode();
   const { protocols, isLoading: protocolsLoading, activeProtocol, setActiveProtocol } = useProtocol();
+  const { myProtocolIds, myOrgs } = useOrg();
   const { audits, activeAudit, setActiveAudit } = useAudit();
   const { demoActive, setDemoActive, canUseDemo } = useDemoMode();
 
@@ -220,55 +223,110 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
             <div className={`px-3 py-3 text-[11px] ${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/50'}`}>
               No protocols yet. Upload one to get started.
             </div>
-          ) : protocols.map((p) => {
-            const active = !isHomeScope && p.id === activeProtocol.id;
-            const colors = getProtocolColors(p.code);
+          ) : (() => {
+            // Split visible protocols into ones the user can access (explicit
+            // member OR site admin of any org — coarse v1 rule that breaks
+            // for multi-org admin/member splits) and ones they can only see
+            // metadata for (eligible for a "Request access" affordance).
+            const isAnyOrgAdmin = myOrgs.some((o) => o.my_role === 'admin');
+            const mine = isAnyOrgAdmin
+              ? protocols
+              : protocols.filter((p) => myProtocolIds.has(p.id));
+            const available = isAnyOrgAdmin
+              ? []
+              : protocols.filter((p) => !myProtocolIds.has(p.id));
+
             return (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => {
-                  setActiveProtocol(p);
-                  setProtocolMenuOpen(false);
-                }}
-                className={`w-full text-left px-3 py-2.5 transition-colors ${
-                  active
-                    ? isLight
-                      ? 'bg-brand-600/10'
-                      : 'bg-brand-600/15'
-                    : isLight
-                    ? 'hover:bg-[#0F172A]/[0.04]'
-                    : 'hover:bg-white/[0.04]'
-                }`}
-                role="option"
-                aria-selected={active}
-              >
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                      isLight ? colors.dotLight : colors.dotDark
-                    }`}
-                  />
-                  <div
-                    className={`text-xs font-semibold ${
-                      active
-                        ? isLight
-                          ? 'text-brand-600'
-                          : 'text-brand-300'
-                        : isLight
-                        ? 'text-[#0F172A]'
-                        : 'text-white'
-                    }`}
-                  >
-                    {p.code}
-                  </div>
-                </div>
-                <div className={`text-[11px] mt-0.5 ml-4 truncate ${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'}`}>
-                  {p.sponsor} · {p.phase}
-                </div>
-              </button>
+              <>
+                {mine.map((p) => {
+                  const active = !isHomeScope && p.id === activeProtocol.id;
+                  const colors = getProtocolColors(p.code);
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveProtocol(p);
+                        setProtocolMenuOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-2.5 transition-colors ${
+                        active
+                          ? isLight
+                            ? 'bg-brand-600/10'
+                            : 'bg-brand-600/15'
+                          : isLight
+                          ? 'hover:bg-[#0F172A]/[0.04]'
+                          : 'hover:bg-white/[0.04]'
+                      }`}
+                      role="option"
+                      aria-selected={active}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                            isLight ? colors.dotLight : colors.dotDark
+                          }`}
+                        />
+                        <div
+                          className={`text-xs font-semibold ${
+                            active
+                              ? isLight
+                                ? 'text-brand-600'
+                                : 'text-brand-300'
+                              : isLight
+                              ? 'text-[#0F172A]'
+                              : 'text-white'
+                          }`}
+                        >
+                          {p.code}
+                        </div>
+                      </div>
+                      <div className={`text-[11px] mt-0.5 ml-4 truncate ${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'}`}>
+                        {p.sponsor} · {p.phase}
+                      </div>
+                    </button>
+                  );
+                })}
+                {available.length > 0 && (
+                  <>
+                    <div className={`px-3 py-2 border-y ${isLight ? 'border-[#E2E8F0] bg-[#F8FAFC]' : 'border-white/[0.06] bg-white/[0.02]'}`}>
+                      <p className={`text-[10px] uppercase tracking-wider font-semibold ${isLight ? 'text-[#334155]/40' : 'text-[#CBD5E1]/35'}`}>
+                        Available in your org
+                      </p>
+                    </div>
+                    {available.map((p) => {
+                      const colors = getProtocolColors(p.code);
+                      return (
+                        <div
+                          key={p.id}
+                          className={`px-3 py-2.5 flex items-start justify-between gap-3 ${isLight ? 'hover:bg-[#0F172A]/[0.02]' : 'hover:bg-white/[0.02]'}`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`w-2 h-2 rounded-full flex-shrink-0 opacity-60 ${
+                                  isLight ? colors.dotLight : colors.dotDark
+                                }`}
+                              />
+                              <div className={`text-xs font-semibold ${isLight ? 'text-[#334155]/70' : 'text-[#CBD5E1]/60'}`}>
+                                {p.code}
+                              </div>
+                            </div>
+                            <div className={`text-[11px] mt-0.5 ml-4 truncate ${isLight ? 'text-[#334155]/45' : 'text-[#CBD5E1]/35'}`}>
+                              {p.sponsor} · {p.phase}
+                            </div>
+                          </div>
+                          <div className="flex-shrink-0">
+                            <RequestAccessButton protocolId={p.id} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+              </>
             );
-          })}
+          })()}
           <div className={`border-t ${isLight ? 'border-[#E2E8F0]' : 'border-white/[0.06]'}`}>
             {!isHomeScope && (
               <button

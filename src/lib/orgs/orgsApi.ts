@@ -362,6 +362,27 @@ export function buildInviteUrl(token: string): string {
 // Protocol members
 // ===========================================================================
 
+/** Return the set of protocol_ids the current user is an explicit member of.
+ *  Used by the Navbar protocol picker to split "Your protocols" vs
+ *  "Available in your org". Site admins access protocols via clause (d) of
+ *  user_can_access_protocol without a protocol_members row; the picker
+ *  handles that case separately by checking org admin status. */
+export async function listMyProtocolMemberships(): Promise<Result<string[]>> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return err('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('protocol_members')
+    .select('protocol_id')
+    .eq('user_id', user.id);
+
+  if (error) return err(error.message);
+  return {
+    ok: true,
+    data: ((data ?? []) as Array<{ protocol_id: string }>).map((r) => r.protocol_id),
+  };
+}
+
 export async function listProtocolMembers(
   protocolId: string,
 ): Promise<Result<ProtocolMember[]>> {

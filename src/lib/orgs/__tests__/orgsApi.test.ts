@@ -59,6 +59,7 @@ describe('orgsApi public surface', () => {
   it('exports the protocol-members helpers', async () => {
     const m = await import('../orgsApi');
     expect(typeof m.listProtocolMembers).toBe('function');
+    expect(typeof m.listMyProtocolMemberships).toBe('function');
     expect(typeof m.addProtocolMember).toBe('function');
     expect(typeof m.updateProtocolMemberRole).toBe('function');
     expect(typeof m.removeProtocolMember).toBe('function');
