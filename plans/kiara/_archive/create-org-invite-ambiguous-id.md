@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: create-org-invite-ambiguous-id
-status: active
+status: merged
+merged: 2026-05-31
 started: 2026-05-30
-target_pr:
+target_pr: #190
 ---
 
 # `create_org_invite` ambiguous column fix
