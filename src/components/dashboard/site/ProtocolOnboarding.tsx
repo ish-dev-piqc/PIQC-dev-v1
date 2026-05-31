@@ -69,7 +69,9 @@ export default function ProtocolOnboarding({ onTabChange }: ProtocolOnboardingPr
     countWorksheetItemsForStudy(firstProtocol.id)
       .then((count) => {
         if (cancelled) return;
-        if (count.awaitingReview > 0) onTabChange('protocol');
+        // Protocol is now a drawer inside Visit Prep; land there so the
+        // Protocol button's awaiting-review badge surfaces the parsed items.
+        if (count.awaitingReview > 0) onTabChange('visit-execution');
       })
       .catch(() => {
         // Swallow — defaults to Today, no user impact. The Dashboard gate

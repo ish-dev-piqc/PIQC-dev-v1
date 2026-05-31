@@ -22,7 +22,8 @@
 //   ║    - ELSE pending completeness_signal_count > 0    → 'medium'          ║
 //   ║      (gaps suggest moderate confidence)                                ║
 //   ║    - ELSE ANY item with confidence_state='medium'  → 'medium'          ║
-//   ║    - ELSE (all items 'high' or null, no signals)   → 'high'            ║
+//   ║    - ELSE ALL items null (never confidence-checked) → 'needs_review'   ║
+//   ║    - ELSE (≥1 real 'high', rest high/null, no sigs) → 'high'           ║
 //   ║                                                                        ║
 //   ║  EMPTY items list (legacy / mock / parser-gap)     → 'needs_review'    ║
 //   ╚════════════════════════════════════════════════════════════════════════╝
@@ -71,9 +72,13 @@ export function deriveVisitConfidence(
   }
 
   // 3. Pessimistic "weakest link" scan. Tracks the lowest-confidence flag
-  //    seen; later checks override earlier ones in severity order.
+  //    seen; later checks override earlier ones in severity order. Also tracks
+  //    whether ANY item carried a real (non-null) confidence — a visit whose
+  //    items are all null was never confidence-checked, so it has no basis to
+  //    claim 'high'.
   let sawLow = false;
   let sawMedium = false;
+  let sawAnyConfidence = false;
   for (const item of items) {
     const c = item.confidence_state;
     if (c === 'needs_review') {
@@ -82,10 +87,14 @@ export function deriveVisitConfidence(
     }
     if (c === 'low') {
       sawLow = true;
+      sawAnyConfidence = true;
     } else if (c === 'medium') {
       sawMedium = true;
+      sawAnyConfidence = true;
+    } else if (c === 'high') {
+      sawAnyConfidence = true;
     }
-    // 'high' and null don't degrade the rollup further.
+    // null doesn't degrade the rollup, but it also doesn't earn 'high'.
   }
 
   if (sawLow) return 'low';
@@ -98,6 +107,15 @@ export function deriveVisitConfidence(
   }
 
   if (sawMedium) return 'medium';
+
+  // 5. No server stamp, no completeness signals, and not a single item carried
+  //    a real confidence value → the visit was never confidence-checked.
+  //    Be honest (needs_review) rather than claiming a false 'high'. Matched
+  //    RPC visits hit step 1 (server-stamped) so this only catches truly
+  //    unscored visits (legacy / parser-gap / unmatched).
+  if (!sawAnyConfidence) {
+    return 'needs_review';
+  }
 
   return 'high';
 }

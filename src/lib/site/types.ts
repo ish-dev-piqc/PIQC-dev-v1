@@ -58,6 +58,11 @@ export interface VisitCrossReference {
   document_title?: string;      // populated frontend-side via documents join
 }
 
+// Reducto/SOTR extraction confidence for the visit, inherited from the source
+// protocol_visit_templates row. Mirrors the SOTR confidence_state enum but kept
+// site-local per mode-isolation (no cross-mode import).
+export type SiteVisitConfidence = 'high' | 'medium' | 'low' | 'needs_review';
+
 export interface SiteVisit {
   id: string;
   date: string;             // yyyy-mm-dd
@@ -72,6 +77,9 @@ export interface SiteVisit {
   priorNote?: string;
   deviationReason?: string;
   crossReferences?: VisitCrossReference[];  // Phase B — joined from template
+  // Extraction confidence from the source template (populated at ingest from
+  // the matching SOTR visit item). undefined when no template/confidence.
+  confidenceState?: SiteVisitConfidence;
 }
 
 // -----------------------------------------------------------------------------

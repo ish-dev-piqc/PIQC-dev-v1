@@ -3,13 +3,12 @@ import { MessageSquare, LayoutDashboard, Activity, FileText, Database, UserCircl
 import DashboardChat from './DashboardChat';
 import KnowledgeBase from './KnowledgeBase';
 import TodayTab from './site/TodayTab';
-import AskTab from './site/AskTab';
+import AskRail from './site/AskRail';
 import ParticipantsTab from './site/ParticipantsTab';
 import VisitsTab from './site/VisitsTab';
 import TeamTab from './site/TeamTab';
 import DemoBanner from './site/DemoBanner';
 import ReportsTab from './site/ReportsTab';
-import ProtocolTab from './site/ProtocolTab';
 import ProtocolRequiredGate from './site/ProtocolRequiredGate';
 import ProtocolOnboarding from './site/ProtocolOnboarding';
 import VisitExecutionTab from './visit-execution/VisitExecutionTab';
@@ -17,7 +16,6 @@ import AuditWorkspaceShell from './audit/AuditWorkspaceShell';
 import { useTheme } from '../../context/ThemeContext';
 import { useMode } from '../../context/ModeContext';
 import { useProtocol } from '../../context/ProtocolContext';
-import { countWorksheetItemsForStudy } from '../../lib/sotr/sourceEvidenceApi';
 import { supabase, type ChatMessage, type RagStatus } from '../../lib/supabase';
 import { TIMEZONE_OPTIONS } from '../../lib/timezones';
 import { useAuth } from '../../context/AuthContext';
@@ -43,9 +41,7 @@ export type DashboardTab =
   | 'overview'           // legacy alias; redirects to 'visit-execution' via the fallback effect
   | 'participants'
   | 'visits'
-  | 'protocol'
   | 'team'
-  | 'ask'
   // Shared
   | 'reports'
   | 'settings';
@@ -65,9 +61,7 @@ const SITE_TABS: TabConfig[] = [
   { id: 'today', label: 'Today', icon: LayoutDashboard },
   { id: 'participants', label: 'Participants', icon: Users },
   { id: 'visits', label: 'Visits', icon: CalendarCheck },
-  { id: 'protocol', label: 'Protocol', icon: Database },
   { id: 'team', label: 'Team', icon: UserCog },
-  { id: 'ask', label: 'Ask', icon: MessageSquare },
   { id: 'reports', label: 'Reports', icon: FileText },
 ];
 
@@ -672,13 +666,9 @@ export default function Dashboard({
   const [chatSelectedDocIds, setChatSelectedDocIds] = useState<string[]>([]);
   const { theme } = useTheme();
   const { mode } = useMode();
-  const { protocols, isLoading: protocolsLoading, activeProtocol } = useProtocol();
+  const { protocols, isLoading: protocolsLoading } = useProtocol();
   const isLight = theme === 'light';
 
-  // Awaiting-review count for the Protocol-tab badge. Refreshes when the
-  // active protocol changes or the user navigates away from Protocol tab
-  // (after a review session, the count drops and the badge updates).
-  const [awaitingReviewCount, setAwaitingReviewCount] = useState(0);
   const resolvedActiveTab = activeTab ?? internalActiveTab;
   const resolvedSettingsSection = settingsSection ?? internalSettingsSection;
 
@@ -697,33 +687,6 @@ export default function Dashboard({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, resolvedActiveTab]);
-
-  // Fetch the awaiting-review count for the active Site Mode protocol so the
-  // Protocol tab in the bar can show a badge. Re-runs on protocol switch and
-  // when the user navigates away from the Protocol tab (typical scenario:
-  // they reviewed some items, switch to Today, badge updates to the new count).
-  //
-  // Depending on activeProtocol?.id rather than the object itself: ProtocolContext
-  // recomputes the object via protocols.find() each render, so the object identity
-  // changes even when the protocol hasn't — the id is the stable signal.
-  const activeProtocolId = activeProtocol?.id ?? null;
-  useEffect(() => {
-    if (mode !== 'site' || !activeProtocolId) {
-      setAwaitingReviewCount(0);
-      return;
-    }
-    let cancelled = false;
-    countWorksheetItemsForStudy(activeProtocolId)
-      .then((c) => {
-        if (!cancelled) setAwaitingReviewCount(c.awaitingReview);
-      })
-      .catch(() => {
-        if (!cancelled) setAwaitingReviewCount(0);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [mode, activeProtocolId, resolvedActiveTab]);
 
   const pageBg = isLight ? 'bg-[#F8FAFC]' : 'bg-[#020617]';
   const tabBarBg = isLight ? 'border-[#E2E8F0] bg-[#F8FAFC]/80' : 'border-white/5 bg-[#020617]/80';
@@ -783,27 +746,10 @@ export default function Dashboard({
             <VisitsTab />
           </ProtocolRequiredGate>
         );
-      case 'protocol':
-        return (
-          <ProtocolRequiredGate label="Protocol">
-            <ProtocolTab />
-          </ProtocolRequiredGate>
-        );
       case 'team':
         return (
           <ProtocolRequiredGate label="Team">
             <TeamTab />
-          </ProtocolRequiredGate>
-        );
-      case 'ask':
-        return (
-          <ProtocolRequiredGate label="Ask">
-            <AskTab
-              messages={chatMessages}
-              setMessages={setChatMessages}
-              selectedDocIds={chatSelectedDocIds}
-              setSelectedDocIds={setChatSelectedDocIds}
-            />
           </ProtocolRequiredGate>
         );
       // Shared
@@ -879,8 +825,6 @@ export default function Dashboard({
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = resolvedActiveTab === tab.id;
-              const showAwaitingBadge =
-                mode === 'site' && tab.id === 'protocol' && awaitingReviewCount > 0;
               return (
                 <button
                   key={tab.id}
@@ -894,15 +838,6 @@ export default function Dashboard({
                 >
                   <Icon size={15} className={isActive ? 'text-brand-300' : ''} />
                   {tab.label}
-                  {showAwaitingBadge && (
-                    <span
-                      data-testid="protocol-tab-awaiting-badge"
-                      className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-semibold rounded-full border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/[0.08] dark:text-amber-300"
-                      title={`${awaitingReviewCount} parsed item${awaitingReviewCount === 1 ? '' : 's'} awaiting review`}
-                    >
-                      {awaitingReviewCount}
-                    </span>
-                  )}
                 </button>
               );
             })}
@@ -910,10 +845,16 @@ export default function Dashboard({
         </div>
       </div>
 
-      <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 flex flex-col" style={{ minHeight: 0 }}>
-        <div className={`flex-1 ${panelBg} border rounded-2xl overflow-hidden flex flex-col`} style={{ minHeight: 0 }}>
-          {renderContent()}
+      {/* Content row: main pane (centered) + the always-present Ask rail on the
+          right. The rail is mounted once here so the conversation survives tab
+          switches; it manages its own collapsed/expanded + per-protocol thread. */}
+      <div className="flex-1 flex flex-row min-h-0 overflow-hidden">
+        <div className="flex-1 min-w-0 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 flex flex-col" style={{ minHeight: 0 }}>
+          <div className={`flex-1 ${panelBg} border rounded-2xl overflow-hidden flex flex-col`} style={{ minHeight: 0 }}>
+            {renderContent()}
+          </div>
         </div>
+        <AskRail />
       </div>
     </div>
   );

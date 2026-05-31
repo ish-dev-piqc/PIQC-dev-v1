@@ -128,8 +128,8 @@ export default function TimingBanner({ snapshot }: Props) {
             aria-hidden
           />
           <p className={`text-xs leading-relaxed ${valueTone}`}>
-            Safety-critical items at this visit. Vital sign and AE timing
-            windows must be met — see item-level timing on the checklist.
+            This visit has safety-critical items. Vital-sign and AE timing
+            windows must be met — see per-item timing on the checklist.
           </p>
         </div>
       )}

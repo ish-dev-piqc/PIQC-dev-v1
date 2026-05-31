@@ -23,6 +23,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { mapReductoExtractToSotr } from "./sourceEvidenceAdapter.ts";
+import { dedupeVisitTemplateRowsByQuality } from "./visitTemplateDedup.ts";
 import type { ReductoExtractResponse } from "./sotrTypes.ts";
 
 // -----------------------------------------------------------------------------
@@ -1472,6 +1473,15 @@ async function buildPersistPayloadForVisit(
   entry: ScheduleEntry,
   llmGaps: DetectedGap[],
   purpose: string | null,
+  // Visit-level link back to the deduped, citation-backed protocol_extracted_items
+  // row (field_type='visit') that the Protocol tab renders. Populating these is
+  // what gives Visit Prep the same confidence + source evidence as Protocol:
+  // the persist RPC stamps confidence_state onto the template and extracted_item_id
+  // onto every requirement, and visit_execution_get_workspace reads confidence
+  // back through that FK. NULL when no matching visit item exists (degrades to
+  // the prior null-confidence behaviour — no regression).
+  extractedItemId: string | null,
+  confidenceState: string | null,
 ): Promise<Record<string, unknown>> {
   const structuredProcs = normalizeStructuredProcedures(entry.procedures_structured);
 
@@ -1554,6 +1564,7 @@ async function buildPersistPayloadForVisit(
           conditional_rules: conditionalRules,
           timing_rule: timingRule,
           source_fields: sourceFields,
+          extracted_item_id: extractedItemId,
         };
       }),
     );
@@ -1579,6 +1590,7 @@ async function buildPersistPayloadForVisit(
             conditional_rules: [],
             timing_rule: null,
             source_fields: [],
+            extracted_item_id: extractedItemId,
           };
         }),
     );
@@ -1589,12 +1601,23 @@ async function buildPersistPayloadForVisit(
   return {
     visit_template_id: visitTemplateId,
     purpose,
-    // confidence_state: NULL on first ingest — extraction-pipeline confidence
-    // not yet wired through Reducto's per-field confidence. Sprint 4 follow-up.
-    confidence_state: null,
+    // Inherited from the matching SOTR visit extracted_item (Reducto citation
+    // confidence). NULL when unmatched — never silently "high".
+    confidence_state: confidenceState,
     procedures: proceduresPayload,
     completeness_signals: llmGaps,
   };
+}
+
+// Mirrors the SOTR adapter's normalizeVisitName so the visit→confidence map
+// keys line up with how protocol_extracted_items grouped visits at dedup time.
+function normalizeVisitNameKey(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+export interface VisitConfidenceLink {
+  extractedItemId: string | null;
+  confidenceState: string | null;
 }
 
 async function persistVisitExecutionWorkspaces(
@@ -1603,6 +1626,10 @@ async function persistVisitExecutionWorkspaces(
     protocolId: string;
     schedule: ScheduleEntry[];
     openaiKey: string;
+    // visit_name (normalized) → the deduped, citation-backed visit extracted_item.
+    // Lets each requirement link back to its source item and inherit the same
+    // confidence the Protocol tab shows. Empty map = prior null-confidence behaviour.
+    confidenceByVisitName: Map<string, VisitConfidenceLink>;
   },
 ): Promise<void> {
   if (args.schedule.length === 0) return;
@@ -1679,7 +1706,20 @@ async function persistVisitExecutionWorkspaces(
       }),
     ]);
 
-    visitsPayload.push(await buildPersistPayloadForVisit(tpl.id, entry, gaps, purpose));
+    const conf =
+      typeof entry.visit_name === "string"
+        ? args.confidenceByVisitName.get(normalizeVisitNameKey(entry.visit_name))
+        : undefined;
+    visitsPayload.push(
+      await buildPersistPayloadForVisit(
+        tpl.id,
+        entry,
+        gaps,
+        purpose,
+        conf?.extractedItemId ?? null,
+        conf?.confidenceState ?? null,
+      ),
+    );
   }
 
   if (visitsPayload.length === 0) return;
@@ -1848,6 +1888,42 @@ export async function processIngestCompletion(
         document_id: docId,
         items_upserted: result.sotrItemsUpserted,
       });
+    }
+
+    // ---------------------------------------------------------------------
+    // 3b. Load the deduped, citation-backed visit items we just persisted.
+    // These are the SAME rows the Protocol tab renders (field_type='visit',
+    // one winning item per visit after dedupeVisitArray, with Reducto citation
+    // confidence). The visit-template + visit-execution layers below link to
+    // them so Visit Prep inherits Protocol-grade confidence + source evidence
+    // instead of defaulting to a false 'high'. Keyed by normalized visit_name.
+    // ---------------------------------------------------------------------
+    const visitConfidenceByName = new Map<string, VisitConfidenceLink>();
+    {
+      const { data: visitItems, error: vErr } = await supabase
+        .from("protocol_extracted_items")
+        .select("id, confidence_state, extracted_value")
+        .eq("document_id", docId)
+        .eq("field_type", "visit");
+      if (vErr) {
+        console.warn("[ingest] visit_confidence_load_failed", { error: vErr.message });
+      } else {
+        for (const it of (visitItems ?? []) as Array<{
+          id: string;
+          confidence_state: string | null;
+          extracted_value: { visit_name?: unknown } | null;
+        }>) {
+          const vn =
+            it.extracted_value && typeof it.extracted_value.visit_name === "string"
+              ? it.extracted_value.visit_name
+              : "";
+          if (!vn) continue;
+          visitConfidenceByName.set(normalizeVisitNameKey(vn), {
+            extractedItemId: it.id,
+            confidenceState: it.confidence_state,
+          });
+        }
+      }
     }
 
     // ---------------------------------------------------------------------
@@ -2037,10 +2113,13 @@ export async function processIngestCompletion(
         // statement, so an input batch containing duplicate visits (Reducto
         // sometimes emits repeated Schedule-of-Events rows) either errors or —
         // across repeated ingests — multiplies templates (the 138-vs-21 bug).
-        // Collapse to one row per key (last occurrence wins) first.
-        const dedupedRows = Array.from(
-          new Map(rows.map((r) => [`${r.visit_name}|${r.study_day}`, r])).values(),
-        );
+        //
+        // Quality-winner selection (not last-occurrence-wins): when the same
+        // (visit_name, study_day) appears twice — typically the inline narrative
+        // section AND the sparse SoA grid table — keep the richer instance so
+        // Visit Prep stores the SAME visit the Protocol tab renders. See
+        // visitTemplateDedup.ts (pure + unit-tested).
+        const dedupedRows = dedupeVisitTemplateRowsByQuality(rows);
 
         if (dedupedRows.length > 0) {
           const { error: tplError } = await supabase
@@ -2077,6 +2156,7 @@ export async function processIngestCompletion(
                 protocolId: resolvedProtocolId,
                 schedule: schedule as ScheduleEntry[],
                 openaiKey,
+                confidenceByVisitName: visitConfidenceByName,
               });
             } catch (vewErr) {
               console.error("[ingest] vew_persist_failed", {
