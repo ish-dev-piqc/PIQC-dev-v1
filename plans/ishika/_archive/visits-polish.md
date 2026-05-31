@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: visits-polish
-status: active
+status: merged
+merged: 2026-05-31
 started: 2026-05-31
-target_pr:
+target_pr: #188
 ---
 
 # Visits Polish — Ask rail, Protocol-as-drawer, Visit Prep accuracy
