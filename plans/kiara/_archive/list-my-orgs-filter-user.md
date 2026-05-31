@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: list-my-orgs-filter-user
-status: active
+status: merged
+merged: 2026-05-31
 started: 2026-05-30
-target_pr:
+target_pr: #200
 ---
 
 # `listMyOrgs` — filter to current user's membership rows
