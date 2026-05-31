@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: invite-url-base
-status: active
+status: merged
+merged: 2026-05-31
 started: 2026-05-30
-target_pr:
+target_pr: #192
 ---
 
 # `buildInviteUrl` — use Vite BASE_URL instead of deriving from window.location.pathname
