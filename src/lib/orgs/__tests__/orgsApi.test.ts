@@ -52,6 +52,7 @@ describe('orgsApi public surface', () => {
     expect(typeof m.createOrgInvite).toBe('function');
     expect(typeof m.acceptOrgInvite).toBe('function');
     expect(typeof m.listOrgInvites).toBe('function');
+    expect(typeof m.revokeOrgInvite).toBe('function');
     expect(typeof m.buildInviteUrl).toBe('function');
   });
 
