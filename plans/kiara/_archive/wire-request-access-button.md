@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: wire-request-access-button
-status: active
+status: merged
+merged: 2026-05-31
 started: 2026-05-30
-target_pr:
+target_pr: #202
 ---
 
 # Wire `RequestAccessButton` into the protocol picker
