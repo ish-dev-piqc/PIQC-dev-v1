@@ -28,6 +28,7 @@ import { supabase } from '../lib/supabase';
 import { useProtocol } from './ProtocolContext';
 import {
   listMyOrgs,
+  listMyProtocolMemberships,
   listProtocolAccessRequests,
   listProtocolGuests,
   listProtocolMembers,
@@ -57,6 +58,9 @@ interface OrgContextValue {
   guests: ProtocolGuest[];
   /** owner_org_id of the currently-active protocol (read from DB; not exposed on Protocol type). */
   protocolOwnerOrgId: string | null;
+  /** Set of protocol_ids the current user is an explicit `protocol_members` row of.
+   *  Used by the Navbar protocol picker to split "Your protocols" vs "Available in your org". */
+  myProtocolIds: Set<string>;
 
   loading: boolean;
   error: string | null;
@@ -73,6 +77,7 @@ const OrgContext = createContext<OrgContextValue>({
   accessRequests: [],
   guests: [],
   protocolOwnerOrgId: null,
+  myProtocolIds: new Set<string>(),
   loading: false,
   error: null,
   refresh: () => {},
@@ -106,6 +111,25 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
   const [protocolMembers, setProtocolMembers] = useState<ProtocolMember[]>([]);
   const [accessRequests, setAccessRequests] = useState<ProtocolAccessRequest[]>([]);
   const [guests, setGuests] = useState<ProtocolGuest[]>([]);
+  const [myProtocolIds, setMyProtocolIds] = useState<Set<string>>(new Set());
+
+  // Load the set of protocols the current user is an explicit member of.
+  // Refreshes on auth change. No realtime for v1 — if a coordinator adds
+  // you mid-session, you'll see it after the next page refresh.
+  useEffect(() => {
+    if (!currentUserId) {
+      setMyProtocolIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    listMyProtocolMemberships().then((res) => {
+      if (cancelled) return;
+      if (res.ok) setMyProtocolIds(new Set(res.data));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserId]);
   const [protocolOwnerOrgId, setProtocolOwnerOrgId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
@@ -249,6 +273,7 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
         accessRequests,
         guests,
         protocolOwnerOrgId,
+        myProtocolIds,
         loading,
         error,
         refresh,
