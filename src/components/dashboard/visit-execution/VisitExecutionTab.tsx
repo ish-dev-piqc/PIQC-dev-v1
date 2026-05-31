@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, FlaskConical, X, AlertTriangle, Plus } from 'lucide-react';
+import { Loader2, FlaskConical, X, AlertTriangle, Plus, Database } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useTheme } from '../../../context/ThemeContext';
 import { fetchVisitExecutionWorkspaces, isMockEnabled } from '../../../lib/visit-execution/visitExecutionApi';
+// Cross-mode import allowed: sourceEvidenceApi is on the piqc-discipline
+// ALLOWED_CROSS_MODE allowlist (same helper the old Protocol tab badge used).
+import { countWorksheetItemsForStudy } from '../../../lib/sotr/sourceEvidenceApi';
+import ProtocolDrawer from './ProtocolDrawer';
 import {
   addRequirement,
   addSiteNote,
@@ -147,6 +151,31 @@ export default function VisitExecutionTab() {
   // CompletenessSignalsPanel's per-row spinner. Set, not Map — we don't need
   // per-signal data, just presence.
   const [inFlightSignalIds, setInFlightSignalIds] = useState<Set<string>>(new Set());
+
+  // Protocol-as-drawer (replaces the former Protocol tab): open state + the
+  // awaiting-review badge count that used to live on the tab. Refreshes on
+  // protocol change and whenever the drawer closes (parsed items may have been
+  // reviewed inside it).
+  const [protocolOpen, setProtocolOpen] = useState(false);
+  const [awaitingReview, setAwaitingReview] = useState(0);
+
+  const refreshAwaitingReview = useCallback(async () => {
+    const pid = activeProtocol?.id;
+    if (!pid) {
+      setAwaitingReview(0);
+      return;
+    }
+    try {
+      const c = await countWorksheetItemsForStudy(pid);
+      setAwaitingReview(c.awaitingReview);
+    } catch {
+      setAwaitingReview(0);
+    }
+  }, [activeProtocol?.id]);
+
+  useEffect(() => {
+    void refreshAwaitingReview();
+  }, [refreshAwaitingReview]);
 
   // Wrap an async signal-resolution call in the in-flight Set so the panel
   // can render the row spinner for the duration. Exception-safe via try/finally
@@ -859,17 +888,20 @@ export default function VisitExecutionTab() {
   }, [textDrawerMode, handleEditSave, handleNoteSave, handlePromoteSignalSave, handleAddSave]);
 
 
+  if (!activeProtocol) {
+    return null;
+  }
+
+  let body: React.ReactNode;
   if (loading) {
-    return (
+    body = (
       <div className="flex-1 flex items-center justify-center text-fg-sub text-sm gap-2">
         <Loader2 size={14} className="animate-spin" />
         Loading visit workspaces…
       </div>
     );
-  }
-
-  if (error) {
-    return (
+  } else if (error) {
+    body = (
       <div className="flex-1 flex items-center justify-center px-6 text-center">
         <div>
           <p className="text-fg-heading text-sm font-semibold mb-1">Couldn't load visits</p>
@@ -877,14 +909,8 @@ export default function VisitExecutionTab() {
         </div>
       </div>
     );
-  }
-
-  if (!activeProtocol) {
-    return null;
-  }
-
-  if (workspaces.length === 0) {
-    return (
+  } else if (workspaces.length === 0) {
+    body = (
       <div className="flex-1 flex items-center justify-center px-6 text-center">
         <div className="max-w-md">
           <FlaskConical size={20} className="mx-auto text-fg-muted mb-3" aria-hidden />
@@ -892,8 +918,8 @@ export default function VisitExecutionTab() {
             No visit templates yet for this protocol
           </p>
           <p className="text-fg-sub text-xs leading-relaxed">
-            Upload a protocol PDF in the Protocol tab and the parsed Schedule
-            of Events will appear here.{' '}
+            Open the Protocol panel to upload a protocol PDF, and the parsed
+            Schedule of Events will appear here.{' '}
             {!isMockEnabled() && (
               <>
                 To preview with sample data, enable the mock toggle:
@@ -908,9 +934,8 @@ export default function VisitExecutionTab() {
         </div>
       </div>
     );
-  }
-
-  return (
+  } else {
+    body = (
     <div className="flex-1 flex overflow-hidden">
       <VisitNavigator
         workspaces={workspaces}
@@ -1083,6 +1108,51 @@ export default function VisitExecutionTab() {
         item={editLogItem}
         currentUserId={currentUserId}
         onClose={closeEditLog}
+      />
+    </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      {/* Header bar — the Protocol panel trigger (replaces the former Protocol
+          tab). Available in every state so re-ingest/upload is always reachable. */}
+      <div
+        className={`flex-shrink-0 flex items-center justify-end px-4 py-2 border-b ${
+          isLight ? 'border-[#E2E8F0]' : 'border-white/5'
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => setProtocolOpen(true)}
+          data-testid="vew-open-protocol"
+          className={`relative inline-flex items-center gap-1.5 text-xs font-medium rounded-md px-3 py-1.5 border ${
+            isLight
+              ? 'border-[#E2E8F0] text-fg-body hover:bg-[#F2F2F2]'
+              : 'border-white/10 text-fg-body hover:bg-white/[0.04]'
+          }`}
+        >
+          <Database size={13} aria-hidden /> Protocol
+          {awaitingReview > 0 && (
+            <span
+              data-testid="vew-protocol-awaiting-badge"
+              className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-semibold rounded-full border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/[0.08] dark:text-amber-300"
+              title={`${awaitingReview} parsed item${awaitingReview === 1 ? '' : 's'} awaiting review`}
+            >
+              {awaitingReview}
+            </span>
+          )}
+        </button>
+      </div>
+
+      <div className="flex-1 min-h-0 flex flex-col">{body}</div>
+
+      <ProtocolDrawer
+        isOpen={protocolOpen}
+        onClose={() => {
+          setProtocolOpen(false);
+          void refreshAwaitingReview();
+        }}
       />
     </div>
   );

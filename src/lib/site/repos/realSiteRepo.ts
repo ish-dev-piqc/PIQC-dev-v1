@@ -11,6 +11,7 @@ import type {
   SiteParticipant,
   SiteTeamMember,
   SiteVisit,
+  SiteVisitConfidence,
   VisitCrossReference,
 } from '../types';
 import type { Protocol } from '../../../context/ProtocolContext';
@@ -224,13 +225,13 @@ interface VisitRow {
   template_id: string | null;
   site_participants: { participant_code: string } | { participant_code: string }[] | null;
   protocol_visit_templates:
-    | { cross_references: VisitCrossReference[] | null }
-    | { cross_references: VisitCrossReference[] | null }[]
+    | { cross_references: VisitCrossReference[] | null; confidence_state: SiteVisitConfidence | null }
+    | { cross_references: VisitCrossReference[] | null; confidence_state: SiteVisitConfidence | null }[]
     | null;
 }
 
 const VISIT_COLUMNS =
-  'id, participant_id, protocol_id, date, time_of_day, study_day, visit_name, window_closes, status, procedures, prior_note, deviation_reason, template_id, site_participants!inner(participant_code), protocol_visit_templates(cross_references)';
+  'id, participant_id, protocol_id, date, time_of_day, study_day, visit_name, window_closes, status, procedures, prior_note, deviation_reason, template_id, site_participants!inner(participant_code), protocol_visit_templates(cross_references, confidence_state)';
 
 function rowToVisit(row: VisitRow): SiteVisit {
   const joined = Array.isArray(row.site_participants)
@@ -257,6 +258,7 @@ function rowToVisit(row: VisitRow): SiteVisit {
     priorNote: row.prior_note ?? undefined,
     deviationReason: row.deviation_reason ?? undefined,
     crossReferences: crossRefs && crossRefs.length > 0 ? crossRefs : undefined,
+    confidenceState: templateJoin?.confidence_state ?? undefined,
   };
 }
 

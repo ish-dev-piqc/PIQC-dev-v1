@@ -16,6 +16,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useSiteData } from '../../../context/SiteDataContext';
 import VisitDetailDrawer from './VisitDetailDrawer';
+import VisitConfidenceChip from './VisitConfidenceChip';
 import { getProtocolColorsById } from '../../../lib/site/protocolColors';
 import type { SiteVisit, VisitStatus } from '../../../lib/site/types';
 
@@ -471,6 +472,7 @@ function VisitRow({
           <span className={`text-xs ${mutedColor}`}>Day {visit.studyDay}</span>
           <span className={mutedColor}>·</span>
           <span className={`text-sm ${headingColor}`}>{visit.visitName}</span>
+          <VisitConfidenceChip confidence={visit.confidenceState} />
         </div>
         <div className={`flex items-center gap-2 mt-0.5 text-xs ${subColor}`}>
           {showDate && <span>{formatDate(visit.date)}</span>}

@@ -170,10 +170,13 @@ describe('deriveVisitConfidence — null-item-confidence handling', () => {
     ).toBe('high');
   });
 
-  it('all-null items + 0 signals → "high"', () => {
-    // No degrading signals; legacy/mock rows shouldn't fail-pessimistic when
-    // there's no information either way.
-    expect(deriveVisitConfidence(makeSnapshot(), [item(null), item(null)])).toBe('high');
+  it('all-null items + 0 signals → "needs_review" (never confidence-checked)', () => {
+    // Honesty fix: a visit whose every item carries NO confidence value was
+    // never scored, so it has no basis to claim 'high'. Server-stamped visits
+    // hit the snapshot.confidence_state short-circuit instead; this branch only
+    // catches truly unscored (legacy / parser-gap / unmatched) visits, which
+    // should read as "needs review", not a false 'high'.
+    expect(deriveVisitConfidence(makeSnapshot(), [item(null), item(null)])).toBe('needs_review');
   });
 
   it('all-null items + signals pending → "medium" (signal-demoted)', () => {
