@@ -321,13 +321,20 @@ export async function listOrgInvites(orgId: string): Promise<Result<OrgInvite[]>
   }
 }
 
-/** Build a shareable invite URL from a token. Uses location.origin so it
- *  works in dev, staging, and prod automatically. */
+/** Build a shareable invite URL from a token.
+ *
+ *  Uses Vite's configured `BASE_URL` so the link always points at the app
+ *  root regardless of which route the admin happened to be on when they
+ *  clicked the button. Previous impl derived the path from
+ *  `window.location.pathname` and over-stripped when the admin was already
+ *  at the root (`/PIQC-dev-v1/` → `/` → 404 on github.io). */
 export function buildInviteUrl(token: string): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const base = typeof window !== 'undefined' ? window.location.pathname : '/';
-  const rootPath = base.replace(/\/+$/, '').replace(/\/[^/]+$/, '/');
-  return `${origin}${rootPath}?invite=${encodeURIComponent(token)}`;
+  // import.meta.env.BASE_URL is set from vite.config.ts (`/PIQC-dev-v1/` on
+  // this project; `/` for unconfigured apps). Always has a trailing slash
+  // per Vite's contract.
+  const base = import.meta.env.BASE_URL ?? '/';
+  return `${origin}${base}?invite=${encodeURIComponent(token)}`;
 }
 
 
