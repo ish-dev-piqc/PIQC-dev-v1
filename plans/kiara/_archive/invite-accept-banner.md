@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: invite-accept-banner
-status: active
+status: merged
+merged: 2026-05-31
 started: 2026-05-30
-target_pr:
+target_pr: #196
 ---
 
 # Invite accept → dashboard banner (replace `alert()`)
