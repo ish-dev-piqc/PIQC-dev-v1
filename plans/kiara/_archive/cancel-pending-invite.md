@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: cancel-pending-invite
-status: active
+status: merged
+merged: 2026-05-31
 started: 2026-05-30
-target_pr:
+target_pr: #198
 ---
 
 # Cancel pending org invite
