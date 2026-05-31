@@ -120,7 +120,7 @@ export default function ParticipantsTab() {
           </p>
           <h2 className={`${headingColor} text-xl font-semibold mt-1`}>Participants</h2>
           <p className={`${subColor} text-sm mt-1`}>
-            Everyone enrolled on this protocol and where they stand.
+            Everyone enrolled on this protocol, at a glance.
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
@@ -218,7 +218,7 @@ export default function ParticipantsTab() {
               : search
                 ? 'No participants match your search.'
                 : scoped.length === 0
-                  ? "Participants aren't extracted from the protocol PDF — add yours as they enroll. Click “New participant” to start."
+                  ? "No participants yet. They aren't pulled from the protocol PDF — add each one as they enroll. Click “New participant” to start."
                   : 'No participants in this status.'}
           </p>
         </div>

@@ -102,9 +102,9 @@ export default function ParticipantFormDrawer({
   };
 
   const validate = (): string | null => {
-    if (!form.participant_code.trim()) return 'Participant code is required.';
+    if (!form.participant_code.trim()) return 'Participant ID is required.';
     if (!/^[A-Za-z0-9-]+$/.test(form.participant_code.trim()))
-      return 'Participant code must contain only letters, numbers, or "-".';
+      return 'Participant ID must contain only letters, numbers, or "-".';
     // enrolled_at is required on create so the participant's day-0 reference
     // is well-defined for visit projection (materialize_protocol_visits uses
     // COALESCE(enrolled_at, demo_anchor_date)). Edits keep the legacy null
@@ -208,7 +208,7 @@ export default function ParticipantFormDrawer({
             </div>
           )}
 
-          <Field label="Participant code" required labelColor={labelColor}>
+          <Field label="Participant ID" required labelColor={labelColor}>
             <input
               type="text"
               value={form.participant_code}
@@ -219,7 +219,7 @@ export default function ParticipantFormDrawer({
             />
             {mode === 'edit' && (
               <p className={`${mutedColor} text-[11px] mt-1`}>
-                Code is immutable after creation. Delete + recreate if needed.
+                ID is immutable after creation. Delete + recreate if needed.
               </p>
             )}
           </Field>
@@ -250,7 +250,7 @@ export default function ParticipantFormDrawer({
                 className={`w-full rounded-md border px-3 py-2 text-sm ${inputBg} ${inputBorder} ${headingColor} focus:outline-none transition-colors`}
               />
             </Field>
-            <Field label="Study day" labelColor={labelColor}>
+            <Field label="Current study day" labelColor={labelColor}>
               <input
                 type="number"
                 value={form.current_study_day}
@@ -281,7 +281,7 @@ export default function ParticipantFormDrawer({
             </Field>
           </div>
 
-          <Field label="Assigned coordinator" labelColor={labelColor}>
+          <Field label="Coordinator" labelColor={labelColor}>
             <input
               type="text"
               value={form.assigned_coordinator}

@@ -346,8 +346,8 @@ function ChecklistItemRow({
                   variant="inline"
                   titleOverride={
                     item.confidence_state === 'low'
-                      ? "PIQC has low confidence in THIS requirement's extracted text. Verify against the protocol source before relying on it."
-                      : "PIQC couldn't establish confidence on THIS requirement. Verify against the protocol source and edit liberally."
+                      ? "Low confidence in this item's extracted text. Check it against the protocol source before you rely on it."
+                      : "PIQC couldn't gauge confidence on this item. Check it against the protocol source and edit as needed."
                   }
                 />
               )}

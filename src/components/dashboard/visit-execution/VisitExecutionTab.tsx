@@ -960,13 +960,13 @@ export default function VisitExecutionTab() {
                 >
                   <FlaskConical size={18} className="mx-auto text-fg-muted mb-2" aria-hidden />
                   <p className="text-fg-heading text-sm font-semibold mb-1">
-                    Requirements not extracted yet for this visit
+                    This visit&rsquo;s requirements aren&rsquo;t drafted yet
                   </p>
                   <p className="text-fg-sub text-xs leading-relaxed max-w-md mx-auto">
-                    The protocol&rsquo;s visit schedule loaded, but the per-visit
-                    execution requirements (procedures, roles, timing) haven&rsquo;t
-                    been generated. Re-ingest this protocol from the Protocol tab so
-                    the parser extracts requirements from the source document.
+                    The visit is on the protocol schedule, but PIQC hasn&rsquo;t
+                    drafted its procedures, roles, and timing. Re-ingest the
+                    protocol from the Protocol tab to generate them from the
+                    source document.
                   </p>
                 </div>
               ) : (
