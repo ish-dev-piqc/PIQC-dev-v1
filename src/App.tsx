@@ -25,6 +25,9 @@ import { CheckoutRedirectProvider, useCheckoutRedirect } from './context/Checkou
 import { getPendingCheckout } from './lib/billing/pendingCheckout';
 import RedirectingToCheckout from './components/billing/RedirectingToCheckout';
 import CheckoutResumer from './components/billing/CheckoutResumer';
+import InviteWelcomeBanner, {
+  type InviteAcceptResult,
+} from './components/dashboard/orgs/InviteWelcomeBanner';
 
 export type AppView = 'landing' | 'dashboard' | 'login' | 'forgot-password';
 
@@ -33,6 +36,9 @@ function AppContent() {
   const [dashboardTab, setDashboardTab] = useState<DashboardTab>('overview');
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('account');
   const [scrollTarget, setScrollTarget] = useState<string | null>(null);
+  // Result of the accept-invite handler — surfaced as a banner on the
+  // dashboard. null when no recent invite was accepted (or after dismiss).
+  const [inviteResult, setInviteResult] = useState<InviteAcceptResult | null>(null);
   const { session, loading, profile, profileLoading } = useAuth();
   const { theme } = useTheme();
   const { isRedirecting } = useCheckoutRedirect();
@@ -58,8 +64,9 @@ function AppContent() {
 
   // Accept-invite flow: if the URL has ?invite=<token> and the user is signed
   // in, redeem the invite on dashboard load. Strips the param after either
-  // success or failure so a refresh doesn't try again. Errors surface as
-  // alerts — non-blocking for the rest of the app load.
+  // success or failure so a refresh doesn't try again. Outcome surfaces as
+  // an <InviteWelcomeBanner /> at the top of the dashboard, not a native
+  // alert popup.
   useEffect(() => {
     if (loading || !session || profileLoading) return;
     if (typeof window === 'undefined') return;
@@ -73,9 +80,14 @@ function AppContent() {
       const result = await acceptOrgInvite(token);
       if (cancelled) return;
       if (result.ok) {
-        alert(`You're now a ${result.data.role} of ${result.data.org_name}.`);
+        setInviteResult({
+          ok: true,
+          org_name: result.data.org_name,
+          role: result.data.role,
+          protocol_count: result.data.protocol_count,
+        });
       } else {
-        alert(`Couldn't accept invite: ${result.error}`);
+        setInviteResult({ ok: false, error: result.error });
       }
       url.searchParams.delete('invite');
       window.history.replaceState({}, '', url.toString());
@@ -173,6 +185,12 @@ function AppContent() {
           onDashboardHome={handleDashboardHome}
           onOpenSettingsSection={handleOpenSettingsSection}
         />
+        {inviteResult && (
+          <InviteWelcomeBanner
+            result={inviteResult}
+            onDismiss={() => setInviteResult(null)}
+          />
+        )}
         <Dashboard
           activeTab={dashboardTab}
           onTabChange={setDashboardTab}
