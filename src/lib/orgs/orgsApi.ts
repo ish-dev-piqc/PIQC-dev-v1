@@ -113,11 +113,22 @@ export async function fetchCurrentUserOrg(): Promise<Result<OrgRow | null>> {
   }
 }
 
-/** List every org the caller is a member of (multi-org support). */
+/** List every org the caller is a member of (multi-org support).
+ *
+ *  Important: filter `.eq('user_id', user.id)`. RLS on `org_members` permits
+ *  the caller to read every member row of any org they belong to (needed for
+ *  the in-org roster query), so an unfiltered SELECT returns one row per
+ *  total member with the same org joined — producing apparent duplicate orgs
+ *  in the OrgSwitcher dropdown. The filter restricts to the caller's own
+ *  membership rows. */
 export async function listMyOrgs(): Promise<Result<OrgWithMembership[]>> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return err('Not authenticated');
+
   const { data, error } = await supabase
     .from('org_members')
-    .select('role, orgs(id, name, slug, created_by, created_at, updated_at)');
+    .select('role, orgs(id, name, slug, created_by, created_at, updated_at)')
+    .eq('user_id', user.id);
 
   if (error) return err(error.message);
   if (!data) return { ok: true, data: [] };
