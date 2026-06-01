@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: organization-page
-status: active
+status: merged
+merged: 2026-06-01
 started: 2026-05-30
-target_pr:
+target_pr: #204
 ---
 
 # Organization page (PR 1 of N): scaffold + Members + Team + drawer removal
