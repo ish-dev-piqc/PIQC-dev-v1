@@ -6,7 +6,7 @@ import TodayTab from './site/TodayTab';
 import AskRail from './site/AskRail';
 import ParticipantsTab from './site/ParticipantsTab';
 import VisitsTab from './site/VisitsTab';
-import TeamTab from './site/TeamTab';
+import TeamTab from './organization/team/TeamTab';
 import OrganizationPage from './organization/OrganizationPage';
 import DemoBanner from './site/DemoBanner';
 import ReportsTab from './site/ReportsTab';

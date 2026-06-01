@@ -1,12 +1,22 @@
 ---
 owner: ki-dev-piqc
 feature: protocol-collaboration
-status: active
+status: superseded
+superseded_by: organization-manage-tab + organization-chat-* (chat PR sequence)
 started: 2026-05-29
+archived: 2026-06-01
 target_pr:
 ---
 
-# Protocol collaboration — per-protocol chat, file sharing, contamination-safe uploads
+# Protocol collaboration — per-protocol chat, file sharing, contamination-safe uploads (SUPERSEDED)
+
+> **Status: superseded.** Scope is being absorbed into the Organization-page chat sequence.
+> The per-protocol chat channels described here will land as PR 4b (auto-synced from
+> `protocol_members`) inside the org Chat tab rather than as a standalone protocol surface.
+> Trial-specific features (decision capture, cross-mode refs, read confirmation,
+> auto-import events, file uploads with contamination defenses) will land as PR 4c+
+> on top of the same channel primitives. See plans/kiara/organization-page.md and
+> plans/kiara/organization-manage-tab.md for the new sequencing.
 
 ## Context
 
