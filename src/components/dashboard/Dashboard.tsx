@@ -655,6 +655,7 @@ interface DashboardProps {
   onTabChange?: (tab: DashboardTab) => void;
   settingsSection?: SettingsSection;
   onSettingsSectionChange?: (section: SettingsSection) => void;
+  onExitOrganization?: () => void;
 }
 
 export default function Dashboard({
@@ -662,6 +663,7 @@ export default function Dashboard({
   onTabChange,
   settingsSection,
   onSettingsSectionChange,
+  onExitOrganization,
 }: DashboardProps) {
   const [internalActiveTab, setInternalActiveTab] = useState<DashboardTab>('overview');
   const [internalSettingsSection, setInternalSettingsSection] = useState<SettingsSection>('account');
@@ -767,7 +769,9 @@ export default function Dashboard({
           />
         );
       case 'organization':
-        return <OrganizationPage />;
+        // Org page is rendered via the early-return branch below; this case
+        // remains as a defensive fallback if the branch is ever bypassed.
+        return <OrganizationPage onExit={onExitOrganization} />;
       case 'settings':
         return (
           <SettingsTab
@@ -780,6 +784,20 @@ export default function Dashboard({
         );
     }
   };
+
+  // Organization is its own full-screen destination — no Site/Audit tab strip,
+  // no constrained panel. The page owns its own header, sub-tab strip (with a
+  // back arrow that calls onExitOrganization), and scroll. Takes priority over
+  // both the audit-mode branch and the protocol-onboarding wall: org chrome
+  // should always be reachable via the user menu, regardless of mode or
+  // whether the user has any protocols yet.
+  if (resolvedActiveTab === 'organization') {
+    return (
+      <div className={`h-screen ${pageBg} pt-16 flex flex-col overflow-hidden`}>
+        <OrganizationPage onExit={onExitOrganization} />
+      </div>
+    );
+  }
 
   // Audit Mode skips the legacy tab rail entirely. The 3-pane workspace shell
   // owns its own navigation (StageNav). Settings is still reachable via the

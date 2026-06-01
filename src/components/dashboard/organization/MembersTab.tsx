@@ -229,9 +229,15 @@ export default function MembersTab() {
 
       {/* Roster */}
       <section>
-        <h3 className={`${labelColor} text-[10px] uppercase tracking-wider font-semibold mb-3`}>
-          Members ({members.length})
-        </h3>
+        <div className="flex items-baseline justify-between mb-2">
+          <h3 className={`${labelColor} text-[10px] uppercase tracking-wider font-semibold`}>
+            Organization members ({members.length})
+          </h3>
+        </div>
+        <p className={`${subColor} text-xs mb-3 max-w-2xl leading-relaxed`}>
+          These users have access to the whole organization. To control who can see a
+          specific protocol, use the Team tab.
+        </p>
         <ul className="space-y-1.5">
           {members.map((m) => (
             <li key={m.user_id} className={`flex items-center justify-between gap-3 px-3 py-2 rounded-md border ${border}`}>
@@ -271,10 +277,14 @@ export default function MembersTab() {
       {/* Invite — admin only */}
       {isAdmin && (
         <section className={`p-5 rounded-md ${sectionBg} border ${border}`}>
-          <h3 className={`${labelColor} text-[10px] uppercase tracking-wider font-semibold mb-3 flex items-center gap-1.5`}>
+          <h3 className={`${labelColor} text-[10px] uppercase tracking-wider font-semibold mb-1 flex items-center gap-1.5`}>
             <UserPlus size={11} />
-            Invite a member
+            Invite to organization
           </h3>
+          <p className={`${subColor} text-xs mb-3 leading-relaxed`}>
+            Adds this person to the org. Use the protocol checklist below if you also want
+            to assign them to specific protocols at the same time.
+          </p>
           <form onSubmit={handleCreateInvite} className="space-y-2">
             <div className="grid grid-cols-[1fr_auto] gap-2">
               <input
