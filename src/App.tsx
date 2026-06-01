@@ -34,6 +34,9 @@ export type AppView = 'landing' | 'dashboard' | 'login' | 'forgot-password';
 function AppContent() {
   const [view, setView] = useState<AppView>('landing');
   const [dashboardTab, setDashboardTab] = useState<DashboardTab>('overview');
+  // Tab the user was on before opening Organization — restored on back-arrow exit.
+  // Defaults to 'today' so first-time exits land somewhere sensible.
+  const [previousDashboardTab, setPreviousDashboardTab] = useState<DashboardTab>('today');
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('account');
   const [scrollTarget, setScrollTarget] = useState<string | null>(null);
   // Result of the accept-invite handler — surfaced as a banner on the
@@ -138,8 +141,19 @@ function AppContent() {
   };
 
   const handleOpenOrganization = () => {
+    // Remember where we were so the back arrow restores it. Avoid saving
+    // 'organization' itself (would create a self-loop) or 'settings' (a
+    // different cross-mode surface that should exit to its own previous tab).
+    if (dashboardTab !== 'organization' && dashboardTab !== 'settings') {
+      setPreviousDashboardTab(dashboardTab);
+    }
     setDashboardTab('organization');
     setView('dashboard');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleExitOrganization = () => {
+    setDashboardTab(previousDashboardTab);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -203,6 +217,7 @@ function AppContent() {
           onTabChange={setDashboardTab}
           settingsSection={settingsSection}
           onSettingsSectionChange={setSettingsSection}
+          onExitOrganization={handleExitOrganization}
         />
       </div>
     );
