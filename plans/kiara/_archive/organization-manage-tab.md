@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: organization-manage-tab
-status: active
+status: merged
+merged: 2026-06-01
 started: 2026-06-01
-target_pr:
+target_pr: #214
 ---
 
 # Organization page — Manage tab + Team protocol picker + read-only Members
