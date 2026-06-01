@@ -8,8 +8,9 @@ import {
   Check,
   AlertTriangle,
   XCircle,
-  Grid3x3,
+  Layers,
   Loader2,
+  ArrowRight,
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useDemoMode } from '../../../context/DemoModeContext';
@@ -24,7 +25,6 @@ import {
   listProtocolMembers,
   listProtocolsByOrg,
   removeOrgMember,
-  removeProtocolMember,
   revokeOrgInvite,
   updateOrgMemberRole,
 } from '../../../lib/orgs/orgsApi';
@@ -82,17 +82,24 @@ export default function ManageTab() {
   const [orgProtocols, setOrgProtocols] = useState<OrgProtocolSummary[]>([]);
   const [assignments, setAssignments] = useState<Map<string, ProtocolMemberRole>>(new Map());
 
-  // Bulk matrix
-  // currentMatrix[cellKey] = role on the server (omitted if not a member)
-  const [currentMatrix, setCurrentMatrix] = useState<Map<string, ProtocolMemberRole>>(new Map());
-  // pendingMatrix[cellKey] = pending change. role => add at that role.
-  // null => remove existing membership. Absent key => no pending change.
-  const [pendingMatrix, setPendingMatrix] = useState<Map<string, ProtocolMemberRole | null>>(
+  // Bulk protocol access — two-list checker.
+  // currentAssignments[cellKey] = role on the server (absent if not a member).
+  // Used to skip already-assigned pairs on submit.
+  const [currentAssignments, setCurrentAssignments] = useState<Map<string, ProtocolMemberRole>>(
     new Map(),
   );
-  const [defaultBulkRole, setDefaultBulkRole] = useState<ProtocolMemberRole>('member');
+  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set());
+  const [selectedProtocolIds, setSelectedProtocolIds] = useState<Set<string>>(new Set());
+  const [bulkRole, setBulkRole] = useState<ProtocolMemberRole>('member');
   const [applying, setApplying] = useState(false);
-  const [applyError, setApplyError] = useState<string | null>(null);
+  const [bulkResult, setBulkResult] = useState<
+    | {
+        added: { memberName: string; protocolCode: string }[];
+        skipped: { memberName: string; protocolCode: string; reason: string }[];
+        failed: { memberName: string; protocolCode: string; reason: string }[];
+      }
+    | null
+  >(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -129,9 +136,9 @@ export default function ManageTab() {
       setInvites(invList);
       setOrgProtocols(protoList);
 
-      // Build the current matrix by fetching protocol_members for each org
-      // protocol in parallel. RLS limits visibility but admins can see all
-      // memberships within their org.
+      // Build current-assignment lookup by fetching protocol_members for each
+      // org protocol in parallel. Used to skip already-assigned pairs on
+      // submit (and to surface "already assigned" in the results banner).
       const memberResults = await Promise.all(
         protoList.map((p) => listProtocolMembers(p.id)),
       );
@@ -143,8 +150,7 @@ export default function ManageTab() {
           next.set(cellKey(m.user_id, protocolId), m.role);
         }
       });
-      setCurrentMatrix(next);
-      setPendingMatrix(new Map());
+      setCurrentAssignments(next);
     }
     setLoading(false);
   }, []);
@@ -253,89 +259,115 @@ export default function ManageTab() {
   };
 
   // -------------------------------------------------------------------------
-  // Bulk matrix handlers
+  // Bulk protocol access — two-list checker handlers
   // -------------------------------------------------------------------------
 
-  function effectiveRole(userId: string, protocolId: string): ProtocolMemberRole | null {
-    const key = cellKey(userId, protocolId);
-    if (pendingMatrix.has(key)) {
-      // pendingMatrix value is the desired state — null means "remove",
-      // a role means "add at this role".
-      return pendingMatrix.get(key) ?? null;
-    }
-    return currentMatrix.get(key) ?? null;
-  }
+  // Site admins have implicit access to every org protocol, so creating
+  // protocol_members rows for them is meaningless. Exclude them from the
+  // selectable member list (separate from the read-only roster which still
+  // shows them).
+  const assignableMembers = useMemo(
+    () => members.filter((m) => m.role !== 'admin'),
+    [members],
+  );
 
-  function isPending(userId: string, protocolId: string): boolean {
-    const key = cellKey(userId, protocolId);
-    if (!pendingMatrix.has(key)) return false;
-    const desired = pendingMatrix.get(key) ?? null;
-    const actual = currentMatrix.get(key) ?? null;
-    return desired !== actual;
-  }
-
-  function toggleCell(userId: string, protocolId: string) {
-    const key = cellKey(userId, protocolId);
-    const current = currentMatrix.get(key);
-    setPendingMatrix((prev) => {
-      const next = new Map(prev);
-      if (next.has(key)) {
-        // Revert pending change.
-        next.delete(key);
-        return next;
-      }
-      if (current) {
-        // Currently a member → mark for removal.
-        next.set(key, null);
-      } else {
-        // Not a member → mark for add at the default bulk role.
-        next.set(key, defaultBulkRole);
-      }
+  function toggleMember(userId: string) {
+    setSelectedMemberIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
       return next;
     });
   }
 
-  const deltas = useMemo(() => {
-    const adds: { userId: string; protocolId: string; role: ProtocolMemberRole }[] = [];
-    const removes: { userId: string; protocolId: string }[] = [];
-    for (const [key, desired] of pendingMatrix.entries()) {
-      const [userId, protocolId] = key.split('|');
-      const actual = currentMatrix.get(key) ?? null;
-      if (desired === actual) continue;
-      if (desired === null) removes.push({ userId, protocolId });
-      else adds.push({ userId, protocolId, role: desired });
-    }
-    return { adds, removes };
-  }, [pendingMatrix, currentMatrix]);
-
-  const totalDeltas = deltas.adds.length + deltas.removes.length;
-
-  async function applyChanges() {
-    if (totalDeltas === 0 || applying) return;
-    setApplying(true);
-    setApplyError(null);
-    const ops: Promise<{ ok: boolean }>[] = [
-      ...deltas.adds.map((d) =>
-        addProtocolMember({
-          protocol_id: d.protocolId,
-          user_id: d.userId,
-          role: d.role,
-        }),
-      ),
-      ...deltas.removes.map((d) => removeProtocolMember(d.protocolId, d.userId)),
-    ];
-    const results = await Promise.all(ops);
-    const failures = results.filter((r) => !r.ok).length;
-    if (failures > 0) {
-      setApplyError(`${failures} of ${results.length} operations failed. The matrix has been refreshed — re-apply any rows that didn't go through.`);
-    }
-    setApplying(false);
-    refresh();
+  function toggleProtocol(protocolId: string) {
+    setSelectedProtocolIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(protocolId)) next.delete(protocolId);
+      else next.add(protocolId);
+      return next;
+    });
   }
 
-  function cancelChanges() {
-    setPendingMatrix(new Map());
-    setApplyError(null);
+  function selectAllMembers() {
+    setSelectedMemberIds(new Set(assignableMembers.map((m) => m.user_id)));
+  }
+
+  function clearMemberSelection() {
+    setSelectedMemberIds(new Set());
+  }
+
+  function selectAllProtocols() {
+    setSelectedProtocolIds(new Set(orgProtocols.map((p) => p.id)));
+  }
+
+  function clearProtocolSelection() {
+    setSelectedProtocolIds(new Set());
+  }
+
+  const plannedPairs = useMemo(() => {
+    // Cartesian product of selected members × selected protocols, split into
+    // "needs insert" (not yet assigned) and "skipped" (already assigned).
+    const newPairs: { userId: string; protocolId: string }[] = [];
+    const skippedPairs: { userId: string; protocolId: string }[] = [];
+    for (const userId of selectedMemberIds) {
+      for (const protocolId of selectedProtocolIds) {
+        const key = cellKey(userId, protocolId);
+        if (currentAssignments.has(key)) skippedPairs.push({ userId, protocolId });
+        else newPairs.push({ userId, protocolId });
+      }
+    }
+    return { newPairs, skippedPairs };
+  }, [selectedMemberIds, selectedProtocolIds, currentAssignments]);
+
+  async function applyAssignments() {
+    const { newPairs, skippedPairs } = plannedPairs;
+    if (newPairs.length === 0 && skippedPairs.length === 0) return;
+    if (applying) return;
+
+    const nameOf = (userId: string) =>
+      members.find((m) => m.user_id === userId)?.name ?? 'Unknown';
+    const codeOf = (protocolId: string) =>
+      orgProtocols.find((p) => p.id === protocolId)?.code ?? 'Unknown';
+
+    setApplying(true);
+    setBulkResult(null);
+
+    const results = await Promise.all(
+      newPairs.map(async (pair) => {
+        const res = await addProtocolMember({
+          protocol_id: pair.protocolId,
+          user_id: pair.userId,
+          role: bulkRole,
+        });
+        return { pair, res };
+      }),
+    );
+
+    const added: { memberName: string; protocolCode: string }[] = [];
+    const failed: { memberName: string; protocolCode: string; reason: string }[] = [];
+    for (const { pair, res } of results) {
+      if (res.ok) {
+        added.push({ memberName: nameOf(pair.userId), protocolCode: codeOf(pair.protocolId) });
+      } else {
+        failed.push({
+          memberName: nameOf(pair.userId),
+          protocolCode: codeOf(pair.protocolId),
+          reason: res.error,
+        });
+      }
+    }
+    const skipped = skippedPairs.map((pair) => ({
+      memberName: nameOf(pair.userId),
+      protocolCode: codeOf(pair.protocolId),
+      reason: 'Already assigned',
+    }));
+
+    setBulkResult({ added, skipped, failed });
+    setApplying(false);
+    setSelectedMemberIds(new Set());
+    setSelectedProtocolIds(new Set());
+    refresh();
   }
 
   // -------------------------------------------------------------------------
@@ -355,8 +387,10 @@ export default function ManageTab() {
   const buttonGhost = isLight
     ? 'text-[#334155]/70 hover:text-[#0F172A] hover:bg-[#0F172A]/[0.05]'
     : 'text-[#CBD5E1]/70 hover:text-white hover:bg-white/[0.05]';
-  const matrixBg = isLight ? 'bg-white' : 'bg-[#0F172A]';
-  const stickyHeaderBg = isLight ? 'bg-[#F8FAFC]' : 'bg-[#0F172A]';
+  const listBg = isLight ? 'bg-white' : 'bg-[#0F172A]';
+  const linkButton = isLight
+    ? 'text-brand-600 hover:underline'
+    : 'text-brand-300 hover:underline';
 
   // -------------------------------------------------------------------------
   // Render
@@ -586,149 +620,227 @@ export default function ManageTab() {
         </ul>
       </section>
 
-      {/* ===== Bulk protocol access matrix ===== */}
+      {/* ===== Bulk protocol access — two-list checker ===== */}
       <section>
         <h3 className={`${labelColor} text-[10px] uppercase tracking-wider font-semibold mb-1 flex items-center gap-1.5`}>
-          <Grid3x3 size={11} />
+          <Layers size={11} />
           Bulk protocol access
         </h3>
-        <p className={`${subColor} text-xs mb-3 leading-relaxed max-w-2xl`}>
-          Toggle cells to add or remove protocol access in bulk. New assignments are created at
-          the default role below; change individual roles afterward from the Team tab.
+        <p className={`${subColor} text-xs mb-4 leading-relaxed max-w-2xl`}>
+          Check the members on the left and the protocols on the right, then click Add. Each
+          selected member gets added to each selected protocol at the chosen role.
+          Already-assigned pairs are skipped automatically. Site administrators are excluded —
+          they already have access to every protocol.
         </p>
 
-        {orgProtocols.length === 0 || members.length === 0 ? (
+        {orgProtocols.length === 0 || assignableMembers.length === 0 ? (
           <div className={`px-4 py-6 rounded-md border ${border} text-center`}>
             <p className={`${subColor} text-xs`}>
               {orgProtocols.length === 0
                 ? 'No protocols in this organization yet.'
-                : 'No members in this organization yet.'}
+                : 'No assignable members in this organization yet (site administrators have implicit access).'}
             </p>
           </div>
         ) : (
-          <>
-            <div className="flex items-center gap-3 mb-3">
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Members column */}
+              <div className={`border ${border} rounded-md ${listBg} flex flex-col`}>
+                <div className={`flex items-center justify-between px-3 py-2 border-b ${border}`}>
+                  <h4 className={`${labelColor} text-[10px] uppercase tracking-wider font-semibold`}>
+                    Members ({selectedMemberIds.size}/{assignableMembers.length})
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={selectAllMembers}
+                      className={`${linkButton} text-[11px]`}
+                    >
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearMemberSelection}
+                      className={`${linkButton} text-[11px]`}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+                <ul className="max-h-72 overflow-y-auto py-1">
+                  {assignableMembers.map((m) => {
+                    const checked = selectedMemberIds.has(m.user_id);
+                    return (
+                      <li key={m.user_id}>
+                        <label
+                          className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer ${
+                            isLight
+                              ? checked
+                                ? 'bg-brand-600/[0.05]'
+                                : 'hover:bg-[#0F172A]/[0.03]'
+                              : checked
+                                ? 'bg-brand-600/[0.10]'
+                                : 'hover:bg-white/[0.03]'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleMember(m.user_id)}
+                            className="flex-shrink-0"
+                          />
+                          <UserIcon size={12} className={mutedColor} />
+                          <span className={`${headingColor} text-sm font-medium truncate`}>
+                            {m.name}
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              {/* Protocols column */}
+              <div className={`border ${border} rounded-md ${listBg} flex flex-col`}>
+                <div className={`flex items-center justify-between px-3 py-2 border-b ${border}`}>
+                  <h4 className={`${labelColor} text-[10px] uppercase tracking-wider font-semibold`}>
+                    Protocols ({selectedProtocolIds.size}/{orgProtocols.length})
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={selectAllProtocols}
+                      className={`${linkButton} text-[11px]`}
+                    >
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearProtocolSelection}
+                      className={`${linkButton} text-[11px]`}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+                <ul className="max-h-72 overflow-y-auto py-1">
+                  {orgProtocols.map((p) => {
+                    const checked = selectedProtocolIds.has(p.id);
+                    return (
+                      <li key={p.id}>
+                        <label
+                          className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer ${
+                            isLight
+                              ? checked
+                                ? 'bg-brand-600/[0.05]'
+                                : 'hover:bg-[#0F172A]/[0.03]'
+                              : checked
+                                ? 'bg-brand-600/[0.10]'
+                                : 'hover:bg-white/[0.03]'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleProtocol(p.id)}
+                            className="flex-shrink-0"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className={`${headingColor} text-sm font-medium truncate`}>
+                              {p.code}
+                            </p>
+                            <p className={`${mutedColor} text-[10px] truncate`}>{p.name}</p>
+                          </div>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </div>
+
+            {/* Action bar */}
+            <div className={`flex flex-wrap items-center gap-3 px-3 py-2.5 rounded-md border ${border} ${sectionBg}`}>
               <label className={`${labelColor} text-[11px] uppercase tracking-wider font-semibold`}>
-                Default role for new assignments
+                Role
               </label>
               <select
-                value={defaultBulkRole}
-                onChange={(e) => setDefaultBulkRole(e.target.value as ProtocolMemberRole)}
+                value={bulkRole}
+                onChange={(e) => setBulkRole(e.target.value as ProtocolMemberRole)}
                 className={`text-xs rounded border px-2 py-1 ${inputBg} ${headingColor}`}
               >
                 <option value="member">Team member</option>
                 <option value="coordinator">Coordinator</option>
                 <option value="viewer">Viewer</option>
               </select>
-            </div>
-
-            <div className={`border ${border} rounded-md overflow-auto ${matrixBg}`}>
-              <table className="text-xs w-max">
-                <thead>
-                  <tr>
-                    <th
-                      className={`sticky left-0 top-0 z-20 ${stickyHeaderBg} px-3 py-2 text-left ${labelColor} uppercase tracking-wider font-semibold border-b border-r ${border}`}
-                    >
-                      Member
-                    </th>
-                    {orgProtocols.map((p) => (
-                      <th
-                        key={p.id}
-                        className={`sticky top-0 z-10 ${stickyHeaderBg} px-3 py-2 text-left border-b ${border} min-w-[140px]`}
-                      >
-                        <p className={`${headingColor} font-semibold`}>{p.code}</p>
-                        <p className={`${mutedColor} text-[10px] truncate`}>{p.name}</p>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {members.map((m) => (
-                    <tr key={m.user_id}>
-                      <th
-                        scope="row"
-                        className={`sticky left-0 z-10 ${stickyHeaderBg} px-3 py-2 text-left border-b border-r ${border} min-w-[200px]`}
-                      >
-                        <p className={`${headingColor} font-medium truncate flex items-center gap-1.5`}>
-                          {m.role === 'admin' ? (
-                            <Crown size={11} className={isLight ? 'text-amber-600' : 'text-amber-400'} />
-                          ) : (
-                            <UserIcon size={11} className={mutedColor} />
-                          )}
-                          {m.name}
-                        </p>
-                      </th>
-                      {orgProtocols.map((p) => {
-                        const role = effectiveRole(m.user_id, p.id);
-                        const pending = isPending(m.user_id, p.id);
-                        // Admins have implicit access — surface that visually without
-                        // letting the user create a redundant protocol_members row.
-                        const adminImplicit = m.role === 'admin';
-                        return (
-                          <td
-                            key={p.id}
-                            className={`px-2 py-1.5 border-b ${border} align-middle`}
-                          >
-                            <button
-                              type="button"
-                              disabled={adminImplicit}
-                              onClick={() => toggleCell(m.user_id, p.id)}
-                              className={`w-full inline-flex items-center justify-center gap-1 px-2 py-1 rounded text-[11px] transition-colors ${
-                                adminImplicit
-                                  ? (isLight ? 'bg-amber-100 text-amber-800 cursor-not-allowed' : 'bg-amber-500/15 text-amber-300 cursor-not-allowed')
-                                  : role
-                                    ? pending
-                                      ? (isLight ? 'bg-rose-100 text-rose-700 line-through' : 'bg-rose-500/15 text-rose-300 line-through')
-                                      : (isLight ? 'bg-brand-600/10 text-brand-600' : 'bg-brand-600/20 text-brand-300')
-                                    : pending
-                                      ? (isLight ? 'bg-emerald-100 text-emerald-700' : 'bg-emerald-500/15 text-emerald-300')
-                                      : (isLight ? 'text-[#334155]/40 hover:bg-[#0F172A]/[0.04]' : 'text-[#CBD5E1]/40 hover:bg-white/[0.05]')
-                              }`}
-                              aria-label={`${m.name} on ${p.code}: ${role ? ROLE_LABEL[role] : 'not a member'}${pending ? ' (pending)' : ''}`}
-                            >
-                              {adminImplicit ? 'Admin (implicit)' : role ? ROLE_LABEL[role] : '—'}
-                            </button>
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {applyError && (
-              <div className={`mt-3 px-3 py-2 rounded-md text-xs ${isLight ? 'bg-rose-50 text-rose-700' : 'bg-rose-500/[0.06] text-rose-300'}`}>
-                {applyError}
-              </div>
-            )}
-
-            <div className="mt-3 flex items-center gap-3">
               <p className={`${subColor} text-xs`}>
-                {totalDeltas === 0
-                  ? 'No pending changes'
-                  : `${deltas.adds.length} addition${deltas.adds.length === 1 ? '' : 's'}, ${deltas.removes.length} removal${deltas.removes.length === 1 ? '' : 's'}`}
+                {selectedMemberIds.size === 0 || selectedProtocolIds.size === 0
+                  ? 'Select members and protocols to add'
+                  : `${plannedPairs.newPairs.length} new assignment${plannedPairs.newPairs.length === 1 ? '' : 's'}${
+                      plannedPairs.skippedPairs.length > 0
+                        ? `, ${plannedPairs.skippedPairs.length} already assigned`
+                        : ''
+                    }`}
               </p>
               <div className="flex-1" />
               <button
                 type="button"
-                onClick={cancelChanges}
-                disabled={totalDeltas === 0 || applying}
-                className={`text-xs px-3 py-1.5 rounded-md ${buttonGhost} disabled:opacity-40`}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={applyChanges}
-                disabled={totalDeltas === 0 || applying}
+                onClick={applyAssignments}
+                disabled={
+                  applying ||
+                  selectedMemberIds.size === 0 ||
+                  selectedProtocolIds.size === 0 ||
+                  plannedPairs.newPairs.length === 0
+                }
                 className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${buttonPrimary}`}
               >
-                {applying && <Loader2 size={12} className="animate-spin" />}
-                {applying ? 'Applying…' : 'Apply changes'}
+                {applying ? <Loader2 size={12} className="animate-spin" /> : <ArrowRight size={12} />}
+                {applying ? 'Adding…' : 'Add to selected protocols'}
               </button>
             </div>
-          </>
+
+            {/* Result banner */}
+            {bulkResult && (
+              <div className={`px-4 py-3 rounded-md border space-y-2 ${
+                bulkResult.failed.length > 0
+                  ? isLight ? 'bg-amber-50 border-amber-200' : 'bg-amber-500/[0.06] border-amber-500/30'
+                  : isLight ? 'bg-emerald-50 border-emerald-200' : 'bg-emerald-500/[0.06] border-emerald-500/30'
+              }`}>
+                {bulkResult.added.length > 0 && (
+                  <div className="flex items-start gap-2">
+                    <Check size={13} className={`${isLight ? 'text-emerald-700' : 'text-emerald-400'} mt-0.5 flex-shrink-0`} />
+                    <p className={`text-xs ${isLight ? 'text-emerald-800' : 'text-emerald-300'} leading-relaxed`}>
+                      Added {bulkResult.added.length} assignment{bulkResult.added.length === 1 ? '' : 's'} at role <strong>{ROLE_LABEL[bulkRole]}</strong>:
+                      {' '}
+                      {bulkResult.added.map((a, i) => (
+                        <span key={i}>
+                          {i > 0 && ', '}
+                          {a.memberName} → {a.protocolCode}
+                        </span>
+                      ))}
+                    </p>
+                  </div>
+                )}
+                {bulkResult.skipped.length > 0 && (
+                  <p className={`text-xs ${subColor} pl-5`}>
+                    Skipped (already assigned): {bulkResult.skipped.map((s) => `${s.memberName} → ${s.protocolCode}`).join(', ')}
+                  </p>
+                )}
+                {bulkResult.failed.length > 0 && (
+                  <p className={`text-xs ${isLight ? 'text-rose-700' : 'text-rose-300'} pl-5`}>
+                    Failed: {bulkResult.failed.map((f) => `${f.memberName} → ${f.protocolCode} (${f.reason})`).join('; ')}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setBulkResult(null)}
+                  className={`${linkButton} text-[11px] pl-5`}
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </section>
     </div>
