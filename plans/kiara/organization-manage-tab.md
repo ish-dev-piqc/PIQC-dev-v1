@@ -28,15 +28,15 @@ After the page-polish PR (#follow-up to #204) Kiara surfaced three remaining UX 
 
 1. **Invite to organization** (lifted from the old MembersTab) — email + role select + per-protocol assignment checkboxes + Create invite button. Pending invites list with copy-link + cancel.
 2. **Manage members** — table-style roster with per-row Remove button and a role-toggle button (Make admin / Make member). This is what currently lives in MembersTab; just moves here.
-3. **Bulk protocol access** — the new piece. Matrix grid:
-   - Rows: every org member (name + current org role badge)
-   - Columns: every org protocol (code + name in the column header)
-   - Cell: shows current `protocol_members` status for (member, protocol). Empty cell = not a member. Badge cell = "Coordinator", "Team member", or "Viewer" depending on existing role.
-   - Click a cell to toggle: empty → adds at the default role (controlled by the top-level role select), member → removes.
-   - Top of the matrix: a "Default role for new assignments" select (Team member / Coordinator / Viewer; default Team member).
-   - Bottom: live delta count ("+3 additions, -1 removal") and an "Apply changes" button. Cancel button reverts pending changes.
-   - Apply fires `addProtocolMember` / `removeProtocolMember` calls in parallel via `Promise.all` for each delta. On any failure, surface an error banner with the count succeeded / count failed. On success, refresh the matrix from the server.
-   - Role changes to existing assignments are explicitly OUT of scope for the matrix — that stays per-row in the Team tab via its existing controls. Keeping the matrix toggle-only avoids the "click-three-times-to-change-role" UX trap.
+3. **Bulk protocol access** — two-list checker.
+   - **Left column**: org members with checkboxes (excluding site administrators, who have implicit access to every protocol — including them in the picker would create meaningless `protocol_members` rows).
+   - **Right column**: org protocols with checkboxes (code + name).
+   - Each column header shows the selection count and "Select all" / "Clear" links.
+   - Below both lists, an action bar: Role select (Team member / Coordinator / Viewer; default Team member), live count of new vs. already-assigned pairs ("3 new assignments, 1 already assigned"), and a primary "Add to selected protocols" button.
+   - Submitting takes the cartesian product of selected members × selected protocols, splits into "new" (not yet a `protocol_members` row) and "already assigned", and fires `addProtocolMember` for each new pair in parallel via `Promise.all`. Already-assigned pairs are skipped client-side, not sent.
+   - Result banner below the action bar shows what happened — added pairs listed individually ("Maya → PP06489, Sam → PP06490"), skipped pairs with reason "Already assigned", and any failures with their server error. Dismissable.
+   - **Removing** access is intentionally NOT in the bulk surface — that stays per-row in the Team tab where the user has the protocol context in front of them. Bulk removal is rare enough not to warrant a second selection mode; the two-list UI stays single-purpose.
+   - Role changes to existing assignments are likewise out of scope here; they live on Team tab per-row via `updateProtocolMemberRole`.
 
 ### What stays in MembersTab.tsx
 
