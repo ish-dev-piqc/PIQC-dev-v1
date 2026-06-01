@@ -9,7 +9,6 @@ import { useAudit } from '../context/AuditContext';
 import { useHeatmap } from '../context/HeatmapContext';
 import { useDemoMode } from '../context/DemoModeContext';
 import { getProtocolColors } from '../lib/site/protocolColors';
-import OrgSettingsDrawer from './dashboard/orgs/OrgSettingsDrawer';
 import MembersDrawer from './dashboard/orgs/MembersDrawer';
 import OrgSwitcher from './dashboard/orgs/OrgSwitcher';
 import RequestAccessButton from './dashboard/orgs/RequestAccessButton';
@@ -23,13 +22,13 @@ interface NavbarProps {
   onViewChange: (view: AppView) => void;
   onDashboardHome: () => void;
   onOpenSettingsSection: (section: SettingsSection) => void;
+  onOpenOrganization: () => void;
 }
 
-export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSettingsSection }: NavbarProps) {
+export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSettingsSection, onOpenOrganization }: NavbarProps) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [orgDrawerOpen, setOrgDrawerOpen] = useState(false);
   const [membersDrawerOpen, setMembersDrawerOpen] = useState(false);
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [protocolMenuOpen, setProtocolMenuOpen] = useState(false);
@@ -633,7 +632,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                       <button
                         onClick={() => {
                           setUserMenuOpen(false);
-                          setOrgDrawerOpen(true);
+                          onOpenOrganization();
                         }}
                         className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm ${isLight ? 'text-[#334155]/60 hover:text-[#0F172A] hover:bg-[#0F172A]/[0.05]' : 'text-[#CBD5E1]/60 hover:text-white hover:bg-white/[0.05]'} rounded-lg transition-all duration-150`}
                       >
@@ -790,7 +789,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                 Billing
               </button>
               <button
-                onClick={() => { setMobileOpen(false); setOrgDrawerOpen(true); }}
+                onClick={() => { setMobileOpen(false); onOpenOrganization(); }}
                 className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#334155]/70 hover:text-[#0F172A] hover:bg-[#0F172A]/[0.06]' : 'text-[#CBD5E1]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
               >
                 <Building2 size={14} />
@@ -908,7 +907,6 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
       )}
     </header>
     {addProtocolOpen && <ProtocolUploadModal onClose={() => setAddProtocolOpen(false)} />}
-    {orgDrawerOpen && <OrgSettingsDrawer onClose={() => setOrgDrawerOpen(false)} />}
     {membersDrawerOpen && <MembersDrawer onClose={() => setMembersDrawerOpen(false)} />}
     </>
   );
