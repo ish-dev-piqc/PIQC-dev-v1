@@ -137,6 +137,12 @@ function AppContent() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleOpenOrganization = () => {
+    setDashboardTab('organization');
+    setView('dashboard');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const pageBg = theme === 'light' ? 'bg-[#F8FAFC]' : 'bg-[#070d1a]';
   const textColor = theme === 'light' ? 'text-[#0F172A]' : 'text-white';
 
@@ -184,6 +190,7 @@ function AppContent() {
           onViewChange={handleViewChange}
           onDashboardHome={handleDashboardHome}
           onOpenSettingsSection={handleOpenSettingsSection}
+          onOpenOrganization={handleOpenOrganization}
         />
         {inviteResult && (
           <InviteWelcomeBanner
@@ -208,6 +215,7 @@ function AppContent() {
         onViewChange={handleViewChange}
         onDashboardHome={handleDashboardHome}
         onOpenSettingsSection={handleOpenSettingsSection}
+        onOpenOrganization={handleOpenOrganization}
       />
       <main>
         <Hero onViewChange={handleViewChange} />

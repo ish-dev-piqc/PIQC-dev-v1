@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { MessageSquare, LayoutDashboard, Activity, FileText, Database, UserCircle2, Users, CalendarCheck, UserCog, CreditCard, Loader2, CheckCircle2, AlertCircle, ClipboardList, type LucideIcon } from 'lucide-react';
+import { MessageSquare, LayoutDashboard, Activity, FileText, Database, UserCircle2, Users, CalendarCheck, CreditCard, Loader2, CheckCircle2, AlertCircle, ClipboardList, type LucideIcon } from 'lucide-react';
 import DashboardChat from './DashboardChat';
 import KnowledgeBase from './KnowledgeBase';
 import TodayTab from './site/TodayTab';
@@ -7,6 +7,7 @@ import AskRail from './site/AskRail';
 import ParticipantsTab from './site/ParticipantsTab';
 import VisitsTab from './site/VisitsTab';
 import TeamTab from './site/TeamTab';
+import OrganizationPage from './organization/OrganizationPage';
 import DemoBanner from './site/DemoBanner';
 import ReportsTab from './site/ReportsTab';
 import ProtocolRequiredGate from './site/ProtocolRequiredGate';
@@ -44,6 +45,7 @@ export type DashboardTab =
   | 'team'
   // Shared
   | 'reports'
+  | 'organization'
   | 'settings';
 export type SettingsSection = 'account' | 'security' | 'billing';
 
@@ -61,7 +63,8 @@ const SITE_TABS: TabConfig[] = [
   { id: 'today', label: 'Today', icon: LayoutDashboard },
   { id: 'participants', label: 'Participants', icon: Users },
   { id: 'visits', label: 'Visits', icon: CalendarCheck },
-  { id: 'team', label: 'Team', icon: UserCog },
+  // Team moved to the Organization page (top-level dashboard tab). See
+  // src/components/dashboard/organization/OrganizationPage.tsx.
   { id: 'reports', label: 'Reports', icon: FileText },
 ];
 
@@ -762,6 +765,8 @@ export default function Dashboard({
             }}
           />
         );
+      case 'organization':
+        return <OrganizationPage />;
       case 'settings':
         return (
           <SettingsTab

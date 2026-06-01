@@ -63,7 +63,7 @@ function fail<T>(label: string, error: unknown): Result<T> {
   // PostgrestError (and most Supabase error shapes) are plain objects with a
   // .message field — they're not `instanceof Error`. The pre-existing impl
   // would `String(error)` them to "[object Object]", which is what users saw
-  // rendered in the OrgSettingsDrawer banner. Unpack the message explicitly.
+  // rendered in the org settings banner. Unpack the message explicitly.
   let msg: string;
   if (error instanceof Error) {
     msg = error.message;
