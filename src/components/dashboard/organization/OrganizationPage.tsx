@@ -13,10 +13,7 @@ import { useOrg } from '../../../context/OrgContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import MembersTab from './MembersTab';
 import ManageTab from './ManageTab';
-// Team tab still lives in dashboard/site/ for now; relocating to
-// dashboard/organization/team/ is a follow-up cleanup PR (sandbox `git mv`
-// limitations during PR 1 forced the deferral).
-import TeamTab from '../site/TeamTab';
+import TeamTab from './team/TeamTab';
 
 // =============================================================================
 // OrganizationPage — full-screen Organization destination.

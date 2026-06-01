@@ -10,18 +10,18 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-react';
-import { useTheme } from '../../../context/ThemeContext';
-import { useProtocol } from '../../../context/ProtocolContext';
-import { useSiteData } from '../../../context/SiteDataContext';
-import { TEAM_ROLE_LABELS, TEAM_ROLE_SHORT } from '../../../lib/site/labels';
-import { deleteTeamMember } from '../../../lib/site/siteApi';
-import { isCertExpired, isCertExpiringSoon } from '../../../lib/site/dateUtils';
+import { useTheme } from '../../../../context/ThemeContext';
+import { useProtocol } from '../../../../context/ProtocolContext';
+import { useSiteData } from '../../../../context/SiteDataContext';
+import { TEAM_ROLE_LABELS, TEAM_ROLE_SHORT } from '../../../../lib/site/labels';
+import { deleteTeamMember } from '../../../../lib/site/siteApi';
+import { isCertExpired, isCertExpiringSoon } from '../../../../lib/site/dateUtils';
 import TeamFormDrawer from './TeamFormDrawer';
 import type {
   SiteTeamMember,
   TeamRole,
   TeamMemberStatus,
-} from '../../../lib/site/types';
+} from '../../../../lib/site/types';
 
 // =============================================================================
 // TeamTab — Site Mode delegation log for the active protocol.
