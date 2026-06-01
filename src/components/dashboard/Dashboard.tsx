@@ -682,6 +682,7 @@ export default function Dashboard({
   // tab-change callers (e.g. App setting 'overview' on logo click while in Site Mode).
   useEffect(() => {
     if (resolvedActiveTab === 'settings') return;
+    if (resolvedActiveTab === 'organization') return;
     const inList = tabs.some((t) => t.id === resolvedActiveTab);
     if (!inList) {
       const fallback = tabs[0].id;
