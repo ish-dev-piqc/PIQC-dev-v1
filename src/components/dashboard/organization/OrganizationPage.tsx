@@ -4,6 +4,7 @@ import {
   Building2,
   ClipboardList,
   Crown,
+  Settings,
   User as UserIcon,
   Users as UsersIcon,
 } from 'lucide-react';
@@ -11,6 +12,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useOrg } from '../../../context/OrgContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import MembersTab from './MembersTab';
+import ManageTab from './ManageTab';
 // Team tab still lives in dashboard/site/ for now; relocating to
 // dashboard/organization/team/ is a follow-up cleanup PR (sandbox `git mv`
 // limitations during PR 1 forced the deferral).
@@ -19,26 +21,26 @@ import TeamTab from '../site/TeamTab';
 // =============================================================================
 // OrganizationPage — full-screen Organization destination.
 //
-// Renders its own chrome row (back-to-dashboard arrow + tab pills) in place
-// of the standard Site/Audit tab strip; the parent Dashboard skips its tab
-// strip + bordered panel when the active tab is 'organization' (see
-// Dashboard.tsx early-return). The page header below the chrome row makes
-// the org context unambiguous: "Organization" eyebrow, org name as the
-// title, role badge underneath.
+// Owns its own chrome row (back arrow + tab pills) in place of the standard
+// Site/Audit tab strip; Dashboard.tsx routes here directly when activeTab is
+// 'organization'.
 //
-// Each tab inside the page is responsible for its own scope-clarity copy
-// (Members → "Organization members"; Team → "Protocol team — {code}") so
-// users always know whether the action they're about to take affects the
-// whole org or just the active protocol.
+// Tabs:
+//   - Members  : read-only org roster (everyone)
+//   - Team     : protocol-specific delegation log + in-page protocol picker.
+//                The picker calls setActiveProtocol so the user's choice
+//                follows them back to the dashboard when they exit.
+//   - Manage   : invite + member-admin + bulk protocol-access matrix.
+//                Admin-only; hidden from the tab strip for site members.
 // =============================================================================
 
 interface OrganizationPageProps {
   onExit?: () => void;
 }
 
-type OrgTab = 'members' | 'team';
+type OrgTab = 'members' | 'team' | 'manage';
 
-const TABS: { id: OrgTab; label: string; icon: typeof UsersIcon }[] = [
+const BASE_TABS: { id: OrgTab; label: string; icon: typeof UsersIcon }[] = [
   { id: 'members', label: 'Members', icon: UsersIcon },
   { id: 'team', label: 'Team', icon: ClipboardList },
 ];
@@ -47,8 +49,13 @@ export default function OrganizationPage({ onExit }: OrganizationPageProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
   const { activeOrg } = useOrg();
-  const { activeProtocol } = useProtocol();
+  const { protocols, activeProtocol, setActiveProtocol } = useProtocol();
   const [activeTab, setActiveTab] = useState<OrgTab>('members');
+
+  const isAdmin = activeOrg?.my_role === 'admin';
+  const tabs: { id: OrgTab; label: string; icon: typeof UsersIcon }[] = isAdmin
+    ? [...BASE_TABS, { id: 'manage', label: 'Manage', icon: Settings }]
+    : BASE_TABS;
 
   const tabBarBg = isLight
     ? 'border-[#E2E8F0] bg-[#F8FAFC]/80'
@@ -63,6 +70,7 @@ export default function OrganizationPage({ onExit }: OrganizationPageProps) {
   const exitButtonClass = isLight
     ? 'text-[#334155]/70 hover:text-[#0F172A] hover:bg-[#0F172A]/[0.05] border-[#E2E8F0]'
     : 'text-[#CBD5E1]/70 hover:text-white hover:bg-white/[0.05] border-white/10';
+  const inputBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#1E293B] border-white/10';
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
@@ -81,7 +89,7 @@ export default function OrganizationPage({ onExit }: OrganizationPageProps) {
               Dashboard
             </button>
             <div className={`w-px h-6 mx-1 ${isLight ? 'bg-[#E2E8F0]' : 'bg-white/10'}`} />
-            {TABS.map((t) => {
+            {tabs.map((t) => {
               const Icon = t.icon;
               const isActive = activeTab === t.id;
               return (
@@ -127,30 +135,54 @@ export default function OrganizationPage({ onExit }: OrganizationPageProps) {
           </div>
 
           {activeTab === 'members' && <MembersTab />}
+
           {activeTab === 'team' && (
             <div className="space-y-4">
               <div>
                 <div className="flex items-center gap-2 text-fg-label text-[10px] uppercase tracking-wider font-semibold">
                   <ClipboardList size={11} />
                   Protocol team
-                  {activeProtocol && (
-                    <span className="text-fg-muted normal-case tracking-normal font-normal">
-                      — {activeProtocol.code}
-                    </span>
-                  )}
                 </div>
                 <p className="text-fg-sub text-xs mt-1 max-w-2xl leading-relaxed">
-                  These users are assigned to {activeProtocol ? `${activeProtocol.code}` : 'the active protocol'} specifically.
-                  To add a brand-new person to the whole organization, switch to the{' '}
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('members')}
-                    className="text-brand-300 hover:underline"
-                  >
-                    Members tab
-                  </button>
-                  {' '}instead.
+                  Pick a protocol to see who's working on it. Adding or removing access happens
+                  in the{' '}
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('manage')}
+                      className="text-brand-300 hover:underline"
+                    >
+                      Manage tab
+                    </button>
+                  ) : (
+                    'Manage tab (admins only)'
+                  )}
+                  .
                 </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <label
+                  htmlFor="org-team-protocol-picker"
+                  className="text-fg-label text-[11px] uppercase tracking-wider font-semibold"
+                >
+                  Protocol
+                </label>
+                <select
+                  id="org-team-protocol-picker"
+                  value={activeProtocol?.id ?? ''}
+                  onChange={(e) => {
+                    const next = protocols.find((p) => p.id === e.target.value);
+                    setActiveProtocol(next ?? null);
+                  }}
+                  className={`text-xs rounded-md border px-2 py-1.5 ${inputBg} text-fg-heading focus:outline-none focus:ring-2 focus:ring-brand-600/30`}
+                >
+                  <option value="">— Select a protocol —</option>
+                  {protocols.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.code} — {p.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               {activeProtocol ? (
                 <TeamTab />
@@ -158,12 +190,14 @@ export default function OrganizationPage({ onExit }: OrganizationPageProps) {
                 <div className={`px-4 py-8 rounded-md border ${headerBorder} text-center`}>
                   <p className="text-fg-body text-sm">No protocol selected.</p>
                   <p className="text-fg-sub text-xs mt-1">
-                    Pick a protocol in the top-bar protocol picker to view and edit its team.
+                    Pick a protocol from the dropdown above to view its team.
                   </p>
                 </div>
               )}
             </div>
           )}
+
+          {activeTab === 'manage' && isAdmin && <ManageTab />}
         </div>
       </div>
     </div>
