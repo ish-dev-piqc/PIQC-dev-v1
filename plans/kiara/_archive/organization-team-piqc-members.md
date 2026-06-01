@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: organization-team-piqc-members
-status: active
+status: merged
+merged: 2026-06-01
 started: 2026-06-01
-target_pr:
+target_pr: #217
 ---
 
 # Team tab: show PIQC team alongside the delegation log + fix picker width
