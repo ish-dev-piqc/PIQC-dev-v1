@@ -14,6 +14,7 @@ import { useProtocol } from '../../../context/ProtocolContext';
 import MembersTab from './MembersTab';
 import ManageTab from './ManageTab';
 import TeamTab from './team/TeamTab';
+import ProtocolMembersList from './team/ProtocolMembersList';
 
 // =============================================================================
 // OrganizationPage — full-screen Organization destination.
@@ -134,15 +135,15 @@ export default function OrganizationPage({ onExit }: OrganizationPageProps) {
           {activeTab === 'members' && <MembersTab />}
 
           {activeTab === 'team' && (
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div>
                 <div className="flex items-center gap-2 text-fg-label text-[10px] uppercase tracking-wider font-semibold">
                   <ClipboardList size={11} />
                   Protocol team
                 </div>
                 <p className="text-fg-sub text-xs mt-1 max-w-2xl leading-relaxed">
-                  Pick a protocol to see who's working on it. Adding or removing access happens
-                  in the{' '}
+                  Pick a protocol to see who's working on it. Adding or removing PIQC access
+                  happens in the{' '}
                   {isAdmin ? (
                     <button
                       type="button"
@@ -157,10 +158,13 @@ export default function OrganizationPage({ onExit }: OrganizationPageProps) {
                   .
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              {/* Picker — flex-wrap so the select drops below the label on narrow
+                  viewports instead of overflowing the page. Caps width so the
+                  selected option's text truncates rather than stretching. */}
+              <div className="flex flex-wrap items-center gap-2">
                 <label
                   htmlFor="org-team-protocol-picker"
-                  className="text-fg-label text-[11px] uppercase tracking-wider font-semibold"
+                  className="text-fg-label text-[11px] uppercase tracking-wider font-semibold flex-shrink-0"
                 >
                   Protocol
                 </label>
@@ -171,7 +175,7 @@ export default function OrganizationPage({ onExit }: OrganizationPageProps) {
                     const next = protocols.find((p) => p.id === e.target.value);
                     setActiveProtocol(next ?? null);
                   }}
-                  className={`text-xs rounded-md border px-2 py-1.5 ${inputBg} text-fg-heading focus:outline-none focus:ring-2 focus:ring-brand-600/30`}
+                  className={`text-xs rounded-md border px-2 py-1.5 ${inputBg} text-fg-heading focus:outline-none focus:ring-2 focus:ring-brand-600/30 w-full sm:w-auto sm:max-w-[320px] min-w-0 truncate`}
                 >
                   <option value="">— Select a protocol —</option>
                   {protocols.map((p) => (
@@ -182,7 +186,22 @@ export default function OrganizationPage({ onExit }: OrganizationPageProps) {
                 </select>
               </div>
               {activeProtocol ? (
-                <TeamTab />
+                <>
+                  <ProtocolMembersList protocolId={activeProtocol.id} />
+
+                  <div className={`pt-4 border-t ${headerBorder}`}>
+                    <div className="flex items-center gap-2 text-fg-label text-[10px] uppercase tracking-wider font-semibold">
+                      <ClipboardList size={11} />
+                      Site delegation log
+                    </div>
+                    <p className="text-fg-sub text-xs mt-1 max-w-2xl leading-relaxed">
+                      Clinical staff with their regulatory role and certifications. Separate
+                      from PIQC access above — this is the delegation log for the trial site,
+                      not the list of users with app access.
+                    </p>
+                  </div>
+                  <TeamTab />
+                </>
               ) : (
                 <div className={`px-4 py-8 rounded-md border ${headerBorder} text-center`}>
                   <p className="text-fg-body text-sm">No protocol selected.</p>
