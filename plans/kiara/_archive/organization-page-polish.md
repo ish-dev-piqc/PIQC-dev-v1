@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: organization-page-polish
-status: active
+status: merged
+merged: 2026-06-01
 started: 2026-06-01
-target_pr:
+target_pr: #210
 ---
 
 # Organization page polish — full-screen destination + scope clarity
