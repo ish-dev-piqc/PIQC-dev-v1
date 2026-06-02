@@ -1,7 +1,7 @@
 ---
 owner: ish-dev-piqc
 feature: visit-prep-order-fix
-status: active
+status: in-review
 started: 2026-06-02
 target_pr:
 ---
@@ -25,7 +25,7 @@ key *does* exist in its JSON). Shipped as a standalone migration so it lands ind
 
 ## Out of scope (files forbidden)
 
-- supabase/functions/_shared/ingestPipeline.ts — the separate missing-visit (non-numeric `study_day`) fix; handled on `feature/ish-visits-polish`, which already rewrites this file (+96 lines). Touching it here would conflict.
+- supabase/functions/_shared/ingestPipeline.ts — the separate missing-visit (non-numeric `study_day`) fix; handled on its own branch `ishika/visit-prep-missing-visit-fix` (carved off main). Not part of this PR.
 - src/components/dashboard/visit-execution/VisitExecutionTab.tsx — the stale `// set by adapter sort` comment (line ~245) is corrected inside visits-polish (in-flight +118 lines there); avoided here to keep this PR conflict-free.
 - All previously-merged migrations (append-only — never edited).
 
@@ -37,6 +37,10 @@ key *does* exist in its JSON). Shipped as a standalone migration so it lands ind
 - [ ] context (`src/context/`)
 - [ ] component (`src/components/`)
 - [ ] test (`src/**/__tests__/`)
+
+**DB schema change → TS type mirror:** N/A — **no type impact.** This is a `CREATE OR REPLACE`
+of an existing RPC; the JSON return shape is byte-identical to v3 (ordering only), so no
+`src/types/visit-execution/` change is needed.
 
 ## Mock data plan
 
