@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: visit-prep-missing-visit-fix
-status: in-review
+status: merged
+merged: 2026-06-02
 started: 2026-06-02
-target_pr:
+target_pr: #228
 ---
 
 # Visit Prep — stop dropping visits with a non-numeric study_day
