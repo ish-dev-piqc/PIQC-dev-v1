@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: organization-team-unified
-status: active
+status: merged
+merged: 2026-06-02
 started: 2026-06-01
-target_pr:
+target_pr: #237
 ---
 
 # Unified Team tab: one row per protocol member, two badges per row
