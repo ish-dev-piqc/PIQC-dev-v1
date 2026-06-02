@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: visit-prep-order-fix
-status: in-review
+status: merged
+merged: 2026-06-02
 started: 2026-06-02
-target_pr:
+target_pr: #227
 ---
 
 # Visit Prep — visit ordering fix (workspace RPC)
