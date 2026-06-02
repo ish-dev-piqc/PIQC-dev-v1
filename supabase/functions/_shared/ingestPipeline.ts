@@ -24,6 +24,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { mapReductoExtractToSotr } from "./sourceEvidenceAdapter.ts";
 import { dedupeVisitTemplateRowsByQuality } from "./visitTemplateDedup.ts";
+import { coerceStudyDay } from "./studyDayCoerce.ts";
 import type { ReductoExtractResponse } from "./sotrTypes.ts";
 
 // -----------------------------------------------------------------------------
@@ -1660,8 +1661,12 @@ async function persistVisitExecutionWorkspaces(
   // protocols. Trade-off accepted: ~3s × N visits sequential vs ~3s total
   // but rate-limit risky. Revisit if ingest latency becomes a complaint.
   for (const entry of args.schedule) {
-    if (typeof entry.visit_name !== "string" || typeof entry.study_day !== "number") continue;
-    const key = `${String(entry.visit_name).trim()}|${Math.trunc(entry.study_day)}`;
+    if (typeof entry.visit_name !== "string") continue;
+    // Coerce identically to the template-build step (step 5) so this key matches
+    // a row in byKey — a numeric `42` here vs a string "42" there would miss.
+    const studyDay = coerceStudyDay(entry.study_day);
+    if (studyDay === null) continue;
+    const key = `${String(entry.visit_name).trim()}|${studyDay}`;
     const tpl = byKey.get(key);
     if (!tpl) continue;
 
@@ -2094,11 +2099,26 @@ export async function processIngestCompletion(
         };
 
         const rows = (schedule as LocalScheduleEntry[])
-          .filter((s) => s && typeof s.visit_name === "string" && typeof s.study_day === "number")
-          .map((s) => ({
+          .filter((s) => s && typeof s.visit_name === "string")
+          .map((s) => {
+            const day = coerceStudyDay(s.study_day);
+            if (day === null) {
+              // Was silently dropped by the old `typeof study_day === "number"`
+              // guard — the missing-Visit-5/6 bug. Keep it LOUD so a re-ingest
+              // gap (or a genuinely non-numeric day Reducto couldn't resolve) is
+              // visible in the function logs instead of a quietly-shorter list.
+              console.warn("[ingest] visit_dropped_unparseable_study_day", {
+                visit_name: String(s.visit_name).trim(),
+                raw_study_day: s.study_day,
+              });
+            }
+            return { s, day };
+          })
+          .filter((sd): sd is { s: LocalScheduleEntry; day: number } => sd.day !== null)
+          .map(({ s, day }) => ({
             protocol_id: resolvedProtocolId,
             visit_name: String(s.visit_name).trim(),
-            study_day: Math.trunc(s.study_day as number),
+            study_day: day,
             window_minus_days: typeof s.window_minus_days === "number" ? Math.max(0, Math.trunc(s.window_minus_days)) : 0,
             window_plus_days: typeof s.window_plus_days === "number" ? Math.max(0, Math.trunc(s.window_plus_days)) : 0,
             procedures: Array.isArray(s.procedures)
@@ -2189,11 +2209,11 @@ export async function processIngestCompletion(
 
       if (protocolId && schedule.length > 0 && result.templatesInserted > 0) {
         const visitListForFanOut = schedule
-          .filter((s) => typeof s.visit_name === "string" && typeof s.study_day === "number")
-          .map((s) => ({
-            visit_name: String(s.visit_name).trim(),
-            study_day: Math.trunc(s.study_day as number),
-          }));
+          .filter((s) => typeof s.visit_name === "string")
+          .map((s) => ({ visit_name: String(s.visit_name).trim(), study_day: coerceStudyDay(s.study_day) }))
+          // Same coercion as the template build so the fan-out targets the same
+          // visits we actually stored (e.g. a "Day 168 ± 7" trailing visit).
+          .filter((v): v is { visit_name: string; study_day: number } => v.study_day !== null);
 
         const { data: siblings } = await supabase
           .from("documents")
