@@ -27,6 +27,7 @@ import {
   removeOrgMember,
   revokeOrgInvite,
   updateOrgMemberRole,
+  updateProtocolMemberRole,
 } from '../../../lib/orgs/orgsApi';
 import type {
   OrgInvite,
@@ -99,11 +100,33 @@ export default function ManageTab() {
   const [bulkResult, setBulkResult] = useState<
     | {
         added: { memberName: string; protocolCode: string; role: ProtocolMemberRole }[];
+        roleChanged: {
+          memberName: string;
+          protocolCode: string;
+          from: ProtocolMemberRole;
+          to: ProtocolMemberRole;
+        }[];
         skipped: { memberName: string; protocolCode: string; reason: string }[];
         failed: { memberName: string; protocolCode: string; reason: string }[];
       }
     | null
   >(null);
+
+  // Conflict modal: shown when the bulk submission includes (member, protocol)
+  // pairs that already exist at a different role. The user resolves each one
+  // with Skip vs Change role, then we apply the new pairs + the requested
+  // role updates. Same-role conflicts (existing == requested) bypass the
+  // modal entirely — there's nothing to decide.
+  const [conflictModal, setConflictModal] = useState<{
+    differentRole: {
+      userId: string;
+      protocolId: string;
+      currentRole: ProtocolMemberRole;
+      requestedRole: ProtocolMemberRole;
+    }[];
+    sameRoleCount: number;
+    resolutions: Map<string, 'skip' | 'change'>;
+  } | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -318,35 +341,118 @@ export default function ManageTab() {
   }
 
   const plannedPairs = useMemo(() => {
-    // Cartesian product of selected members × selected protocols, each
-    // carrying the per-member role. Split into "needs insert" (not yet
-    // assigned) and "skipped" (already assigned).
+    // Cartesian product of selected members × selected protocols, split into:
+    //   - newPairs: no existing assignment → straight add
+    //   - sameRoleConflicts: already assigned at the requested role → auto-skip
+    //   - differentRoleConflicts: already assigned at a DIFFERENT role →
+    //     requires a Skip / Change decision in the conflict modal.
     const newPairs: { userId: string; protocolId: string; role: ProtocolMemberRole }[] = [];
-    const skippedPairs: { userId: string; protocolId: string }[] = [];
+    const sameRoleConflicts: {
+      userId: string;
+      protocolId: string;
+      currentRole: ProtocolMemberRole;
+      requestedRole: ProtocolMemberRole;
+    }[] = [];
+    const differentRoleConflicts: {
+      userId: string;
+      protocolId: string;
+      currentRole: ProtocolMemberRole;
+      requestedRole: ProtocolMemberRole;
+    }[] = [];
     for (const [userId, role] of selectedMembers) {
       for (const protocolId of selectedProtocolIds) {
         const key = cellKey(userId, protocolId);
-        if (currentAssignments.has(key)) skippedPairs.push({ userId, protocolId });
-        else newPairs.push({ userId, protocolId, role });
+        const existing = currentAssignments.get(key);
+        if (existing === undefined) {
+          newPairs.push({ userId, protocolId, role });
+        } else if (existing === role) {
+          sameRoleConflicts.push({
+            userId,
+            protocolId,
+            currentRole: existing,
+            requestedRole: role,
+          });
+        } else {
+          differentRoleConflicts.push({
+            userId,
+            protocolId,
+            currentRole: existing,
+            requestedRole: role,
+          });
+        }
       }
     }
-    return { newPairs, skippedPairs };
+    return { newPairs, sameRoleConflicts, differentRoleConflicts };
   }, [selectedMembers, selectedProtocolIds, currentAssignments]);
 
-  async function applyAssignments() {
-    const { newPairs, skippedPairs } = plannedPairs;
-    if (newPairs.length === 0 && skippedPairs.length === 0) return;
+  function nameOf(userId: string): string {
+    return members.find((m) => m.user_id === userId)?.name ?? 'Unknown';
+  }
+  function codeOf(protocolId: string): string {
+    return orgProtocols.find((p) => p.id === protocolId)?.code ?? 'Unknown';
+  }
+
+  // Click handler on the main "Add to selected protocols" button. Routes to
+  // either the immediate-commit path or the conflict modal depending on
+  // whether any pairs need a Skip/Change decision.
+  function handleApplyClick() {
+    const { newPairs, sameRoleConflicts, differentRoleConflicts } = plannedPairs;
+    if (newPairs.length === 0 && differentRoleConflicts.length === 0) return;
     if (applying) return;
+    if (differentRoleConflicts.length > 0) {
+      // Open the modal — default every conflict to 'skip' so a user who just
+      // clicks Apply doesn't accidentally clobber existing roles.
+      const resolutions = new Map<string, 'skip' | 'change'>();
+      for (const c of differentRoleConflicts) {
+        resolutions.set(cellKey(c.userId, c.protocolId), 'skip');
+      }
+      setConflictModal({
+        differentRole: differentRoleConflicts,
+        sameRoleCount: sameRoleConflicts.length,
+        resolutions,
+      });
+      return;
+    }
+    // No conflicts requiring user input — commit the new pairs directly.
+    void commitAssignments(newPairs, [], sameRoleConflicts.length);
+  }
 
-    const nameOf = (userId: string) =>
-      members.find((m) => m.user_id === userId)?.name ?? 'Unknown';
-    const codeOf = (protocolId: string) =>
-      orgProtocols.find((p) => p.id === protocolId)?.code ?? 'Unknown';
+  function setResolution(key: string, value: 'skip' | 'change') {
+    setConflictModal((prev) => {
+      if (!prev) return prev;
+      const next = new Map(prev.resolutions);
+      next.set(key, value);
+      return { ...prev, resolutions: next };
+    });
+  }
 
+  async function confirmConflictModal() {
+    if (!conflictModal) return;
+    const { differentRole, sameRoleCount, resolutions } = conflictModal;
+    const { newPairs } = plannedPairs;
+    const roleChanges = differentRole.filter(
+      (c) => resolutions.get(cellKey(c.userId, c.protocolId)) === 'change',
+    );
+    setConflictModal(null);
+    await commitAssignments(newPairs, roleChanges, sameRoleCount);
+  }
+
+  async function commitAssignments(
+    newPairs: { userId: string; protocolId: string; role: ProtocolMemberRole }[],
+    roleChanges: {
+      userId: string;
+      protocolId: string;
+      currentRole: ProtocolMemberRole;
+      requestedRole: ProtocolMemberRole;
+    }[],
+    sameRoleSkipCount: number,
+  ) {
     setApplying(true);
     setBulkResult(null);
 
-    const results = await Promise.all(
+    // Run inserts and role-changes in parallel — the server treats them as
+    // independent rows / updates.
+    const addResults = await Promise.all(
       newPairs.map(async (pair) => {
         const res = await addProtocolMember({
           protocol_id: pair.protocolId,
@@ -356,10 +462,25 @@ export default function ManageTab() {
         return { pair, res };
       }),
     );
+    const changeResults = await Promise.all(
+      roleChanges.map(async (change) => {
+        const res = await updateProtocolMemberRole(change.protocolId, change.userId, {
+          role: change.requestedRole,
+        });
+        return { change, res };
+      }),
+    );
 
     const added: { memberName: string; protocolCode: string; role: ProtocolMemberRole }[] = [];
+    const roleChanged: {
+      memberName: string;
+      protocolCode: string;
+      from: ProtocolMemberRole;
+      to: ProtocolMemberRole;
+    }[] = [];
     const failed: { memberName: string; protocolCode: string; reason: string }[] = [];
-    for (const { pair, res } of results) {
+
+    for (const { pair, res } of addResults) {
       if (res.ok) {
         added.push({
           memberName: nameOf(pair.userId),
@@ -374,13 +495,46 @@ export default function ManageTab() {
         });
       }
     }
-    const skipped = skippedPairs.map((pair) => ({
-      memberName: nameOf(pair.userId),
-      protocolCode: codeOf(pair.protocolId),
-      reason: 'Already assigned',
-    }));
+    for (const { change, res } of changeResults) {
+      if (res.ok) {
+        roleChanged.push({
+          memberName: nameOf(change.userId),
+          protocolCode: codeOf(change.protocolId),
+          from: change.currentRole,
+          to: change.requestedRole,
+        });
+      } else {
+        failed.push({
+          memberName: nameOf(change.userId),
+          protocolCode: codeOf(change.protocolId),
+          reason: res.error,
+        });
+      }
+    }
 
-    setBulkResult({ added, skipped, failed });
+    // Same-role + user-chose-skip pairs aren't surfaced individually — just
+    // an aggregate count so the banner doesn't get noisy when many users are
+    // selected against many protocols.
+    const skipped: { memberName: string; protocolCode: string; reason: string }[] = [];
+    if (sameRoleSkipCount > 0) {
+      skipped.push({
+        memberName: '',
+        protocolCode: '',
+        reason: `${sameRoleSkipCount} already at the requested role`,
+      });
+    }
+    const skippedByUser = (conflictModal?.differentRole ?? []).filter(
+      (c) => conflictModal?.resolutions.get(cellKey(c.userId, c.protocolId)) === 'skip',
+    );
+    for (const c of skippedByUser) {
+      skipped.push({
+        memberName: nameOf(c.userId),
+        protocolCode: codeOf(c.protocolId),
+        reason: `kept as ${ROLE_LABEL[c.currentRole]}`,
+      });
+    }
+
+    setBulkResult({ added, roleChanged, skipped, failed });
     setApplying(false);
     setSelectedMembers(new Map());
     setSelectedProtocolIds(new Set());
@@ -807,21 +961,26 @@ export default function ManageTab() {
                 <p className={`${subColor} text-xs`}>
                   {selectedMembers.size === 0 || selectedProtocolIds.size === 0
                     ? 'Select members and protocols to add'
-                    : `${plannedPairs.newPairs.length} new assignment${plannedPairs.newPairs.length === 1 ? '' : 's'}${
-                        plannedPairs.skippedPairs.length > 0
-                          ? `, ${plannedPairs.skippedPairs.length} already assigned`
+                    : `${plannedPairs.newPairs.length} new${
+                        plannedPairs.differentRoleConflicts.length > 0
+                          ? `, ${plannedPairs.differentRoleConflicts.length} role conflict${plannedPairs.differentRoleConflicts.length === 1 ? '' : 's'}`
+                          : ''
+                      }${
+                        plannedPairs.sameRoleConflicts.length > 0
+                          ? `, ${plannedPairs.sameRoleConflicts.length} already at this role`
                           : ''
                       }`}
                 </p>
                 <div className="flex-1" />
                 <button
                   type="button"
-                  onClick={applyAssignments}
+                  onClick={handleApplyClick}
                   disabled={
                     applying ||
                     selectedMembers.size === 0 ||
                     selectedProtocolIds.size === 0 ||
-                    plannedPairs.newPairs.length === 0
+                    (plannedPairs.newPairs.length === 0 &&
+                      plannedPairs.differentRoleConflicts.length === 0)
                   }
                   className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${buttonPrimary}`}
                 >
@@ -853,9 +1012,28 @@ export default function ManageTab() {
                     </p>
                   </div>
                 )}
+                {bulkResult.roleChanged.length > 0 && (
+                  <p className={`text-xs ${isLight ? 'text-emerald-800' : 'text-emerald-300'} pl-5 leading-relaxed`}>
+                    Updated {bulkResult.roleChanged.length} role
+                    {bulkResult.roleChanged.length === 1 ? '' : 's'}:
+                    {' '}
+                    {bulkResult.roleChanged.map((r, i) => (
+                      <span key={i}>
+                        {i > 0 && ', '}
+                        {r.memberName} → {r.protocolCode} ({ROLE_LABEL[r.from]} → {ROLE_LABEL[r.to]})
+                      </span>
+                    ))}
+                  </p>
+                )}
                 {bulkResult.skipped.length > 0 && (
                   <p className={`text-xs ${subColor} pl-5`}>
-                    Skipped (already assigned): {bulkResult.skipped.map((s) => `${s.memberName} → ${s.protocolCode}`).join(', ')}
+                    Skipped: {bulkResult.skipped
+                      .map((s) =>
+                        s.memberName === ''
+                          ? s.reason
+                          : `${s.memberName} → ${s.protocolCode} (${s.reason})`,
+                      )
+                      .join(', ')}
                   </p>
                 )}
                 {bulkResult.failed.length > 0 && (
@@ -870,6 +1048,96 @@ export default function ManageTab() {
                 >
                   Dismiss
                 </button>
+              </div>
+            )}
+
+            {/* Conflict resolution modal — opens when a bulk submission
+                includes pairs already assigned at a DIFFERENT role. */}
+            {conflictModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+                <div
+                  className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                  onClick={() => setConflictModal(null)}
+                  aria-hidden="true"
+                />
+                <div className={`relative max-w-lg w-full max-h-[80vh] flex flex-col rounded-lg border shadow-xl ${isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/10'}`}>
+                  <div className={`px-5 py-3 border-b ${border} flex items-start gap-2`}>
+                    <AlertTriangle size={16} className={isLight ? 'text-amber-600' : 'text-amber-400'} />
+                    <div>
+                      <h3 className={`${headingColor} text-sm font-semibold`}>
+                        {conflictModal.differentRole.length} member
+                        {conflictModal.differentRole.length === 1 ? ' is' : 's are'} already on a selected protocol
+                      </h3>
+                      <p className={`${subColor} text-xs mt-0.5 leading-relaxed`}>
+                        Each one already has a different role than you picked. Skip to leave the
+                        existing role, or change to the role you selected.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto px-5 py-3 space-y-3">
+                    {conflictModal.differentRole.map((c) => {
+                      const key = cellKey(c.userId, c.protocolId);
+                      const choice = conflictModal.resolutions.get(key) ?? 'skip';
+                      return (
+                        <div key={key} className={`rounded-md border ${border} px-3 py-2.5`}>
+                          <p className={`${headingColor} text-sm font-medium`}>
+                            {nameOf(c.userId)} → {codeOf(c.protocolId)}
+                          </p>
+                          <p className={`${subColor} text-xs mt-0.5`}>
+                            Currently <strong>{ROLE_LABEL[c.currentRole]}</strong>. You picked{' '}
+                            <strong>{ROLE_LABEL[c.requestedRole]}</strong>.
+                          </p>
+                          <div className="mt-2 flex flex-col gap-1.5">
+                            <label className={`inline-flex items-center gap-2 text-xs ${headingColor} cursor-pointer`}>
+                              <input
+                                type="radio"
+                                name={`conflict-${key}`}
+                                checked={choice === 'skip'}
+                                onChange={() => setResolution(key, 'skip')}
+                              />
+                              Skip — keep as {ROLE_LABEL[c.currentRole]}
+                            </label>
+                            <label className={`inline-flex items-center gap-2 text-xs ${headingColor} cursor-pointer`}>
+                              <input
+                                type="radio"
+                                name={`conflict-${key}`}
+                                checked={choice === 'change'}
+                                onChange={() => setResolution(key, 'change')}
+                              />
+                              Change to {ROLE_LABEL[c.requestedRole]}
+                            </label>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {conflictModal.sameRoleCount > 0 && (
+                      <p className={`${subColor} text-[11px] italic`}>
+                        ({conflictModal.sameRoleCount} other pair
+                        {conflictModal.sameRoleCount === 1 ? ' is' : 's are'} already at the
+                        requested role — those are skipped automatically.)
+                      </p>
+                    )}
+                  </div>
+
+                  <div className={`flex items-center justify-end gap-2 px-5 py-3 border-t ${border}`}>
+                    <button
+                      type="button"
+                      onClick={() => setConflictModal(null)}
+                      className={`text-xs px-3 py-1.5 rounded-md ${buttonGhost}`}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={confirmConflictModal}
+                      className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${buttonPrimary}`}
+                    >
+                      <Check size={12} />
+                      Apply
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </>
