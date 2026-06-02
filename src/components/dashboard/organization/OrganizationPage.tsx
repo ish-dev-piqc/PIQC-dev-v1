@@ -4,6 +4,7 @@ import {
   Building2,
   ClipboardList,
   Crown,
+  MessageCircle,
   Settings,
   User as UserIcon,
   Users as UsersIcon,
@@ -13,6 +14,7 @@ import { useOrg } from '../../../context/OrgContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import MembersTab from './MembersTab';
 import ManageTab from './ManageTab';
+import ChatTab from './ChatTab';
 import UnifiedTeamList from './team/UnifiedTeamList';
 
 // =============================================================================
@@ -31,7 +33,7 @@ import UnifiedTeamList from './team/UnifiedTeamList';
 //                Admin-only; hidden from the tab strip for site members.
 // =============================================================================
 
-export type OrgTab = 'members' | 'team' | 'manage';
+export type OrgTab = 'members' | 'team' | 'chat' | 'manage';
 
 interface OrganizationPageProps {
   onExit?: () => void;
@@ -41,6 +43,7 @@ interface OrganizationPageProps {
 const BASE_TABS: { id: OrgTab; label: string; icon: typeof UsersIcon }[] = [
   { id: 'members', label: 'Members', icon: UsersIcon },
   { id: 'team', label: 'Team', icon: ClipboardList },
+  { id: 'chat', label: 'Chat', icon: MessageCircle },
 ];
 
 export default function OrganizationPage({ onExit, initialTab }: OrganizationPageProps) {
@@ -197,6 +200,8 @@ export default function OrganizationPage({ onExit, initialTab }: OrganizationPag
               )}
             </div>
           )}
+
+          {activeTab === 'chat' && <ChatTab />}
 
           {activeTab === 'manage' && isAdmin && <ManageTab />}
         </div>

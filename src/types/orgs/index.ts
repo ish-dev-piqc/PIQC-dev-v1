@@ -111,6 +111,25 @@ export type ProtocolMemberPatch = { role: ProtocolMemberRole };
 
 
 // ---------------------------------------------------------------------------
+// Org-wide chat messages
+// ---------------------------------------------------------------------------
+
+export interface OrgMessage {
+  id: string;
+  org_id: string;
+  /** null when the author was deleted from auth.users (ON DELETE SET NULL). */
+  author_user_id: string | null;
+  body: string;
+  created_at: string;
+}
+
+export interface NewOrgMessageInput {
+  org_id: string;
+  body: string;
+}
+
+
+// ---------------------------------------------------------------------------
 // Access requests
 // ---------------------------------------------------------------------------
 

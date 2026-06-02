@@ -37,6 +37,7 @@ import type {
   Org,
   OrgInvite,
   OrgMemberWithProfile,
+  OrgMessage,
   OrgProtocolSummary,
   OrgRole,
   OrgRow,
@@ -49,6 +50,7 @@ import type {
 } from '../../types/orgs';
 import { adaptAccessRequest, adaptAccessRequests } from './accessRequestsAdapter';
 import { adaptGuest, adaptGuests } from './guestsAdapter';
+import { adaptOrgMessage, adaptOrgMessages } from './orgMessagesAdapter';
 import { adaptProtocolMember, adaptProtocolMembers } from './protocolMembersAdapter';
 
 export type Result<T> =
@@ -355,6 +357,57 @@ export function buildInviteUrl(token: string): string {
   // per Vite's contract.
   const base = import.meta.env.BASE_URL ?? '/';
   return `${origin}${base}?invite=${encodeURIComponent(token)}`;
+}
+
+
+// ===========================================================================
+// Org messages — org-wide general chat. Realtime subscription lives in
+// src/context/OrgChatContext.tsx (per the "realtime in context" rule).
+// ===========================================================================
+
+/** Most-recent N messages for the org, returned oldest-first for display.
+ *  Default limit 100 — for v1 we render the whole window without pagination. */
+export async function listOrgMessages(
+  orgId: string,
+  limit = 100,
+): Promise<Result<OrgMessage[]>> {
+  const { data, error } = await supabase
+    .from('org_messages')
+    .select('id, org_id, author_user_id, body, created_at')
+    .eq('org_id', orgId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) return fail('listOrgMessages', error);
+  // Index is DESC for the query; reverse for chronological-display order.
+  const rows = (data ?? []).slice().reverse();
+  return { ok: true, data: adaptOrgMessages(rows) };
+}
+
+export async function postOrgMessage(
+  orgId: string,
+  body: string,
+): Promise<Result<OrgMessage>> {
+  const trimmed = body.trim();
+  if (!trimmed) return err('Message cannot be empty.');
+  if (trimmed.length > 10000) return err('Message is too long (10000 character max).');
+
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr) return fail('postOrgMessage:getUser', userErr);
+  const user = userData?.user;
+  if (!user) return err('Not authenticated.');
+
+  const { data, error } = await supabase
+    .from('org_messages')
+    .insert({
+      org_id: orgId,
+      author_user_id: user.id,
+      body: trimmed,
+    })
+    .select('id, org_id, author_user_id, body, created_at')
+    .single();
+  if (error) return fail('postOrgMessage', error);
+  if (!data) return err('Insert returned no row.');
+  return { ok: true, data: adaptOrgMessage(data) };
 }
 
 
