@@ -6,8 +6,7 @@ import TodayTab from './site/TodayTab';
 import AskRail from './site/AskRail';
 import ParticipantsTab from './site/ParticipantsTab';
 import VisitsTab from './site/VisitsTab';
-import TeamTab from './organization/team/TeamTab';
-import OrganizationPage from './organization/OrganizationPage';
+import OrganizationPage, { type OrgTab } from './organization/OrganizationPage';
 import DemoBanner from './site/DemoBanner';
 import ReportsTab from './site/ReportsTab';
 import ProtocolRequiredGate from './site/ProtocolRequiredGate';
@@ -42,7 +41,6 @@ export type DashboardTab =
   | 'overview'           // legacy alias; redirects to 'visit-execution' via the fallback effect
   | 'participants'
   | 'visits'
-  | 'team'
   // Shared
   | 'reports'
   | 'organization'
@@ -656,6 +654,10 @@ interface DashboardProps {
   settingsSection?: SettingsSection;
   onSettingsSectionChange?: (section: SettingsSection) => void;
   onExitOrganization?: () => void;
+  // Lands the Organization page on its Team tab — used by Today's
+  // cert-warning band so admins jump straight to fixing the cert.
+  onNavigateToOrgTeam?: () => void;
+  organizationInitialTab?: OrgTab;
 }
 
 export default function Dashboard({
@@ -664,6 +666,8 @@ export default function Dashboard({
   settingsSection,
   onSettingsSectionChange,
   onExitOrganization,
+  onNavigateToOrgTeam,
+  organizationInitialTab,
 }: DashboardProps) {
   const [internalActiveTab, setInternalActiveTab] = useState<DashboardTab>('overview');
   const [internalSettingsSection, setInternalSettingsSection] = useState<SettingsSection>('account');
@@ -734,10 +738,7 @@ export default function Dashboard({
               onTabChange?.('visits');
               if (!onTabChange) setInternalActiveTab('visits');
             }}
-            onNavigateToTeam={() => {
-              onTabChange?.('team');
-              if (!onTabChange) setInternalActiveTab('team');
-            }}
+            onNavigateToTeam={() => onNavigateToOrgTeam?.()}
           />
         );
       case 'participants':
@@ -750,12 +751,6 @@ export default function Dashboard({
         return (
           <ProtocolRequiredGate label="Visits">
             <VisitsTab />
-          </ProtocolRequiredGate>
-        );
-      case 'team':
-        return (
-          <ProtocolRequiredGate label="Team">
-            <TeamTab />
           </ProtocolRequiredGate>
         );
       // Shared
@@ -794,7 +789,10 @@ export default function Dashboard({
   if (resolvedActiveTab === 'organization') {
     return (
       <div className={`h-screen ${pageBg} pt-16 flex flex-col overflow-hidden`}>
-        <OrganizationPage onExit={onExitOrganization} />
+        <OrganizationPage
+          onExit={onExitOrganization}
+          initialTab={organizationInitialTab}
+        />
       </div>
     );
   }
