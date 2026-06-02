@@ -31,23 +31,24 @@ import UnifiedTeamList from './team/UnifiedTeamList';
 //                Admin-only; hidden from the tab strip for site members.
 // =============================================================================
 
+export type OrgTab = 'members' | 'team' | 'manage';
+
 interface OrganizationPageProps {
   onExit?: () => void;
+  initialTab?: OrgTab;
 }
-
-type OrgTab = 'members' | 'team' | 'manage';
 
 const BASE_TABS: { id: OrgTab; label: string; icon: typeof UsersIcon }[] = [
   { id: 'members', label: 'Members', icon: UsersIcon },
   { id: 'team', label: 'Team', icon: ClipboardList },
 ];
 
-export default function OrganizationPage({ onExit }: OrganizationPageProps) {
+export default function OrganizationPage({ onExit, initialTab }: OrganizationPageProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
   const { activeOrg } = useOrg();
   const { protocols, activeProtocol, setActiveProtocol } = useProtocol();
-  const [activeTab, setActiveTab] = useState<OrgTab>('members');
+  const [activeTab, setActiveTab] = useState<OrgTab>(initialTab ?? 'members');
 
   const isAdmin = activeOrg?.my_role === 'admin';
   const tabs: { id: OrgTab; label: string; icon: typeof UsersIcon }[] = isAdmin
