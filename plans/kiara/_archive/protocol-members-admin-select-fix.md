@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: protocol-members-admin-select-fix
-status: active
+status: merged
+merged: 2026-06-02
 started: 2026-06-01
-target_pr:
+target_pr: #223
 ---
 
 # Fix: site admins can't SELECT protocol_members on their own org's protocols
