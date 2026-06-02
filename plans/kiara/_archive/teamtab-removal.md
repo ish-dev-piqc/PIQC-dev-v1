@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: teamtab-removal
-status: active
+status: merged
+merged: 2026-06-02
 started: 2026-06-01
-target_pr:
+target_pr: #231
 ---
 
 # Cleanup: remove dead TeamTab.tsx; route TodayTab cert click to Org Team
