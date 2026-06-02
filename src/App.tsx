@@ -8,7 +8,7 @@ import Contact from './components/Contact';
 import Footer from './components/Footer';
 import Chatbot from './components/Chatbot';
 import Dashboard, { type DashboardTab, type SettingsSection } from './components/dashboard/Dashboard';
-import type { OrgTab } from './components/dashboard/organization/OrganizationPage';
+import { ORG_TAB_STORAGE_KEY } from './components/dashboard/organization/OrganizationPage';
 import Login from './components/auth/Login';
 import ForgotPassword from './components/auth/ForgotPassword';
 import ProfileCompletion from './components/auth/ProfileCompletion';
@@ -75,9 +75,6 @@ function AppContent() {
   // Tab the user was on before opening Organization — restored on back-arrow exit.
   // Defaults to 'today' so first-time exits land somewhere sensible.
   const [previousDashboardTab, setPreviousDashboardTab] = useState<DashboardTab>('today');
-  // Initial Organization-page sub-tab. User-menu navigation lands on 'members';
-  // deep-link entry points (e.g. cert-warning band on TodayTab) override to 'team'.
-  const [organizationInitialTab, setOrganizationInitialTab] = useState<OrgTab>('members');
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('account');
   const [scrollTarget, setScrollTarget] = useState<string | null>(null);
   // Result of the accept-invite handler — surfaced as a banner on the
@@ -201,7 +198,9 @@ function AppContent() {
     if (dashboardTab !== 'organization' && dashboardTab !== 'settings') {
       setPreviousDashboardTab(dashboardTab);
     }
-    setOrganizationInitialTab('members');
+    // Don't reset the Organization sub-tab — the user-menu entry lands on
+    // whichever sub-tab they were last on (via localStorage). Feels natural
+    // for a "go to my org" jump: come back where I left off.
     setDashboardTab('organization');
     setView('dashboard');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -211,7 +210,14 @@ function AppContent() {
     if (dashboardTab !== 'organization' && dashboardTab !== 'settings') {
       setPreviousDashboardTab(dashboardTab);
     }
-    setOrganizationInitialTab('team');
+    // Deep-link override: write the target sub-tab to localStorage directly
+    // so OrganizationPage's mount-time read picks it up. No prop drilling
+    // needed; localStorage is the single source of truth.
+    try {
+      localStorage.setItem(ORG_TAB_STORAGE_KEY, 'team');
+    } catch {
+      /* ignore — non-blocking, just won't deep-link */
+    }
     setDashboardTab('organization');
     setView('dashboard');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -284,7 +290,6 @@ function AppContent() {
           onSettingsSectionChange={setSettingsSection}
           onExitOrganization={handleExitOrganization}
           onNavigateToOrgTeam={handleNavigateToOrgTeam}
-          organizationInitialTab={organizationInitialTab}
         />
       </div>
     );

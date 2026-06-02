@@ -37,10 +37,9 @@ export type OrgTab = 'members' | 'team' | 'chat' | 'manage';
 
 interface OrganizationPageProps {
   onExit?: () => void;
-  initialTab?: OrgTab;
 }
 
-const ORG_TAB_STORAGE_KEY = 'piq-org-tab-v1';
+export const ORG_TAB_STORAGE_KEY = 'piq-org-tab-v1';
 const VALID_ORG_TABS: ReadonlySet<OrgTab> = new Set<OrgTab>([
   'members',
   'team',
@@ -64,15 +63,17 @@ const BASE_TABS: { id: OrgTab; label: string; icon: typeof UsersIcon }[] = [
   { id: 'chat', label: 'Chat', icon: MessageCircle },
 ];
 
-export default function OrganizationPage({ onExit, initialTab }: OrganizationPageProps) {
+export default function OrganizationPage({ onExit }: OrganizationPageProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
   const { activeOrg } = useOrg();
   const { protocols, activeProtocol, setActiveProtocol } = useProtocol();
-  // Priority: explicit initialTab prop (cert-click deep link) → localStorage
-  // (refresh restores last sub-tab) → 'members' (default for a fresh user).
+  // Read from localStorage on each mount so refresh restores the last
+  // sub-tab. Deep-link entry points (e.g. cert-warning band → Team) write
+  // directly to localStorage in App.tsx before navigating, so the read
+  // here picks up their intent without a prop being passed in.
   const [activeTab, setActiveTab] = useState<OrgTab>(
-    () => initialTab ?? readStoredOrgTab() ?? 'members',
+    () => readStoredOrgTab() ?? 'members',
   );
 
   // Persist the active sub-tab so a hard refresh lands the user back on the

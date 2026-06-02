@@ -6,7 +6,7 @@ import TodayTab from './site/TodayTab';
 import AskRail from './site/AskRail';
 import ParticipantsTab from './site/ParticipantsTab';
 import VisitsTab from './site/VisitsTab';
-import OrganizationPage, { type OrgTab } from './organization/OrganizationPage';
+import OrganizationPage from './organization/OrganizationPage';
 import DemoBanner from './site/DemoBanner';
 import ReportsTab from './site/ReportsTab';
 import ProtocolRequiredGate from './site/ProtocolRequiredGate';
@@ -655,9 +655,10 @@ interface DashboardProps {
   onSettingsSectionChange?: (section: SettingsSection) => void;
   onExitOrganization?: () => void;
   // Lands the Organization page on its Team tab — used by Today's
-  // cert-warning band so admins jump straight to fixing the cert.
+  // cert-warning band so admins jump straight to fixing the cert. App.tsx
+  // writes 'team' to localStorage before calling this; OrganizationPage's
+  // mount-time read picks it up.
   onNavigateToOrgTeam?: () => void;
-  organizationInitialTab?: OrgTab;
 }
 
 export default function Dashboard({
@@ -667,7 +668,6 @@ export default function Dashboard({
   onSettingsSectionChange,
   onExitOrganization,
   onNavigateToOrgTeam,
-  organizationInitialTab,
 }: DashboardProps) {
   const [internalActiveTab, setInternalActiveTab] = useState<DashboardTab>('overview');
   const [internalSettingsSection, setInternalSettingsSection] = useState<SettingsSection>('account');
@@ -789,10 +789,7 @@ export default function Dashboard({
   if (resolvedActiveTab === 'organization') {
     return (
       <div className={`h-screen ${pageBg} pt-16 flex flex-col overflow-hidden`}>
-        <OrganizationPage
-          onExit={onExitOrganization}
-          initialTab={organizationInitialTab}
-        />
+        <OrganizationPage onExit={onExitOrganization} />
       </div>
     );
   }
