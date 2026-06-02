@@ -82,19 +82,23 @@ export default function ManageTab() {
   const [orgProtocols, setOrgProtocols] = useState<OrgProtocolSummary[]>([]);
   const [assignments, setAssignments] = useState<Map<string, ProtocolMemberRole>>(new Map());
 
-  // Bulk protocol access — two-list checker.
+  // Bulk protocol access — paired two-list selection.
   // currentAssignments[cellKey] = role on the server (absent if not a member).
   // Used to skip already-assigned pairs on submit.
   const [currentAssignments, setCurrentAssignments] = useState<Map<string, ProtocolMemberRole>>(
     new Map(),
   );
-  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set());
+  // selectedMembers maps userId → role to assign for THIS user. Each member
+  // can be added at a different role in the same batch (Maya as Coordinator,
+  // Sam as Team member). Default role on selection is 'member'.
+  const [selectedMembers, setSelectedMembers] = useState<Map<string, ProtocolMemberRole>>(
+    new Map(),
+  );
   const [selectedProtocolIds, setSelectedProtocolIds] = useState<Set<string>>(new Set());
-  const [bulkRole, setBulkRole] = useState<ProtocolMemberRole>('member');
   const [applying, setApplying] = useState(false);
   const [bulkResult, setBulkResult] = useState<
     | {
-        added: { memberName: string; protocolCode: string }[];
+        added: { memberName: string; protocolCode: string; role: ProtocolMemberRole }[];
         skipped: { memberName: string; protocolCode: string; reason: string }[];
         failed: { memberName: string; protocolCode: string; reason: string }[];
       }
@@ -272,10 +276,18 @@ export default function ManageTab() {
   );
 
   function toggleMember(userId: string) {
-    setSelectedMemberIds((prev) => {
-      const next = new Set(prev);
+    setSelectedMembers((prev) => {
+      const next = new Map(prev);
       if (next.has(userId)) next.delete(userId);
-      else next.add(userId);
+      else next.set(userId, 'member'); // default role on first select
+      return next;
+    });
+  }
+
+  function setMemberRole(userId: string, role: ProtocolMemberRole) {
+    setSelectedMembers((prev) => {
+      const next = new Map(prev);
+      if (next.has(userId)) next.set(userId, role);
       return next;
     });
   }
@@ -290,11 +302,11 @@ export default function ManageTab() {
   }
 
   function selectAllMembers() {
-    setSelectedMemberIds(new Set(assignableMembers.map((m) => m.user_id)));
+    setSelectedMembers(new Map(assignableMembers.map((m) => [m.user_id, 'member' as ProtocolMemberRole])));
   }
 
   function clearMemberSelection() {
-    setSelectedMemberIds(new Set());
+    setSelectedMembers(new Map());
   }
 
   function selectAllProtocols() {
@@ -306,19 +318,20 @@ export default function ManageTab() {
   }
 
   const plannedPairs = useMemo(() => {
-    // Cartesian product of selected members × selected protocols, split into
-    // "needs insert" (not yet assigned) and "skipped" (already assigned).
-    const newPairs: { userId: string; protocolId: string }[] = [];
+    // Cartesian product of selected members × selected protocols, each
+    // carrying the per-member role. Split into "needs insert" (not yet
+    // assigned) and "skipped" (already assigned).
+    const newPairs: { userId: string; protocolId: string; role: ProtocolMemberRole }[] = [];
     const skippedPairs: { userId: string; protocolId: string }[] = [];
-    for (const userId of selectedMemberIds) {
+    for (const [userId, role] of selectedMembers) {
       for (const protocolId of selectedProtocolIds) {
         const key = cellKey(userId, protocolId);
         if (currentAssignments.has(key)) skippedPairs.push({ userId, protocolId });
-        else newPairs.push({ userId, protocolId });
+        else newPairs.push({ userId, protocolId, role });
       }
     }
     return { newPairs, skippedPairs };
-  }, [selectedMemberIds, selectedProtocolIds, currentAssignments]);
+  }, [selectedMembers, selectedProtocolIds, currentAssignments]);
 
   async function applyAssignments() {
     const { newPairs, skippedPairs } = plannedPairs;
@@ -338,17 +351,21 @@ export default function ManageTab() {
         const res = await addProtocolMember({
           protocol_id: pair.protocolId,
           user_id: pair.userId,
-          role: bulkRole,
+          role: pair.role,
         });
         return { pair, res };
       }),
     );
 
-    const added: { memberName: string; protocolCode: string }[] = [];
+    const added: { memberName: string; protocolCode: string; role: ProtocolMemberRole }[] = [];
     const failed: { memberName: string; protocolCode: string; reason: string }[] = [];
     for (const { pair, res } of results) {
       if (res.ok) {
-        added.push({ memberName: nameOf(pair.userId), protocolCode: codeOf(pair.protocolId) });
+        added.push({
+          memberName: nameOf(pair.userId),
+          protocolCode: codeOf(pair.protocolId),
+          role: pair.role,
+        });
       } else {
         failed.push({
           memberName: nameOf(pair.userId),
@@ -365,7 +382,7 @@ export default function ManageTab() {
 
     setBulkResult({ added, skipped, failed });
     setApplying(false);
-    setSelectedMemberIds(new Set());
+    setSelectedMembers(new Map());
     setSelectedProtocolIds(new Set());
     refresh();
   }
@@ -642,166 +659,181 @@ export default function ManageTab() {
             </p>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Members column */}
-              <div className={`border ${border} rounded-md ${listBg} flex flex-col`}>
-                <div className={`flex items-center justify-between px-3 py-2 border-b ${border}`}>
-                  <h4 className={`${labelColor} text-[10px] uppercase tracking-wider font-semibold`}>
-                    Members ({selectedMemberIds.size}/{assignableMembers.length})
-                  </h4>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={selectAllMembers}
-                      className={`${linkButton} text-[11px]`}
-                    >
-                      Select all
-                    </button>
-                    <button
-                      type="button"
-                      onClick={clearMemberSelection}
-                      className={`${linkButton} text-[11px]`}
-                    >
-                      Clear
-                    </button>
-                  </div>
-                </div>
-                <ul className="max-h-72 overflow-y-auto py-1">
-                  {assignableMembers.map((m) => {
-                    const checked = selectedMemberIds.has(m.user_id);
-                    return (
-                      <li key={m.user_id}>
-                        <label
-                          className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer ${
-                            isLight
-                              ? checked
-                                ? 'bg-brand-600/[0.05]'
-                                : 'hover:bg-[#0F172A]/[0.03]'
-                              : checked
-                                ? 'bg-brand-600/[0.10]'
-                                : 'hover:bg-white/[0.03]'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleMember(m.user_id)}
-                            className="flex-shrink-0"
-                          />
-                          <UserIcon size={12} className={mutedColor} />
-                          <span className={`${headingColor} text-sm font-medium truncate`}>
-                            {m.name}
-                          </span>
-                        </label>
-                      </li>
-                    );
-                  })}
-                </ul>
+          <>
+            {/* Single grouped container — members + protocols + action bar
+                read as one paired-selection workflow. */}
+            <div className={`border ${border} rounded-md ${sectionBg}`}>
+              <div className={`flex items-center justify-between px-4 py-2.5 border-b ${border}`}>
+                <p className={`${headingColor} text-xs font-semibold`}>Add members to protocols</p>
+                <p className={`${subColor} text-[11px]`}>
+                  Check who, check where, pick a role per person, click Add.
+                </p>
               </div>
 
-              {/* Protocols column */}
-              <div className={`border ${border} rounded-md ${listBg} flex flex-col`}>
-                <div className={`flex items-center justify-between px-3 py-2 border-b ${border}`}>
-                  <h4 className={`${labelColor} text-[10px] uppercase tracking-wider font-semibold`}>
-                    Protocols ({selectedProtocolIds.size}/{orgProtocols.length})
-                  </h4>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={selectAllProtocols}
-                      className={`${linkButton} text-[11px]`}
-                    >
-                      Select all
-                    </button>
-                    <button
-                      type="button"
-                      onClick={clearProtocolSelection}
-                      className={`${linkButton} text-[11px]`}
-                    >
-                      Clear
-                    </button>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-0 md:gap-0">
+                {/* Members column */}
+                <div className={`border-b md:border-b-0 md:border-r ${border} ${listBg} flex flex-col`}>
+                  <div className={`flex items-center justify-between px-3 py-2 border-b ${border}`}>
+                    <h4 className={`${labelColor} text-[10px] uppercase tracking-wider font-semibold`}>
+                      Members ({selectedMembers.size}/{assignableMembers.length})
+                    </h4>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={selectAllMembers}
+                        className={`${linkButton} text-[11px]`}
+                      >
+                        Select all
+                      </button>
+                      <button
+                        type="button"
+                        onClick={clearMemberSelection}
+                        className={`${linkButton} text-[11px]`}
+                      >
+                        Clear
+                      </button>
+                    </div>
                   </div>
+                  <ul className="max-h-72 overflow-y-auto py-1">
+                    {assignableMembers.map((m) => {
+                      const checked = selectedMembers.has(m.user_id);
+                      const role = selectedMembers.get(m.user_id) ?? 'member';
+                      return (
+                        <li key={m.user_id}>
+                          <label
+                            className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer ${
+                              isLight
+                                ? checked
+                                  ? 'bg-brand-600/[0.05]'
+                                  : 'hover:bg-[#0F172A]/[0.03]'
+                                : checked
+                                  ? 'bg-brand-600/[0.10]'
+                                  : 'hover:bg-white/[0.03]'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleMember(m.user_id)}
+                              className="flex-shrink-0"
+                            />
+                            <UserIcon size={12} className={mutedColor} />
+                            <span className={`${headingColor} text-sm font-medium truncate flex-1 min-w-0`}>
+                              {m.name}
+                            </span>
+                            {checked && (
+                              <select
+                                value={role}
+                                onChange={(e) =>
+                                  setMemberRole(m.user_id, e.target.value as ProtocolMemberRole)
+                                }
+                                onClick={(e) => e.stopPropagation()}
+                                aria-label={`Role for ${m.name}`}
+                                className={`text-[11px] rounded border px-1.5 py-0.5 ${inputBg} ${headingColor} flex-shrink-0`}
+                              >
+                                <option value="member">Team member</option>
+                                <option value="coordinator">Coordinator</option>
+                                <option value="viewer">Viewer</option>
+                              </select>
+                            )}
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
-                <ul className="max-h-72 overflow-y-auto py-1">
-                  {orgProtocols.map((p) => {
-                    const checked = selectedProtocolIds.has(p.id);
-                    return (
-                      <li key={p.id}>
-                        <label
-                          className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer ${
-                            isLight
-                              ? checked
-                                ? 'bg-brand-600/[0.05]'
-                                : 'hover:bg-[#0F172A]/[0.03]'
-                              : checked
-                                ? 'bg-brand-600/[0.10]'
-                                : 'hover:bg-white/[0.03]'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleProtocol(p.id)}
-                            className="flex-shrink-0"
-                          />
-                          <div className="min-w-0 flex-1">
-                            <p className={`${headingColor} text-sm font-medium truncate`}>
-                              {p.code}
-                            </p>
-                            <p className={`${mutedColor} text-[10px] truncate`}>{p.name}</p>
-                          </div>
-                        </label>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            </div>
 
-            {/* Action bar */}
-            <div className={`flex flex-wrap items-center gap-3 px-3 py-2.5 rounded-md border ${border} ${sectionBg}`}>
-              <label className={`${labelColor} text-[11px] uppercase tracking-wider font-semibold`}>
-                Role
-              </label>
-              <select
-                value={bulkRole}
-                onChange={(e) => setBulkRole(e.target.value as ProtocolMemberRole)}
-                className={`text-xs rounded border px-2 py-1 ${inputBg} ${headingColor}`}
-              >
-                <option value="member">Team member</option>
-                <option value="coordinator">Coordinator</option>
-                <option value="viewer">Viewer</option>
-              </select>
-              <p className={`${subColor} text-xs`}>
-                {selectedMemberIds.size === 0 || selectedProtocolIds.size === 0
-                  ? 'Select members and protocols to add'
-                  : `${plannedPairs.newPairs.length} new assignment${plannedPairs.newPairs.length === 1 ? '' : 's'}${
-                      plannedPairs.skippedPairs.length > 0
-                        ? `, ${plannedPairs.skippedPairs.length} already assigned`
-                        : ''
-                    }`}
-              </p>
-              <div className="flex-1" />
-              <button
-                type="button"
-                onClick={applyAssignments}
-                disabled={
-                  applying ||
-                  selectedMemberIds.size === 0 ||
-                  selectedProtocolIds.size === 0 ||
-                  plannedPairs.newPairs.length === 0
-                }
-                className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${buttonPrimary}`}
-              >
-                {applying ? <Loader2 size={12} className="animate-spin" /> : <ArrowRight size={12} />}
-                {applying ? 'Adding…' : 'Add to selected protocols'}
-              </button>
+                {/* Protocols column */}
+                <div className={`${listBg} flex flex-col`}>
+                  <div className={`flex items-center justify-between px-3 py-2 border-b ${border}`}>
+                    <h4 className={`${labelColor} text-[10px] uppercase tracking-wider font-semibold`}>
+                      Protocols ({selectedProtocolIds.size}/{orgProtocols.length})
+                    </h4>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={selectAllProtocols}
+                        className={`${linkButton} text-[11px]`}
+                      >
+                        Select all
+                      </button>
+                      <button
+                        type="button"
+                        onClick={clearProtocolSelection}
+                        className={`${linkButton} text-[11px]`}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                  <ul className="max-h-72 overflow-y-auto py-1">
+                    {orgProtocols.map((p) => {
+                      const checked = selectedProtocolIds.has(p.id);
+                      return (
+                        <li key={p.id}>
+                          <label
+                            className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer ${
+                              isLight
+                                ? checked
+                                  ? 'bg-brand-600/[0.05]'
+                                  : 'hover:bg-[#0F172A]/[0.03]'
+                                : checked
+                                  ? 'bg-brand-600/[0.10]'
+                                  : 'hover:bg-white/[0.03]'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleProtocol(p.id)}
+                              className="flex-shrink-0"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className={`${headingColor} text-sm font-medium truncate`}>
+                                {p.code}
+                              </p>
+                              <p className={`${mutedColor} text-[10px] truncate`}>{p.name}</p>
+                            </div>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              </div>
+
+              {/* Action bar — count + apply button inside the same container */}
+              <div className={`flex flex-wrap items-center gap-3 px-4 py-2.5 border-t ${border}`}>
+                <p className={`${subColor} text-xs`}>
+                  {selectedMembers.size === 0 || selectedProtocolIds.size === 0
+                    ? 'Select members and protocols to add'
+                    : `${plannedPairs.newPairs.length} new assignment${plannedPairs.newPairs.length === 1 ? '' : 's'}${
+                        plannedPairs.skippedPairs.length > 0
+                          ? `, ${plannedPairs.skippedPairs.length} already assigned`
+                          : ''
+                      }`}
+                </p>
+                <div className="flex-1" />
+                <button
+                  type="button"
+                  onClick={applyAssignments}
+                  disabled={
+                    applying ||
+                    selectedMembers.size === 0 ||
+                    selectedProtocolIds.size === 0 ||
+                    plannedPairs.newPairs.length === 0
+                  }
+                  className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${buttonPrimary}`}
+                >
+                  {applying ? <Loader2 size={12} className="animate-spin" /> : <ArrowRight size={12} />}
+                  {applying ? 'Adding…' : 'Add to selected protocols'}
+                </button>
+              </div>
             </div>
 
             {/* Result banner */}
             {bulkResult && (
-              <div className={`px-4 py-3 rounded-md border space-y-2 ${
+              <div className={`mt-4 px-4 py-3 rounded-md border space-y-2 ${
                 bulkResult.failed.length > 0
                   ? isLight ? 'bg-amber-50 border-amber-200' : 'bg-amber-500/[0.06] border-amber-500/30'
                   : isLight ? 'bg-emerald-50 border-emerald-200' : 'bg-emerald-500/[0.06] border-emerald-500/30'
@@ -810,12 +842,12 @@ export default function ManageTab() {
                   <div className="flex items-start gap-2">
                     <Check size={13} className={`${isLight ? 'text-emerald-700' : 'text-emerald-400'} mt-0.5 flex-shrink-0`} />
                     <p className={`text-xs ${isLight ? 'text-emerald-800' : 'text-emerald-300'} leading-relaxed`}>
-                      Added {bulkResult.added.length} assignment{bulkResult.added.length === 1 ? '' : 's'} at role <strong>{ROLE_LABEL[bulkRole]}</strong>:
+                      Added {bulkResult.added.length} assignment{bulkResult.added.length === 1 ? '' : 's'}:
                       {' '}
                       {bulkResult.added.map((a, i) => (
                         <span key={i}>
                           {i > 0 && ', '}
-                          {a.memberName} → {a.protocolCode}
+                          {a.memberName} → {a.protocolCode} ({ROLE_LABEL[a.role]})
                         </span>
                       ))}
                     </p>
@@ -840,7 +872,7 @@ export default function ManageTab() {
                 </button>
               </div>
             )}
-          </div>
+          </>
         )}
       </section>
     </div>
