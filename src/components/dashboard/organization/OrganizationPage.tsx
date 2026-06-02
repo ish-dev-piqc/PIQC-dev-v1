@@ -13,8 +13,7 @@ import { useOrg } from '../../../context/OrgContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import MembersTab from './MembersTab';
 import ManageTab from './ManageTab';
-import TeamTab from './team/TeamTab';
-import ProtocolMembersList from './team/ProtocolMembersList';
+import UnifiedTeamList from './team/UnifiedTeamList';
 
 // =============================================================================
 // OrganizationPage — full-screen Organization destination.
@@ -186,22 +185,7 @@ export default function OrganizationPage({ onExit }: OrganizationPageProps) {
                 </select>
               </div>
               {activeProtocol ? (
-                <>
-                  <ProtocolMembersList protocolId={activeProtocol.id} />
-
-                  <div className={`pt-4 border-t ${headerBorder}`}>
-                    <div className="flex items-center gap-2 text-fg-label text-[10px] uppercase tracking-wider font-semibold">
-                      <ClipboardList size={11} />
-                      Site delegation log
-                    </div>
-                    <p className="text-fg-sub text-xs mt-1 max-w-2xl leading-relaxed">
-                      Clinical staff with their regulatory role and certifications. Separate
-                      from PIQC access above — this is the delegation log for the trial site,
-                      not the list of users with app access.
-                    </p>
-                  </div>
-                  <TeamTab />
-                </>
+                <UnifiedTeamList protocolId={activeProtocol.id} />
               ) : (
                 <div className={`px-4 py-8 rounded-md border ${headerBorder} text-center`}>
                   <p className="text-fg-body text-sm">No protocol selected.</p>

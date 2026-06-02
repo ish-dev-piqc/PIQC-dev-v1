@@ -1,20 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, AlertTriangle, Mail } from 'lucide-react';
+import { X, AlertTriangle } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useOverlay } from '../../../../hooks/useOverlay';
 import { useSwipeDismiss } from '../../../../hooks/useSwipeDismiss';
-import { updateTeamMember } from '../../../../lib/site/siteApi';
+import { createTeamMember, updateTeamMember } from '../../../../lib/site/siteApi';
 import type { SiteTeamMember, TeamRole, TeamMemberStatus } from '../../../../lib/site/types';
 import { TEAM_ROLE_LABELS } from '../../../../lib/site/labels';
 
 // =============================================================================
-// TeamFormDrawer — edit a site_team_members row (legacy create path stubbed).
+// TeamFormDrawer — add or edit a site_team_members row.
 //
-// Edit mode renders the full form so existing members can still get their
-// cert dates, role, etc. updated. Create mode renders a static message
-// directing the user to contact PIQC or have the teammate sign in directly
-// — self-service add isn't a supported flow right now and we don't want a
-// form that silently fails to onboard people who don't have accounts yet.
+// Edit mode: pre-populates the form from `initial` and submits via
+// updateTeamMember.
+//
+// Create mode: same form, submits via createTeamMember scoped to the
+// passed-in protocolId. Used by the Organization → Team → "Add clinical
+// staff" affordance to register clinical roles for people who may not be
+// PIQC users (e.g. a pharmacist who never logs in). Email is optional —
+// presence of the row is what powers the delegation log + cert tracking.
 // =============================================================================
 
 const ROLE_OPTIONS: TeamRole[] = ['PI', 'SUB_I', 'COORDINATOR', 'NURSE', 'PHARMACIST', 'MONITOR'];
@@ -27,12 +30,7 @@ interface TeamFormDrawerProps {
   onClose: () => void;
 }
 
-// `protocolId` stays on the interface for callers that pass it (e.g. the
-// VisitsTab footer Add-team-member button), but the drawer itself doesn't
-// need it — the team-member operations route through TeamContext using the
-// active protocol from elsewhere. Destructured-but-unused warnings would
-// fire, so we don't destructure it.
-export default function TeamFormDrawer({ mode, initial, onClose }: TeamFormDrawerProps) {
+export default function TeamFormDrawer({ mode, protocolId, initial, onClose }: TeamFormDrawerProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
   const overlay = useRef<HTMLDivElement>(null);
@@ -67,10 +65,6 @@ export default function TeamFormDrawer({ mode, initial, onClose }: TeamFormDrawe
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Create mode renders a static "Contact PIQC" panel — no form submit
-    // path. Guarding here is defence-in-depth in case a stray enter-press
-    // bubbles up.
-    if (mode === 'create') return;
     if (submitting) return;
     const v = validate();
     if (v) {
@@ -95,7 +89,10 @@ export default function TeamFormDrawer({ mode, initial, onClose }: TeamFormDrawe
       notes: notes.trim() || null,
     };
 
-    const result = await updateTeamMember(initial!.id, payload);
+    const result =
+      mode === 'edit'
+        ? await updateTeamMember(initial!.id, payload)
+        : await createTeamMember({ protocol_id: protocolId, ...payload });
 
     setSubmitting(false);
     if (!result.ok) {
@@ -141,39 +138,6 @@ export default function TeamFormDrawer({ mode, initial, onClose }: TeamFormDrawe
             </button>
           </div>
 
-          {mode === 'create' ? (
-            <>
-              <div className="flex-1 overflow-y-auto p-5 space-y-4">
-                <div
-                  className={`flex items-start gap-3 px-4 py-3.5 rounded-md border ${
-                    isLight
-                      ? 'bg-[#F8FAFC] border-[#E2E8F0] text-[#334155]'
-                      : 'bg-white/[0.02] border-white/5 text-[#CBD5E1]'
-                  }`}
-                >
-                  <Mail size={16} className={`mt-0.5 flex-shrink-0 ${subColor}`} />
-                  <div className="text-sm leading-relaxed">
-                    <p className={`${headingColor} font-semibold mb-1`}>Self-serve add isn't available yet</p>
-                    <p>
-                      To add a new team member, contact PIQC and we'll provision the account, or have
-                      the teammate sign in directly at this protocol's URL — they'll be added automatically
-                      after their first sign-in.
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className={`flex items-center justify-end gap-2 px-5 py-3.5 border-t ${border}`}>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${buttonPrimary}`}
-                >
-                  Got it
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
           <div className="flex-1 overflow-y-auto p-5 space-y-4">
             <div>
               <label className={`block ${labelColor} text-xs font-semibold uppercase tracking-wider mb-1.5`}>
@@ -302,11 +266,9 @@ export default function TeamFormDrawer({ mode, initial, onClose }: TeamFormDrawe
               Cancel
             </button>
             <button type="submit" disabled={submitting} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${buttonPrimary}`}>
-              {submitting ? 'Saving…' : 'Save changes'}
+              {submitting ? 'Saving…' : mode === 'create' ? 'Add team member' : 'Save changes'}
             </button>
           </div>
-            </>
-          )}
         </form>
       </div>
     </div>
