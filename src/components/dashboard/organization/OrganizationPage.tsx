@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ArrowLeft,
   Building2,
@@ -40,6 +40,24 @@ interface OrganizationPageProps {
   initialTab?: OrgTab;
 }
 
+const ORG_TAB_STORAGE_KEY = 'piq-org-tab-v1';
+const VALID_ORG_TABS: ReadonlySet<OrgTab> = new Set<OrgTab>([
+  'members',
+  'team',
+  'chat',
+  'manage',
+]);
+
+function readStoredOrgTab(): OrgTab | null {
+  try {
+    const v = localStorage.getItem(ORG_TAB_STORAGE_KEY);
+    if (v && VALID_ORG_TABS.has(v as OrgTab)) return v as OrgTab;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
 const BASE_TABS: { id: OrgTab; label: string; icon: typeof UsersIcon }[] = [
   { id: 'members', label: 'Members', icon: UsersIcon },
   { id: 'team', label: 'Team', icon: ClipboardList },
@@ -51,7 +69,21 @@ export default function OrganizationPage({ onExit, initialTab }: OrganizationPag
   const isLight = theme === 'light';
   const { activeOrg } = useOrg();
   const { protocols, activeProtocol, setActiveProtocol } = useProtocol();
-  const [activeTab, setActiveTab] = useState<OrgTab>(initialTab ?? 'members');
+  // Priority: explicit initialTab prop (cert-click deep link) → localStorage
+  // (refresh restores last sub-tab) → 'members' (default for a fresh user).
+  const [activeTab, setActiveTab] = useState<OrgTab>(
+    () => initialTab ?? readStoredOrgTab() ?? 'members',
+  );
+
+  // Persist the active sub-tab so a hard refresh lands the user back on the
+  // same surface (Chat, Manage, etc.) instead of bouncing them to Members.
+  useEffect(() => {
+    try {
+      localStorage.setItem(ORG_TAB_STORAGE_KEY, activeTab);
+    } catch {
+      /* ignore */
+    }
+  }, [activeTab]);
 
   const isAdmin = activeOrg?.my_role === 'admin';
   const tabs: { id: OrgTab; label: string; icon: typeof UsersIcon }[] = isAdmin

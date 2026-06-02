@@ -33,9 +33,45 @@ import InviteWelcomeBanner, {
 
 export type AppView = 'landing' | 'dashboard' | 'login' | 'forgot-password';
 
+// localStorage key for the active dashboard tab. Survives refreshes so the
+// user lands back where they were instead of getting bounced to the mode's
+// default tab on reload.
+const DASHBOARD_TAB_STORAGE_KEY = 'piq-dashboard-tab-v1';
+
+// Allow-list of DashboardTab string values used to validate localStorage
+// reads. Reading raw localStorage and casting to DashboardTab would let a
+// stale or corrupted value short-circuit the fallback effect inside
+// Dashboard.tsx; this guard returns null on anything unrecognised.
+const VALID_DASHBOARD_TABS: ReadonlySet<DashboardTab> = new Set<DashboardTab>([
+  'audit-overview',
+  'chat',
+  'knowledge',
+  'workflows',
+  'visit-execution',
+  'today',
+  'overview',
+  'participants',
+  'visits',
+  'reports',
+  'organization',
+  'settings',
+]);
+
+function readStoredDashboardTab(): DashboardTab | null {
+  try {
+    const v = localStorage.getItem(DASHBOARD_TAB_STORAGE_KEY);
+    if (v && VALID_DASHBOARD_TABS.has(v as DashboardTab)) return v as DashboardTab;
+  } catch {
+    /* ignore — localStorage can throw in privacy/quota edge cases */
+  }
+  return null;
+}
+
 function AppContent() {
   const [view, setView] = useState<AppView>('landing');
-  const [dashboardTab, setDashboardTab] = useState<DashboardTab>('overview');
+  const [dashboardTab, setDashboardTab] = useState<DashboardTab>(
+    () => readStoredDashboardTab() ?? 'overview',
+  );
   // Tab the user was on before opening Organization — restored on back-arrow exit.
   // Defaults to 'today' so first-time exits land somewhere sensible.
   const [previousDashboardTab, setPreviousDashboardTab] = useState<DashboardTab>('today');
@@ -60,6 +96,19 @@ function AppContent() {
 
   const profileComplete = !!profile?.profile_completed_at;
   const needsProfileCompletion = !!session && !profileLoading && !profileComplete;
+
+  // Persist dashboardTab so a refresh keeps the user on the same area.
+  // Skip writing 'overview' — that's our legacy alias that the Dashboard
+  // fallback effect immediately rewrites, and persisting it would churn.
+  useEffect(() => {
+    try {
+      if (dashboardTab !== 'overview') {
+        localStorage.setItem(DASHBOARD_TAB_STORAGE_KEY, dashboardTab);
+      }
+    } catch {
+      /* ignore localStorage errors */
+    }
+  }, [dashboardTab]);
 
   useEffect(() => {
     if (!loading && session && (view === 'login' || view === 'landing')) {
