@@ -138,46 +138,39 @@ export default function DemoAskPanel() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* Scrollable conversation / empty state */}
+      {/* Scrollable conversation / empty state.
+          Ishika feedback (2026-06-03): chat should dominate over chrome and
+          starters. Empty-state cards became compact chips, the explainer is
+          one short line, and the bulk of the bubble reads as "chat area
+          waiting" rather than "menu of options." */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
         {isEmpty ? (
-          <div className="max-w-2xl mx-auto">
-            <div className="flex items-start gap-2 mb-4">
+          <div className="h-full flex flex-col">
+            {/* Top spacer keeps the chat area visually open above the chips */}
+            <div className="flex-1 min-h-[40px]" />
+            <div className="flex items-center gap-1.5 mb-2">
               <Sparkles
-                size={14}
-                className={`mt-0.5 flex-shrink-0 ${isLight ? 'text-brand-600' : 'text-brand-300'}`}
+                size={11}
+                className={`flex-shrink-0 ${isLight ? 'text-brand-600' : 'text-brand-300'}`}
               />
-              <p className={`${subColor} text-xs leading-relaxed`}>
-                Every answer is grounded in <span className="font-semibold">{activeProtocol.code}</span>{' '}
-                and cites the source page so you can verify before acting. Pick a starter to see a
-                demo response.
+              <p className={`${labelColor} text-[10px] uppercase tracking-wider font-semibold`}>
+                Try a starter
               </p>
             </div>
-            <div className="grid grid-cols-1 gap-2.5">
+            <div className="flex flex-col gap-1.5">
               {SUGGESTIONS_PER_PROTOCOL.map((s) => {
                 const Icon = s.icon;
                 return (
                   <button
                     key={s.matchKey}
                     onClick={() => handleSuggestion(s)}
-                    className={`text-left p-3.5 rounded-xl border transition-colors flex items-start gap-3 ${cardBase}`}
+                    className={`text-left text-xs px-2.5 py-2 rounded-lg border flex items-center gap-2 transition-colors ${cardBase}`}
                   >
-                    <span
-                      className={`flex-shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-lg border ${
-                        isLight
-                          ? 'bg-brand-600/[0.08] border-brand-600/20 text-brand-600'
-                          : 'bg-brand-300/[0.10] border-brand-300/25 text-brand-300'
-                      }`}
-                    >
-                      <Icon size={15} />
-                    </span>
-                    <span
-                      className={`text-sm font-medium leading-snug ${
-                        isLight ? 'text-[#0F172A]' : 'text-white'
-                      }`}
-                    >
-                      {s.text}
-                    </span>
+                    <Icon
+                      size={12}
+                      className={`flex-shrink-0 ${isLight ? 'text-brand-600' : 'text-brand-300'}`}
+                    />
+                    <span className={`${subColor} truncate`}>{s.text}</span>
                   </button>
                 );
               })}

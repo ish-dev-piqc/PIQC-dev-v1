@@ -3,7 +3,7 @@ import { MessageSquare, LayoutDashboard, Activity, FileText, Database, UserCircl
 import DashboardChat from './DashboardChat';
 import KnowledgeBase from './KnowledgeBase';
 import TodayTab from './site/TodayTab';
-import AskRail from './site/AskRail';
+import AskBubble from './site/AskBubble';
 import ParticipantsTab from './site/ParticipantsTab';
 import VisitsTab from './site/VisitsTab';
 import OrganizationPage from './organization/OrganizationPage';
@@ -864,17 +864,19 @@ export default function Dashboard({
         </div>
       </div>
 
-      {/* Content row: main pane (centered) + the always-present Ask rail on the
-          right. The rail is mounted once here so the conversation survives tab
-          switches; it manages its own collapsed/expanded + per-protocol thread. */}
+      {/* Content row: main pane (centered). The Ask assistant is mounted as a
+          floating bubble (AskBubble) anchored bottom-right via fixed
+          positioning, so it sits outside the flex layout and overlays content.
+          It's mounted once here so the conversation survives tab switches and
+          manages its own collapsed/expanded + per-protocol thread. */}
       <div className="flex-1 flex flex-row min-h-0 overflow-hidden">
         <div className="flex-1 min-w-0 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 flex flex-col" style={{ minHeight: 0 }}>
           <div className={`flex-1 ${panelBg} border rounded-2xl overflow-hidden flex flex-col`} style={{ minHeight: 0 }}>
             {renderContent()}
           </div>
         </div>
-        <AskRail />
       </div>
+      <AskBubble />
     </div>
   );
 }

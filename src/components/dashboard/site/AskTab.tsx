@@ -104,27 +104,37 @@ export default function AskTab({
   const localSelectedDocIds = _localOverride ?? protocolDocIds;
   const setLocalSelectedDocIds = (ids: string[]) => _setLocalOverride(ids);
 
-  if (!activeProtocol) return null;
-
   // Rule-based dynamic prompts (D3a) — see src/lib/site/askPrompts.ts.
   // Derived from the active protocol's phase, the presence of an extracted
   // schedule, and the team-member roles staffed on the study.
+  //
+  // NOTE: these hooks run unconditionally (before the early-return below) to
+  // satisfy react-hooks/rules-of-hooks. They guard internally against the
+  // null-protocol case so an early null return below is still the source of
+  // truth for rendering.
   const protocolTeam = useMemo(
-    () => teamMembers.filter((m) => m.protocol_id === activeProtocol.id),
+    () =>
+      activeProtocol
+        ? teamMembers.filter((m) => m.protocol_id === activeProtocol.id)
+        : [],
     [teamMembers, activeProtocol],
   );
   const protocolSuggestions = useMemo(
     () =>
-      deriveAskPrompts({
-        protocol: activeProtocol,
-        team: protocolTeam,
-        hasVisitTemplates,
-      }).map(({ icon, text }) => ({
-        icon: PROMPT_ICONS[icon] ?? Calendar,
-        text,
-      })),
+      activeProtocol
+        ? deriveAskPrompts({
+            protocol: activeProtocol,
+            team: protocolTeam,
+            hasVisitTemplates,
+          }).map(({ icon, text }) => ({
+            icon: PROMPT_ICONS[icon] ?? Calendar,
+            text,
+          }))
+        : [],
     [activeProtocol, protocolTeam, hasVisitTemplates],
   );
+
+  if (!activeProtocol) return null;
 
   // ---------------------------------------------------------------------------
   // Theme tokens
@@ -132,40 +142,29 @@ export default function AskTab({
   const headingColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
-  const sectionHeader = 'text-fg-label';
   const stripBg = isLight
-    ? 'bg-brand-600/[0.05] border-brand-600/20'
-    : 'bg-brand-300/[0.06] border-brand-300/25';
-  const iconBg = isLight
-    ? 'bg-brand-600/10 border-brand-600/20 text-brand-600'
-    : 'bg-brand-300/15 border-brand-300/25 text-brand-300';
+    ? 'bg-brand-600/[0.04] border-brand-600/15'
+    : 'bg-brand-300/[0.05] border-brand-300/20';
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* Protocol context strip */}
-      <div className={`flex-shrink-0 border-b ${stripBg} px-5 py-3`}>
-        <div className="flex items-start gap-3">
-          <div
-            className={`inline-flex items-center justify-center w-9 h-9 rounded-xl border flex-shrink-0 ${iconBg}`}
-          >
-            <Sparkles size={16} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
-              Protocol-grounded assistant
-            </p>
-            <p className={`${headingColor} text-sm font-semibold mt-0.5 truncate`}>
-              Asking about <span className="font-bold">{activeProtocol.code}</span>
-              <span className={`${mutedColor} font-normal ml-2`}>·</span>
-              <span className={`${subColor} font-medium ml-2`}>
-                {activeProtocol.sponsor} · {activeProtocol.phase}
-              </span>
-            </p>
-            <p className={`${subColor} text-xs mt-1 leading-relaxed`}>
-              Answers are grounded in this protocol's documents. Citations point back to the
-              source section so you can verify before acting.
-            </p>
-          </div>
+      {/* Protocol context strip — Ishika feedback (2026-06-03): keep this slim
+          so the chat surface dominates. One row, no preamble label, no
+          paragraph copy (the "grounded + cited" promise now lives in the
+          empty-state and in the citation chips themselves). */}
+      <div className={`flex-shrink-0 border-b ${stripBg} px-4 py-2`}>
+        <div className="flex items-center gap-2 min-w-0">
+          <Sparkles
+            size={13}
+            className={`flex-shrink-0 ${isLight ? 'text-brand-600' : 'text-brand-300'}`}
+          />
+          <p className={`text-xs min-w-0 truncate`}>
+            <span className={`${headingColor} font-semibold`}>{activeProtocol.code}</span>
+            <span className={`${mutedColor} mx-1.5`}>·</span>
+            <span className={subColor}>
+              {activeProtocol.sponsor} · {activeProtocol.phase}
+            </span>
+          </p>
         </div>
       </div>
 
