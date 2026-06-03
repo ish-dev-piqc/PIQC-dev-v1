@@ -18,6 +18,8 @@ import { supabase } from '../supabase';
 import type { Result } from '../site/siteApi';
 import { getMockVisitExecutionWorkspaces } from './mockVisitWorkspace';
 import type {
+  VisitCoverage,
+  VisitCoverageGap,
   VisitExecutionWorkspace,
   VisitRequirementHumanEditEvent,
 } from '../../types/visit-execution';
@@ -81,6 +83,37 @@ export async function fetchVisitExecutionWorkspaces(
     ? (payload!.workspaces as VisitExecutionWorkspace[])
     : [];
   return { ok: true, data: workspaces };
+}
+
+/**
+ * Fetch the protocol-level completeness coverage (#4) for the Visit-Prep banner.
+ *
+ * Mock on  → null (no synthetic coverage in the demo fixture).
+ * Mock off → visit_execution_get_coverage RPC → the latest coverage row, or null
+ *            when none exists yet (no banner shown). RPC error → { ok: false }.
+ */
+export async function fetchVisitCoverage(
+  protocolId: string,
+): Promise<Result<VisitCoverage | null>> {
+  if (isMockEnabled()) return { ok: true, data: null };
+
+  const { data, error } = await supabase.rpc('visit_execution_get_coverage', {
+    p_protocol_id: protocolId,
+  });
+  if (error) return { ok: false, error: error.message };
+  if (!data || typeof data !== 'object') return { ok: true, data: null };
+
+  const d = data as Partial<VisitCoverage>;
+  return {
+    ok: true,
+    data: {
+      expected_count: typeof d.expected_count === 'number' ? d.expected_count : 0,
+      found_count: typeof d.found_count === 'number' ? d.found_count : 0,
+      missing: Array.isArray(d.missing) ? (d.missing as VisitCoverageGap[]) : [],
+      detected_at: typeof d.detected_at === 'string' ? d.detected_at : '',
+      resolution: typeof d.resolution === 'string' ? d.resolution : 'pending',
+    },
+  };
 }
 
 

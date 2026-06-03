@@ -4,7 +4,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useOverlay } from '../../../hooks/useOverlay';
 import { useOrg } from '../../../context/OrgContext';
 import { useProtocol } from '../../../context/ProtocolContext';
-import { inviteGuest, revokeGuest } from '../../../lib/orgs/orgsApi';
+import { inviteGuest, revokeGuest, buildGuestInviteUrl } from '../../../lib/orgs/orgsApi';
 import { countActiveFreeGuests } from '../../../lib/orgs/guestsAdapter';
 
 // =============================================================================
@@ -27,11 +27,6 @@ interface InviteGuestModalProps {
   onClose: () => void;
 }
 
-function buildGuestInviteUrl(token: string): string {
-  if (typeof window === 'undefined') return `?guestInvite=${token}`;
-  return `${window.location.origin}${window.location.pathname}?guestInvite=${token}`;
-}
-
 export default function InviteGuestModal({ onClose }: InviteGuestModalProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
@@ -45,6 +40,9 @@ export default function InviteGuestModal({ onClose }: InviteGuestModalProps) {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  // Set after a successful invite so we can confirm whether the email went out
+  // (Resend) or only the clipboard-copy fallback is available.
+  const [sendResult, setSendResult] = useState<{ email: string; emailSent: boolean } | null>(null);
 
   const activeFreeGuestCount = useMemo(
     () =>
@@ -73,11 +71,13 @@ export default function InviteGuestModal({ onClose }: InviteGuestModalProps) {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!activeProtocol || working || !email.trim()) return;
+    const invitedEmail = email.trim();
     setWorking(true);
     setError(null);
+    setSendResult(null);
     const res = await inviteGuest({
       protocol_id: activeProtocol.id,
-      invited_email: email.trim(),
+      invited_email: invitedEmail,
       is_paid_seat: atOrOverCap,
     });
     setWorking(false);
@@ -86,8 +86,9 @@ export default function InviteGuestModal({ onClose }: InviteGuestModalProps) {
       return;
     }
     setEmail('');
+    setSendResult({ email: invitedEmail, emailSent: res.data.emailSent });
     refresh();
-    // Auto-copy the link to clipboard for convenience.
+    // Auto-copy the link to clipboard as a fallback (and for emailSent === false).
     void copyInviteUrl(res.data.invite_token);
   }
 
@@ -165,6 +166,32 @@ export default function InviteGuestModal({ onClose }: InviteGuestModalProps) {
             >
               {error}
             </div>
+          )}
+
+          {sendResult && (
+            sendResult.emailSent ? (
+              <div
+                className={`flex items-start gap-2 px-3 py-2 rounded-md text-xs ${
+                  isLight
+                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                    : 'bg-emerald-500/[0.06] border border-emerald-500/20 text-emerald-300'
+                }`}
+              >
+                <Check size={12} className="mt-0.5 flex-shrink-0" />
+                <p>Invite emailed to {sendResult.email} (link also copied).</p>
+              </div>
+            ) : (
+              <div
+                className={`flex items-start gap-2 px-3 py-2 rounded-md text-xs ${
+                  isLight
+                    ? 'bg-amber-50 border border-amber-200 text-amber-800'
+                    : 'bg-amber-500/[0.06] border border-amber-500/20 text-amber-300'
+                }`}
+              >
+                <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
+                <p>Invite created, but the email didn't send — the link was copied, send it manually.</p>
+              </div>
+            )
           )}
 
           <label className="text-[10px] uppercase tracking-wider font-semibold text-fg-label">

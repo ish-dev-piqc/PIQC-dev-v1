@@ -657,9 +657,17 @@ export async function listProtocolGuests(
   };
 }
 
+/** Build a shareable guest-invite URL from a token. Centralised here so the
+ *  API layer (which emails the link) and InviteGuestModal (which copies it)
+ *  produce identical URLs that the `?guestInvite=` redemption flow expects. */
+export function buildGuestInviteUrl(token: string): string {
+  if (typeof window === 'undefined') return `?guestInvite=${token}`;
+  return `${window.location.origin}${window.location.pathname}?guestInvite=${token}`;
+}
+
 export async function inviteGuest(
   input: NewProtocolGuestInput,
-): Promise<Result<ProtocolGuest>> {
+): Promise<Result<ProtocolGuest & { emailSent: boolean }>> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return err('Not authenticated');
 
@@ -683,7 +691,29 @@ export async function inviteGuest(
 
   if (error) return err(error.message);
   if (!data) return err('Insert returned no row');
-  return { ok: true, data: adaptGuest(data as unknown as Parameters<typeof adaptGuest>[0]) };
+  const guest = adaptGuest(data as unknown as Parameters<typeof adaptGuest>[0]);
+
+  // Best-effort: invoke the Edge Function to email the invite link via Resend.
+  // If it fails, the guest row still exists and the coordinator can copy the
+  // link manually from the modal. The flag lets the UI confirm "✓ emailed" vs
+  // a "copy the link" warning. Mirrors createOrgInvite's send path.
+  const inviteUrl = buildGuestInviteUrl(guest.invite_token);
+  let emailSent = false;
+  try {
+    const { data: fnData, error: fnError } = await supabase.functions.invoke(
+      'send-guest-invite-email',
+      { body: { guestId: guest.id, inviteUrl } },
+    );
+    if (!fnError && fnData && typeof fnData === 'object' && 'ok' in fnData && fnData.ok === true) {
+      emailSent = true;
+    } else if (fnError) {
+      console.warn('[orgsApi] send-guest-invite-email failed:', fnError.message);
+    }
+  } catch (e) {
+    console.warn('[orgsApi] send-guest-invite-email threw:', e);
+  }
+
+  return { ok: true, data: { ...guest, emailSent } };
 }
 
 export async function revokeGuest(guestId: string): Promise<Result<void>> {
