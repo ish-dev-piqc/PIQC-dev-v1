@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dedupeVisitTemplateRowsByQuality } from '../visitTemplateDedup.ts';
+import { dedupeVisitTemplateRowsByQuality, staleTemplateIds } from '../visitTemplateDedup.ts';
 
 // =============================================================================
 // visitTemplateDedup — quality-winner selection for duplicate visit rows.
@@ -63,5 +63,49 @@ describe('dedupeVisitTemplateRowsByQuality', () => {
       row({ visit_name: 'Unscheduled', study_day: 28 }),
     ]);
     expect(out).toHaveLength(2);
+  });
+});
+
+// =============================================================================
+// staleTemplateIds — idempotent re-ingest prune. Given a document's already-
+// stored templates + the freshly-extracted (kept) batch, returns the ids that
+// are no longer present and should be deleted, so non-deterministic Reducto
+// naming can't accumulate a new variant row per re-ingest.
+// =============================================================================
+
+const stored = (id: string, visit_name: string, study_day: number) => ({ id, visit_name, study_day });
+
+describe('staleTemplateIds', () => {
+  it('flags a prior-run variant of a re-extracted visit (the accumulation bug)', () => {
+    // Same day-1 visit, re-extracted under a different name → old row is stale.
+    const existing = [stored('old', 'Treatment Visit 1 (Week 0)', 1)];
+    const kept = [row({ visit_name: 'Treatment Visit 1', study_day: 1 })];
+    expect(staleTemplateIds(existing, kept)).toEqual(['old']);
+  });
+
+  it('keeps a visit that persists unchanged (so its id + requirements + edits survive)', () => {
+    const existing = [stored('s1', 'Screening', -28)];
+    const kept = [row({ visit_name: 'Screening', study_day: -28 })];
+    expect(staleTemplateIds(existing, kept)).toEqual([]);
+  });
+
+  it('returns only the stale ids from a mixed set', () => {
+    const existing = [
+      stored('a', 'Visit A', 1),
+      stored('b', 'Visit B', 14),
+      stored('c', 'Visit C (old name)', 28),
+    ];
+    const kept = [row({ visit_name: 'Visit B', study_day: 14 })];
+    expect(staleTemplateIds(existing, kept).sort()).toEqual(['a', 'c']);
+  });
+
+  it('treats the same name on a different study_day as stale (key includes the day)', () => {
+    const existing = [stored('x', 'Unscheduled', 14)];
+    const kept = [row({ visit_name: 'Unscheduled', study_day: 28 })];
+    expect(staleTemplateIds(existing, kept)).toEqual(['x']);
+  });
+
+  it('no existing rows → nothing to prune', () => {
+    expect(staleTemplateIds([], [row()])).toEqual([]);
   });
 });
