@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: visit-prep-schedule-rules-coverage
-status: in-review
+status: merged
+merged: 2026-06-03
 started: 2026-06-02
-target_pr:
+target_pr: #247
 ---
 
 # Visit Prep — schedule rules (#3) + completeness coverage (#4)
