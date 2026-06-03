@@ -1,6 +1,6 @@
 ---
 owner: ish-dev-piqc
-feature: Visit Prep — coverage missing-list dedup (#4 follow-up)
+feature: Visit Prep — coverage dedup (#4) + upload finalization fix
 status: active
 started: 2026-06-03
 target_pr:
@@ -25,13 +25,19 @@ review."
 - `supabase/functions/_shared/ingestPipeline.ts` — dedup the merged `missing` list by
   normalized label before the `protocol_visit_coverage` upsert (~line 2366), so
   `expected_count` and the list reflect unique missing visits.
+- `src/components/dashboard/KnowledgeBase.tsx` — `UploadForm` calls `onSuccess` only when
+  the parse reaches `ready` (not at parse-start), so consumers that close on `onSuccess`
+  (`ProtocolUploadModal`) don't unmount the form and kill the poll loop mid-parse.
+- `src/components/dashboard/Dashboard.tsx` — wire `ingest-recover` on dashboard mount
+  (the function was built for this but never called), finalizing any docs stranded in
+  `pending` (tab/modal closed mid-parse). Both files are on the CI supabase-debt allowlist.
 
 ## Out of scope (files forbidden)
 
 - `supabase/functions/_shared/visitScheduleRules.ts` (detectors are correct individually)
 - `supabase/migrations/*` (no schema change — logic only)
-- `src/**` (no type/UI impact — shape unchanged, just fewer/unique entries)
-- The upload-finalization bug (separate branch/PR)
+- `src/types/**`, `src/lib/**` (no type/API change — IngestResponse shape unchanged)
+- `ProtocolUploadModal.tsx` / `ProtocolOnboarding.tsx` (fix is centralized in `UploadForm`)
 
 ## Architecture layers touched
 
