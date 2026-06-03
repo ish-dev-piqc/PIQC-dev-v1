@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: visit-prep-implausible-day-refine
-status: in-review
+status: merged
+merged: 2026-06-03
 started: 2026-06-02
-target_pr:
+target_pr: #251
 ---
 
 # Visit Prep — refine #3a implausible-day to kill false positives
