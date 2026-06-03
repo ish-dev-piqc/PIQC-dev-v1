@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: resend-guest-invite-emails
-status: active
+status: merged
+merged: 2026-06-03
 started: 2026-06-03
-target_pr:
+target_pr: #241
 ---
 
 # Send protocol-guest invite emails via Resend
