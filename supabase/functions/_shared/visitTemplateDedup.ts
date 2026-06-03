@@ -10,9 +10,28 @@
 // visit-template / Visit-Prep layer stores the SAME instance the Protocol tab
 // renders (the SOTR adapter's dedupeVisitArray uses the same window preference).
 //
-// Pure: no I/O, no imports, easy to vitest. Generic over the row shape so the
-// caller's exact row type flows through unchanged.
+// Pure: no I/O, imports only the pure name normalizer, easy to vitest. Generic
+// over the row shape so the caller's exact row type flows through unchanged.
 // =============================================================================
+
+import { canonicalVisitName } from "./visitNameNormalize.ts";
+
+/**
+ * Match key for associating a RAW schedule entry with its persisted visit
+ * template. Canonicalizes the name (so a raw "Treatment Visit 1 (Day 1, Cycle 1)"
+ * keys identically to the stored canonical "Treatment Visit 1") then pairs it
+ * with study_day. MUST be used on BOTH sides of the match (template map build +
+ * schedule lookup) — that single-source-of-truth is the whole point: the prior
+ * bug was two hand-written `${name}|${day}` keys that drifted once #2 started
+ * canonicalizing the stored template name, silently dropping every
+ * parenthetical-named visit's procedures.
+ *
+ * canonicalVisitName is idempotent, so a canonical name in → same key, a raw
+ * name in → same key. Lowercased for case robustness (safe because symmetric).
+ */
+export function visitMatchKey(visitName: string, studyDay: number | string): string {
+  return `${canonicalVisitName(String(visitName).trim()).toLowerCase()}|${studyDay}`;
+}
 
 export interface DedupableVisitRow {
   visit_name: string;

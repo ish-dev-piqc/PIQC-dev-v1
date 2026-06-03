@@ -1,5 +1,40 @@
 import { describe, it, expect } from 'vitest';
-import { dedupeVisitTemplateRowsByQuality, staleTemplateIds } from '../visitTemplateDedup.ts';
+import { dedupeVisitTemplateRowsByQuality, staleTemplateIds, visitMatchKey } from '../visitTemplateDedup.ts';
+
+// =============================================================================
+// visitMatchKey — the schedule-entry ↔ visit-template match key. Locks the
+// regression where the template side used the canonicalized stored name and the
+// lookup side used the raw extraction name, so parenthetical-named visits
+// (Treatment Visit N (Day 1, Cycle N)) silently lost all their procedures.
+// =============================================================================
+describe('visitMatchKey (schedule ↔ template match)', () => {
+  it('keys a raw extraction name and its canonical template name IDENTICALLY', () => {
+    // This assertion would have failed the instant #2 canonicalized the stored name.
+    expect(visitMatchKey('Treatment Visit 1 (Day 1, Cycle 1)', 1)).toBe(
+      visitMatchKey('Treatment Visit 1', 1),
+    );
+    expect(visitMatchKey('Treatment Visit 7 (Day 1, Cycle 7)', 85)).toBe(
+      visitMatchKey('Treatment Visit 7', 85),
+    );
+  });
+
+  it('is idempotent (canonical name in → same key)', () => {
+    expect(visitMatchKey('Treatment Visit 2', 15)).toBe(visitMatchKey('Treatment Visit 2', 15));
+  });
+
+  it('keeps genuinely different visits distinct', () => {
+    expect(visitMatchKey('Treatment Visit 1', 1)).not.toBe(visitMatchKey('Treatment Visit 2', 1));
+    expect(visitMatchKey('Treatment Visit 1', 1)).not.toBe(visitMatchKey('Treatment Visit 1', 15));
+    // A semantic parenthetical is NOT stripped, so it stays its own visit.
+    expect(visitMatchKey('Treatment Visit 1 (PK substudy)', 1)).not.toBe(
+      visitMatchKey('Treatment Visit 1', 1),
+    );
+  });
+
+  it('is case- and whitespace-insensitive (symmetric on both sides)', () => {
+    expect(visitMatchKey('  Screening  ', -28)).toBe(visitMatchKey('screening', -28));
+  });
+});
 
 // =============================================================================
 // visitTemplateDedup — quality-winner selection for duplicate visit rows.
