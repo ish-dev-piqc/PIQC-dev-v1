@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: Visit Prep — fix requirements dropped for parenthetical-named visits
-status: active
+status: merged
+merged: 2026-06-03
 started: 2026-06-03
-target_pr:
+target_pr: #259
 approved_by: rv61 (supabase/_shared ingest pipeline)
 ---
 
