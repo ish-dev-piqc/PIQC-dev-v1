@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: ask-tab-demo-polish
-status: active
+status: merged
+merged: 2026-06-03
 started: 2026-06-03
-target_pr:
+target_pr: #249
 ---
 
 # Ask tab demo polish
