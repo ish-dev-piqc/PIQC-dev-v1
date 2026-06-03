@@ -3,11 +3,12 @@ import { Loader2, FlaskConical, X, AlertTriangle, Plus, Database } from 'lucide-
 import { useAuth } from '../../../context/AuthContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useTheme } from '../../../context/ThemeContext';
-import { fetchVisitExecutionWorkspaces, isMockEnabled } from '../../../lib/visit-execution/visitExecutionApi';
+import { fetchVisitExecutionWorkspaces, fetchVisitCoverage, isMockEnabled } from '../../../lib/visit-execution/visitExecutionApi';
 // Cross-mode import allowed: sourceEvidenceApi is on the piqc-discipline
 // ALLOWED_CROSS_MODE allowlist (same helper the old Protocol tab badge used).
 import { countWorksheetItemsForStudy } from '../../../lib/sotr/sourceEvidenceApi';
 import ProtocolDrawer from './ProtocolDrawer';
+import CoverageBanner from './CoverageBanner';
 import {
   addRequirement,
   addSiteNote,
@@ -24,6 +25,7 @@ import type {
   RoleFilter,
   VisitCompletenessSignal,
   VisitExecutionItem,
+  VisitCoverage,
   VisitExecutionWorkspace,
 } from '../../../types/visit-execution';
 import { itemMatchesRoleFilter } from '../../../lib/visit-execution/parseRoleHint';
@@ -104,6 +106,7 @@ export default function VisitExecutionTab() {
   const isLight = theme === 'light';
 
   const [workspaces, setWorkspaces] = useState<VisitExecutionWorkspace[]>([]);
+  const [coverage, setCoverage] = useState<VisitCoverage | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -226,12 +229,17 @@ export default function VisitExecutionTab() {
   useEffect(() => {
     if (!activeProtocol) {
       setWorkspaces([]);
+      setCoverage(null);
       setSelectedId(null);
       return;
     }
     let cancelled = false;
     setLoading(true);
     setError(null);
+    // Completeness coverage (#4) — best-effort, independent of the workspace load.
+    fetchVisitCoverage(activeProtocol.id).then((cr) => {
+      if (!cancelled) setCoverage(cr.ok ? cr.data : null);
+    });
     fetchVisitExecutionWorkspaces(activeProtocol.id).then((r) => {
       if (cancelled) return;
       setLoading(false);
@@ -946,6 +954,7 @@ export default function VisitExecutionTab() {
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-4xl mx-auto px-5 sm:px-8 py-6 space-y-5">
+          <CoverageBanner coverage={coverage} />
           {selectedWorkspace ? (
             <>
               <VisitSnapshotCard
