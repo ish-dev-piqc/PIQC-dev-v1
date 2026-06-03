@@ -442,6 +442,26 @@ export interface VisitExecutionWorkspace {
   items: VisitExecutionItem[];
 }
 
+// ---------------------------------------------------------------------------
+// Protocol-level completeness coverage (#4). Returned by the
+// visit_execution_get_coverage RPC; drives the Visit-Prep coverage banner.
+// A gap is protocol-level (a missing visit has no template), so it lives here
+// rather than in per-visit completeness_signals.
+// ---------------------------------------------------------------------------
+export interface VisitCoverageGap {
+  label: string;
+  reason: string;
+  source: 'sequence' | 'aggregate' | 'llm';
+}
+
+export interface VisitCoverage {
+  expected_count: number;
+  found_count: number;
+  missing: VisitCoverageGap[];
+  detected_at: string;
+  resolution: string;
+}
+
 
 // ---------------------------------------------------------------------------
 // Default-expansion logic — pure function used by ExecutionChecklist to
