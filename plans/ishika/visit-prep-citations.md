@@ -1,9 +1,9 @@
 ---
 owner: ish-dev-piqc
 feature: Visit Prep — source citations (wire traceability to real evidence)
-status: active
+status: in-review
 started: 2026-06-03
-target_pr:
+target_pr: "#257"
 approved_by: rv61 (supabase migration — workspace RPC)
 ---
 
