@@ -2363,7 +2363,20 @@ export async function processIngestCompletion(
                   .join("\n"),
                 openaiKey,
               });
-              const missing = [...sequenceGaps, ...aggGaps, ...llmGaps];
+              // Multiple detectors (sequence + LLM especially) routinely flag the
+              // SAME missing visit, so collapse by normalized label before counting —
+              // otherwise expected_count double-counts (Visit 5/6 caught by both →
+              // 4, not 2). First occurrence wins; sequenceGaps lead so the precise
+              // deterministic reason is kept over the LLM's prose. Aggregate flags
+              // (label = full gap_text) are distinct and unaffected.
+              const seenLabels = new Set<string>();
+              const missing = [...sequenceGaps, ...aggGaps, ...llmGaps].filter((g) => {
+                const key = (g.label ?? "").trim().toLowerCase();
+                if (!key) return true;
+                if (seenLabels.has(key)) return false;
+                seenLabels.add(key);
+                return true;
+              });
               const { error: covErr } = await supabase.from("protocol_visit_coverage").upsert(
                 {
                   protocol_id: resolvedProtocolId,

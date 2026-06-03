@@ -85,6 +85,13 @@ export function UploadForm({
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
+  // Keep the latest onSuccess without re-running the poll effect when the parent
+  // re-renders with a new callback identity (which would restart polling).
+  const onSuccessRef = useRef(onSuccess);
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+  }, [onSuccess]);
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
@@ -141,12 +148,15 @@ export function UploadForm({
       // off to the poll loop (useEffect below), and notify the parent so
       // ProtocolOnboarding etc. can wire up their realtime listeners.
       if (res.status === 202 || typed.status === 'pending') {
+        // Do NOT notify the parent yet. Some consumers (ProtocolUploadModal)
+        // close on onSuccess — closing unmounts this form and kills the poll
+        // loop below before the parse finalizes, stranding the doc at 'pending'.
+        // We fire onSuccess only once the poll reports 'ready' (see below).
         setState({
           status: 'parsing',
-          message: 'Parsing your protocol — usually 30–180 seconds. We\'ll keep checking; safe to leave this open.',
+          message: 'Parsing your protocol — usually 30–180 seconds. Keep this open; we\'ll confirm when it\'s ready.',
           pendingDocumentId: typed.document_id,
         });
-        onSuccess(typed);
         return;
       }
 
@@ -197,6 +207,15 @@ export function UploadForm({
           setState({
             status: 'success',
             message: 'Protocol parsed and ready.',
+          });
+          // Notify the parent now that the parse is genuinely done — this is
+          // where consumers (list refresh, modal close, onboarding routing)
+          // should react, not at parse-start.
+          onSuccessRef.current({
+            success: true,
+            document_id: pendingDocId,
+            protocol_id: data.protocol_id ?? null,
+            status: 'ready',
           });
         } else if (data.status === 'failed') {
           setState({

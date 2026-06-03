@@ -678,6 +678,15 @@ export default function Dashboard({
   const { protocols, isLoading: protocolsLoading } = useProtocol();
   const isLight = theme === 'light';
 
+  // Safety net for stranded ingests: if the upload modal/tab was closed before
+  // a parse finalized, the UploadForm poll loop died and the doc is stuck at
+  // 'pending'. ingest-recover scans the caller's stuck-pending docs (>10min) and
+  // runs completion; the documents realtime channel reflects the flip. Best-effort,
+  // fire-and-forget, once per dashboard mount (invoke carries the user session).
+  useEffect(() => {
+    void supabase.functions.invoke('ingest-recover').catch(() => {});
+  }, []);
+
   const resolvedActiveTab = activeTab ?? internalActiveTab;
   const resolvedSettingsSection = settingsSection ?? internalSettingsSection;
 
