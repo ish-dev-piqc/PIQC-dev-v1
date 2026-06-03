@@ -32,6 +32,8 @@ import type {
   BoundingBox,
 } from './sotrTypes.ts';
 
+import { normalizeVisitName } from "./visitNameNormalize.ts";
+
 // ---------------------------------------------------------------------------
 // Visit deduplication
 //
@@ -75,9 +77,7 @@ export interface VisitDedupResult {
   extraEvidenceFor: Map<number, ExtraEvidenceRef[]>;
 }
 
-function normalizeVisitName(name: string): string {
-  return name.trim().toLowerCase().replace(/\s+/g, ' ');
-}
+// normalizeVisitName is imported from ./visitNameNormalize.ts (shared, parity-tested).
 
 function toNumber(v: unknown): number {
   if (typeof v === 'number' && Number.isFinite(v)) return v;

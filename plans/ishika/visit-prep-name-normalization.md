@@ -1,7 +1,7 @@
 ---
 owner: ish-dev-piqc
 feature: visit-prep-name-normalization
-status: active
+status: in-review
 started: 2026-06-02
 target_pr:
 ---
@@ -21,6 +21,7 @@ consistent. Fix #2 of the approved plan (`~/.claude/plans/ok-so-now-lets-wiggly-
 ## Scope (files allowed)
 
 - supabase/functions/_shared/visitNameNormalize.ts
+- src/lib/sotr/visitNameNormalize.ts
 - supabase/functions/_shared/ingestPipeline.ts
 - supabase/functions/_shared/sourceEvidenceAdapter.ts
 - src/lib/sotr/sourceEvidenceAdapter.ts
