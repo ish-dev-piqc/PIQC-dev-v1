@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: ask-bubble-header-consolidation
-status: active
+status: merged
+merged: 2026-06-03
 started: 2026-06-03
-target_pr:
+target_pr: #253
 ---
 
 # Ask bubble — header consolidation + AskRail cleanup
