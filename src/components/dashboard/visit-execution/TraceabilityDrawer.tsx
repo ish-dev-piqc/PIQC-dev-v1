@@ -45,6 +45,7 @@ export default function TraceabilityDrawer({ item, onClose }: Props) {
     t.soa_column ||
     t.protocol_section ||
     t.protocol_page !== null ||
+    t.source_quote ||
     t.amendment_version ||
     t.cross_reference_source_section ||
     t.cross_reference_snippet;
@@ -120,6 +121,12 @@ export default function TraceabilityDrawer({ item, onClose }: Props) {
                   Page {t.protocol_page}
                 </p>
               )}
+            </Section>
+          )}
+
+          {t.source_quote && (
+            <Section icon={<Quote size={13} />} label="Quoted from protocol">
+              <p className="text-fg-body text-sm italic">“{t.source_quote}”</p>
             </Section>
           )}
 

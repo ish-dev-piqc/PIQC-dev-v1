@@ -314,8 +314,11 @@ export interface VisitItemTraceability {
   protocol_page: number | null;
   /** Protocol amendment label (e.g. "Amendment 2.1"). NULL = original. */
   amendment_version: string | null;
-  /** FK to protocol_source_evidence.id — null in Sprint 1. */
+  /** FK to protocol_source_evidence.id — resolved from the primary evidence link. */
   source_evidence_id: string | null;
+  /** Verbatim quoted text from the resolved source evidence (the SoA cell or
+   * sentence the requirement was extracted from). null when no evidence links. */
+  source_quote: string | null;
   /** Verbatim cross-reference snippet from another protocol section. */
   cross_reference_source_section: string | null;
   cross_reference_page: number | null;
