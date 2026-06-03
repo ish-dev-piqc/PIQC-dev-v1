@@ -23,7 +23,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { mapReductoExtractToSotr } from "./sourceEvidenceAdapter.ts";
-import { dedupeVisitTemplateRowsByQuality } from "./visitTemplateDedup.ts";
+import { dedupeVisitTemplateRowsByQuality, staleTemplateIds } from "./visitTemplateDedup.ts";
 import { coerceStudyDay } from "./studyDayCoerce.ts";
 import type { ReductoExtractResponse } from "./sotrTypes.ts";
 
@@ -2149,6 +2149,47 @@ export async function processIngestCompletion(
             console.error("[ingest] template_upsert_failed", { error: tplError.message });
           } else {
             result.templatesInserted = dedupedRows.length;
+
+            // Idempotent re-ingest: prune THIS document's stale templates — rows
+            // a prior run created whose (visit_name, study_day) is no longer in
+            // the current extraction. Reducto's non-deterministic naming would
+            // otherwise accumulate a fresh variant row per re-ingest (one doc
+            // re-ingested 6× produced 36 rows for ~15 real visits). Prune-stale
+            // (not delete-all) so visits that persist keep their IDs +
+            // requirements + human edits; scoped to source_document_id so
+            // multi-doc protocols don't clobber each other. Guarded by
+            // dedupedRows.length > 0 above, so a zero-visit re-ingest (e.g. a
+            // failed extract) can never wipe the existing set.
+            {
+              const { data: existingForDoc, error: exErr } = await supabase
+                .from("protocol_visit_templates")
+                .select("id, visit_name, study_day")
+                .eq("protocol_id", resolvedProtocolId)
+                .eq("source_document_id", docId);
+              if (exErr) {
+                console.error("[ingest] template_prune_load_failed", { error: exErr.message });
+              } else {
+                const staleIds = staleTemplateIds(
+                  (existingForDoc ?? []) as Array<{ id: string; visit_name: string; study_day: number }>,
+                  dedupedRows,
+                );
+                if (staleIds.length > 0) {
+                  const { error: delErr } = await supabase
+                    .from("protocol_visit_templates")
+                    .delete()
+                    .in("id", staleIds);
+                  if (delErr) {
+                    console.error("[ingest] template_prune_failed", { error: delErr.message });
+                  } else {
+                    console.log("[ingest] template_pruned", {
+                      protocol_id: resolvedProtocolId,
+                      document_id: docId,
+                      pruned: staleIds.length,
+                    });
+                  }
+                }
+              }
+            }
 
             const { data: protoRow } = await supabase
               .from("protocols")
