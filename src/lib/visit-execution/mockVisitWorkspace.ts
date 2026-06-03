@@ -65,6 +65,7 @@ function buildItem(
     protocol_page: null,
     amendment_version: 'Original (v1.0)',
     source_evidence_id: null,
+    source_quote: null,
     cross_reference_source_section: null,
     cross_reference_page: null,
     cross_reference_snippet: null,
