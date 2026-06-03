@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: visit-prep-name-normalization
-status: in-review
+status: merged
+merged: 2026-06-03
 started: 2026-06-02
-target_pr:
+target_pr: #245
 ---
 
 # Visit Prep — visit-name normalization (collapse time/cycle variants)
