@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: Visit Prep — coverage dedup (#4) + upload finalization fix
-status: active
+status: merged
+merged: 2026-06-03
 started: 2026-06-03
-target_pr:
+target_pr: #255
 approved_by: rv61 (supabase/_shared ingest pipeline)
 ---
 
