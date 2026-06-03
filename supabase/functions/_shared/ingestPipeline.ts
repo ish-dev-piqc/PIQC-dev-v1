@@ -24,6 +24,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { mapReductoExtractToSotr } from "./sourceEvidenceAdapter.ts";
 import { dedupeVisitTemplateRowsByQuality, staleTemplateIds } from "./visitTemplateDedup.ts";
+import { canonicalVisitName, normalizeVisitName } from "./visitNameNormalize.ts";
 import { coerceStudyDay } from "./studyDayCoerce.ts";
 import type { ReductoExtractResponse } from "./sotrTypes.ts";
 
@@ -1610,10 +1611,11 @@ async function buildPersistPayloadForVisit(
   };
 }
 
-// Mirrors the SOTR adapter's normalizeVisitName so the visit→confidence map
-// keys line up with how protocol_extracted_items grouped visits at dedup time.
+// Mirrors the SOTR adapter's normalizeVisitName (now via the shared
+// visitNameNormalize module) so the visit→confidence map keys line up with how
+// protocol_extracted_items grouped visits at dedup time.
 function normalizeVisitNameKey(name: string): string {
-  return name.trim().toLowerCase().replace(/\s+/g, " ");
+  return normalizeVisitName(name);
 }
 
 export interface VisitConfidenceLink {
@@ -2117,7 +2119,10 @@ export async function processIngestCompletion(
           .filter((sd): sd is { s: LocalScheduleEntry; day: number } => sd.day !== null)
           .map(({ s, day }) => ({
             protocol_id: resolvedProtocolId,
-            visit_name: String(s.visit_name).trim(),
+            // Canonical name: strip pure time/cycle parentheticals so
+            // "Treatment Visit 1 (Cycle 1 Day 1)" and "Treatment Visit 1" store
+            // as one name and dedup/prune collapse them. Display case preserved.
+            visit_name: canonicalVisitName(String(s.visit_name)),
             study_day: day,
             window_minus_days: typeof s.window_minus_days === "number" ? Math.max(0, Math.trunc(s.window_minus_days)) : 0,
             window_plus_days: typeof s.window_plus_days === "number" ? Math.max(0, Math.trunc(s.window_plus_days)) : 0,
@@ -2251,7 +2256,7 @@ export async function processIngestCompletion(
       if (protocolId && schedule.length > 0 && result.templatesInserted > 0) {
         const visitListForFanOut = schedule
           .filter((s) => typeof s.visit_name === "string")
-          .map((s) => ({ visit_name: String(s.visit_name).trim(), study_day: coerceStudyDay(s.study_day) }))
+          .map((s) => ({ visit_name: canonicalVisitName(String(s.visit_name)), study_day: coerceStudyDay(s.study_day) }))
           // Same coercion as the template build so the fan-out targets the same
           // visits we actually stored (e.g. a "Day 168 ± 7" trailing visit).
           .filter((v): v is { visit_name: string; study_day: number } => v.study_day !== null);
