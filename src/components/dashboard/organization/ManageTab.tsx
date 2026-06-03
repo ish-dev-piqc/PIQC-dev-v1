@@ -80,6 +80,11 @@ export default function ManageTab() {
   const [inviteRole, setInviteRole] = useState<OrgRole>('member');
   const [creatingInvite, setCreatingInvite] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  // After invite creation, briefly show "✓ Email sent to <email>" or a
+  // warning if the Edge Function failed. Cleared on next form submit.
+  const [lastInviteResult, setLastInviteResult] = useState<
+    { email: string; emailSent: boolean } | null
+  >(null);
   const [orgProtocols, setOrgProtocols] = useState<OrgProtocolSummary[]>([]);
   const [assignments, setAssignments] = useState<Map<string, ProtocolMemberRole>>(new Map());
 
@@ -197,14 +202,16 @@ export default function ManageTab() {
   const handleCreateInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!org || creatingInvite || !inviteEmail.trim()) return;
+    const submittedEmail = inviteEmail.trim();
     setCreatingInvite(true);
     setError(null);
+    setLastInviteResult(null);
     const protocolAssignments: ProtocolAssignment[] = Array.from(assignments.entries()).map(
       ([protocol_id, role]) => ({ protocol_id, role }),
     );
     const result = await createOrgInvite(
       org.id,
-      inviteEmail.trim(),
+      submittedEmail,
       inviteRole,
       protocolAssignments,
     );
@@ -221,6 +228,7 @@ export default function ManageTab() {
     } catch {
       /* ignore — user can copy from the listing below */
     }
+    setLastInviteResult({ email: submittedEmail, emailSent: result.data.emailSent });
     setInviteEmail('');
     setAssignments(new Map());
     refresh();
@@ -691,8 +699,41 @@ export default function ManageTab() {
             disabled={creatingInvite || !inviteEmail.trim()}
             className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${buttonPrimary}`}
           >
-            {creatingInvite ? 'Creating…' : 'Create invite + copy link'}
+            {creatingInvite ? 'Creating…' : 'Create invite + send email'}
           </button>
+
+          {lastInviteResult && (
+            lastInviteResult.emailSent ? (
+              <div
+                className={`mt-2 flex items-start gap-2 px-3 py-2 rounded-md text-xs ${
+                  isLight
+                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                    : 'bg-emerald-500/[0.06] border border-emerald-500/30 text-emerald-300'
+                }`}
+              >
+                <Check size={13} className="mt-0.5 flex-shrink-0" />
+                <span>
+                  Invite sent to <strong>{lastInviteResult.email}</strong>. The link
+                  is also on your clipboard.
+                </span>
+              </div>
+            ) : (
+              <div
+                className={`mt-2 flex items-start gap-2 px-3 py-2 rounded-md text-xs ${
+                  isLight
+                    ? 'bg-amber-50 border border-amber-200 text-amber-800'
+                    : 'bg-amber-500/[0.06] border border-amber-500/30 text-amber-300'
+                }`}
+              >
+                <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
+                <span>
+                  Invite created for <strong>{lastInviteResult.email}</strong>, but
+                  the email couldn't be sent. The link is on your clipboard — share
+                  it manually, or use the Copy link button below.
+                </span>
+              </div>
+            )
+          )}
         </form>
 
         {invites.length > 0 && (

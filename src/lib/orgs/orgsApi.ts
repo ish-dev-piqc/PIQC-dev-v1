@@ -259,7 +259,7 @@ export async function createOrgInvite(
   email: string,
   role: OrgRole,
   protocolAssignments: ProtocolAssignment[] = [],
-): Promise<Result<{ id: string; token: string; expires_at: string }>> {
+): Promise<Result<{ id: string; token: string; expires_at: string; emailSent: boolean }>> {
   try {
     const { data, error } = await supabase.rpc('create_org_invite', {
       p_org_id: orgId,
@@ -270,9 +270,31 @@ export async function createOrgInvite(
     if (error) throw error;
     const row = Array.isArray(data) ? data[0] : data;
     if (!row?.token) throw new Error('RPC returned no token');
+
+    // Best-effort: invoke the Edge Function to email the invite link via
+    // Resend. If it fails, the invite row still exists and the admin can
+    // copy the link manually from the pending-invites list. We surface the
+    // success/failure in the return so the UI can show "✓ Email sent" vs
+    // a "copy the link" warning.
+    const inviteUrl = buildInviteUrl(row.token);
+    let emailSent = false;
+    try {
+      const { data: fnData, error: fnError } = await supabase.functions.invoke(
+        'send-org-invite-email',
+        { body: { inviteId: row.id, inviteUrl } },
+      );
+      if (!fnError && fnData && typeof fnData === 'object' && 'ok' in fnData && fnData.ok === true) {
+        emailSent = true;
+      } else if (fnError) {
+        console.warn('[orgsApi] send-org-invite-email failed:', fnError.message);
+      }
+    } catch (e) {
+      console.warn('[orgsApi] send-org-invite-email threw:', e);
+    }
+
     return {
       ok: true,
-      data: { id: row.id, token: row.token, expires_at: row.expires_at },
+      data: { id: row.id, token: row.token, expires_at: row.expires_at, emailSent },
     };
   } catch (e) {
     return fail('createOrgInvite', e);
