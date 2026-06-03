@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: visit-prep-idempotent-reingest
-status: active
+status: merged
+merged: 2026-06-03
 started: 2026-06-02
-target_pr:
+target_pr: #242
 ---
 
 # Visit Prep — make visit-template ingest idempotent (prune stale on re-ingest)
