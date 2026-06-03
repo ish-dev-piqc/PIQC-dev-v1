@@ -101,9 +101,13 @@ manually."). Clipboard auto-copy still happens in both cases.
 None.
 
 ## Approved-by
-- `@rg-dev-piqc` — `supabase/functions/**` is Roger's domain per CODEOWNERS.
+- `@rv61` (Roger) — `supabase/functions/**` is Roger's domain per CODEOWNERS.
   Edge Function mirrors the just-merged `send-org-invite-email` (same Resend
   key, same From address) — minimal blast radius.
+- `@ki-dev-piqc` (Kiara) — `/src/lib/orgs/` and `/src/components/dashboard/orgs/`
+  are Kiara's per CODEOWNERS. This guest flow is the direct parallel to her
+  just-merged org-invite-email work, so she's the natural reviewer. Tag her on
+  the PR.
 
 ## Verification
 - Deploy: `npx supabase functions deploy send-guest-invite-email`.
