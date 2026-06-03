@@ -6,10 +6,18 @@ import {
 } from '../visitScheduleRules.ts';
 
 describe('detectImplausibleDay (#3a)', () => {
-  it('flags an end-of-treatment visit dated implausibly early', () => {
+  it('flags an end-of-treatment visit dated at/near baseline in a long study', () => {
     expect(detectImplausibleDay('EOT Visit', 14, 169)?.detection_reason).toBe('implausible_study_day');
     expect(detectImplausibleDay('End of Treatment (EOT) Visit', 0, 169)?.detection_reason).toBe('implausible_study_day');
-    expect(detectImplausibleDay('Follow-up Assessment', 30, 360)?.detection_reason).toBe('implausible_study_day');
+  });
+
+  it('does NOT flag a legit mid-study EOT or any follow-up (long-tail studies)', () => {
+    // EOT at month ~6 legitimately precedes follow-up to month 24 — not a gap.
+    expect(detectImplausibleDay('EOT Visit', 169, 672)).toBeNull();
+    expect(detectImplausibleDay('Follow-up Assessment (Month 9)', 270, 672)).toBeNull();
+    expect(detectImplausibleDay('Follow-up Visits (Month 9, 12, 18, 24)', 270, 672)).toBeNull();
+    // Short study: an EOT at day 14 is plausible when the study only runs ~28 days.
+    expect(detectImplausibleDay('EOT Visit', 14, 28)).toBeNull();
   });
   it('does NOT flag a plausibly-late end visit', () => {
     expect(detectImplausibleDay('EOT Visit', 169, 169)).toBeNull();

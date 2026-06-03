@@ -22,7 +22,9 @@ export interface ScheduleGap {
   detection_reason: string;
 }
 
-const LATE_VISIT = /\b(eot|eos|end[ -]of[ -](treatment|study)|follow[ -]?up|early termination)\b/i;
+// NOTE: "follow-up" is intentionally NOT here — follow-ups legitimately span
+// the whole post-treatment tail, so flagging them produces false positives.
+const LATE_VISIT = /\b(eot|eos|end[ -]of[ -](treatment|study)|final visit|early termination)\b/i;
 const EARLY_VISIT = /\b(screening|baseline|run[ -]?in|enrol)/i;
 
 /**
@@ -36,9 +38,14 @@ export function detectImplausibleDay(
   maxStudyDay: number,
 ): ScheduleGap | null {
   if (!Number.isFinite(studyDay) || maxStudyDay <= 0) return null;
-  if (LATE_VISIT.test(visitName) && studyDay < 0.5 * maxStudyDay) {
+  // LATE-named visits legitimately sit mid-study when there's a long follow-up
+  // tail (end-of-TREATMENT precedes follow-up), so flag them ONLY at/near
+  // baseline in a study that clearly runs much longer — that's the real garble
+  // (EOT extracted at day 0/14 when the true EOT is day 169). Absolute, not
+  // relative to max, so a legit mid-study EOT (e.g. day 169 of 672) is NOT flagged.
+  if (LATE_VISIT.test(visitName) && maxStudyDay >= 60 && studyDay <= 14) {
     return {
-      gap_text: `"${visitName}" is dated study day ${studyDay}, implausibly early — the last scheduled visit is day ${maxStudyDay}. Verify the visit's day.`,
+      gap_text: `"${visitName}" is dated study day ${studyDay} — implausibly early for an end-of-treatment/study visit in a study that runs to day ${maxStudyDay}. Verify the visit's day.`,
       source_section: null,
       source_page: null,
       detection_confidence: "needs_review",
