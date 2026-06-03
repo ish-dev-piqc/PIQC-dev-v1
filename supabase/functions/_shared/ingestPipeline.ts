@@ -23,7 +23,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { mapReductoExtractToSotr } from "./sourceEvidenceAdapter.ts";
-import { dedupeVisitTemplateRowsByQuality, staleTemplateIds } from "./visitTemplateDedup.ts";
+import { dedupeVisitTemplateRowsByQuality, staleTemplateIds, visitMatchKey } from "./visitTemplateDedup.ts";
 import { canonicalVisitName, normalizeVisitName } from "./visitNameNormalize.ts";
 import {
   detectImplausibleDay,
@@ -1728,8 +1728,15 @@ async function persistVisitExecutionWorkspaces(
   type TemplateRow = { id: string; visit_name: string; study_day: number };
   const byKey = new Map<string, TemplateRow>();
   for (const t of (templates ?? []) as TemplateRow[]) {
-    byKey.set(`${t.visit_name}|${t.study_day}`, t);
+    // visitMatchKey canonicalizes the name — the stored template name is already
+    // canonical, the raw schedule entry below is not; using the SAME key fn on
+    // both sides is what stops them drifting (the silent-drop regression).
+    byKey.set(visitMatchKey(t.visit_name, t.study_day), t);
   }
+  // Loud guard: any schedule entry that carried procedures but matched no
+  // template means data is being dropped — surface it instead of silently
+  // skipping (the old failure mode that hid the missing Treatment Visits).
+  const unmatchedWithProcedures: string[] = [];
 
   const visitsPayload: Array<Record<string, unknown>> = [];
 
@@ -1751,9 +1758,15 @@ async function persistVisitExecutionWorkspaces(
     // a row in byKey — a numeric `42` here vs a string "42" there would miss.
     const studyDay = coerceStudyDay(entry.study_day);
     if (studyDay === null) continue;
-    const key = `${String(entry.visit_name).trim()}|${studyDay}`;
+    const key = visitMatchKey(entry.visit_name, studyDay);
     const tpl = byKey.get(key);
-    if (!tpl) continue;
+    if (!tpl) {
+      const hadProcedures =
+        normalizeStructuredProcedures(entry.procedures_structured).length > 0 ||
+        (Array.isArray(entry.procedures) && entry.procedures.length > 0);
+      if (hadProcedures) unmatchedWithProcedures.push(String(entry.visit_name).trim());
+      continue;
+    }
 
     const structuredProcs = normalizeStructuredProcedures(entry.procedures_structured);
     const extractedLabels = structuredProcs.length > 0
@@ -1815,6 +1828,18 @@ async function persistVisitExecutionWorkspaces(
         conf?.confidenceState ?? null,
       ),
     );
+  }
+
+  // Loud guard: schedule entries that carried procedures but matched NO template
+  // had their procedures dropped. This is the exact failure mode that hid the
+  // missing Treatment Visits (canonicalized template name vs raw lookup key).
+  // Surface it for any protocol / any future cause instead of failing silently.
+  if (unmatchedWithProcedures.length > 0) {
+    console.error("[ingest] vew_unmatched_visits_with_procedures", {
+      protocol_id: args.protocolId,
+      count: unmatchedWithProcedures.length,
+      visits: unmatchedWithProcedures,
+    });
   }
 
   if (visitsPayload.length === 0) return;
