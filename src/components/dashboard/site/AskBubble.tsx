@@ -97,7 +97,6 @@ export default function AskBubble() {
     ? 'bg-white border-[#E2E8F0] shadow-[0_24px_48px_-12px_rgba(15,23,42,0.18)]'
     : 'bg-[#0F172A] border-white/[0.08] shadow-[0_24px_48px_-12px_rgba(0,0,0,0.6)]';
   const headerBorder = isLight ? 'border-[#E2E8F0]' : 'border-white/[0.06]';
-  const subColor = 'text-fg-sub';
 
   return (
     <div
@@ -125,11 +124,11 @@ export default function AskBubble() {
           <Sparkles size={13} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-fg-heading leading-tight truncate">
-            Ask
-            {activeProtocol && (
-              <span className={`${subColor} font-normal ml-1.5`}>· {activeProtocol.code}</span>
-            )}
+          {/* Per Kiara/Ishika 2026-06-03: single bolded title here ("Protocol
+              Assistant"). Protocol metadata (code · sponsor · phase) lives in
+              the AskTab strip below — we only show two header rows total. */}
+          <p className="text-sm font-bold text-fg-heading leading-tight truncate">
+            Protocol Assistant
           </p>
         </div>
         <button

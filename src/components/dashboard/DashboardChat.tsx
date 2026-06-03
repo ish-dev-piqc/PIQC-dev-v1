@@ -507,6 +507,11 @@ interface DashboardChatProps {
   // Optional: override the empty-state title/subtitle for context-scoped use.
   emptyHeading?: string;
   emptySubtext?: string;
+  // Optional: suppress the "Protocol Assistant" header strip. Used by AskTab
+  // inside AskBubble, where the bubble already provides a "Protocol Assistant"
+  // header — rendering this one too produces three stacked title rows.
+  // Defaults to false so Audit Mode's call site is unchanged.
+  hideHeader?: boolean;
 }
 
 export default function DashboardChat({
@@ -517,6 +522,7 @@ export default function DashboardChat({
   customSuggestions,
   emptyHeading,
   emptySubtext,
+  hideHeader = false,
 }: DashboardChatProps) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -667,36 +673,39 @@ export default function DashboardChat({
   return (
     <div className={`flex flex-col h-full ${isLight ? 'bg-[#fafcfd]' : 'bg-[#0c1118]'}`}>
 
-      {/* Header */}
-      <div className={`flex-shrink-0 px-5 py-3.5 border-b ${
-        isLight
-          ? 'border-[#e2eaf0] bg-white'
-          : 'border-white/[0.06] bg-[#11171d]'
-      }`}>
-        <div className="flex items-center gap-3">
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-sm ${
-            isLight
-              ? 'bg-gradient-to-br from-[#dceaf0] to-[#c4d8e4]'
-              : 'bg-gradient-to-br from-[#1e2e38] to-[#162026]'
-          }`}>
-            <BookOpen size={17} className="text-[#4a7aa8]" />
-          </div>
-          <div>
-            <h2 className={`font-semibold text-sm leading-tight ${isLight ? 'text-[#1E293B]' : 'text-[#e0e8f0]'}`}>
-              Protocol Assistant
-            </h2>
-            <p className={`text-[11px] leading-tight mt-0.5 ${isLight ? 'text-[#334155]/50' : 'text-[#94A3B8]'}`}>
-              Clinical knowledge at your fingertips
-            </p>
-          </div>
-          <div className="ml-auto flex items-center gap-1.5">
-            <span className={`w-1.5 h-1.5 rounded-full transition-colors duration-500 ${statusColor} ${loading ? '' : 'animate-pulse'}`} />
-            <span className={`text-[11px] font-medium transition-all duration-300 ${isLight ? 'text-[#334155]/50' : 'text-[#94A3B8]'}`}>
-              {statusLabel}
-            </span>
+      {/* Header — hidden when consumed from AskBubble (which provides its own
+          "Protocol Assistant" title). Defaults to visible for Audit Mode. */}
+      {!hideHeader && (
+        <div className={`flex-shrink-0 px-5 py-3.5 border-b ${
+          isLight
+            ? 'border-[#e2eaf0] bg-white'
+            : 'border-white/[0.06] bg-[#11171d]'
+        }`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-sm ${
+              isLight
+                ? 'bg-gradient-to-br from-[#dceaf0] to-[#c4d8e4]'
+                : 'bg-gradient-to-br from-[#1e2e38] to-[#162026]'
+            }`}>
+              <BookOpen size={17} className="text-[#4a7aa8]" />
+            </div>
+            <div>
+              <h2 className={`font-semibold text-sm leading-tight ${isLight ? 'text-[#1E293B]' : 'text-[#e0e8f0]'}`}>
+                Protocol Assistant
+              </h2>
+              <p className={`text-[11px] leading-tight mt-0.5 ${isLight ? 'text-[#334155]/50' : 'text-[#94A3B8]'}`}>
+                Clinical knowledge at your fingertips
+              </p>
+            </div>
+            <div className="ml-auto flex items-center gap-1.5">
+              <span className={`w-1.5 h-1.5 rounded-full transition-colors duration-500 ${statusColor} ${loading ? '' : 'animate-pulse'}`} />
+              <span className={`text-[11px] font-medium transition-all duration-300 ${isLight ? 'text-[#334155]/50' : 'text-[#94A3B8]'}`}>
+                {statusLabel}
+              </span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto scroll-smooth relative">

@@ -7,7 +7,6 @@ import {
   FlaskConical,
   Pill,
   ShieldCheck,
-  Sparkles,
   Stethoscope,
   Upload,
 } from 'lucide-react';
@@ -148,24 +147,18 @@ export default function AskTab({
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* Protocol context strip — Ishika feedback (2026-06-03): keep this slim
-          so the chat surface dominates. One row, no preamble label, no
-          paragraph copy (the "grounded + cited" promise now lives in the
-          empty-state and in the citation chips themselves). */}
+      {/* Protocol metadata strip — second of the two header rows in the bubble
+          (the first is "Protocol Assistant" in AskBubble). No icon here; the
+          bubble header already has one. Single truncating line: code · sponsor
+          · phase. */}
       <div className={`flex-shrink-0 border-b ${stripBg} px-4 py-2`}>
-        <div className="flex items-center gap-2 min-w-0">
-          <Sparkles
-            size={13}
-            className={`flex-shrink-0 ${isLight ? 'text-brand-600' : 'text-brand-300'}`}
-          />
-          <p className={`text-xs min-w-0 truncate`}>
-            <span className={`${headingColor} font-semibold`}>{activeProtocol.code}</span>
-            <span className={`${mutedColor} mx-1.5`}>·</span>
-            <span className={subColor}>
-              {activeProtocol.sponsor} · {activeProtocol.phase}
-            </span>
-          </p>
-        </div>
+        <p className="text-xs min-w-0 truncate">
+          <span className={`${headingColor} font-semibold`}>{activeProtocol.code}</span>
+          <span className={`${mutedColor} mx-1.5`}>·</span>
+          <span className={subColor}>
+            {activeProtocol.sponsor} · {activeProtocol.phase}
+          </span>
+        </p>
       </div>
 
       {/* Demo mode: short-circuit to canned-response panel — never hits the live LLM. */}
@@ -201,6 +194,7 @@ export default function AskTab({
             customSuggestions={protocolSuggestions}
             emptyHeading={`Ask about ${activeProtocol.code}`}
             emptySubtext={`Grounded in ${documents.length} document${documents.length === 1 ? '' : 's'} for ${activeProtocol.code}. Pick a starter or ask anything.`}
+            hideHeader
           />
         </div>
       )}
