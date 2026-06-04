@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: chat-mention-notification-badge
-status: active
+status: merged
+merged: 2026-06-04
 started: 2026-06-04
-target_pr:
+target_pr: #273
 ---
 
 # Chat: global @-mention notification badge
