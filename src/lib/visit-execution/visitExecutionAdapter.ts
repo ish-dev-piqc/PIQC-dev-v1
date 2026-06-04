@@ -97,6 +97,7 @@ export function adaptVisitTemplate(template: ProtocolVisitTemplate): VisitExecut
       protocol_page: null,
       amendment_version: null,
       source_evidence_id: null,
+      source_quote: null,
       ...visitCrossRef,
     },
     review_status: 'not_reviewed',

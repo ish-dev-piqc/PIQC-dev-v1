@@ -23,8 +23,11 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { mapReductoExtractToSotr } from "./sourceEvidenceAdapter.ts";
-import { dedupeVisitTemplateRowsByQuality, staleTemplateIds, visitMatchKey } from "./visitTemplateDedup.ts";
+import { dedupeVisitTemplateRowsByQuality, pickTemplateForVisit, staleTemplateIds, visitMatchKey } from "./visitTemplateDedup.ts";
 import { canonicalVisitName, normalizeVisitName } from "./visitNameNormalize.ts";
+import { enrichScheduleFromLlm, evaluateSoaGate, gridToScheduleOfEvents, parseSoaGrid } from "./soaGridParser.ts";
+import type { SoaGateDecision } from "./soaGridParser.ts";
+import { deriveVisitCountSignal } from "./soaColumnCount.ts";
 import {
   detectImplausibleDay,
   expandAggregateVisitRow,
@@ -137,6 +140,27 @@ export function mapRawChunksToChunkData(rawChunks: ReductoChunk[]): ChunkData[] 
     .filter((c): c is ChunkData => c !== null);
 }
 
+/**
+ * Collect the HTML grid of every Table block across the parse, for the
+ * deterministic SoA-grid parse (soaGridParser). This reads block-level table
+ * HTML that mapRawChunksToChunkData discards — it does NOT touch chunk.content
+ * or embeddings, so the Ask-tab RAG path is byte-for-byte unchanged. Only blocks
+ * whose content actually contains an HTML table are kept (a prose-summarized
+ * table is skipped → the fallback gate handles it).
+ */
+export function collectTableHtml(rawChunks: ReductoChunk[]): Array<{ content: string; page: number | null }> {
+  const out: Array<{ content: string; page: number | null }> = [];
+  for (const c of rawChunks) {
+    const blocks: ReductoBlock[] = Array.isArray(c.blocks) ? c.blocks : [];
+    for (const b of blocks) {
+      if (/table/i.test(b.type ?? "") && typeof b.content === "string" && /<t[rd]\b/i.test(b.content)) {
+        out.push({ content: b.content, page: typeof b.bbox?.page === "number" ? b.bbox.page : null });
+      }
+    }
+  }
+  return out;
+}
+
 /** Plain-text fallback for non-PDF text uploads. */
 export function splitIntoChunks(text: string): ChunkData[] {
   const words = text.split(/\s+/).filter(Boolean);
@@ -231,6 +255,12 @@ export async function uploadToReducto(pdfBytes: Uint8Array, reductoKey: string):
 export async function kickOffReductoParseAsync(
   fileId: string,
   reductoKey: string,
+  // Workstream D: when a webhook URL is supplied, Reducto POSTs the completed
+  // job to it directly (server-to-server, retried 3×), so finalization no longer
+  // depends on the browser polling /ingest-status — the long-PDF "stuck pending"
+  // fix. metadata.document_id is echoed back so the webhook knows which doc.
+  // Omitted (undefined) → identical to the prior polling-only behaviour.
+  webhook?: { url: string; documentId: string },
 ): Promise<string> {
   return withRetry(async () => {
     const res = await fetch(`${REDUCTO_BASE_URL}/parse_async`, {
@@ -260,6 +290,12 @@ export async function kickOffReductoParseAsync(
           agentic: [{ scope: "table" }, { scope: "figure" }],
           intelligent_ordering: true,
         },
+        ...(webhook
+          ? {
+            async_config: { webhook: { mode: "direct", url: webhook.url } },
+            metadata: { document_id: webhook.documentId },
+          }
+          : {}),
       }),
     });
 
@@ -293,7 +329,7 @@ export async function kickOffReductoParseAsync(
 export async function fetchReductoJobResult(
   jobId: string,
   reductoKey: string,
-): Promise<{ status: string; chunks: ChunkData[] }> {
+): Promise<{ status: string; chunks: ChunkData[]; tableHtml: Array<{ content: string; page: number | null }> }> {
   return withRetry(async () => {
     const res = await fetch(`${REDUCTO_BASE_URL}/job/${jobId}`, {
       method: "GET",
@@ -346,7 +382,11 @@ export async function fetchReductoJobResult(
       });
     }
 
-    return { status, chunks: mapRawChunksToChunkData(rawChunks) };
+    return {
+      status,
+      chunks: mapRawChunksToChunkData(rawChunks),
+      tableHtml: collectTableHtml(rawChunks),
+    };
   }, "fetchReductoJobResult");
 }
 
@@ -1710,8 +1750,8 @@ async function persistVisitExecutionWorkspaces(
     // confidence the Protocol tab shows. Empty map = prior null-confidence behaviour.
     confidenceByVisitName: Map<string, VisitConfidenceLink>;
   },
-): Promise<void> {
-  if (args.schedule.length === 0) return;
+): Promise<{ unmatchedWithProcedures: string[]; keyCollisions: string[] }> {
+  if (args.schedule.length === 0) return { unmatchedWithProcedures: [], keyCollisions: [] };
 
   // Load the visit_template rows we just wrote so we can map visit_name +
   // study_day → visit_template_id (the persist RPC keys on UUIDs, not names).
@@ -1722,29 +1762,32 @@ async function persistVisitExecutionWorkspaces(
 
   if (error) {
     console.error("[ingest] vew_load_templates_failed", { error: error.message });
-    return;
+    return { unmatchedWithProcedures: [], keyCollisions: [] };
   }
 
   type TemplateRow = { id: string; visit_name: string; study_day: number };
-  const byKey = new Map<string, TemplateRow>();
+  // Bucket by key (not last-write-wins): if two templates canonicalize to the
+  // same (name, study_day) key, keeping BOTH lets the lookup disambiguate by
+  // exact name instead of silently dropping one visit's procedures (#259's
+  // residual collision risk). visitMatchKey canonicalizes the name — the stored
+  // template name is already canonical, the raw schedule entry below is not;
+  // using the SAME key fn on both sides is what stops them drifting.
+  const byKey = new Map<string, TemplateRow[]>();
   for (const t of (templates ?? []) as TemplateRow[]) {
-    // visitMatchKey canonicalizes the name — the stored template name is already
-    // canonical, the raw schedule entry below is not; using the SAME key fn on
-    // both sides is what stops them drifting (the silent-drop regression).
-    byKey.set(visitMatchKey(t.visit_name, t.study_day), t);
+    const k = visitMatchKey(t.visit_name, t.study_day);
+    const bucket = byKey.get(k);
+    if (bucket) bucket.push(t);
+    else byKey.set(k, [t]);
   }
   // Loud guard: any schedule entry that carried procedures but matched no
   // template means data is being dropped — surface it instead of silently
   // skipping (the old failure mode that hid the missing Treatment Visits).
   const unmatchedWithProcedures: string[] = [];
+  // Loud guard: two templates collided on one key — we picked one by exact name.
+  const keyCollisions: string[] = [];
 
   const visitsPayload: Array<Record<string, unknown>> = [];
 
-  // Serial across visits is deliberate: each visit fires two parallel LLM
-  // calls (purpose + missing-req), so parallelizing the outer loop would
-  // multiply OpenAI concurrency by N visits and trip rate limits on larger
-  // protocols. Trade-off accepted: ~3s × N visits sequential vs ~3s total
-  // but rate-limit risky. Revisit if ingest latency becomes a complaint.
   // Schedule span for the implausible-day check (#3a) — scaled to the protocol's
   // own length so the rules generalize across short and long studies.
   const maxStudyDay = args.schedule.reduce((m, e) => {
@@ -1752,6 +1795,18 @@ async function persistVisitExecutionWorkspaces(
     return d !== null && d > m ? d : m;
   }, 0);
 
+  // Phase 1 (sequential, cheap): match each schedule entry to its template,
+  // disambiguate collisions, and gather the per-visit inputs. The mutations
+  // here (unmatched / collision guards) stay single-threaded.
+  interface PreparedVisit {
+    entry: ScheduleEntry;
+    templateId: string;
+    extractedLabels: string[];
+    visitSectionText: string;
+    reductoPurpose: string;
+    studyDay: number;
+  }
+  const prepared: PreparedVisit[] = [];
   for (const entry of args.schedule) {
     if (typeof entry.visit_name !== "string") continue;
     // Coerce identically to the template-build step (step 5) so this key matches
@@ -1759,13 +1814,20 @@ async function persistVisitExecutionWorkspaces(
     const studyDay = coerceStudyDay(entry.study_day);
     if (studyDay === null) continue;
     const key = visitMatchKey(entry.visit_name, studyDay);
-    const tpl = byKey.get(key);
-    if (!tpl) {
+    const bucket = byKey.get(key);
+    if (!bucket || bucket.length === 0) {
       const hadProcedures =
         normalizeStructuredProcedures(entry.procedures_structured).length > 0 ||
         (Array.isArray(entry.procedures) && entry.procedures.length > 0);
       if (hadProcedures) unmatchedWithProcedures.push(String(entry.visit_name).trim());
       continue;
+    }
+    // Disambiguate a collision by exact visit_name (raw, then canonical); never
+    // silently drop the other visit's procedures.
+    const { pick, collided } = pickTemplateForVisit(bucket, String(entry.visit_name));
+    const tpl = pick!; // bucket is non-empty here
+    if (collided) {
+      keyCollisions.push(`${key} → [${bucket.map((t) => t.visit_name).join(" | ")}] picked "${tpl.visit_name}"`);
     }
 
     const structuredProcs = normalizeStructuredProcedures(entry.procedures_structured);
@@ -1777,58 +1839,73 @@ async function persistVisitExecutionWorkspaces(
         ? (entry.procedures as unknown[]).filter((p): p is string => typeof p === "string")
         : [];
 
-    const visitSectionText = pickVisitSectionText(entry);
+    prepared.push({
+      entry,
+      templateId: tpl.id,
+      extractedLabels,
+      visitSectionText: pickVisitSectionText(entry),
+      reductoPurpose: typeof entry.visit_purpose === "string" ? entry.visit_purpose.trim() : "",
+      studyDay,
+    });
+  }
 
-    // LLM passes in parallel per visit. Both fail gracefully — purpose returns
-    // null, missing-req returns a synthetic 'coverage_check_unavailable' gap.
-    //
-    // Visit-purpose: short-circuit ONLY if Reducto's extracted value clears
-    // the quality floor (substantive prose, not "Day 1"). Below the floor we
-    // still call the dedicated LLM prompt so the mastery principle holds.
-    const reductoPurpose = typeof entry.visit_purpose === "string"
-      ? entry.visit_purpose.trim()
-      : "";
+  // Phase 2 (bounded-parallel): each visit fires up to two LLM calls (purpose +
+  // missing-req). Previously fully serial to bound OpenAI concurrency; a bounded
+  // pool keeps that ceiling (POOL × 2 in-flight) while collapsing wall-clock from
+  // ~3s × N to ~3s × ceil(N / POOL) — the long-protocol completion no longer
+  // risks the 150s function cap. Results are written by index to preserve order.
+  const POOL = 4;
+  const results: Array<Record<string, unknown> | null> = new Array(prepared.length).fill(null);
+  let cursor = 0;
+  const runVisit = async (p: PreparedVisit, index: number): Promise<void> => {
+    // Visit-purpose: short-circuit ONLY if Reducto's extracted value clears the
+    // quality floor (substantive prose, not "Day 1"). Below the floor call the
+    // dedicated LLM prompt. Both LLM passes fail gracefully (null / synthetic gap).
     const purposeTask: Promise<string | null> =
-      reductoPurpose.length > 0 && reductoPurposeMeetsQualityFloor(reductoPurpose)
-        ? Promise.resolve(reductoPurpose)
+      p.reductoPurpose.length > 0 && reductoPurposeMeetsQualityFloor(p.reductoPurpose)
+        ? Promise.resolve(p.reductoPurpose)
         : generateVisitPurpose({
-            visit_name: String(entry.visit_name).trim(),
-            study_day: Math.trunc(entry.study_day),
-            visit_section_text: visitSectionText,
+            visit_name: String(p.entry.visit_name).trim(),
+            study_day: Math.trunc(p.entry.study_day),
+            visit_section_text: p.visitSectionText,
             openaiKey: args.openaiKey,
           });
 
     const [purpose, gaps] = await Promise.all([
       purposeTask,
       detectMissingRequirements({
-        visit_name: String(entry.visit_name).trim(),
-        study_day: Math.trunc(entry.study_day),
-        extracted_labels: extractedLabels,
-        visit_section_text: visitSectionText,
+        visit_name: String(p.entry.visit_name).trim(),
+        study_day: Math.trunc(p.entry.study_day),
+        extracted_labels: p.extractedLabels,
+        visit_section_text: p.visitSectionText,
         openaiKey: args.openaiKey,
       }),
     ]);
 
     // #3a: flag a study_day that contradicts the visit name (e.g. EOT dated
     // early) as a per-visit review signal. Flag only — never correct the day.
-    const dayGap = detectImplausibleDay(String(entry.visit_name).trim(), studyDay, maxStudyDay);
+    const dayGap = detectImplausibleDay(String(p.entry.visit_name).trim(), p.studyDay, maxStudyDay);
     const allGaps = dayGap ? [...gaps, dayGap] : gaps;
 
-    const conf =
-      typeof entry.visit_name === "string"
-        ? args.confidenceByVisitName.get(normalizeVisitNameKey(entry.visit_name))
-        : undefined;
-    visitsPayload.push(
-      await buildPersistPayloadForVisit(
-        tpl.id,
-        entry,
-        allGaps,
-        purpose,
-        conf?.extractedItemId ?? null,
-        conf?.confidenceState ?? null,
-      ),
+    const conf = args.confidenceByVisitName.get(normalizeVisitNameKey(String(p.entry.visit_name)));
+    results[index] = await buildPersistPayloadForVisit(
+      p.templateId,
+      p.entry,
+      allGaps,
+      purpose,
+      conf?.extractedItemId ?? null,
+      conf?.confidenceState ?? null,
     );
-  }
+  };
+  const worker = async (): Promise<void> => {
+    while (true) {
+      const i = cursor++;
+      if (i >= prepared.length) return;
+      await runVisit(prepared[i], i);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(POOL, prepared.length) }, worker));
+  for (const r of results) if (r) visitsPayload.push(r);
 
   // Loud guard: schedule entries that carried procedures but matched NO template
   // had their procedures dropped. This is the exact failure mode that hid the
@@ -1841,8 +1918,15 @@ async function persistVisitExecutionWorkspaces(
       visits: unmatchedWithProcedures,
     });
   }
+  if (keyCollisions.length > 0) {
+    console.error("[ingest] vew_template_key_collisions", {
+      protocol_id: args.protocolId,
+      count: keyCollisions.length,
+      collisions: keyCollisions,
+    });
+  }
 
-  if (visitsPayload.length === 0) return;
+  if (visitsPayload.length === 0) return { unmatchedWithProcedures, keyCollisions };
 
   const proceduresInPayload = visitsPayload.reduce(
     (n, v) =>
@@ -1863,7 +1947,7 @@ async function persistVisitExecutionWorkspaces(
 
   if (rpcError) {
     console.error("[ingest] vew_persist_rpc_failed", { error: rpcError.message });
-    return;
+    return { unmatchedWithProcedures, keyCollisions };
   }
   // Surface the silent-empty case: the RPC "succeeded" but wrote no
   // requirements despite a non-empty payload. Previously this read as a
@@ -1879,6 +1963,7 @@ async function persistVisitExecutionWorkspaces(
     });
   }
   console.log("[ingest] vew_persist_succeeded", { protocol_id: args.protocolId, result: data });
+  return { unmatchedWithProcedures, keyCollisions };
 }
 
 // -----------------------------------------------------------------------------
@@ -1951,6 +2036,60 @@ export async function processIngestCompletion(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new Error(`Reducto extract pass failed: ${msg}`);
+    }
+
+    // ---------------------------------------------------------------------
+    // 1b. Deterministic SoA grid extraction (workstream A).
+    // Read the SoA HTML grid Reducto already returns and OVERRIDE the LLM's
+    // schedule_of_events with the verbatim per-visit checklists — unless the
+    // automatic gate decides the grid is unreliable (no grid / under-covers /
+    // empty column / structural failure), in which case we keep the LLM
+    // extraction and flag extraction_method='llm_fallback' (never silent).
+    // Everything downstream (SOTR, templates, coverage) consumes the same
+    // schedule_of_events shape, so only this one step changes.
+    // ---------------------------------------------------------------------
+    let soaDecision: SoaGateDecision = { useGrid: false, method: "llm_fallback", reasons: ["grid not attempted"] };
+    let soaExpectedFromSignal = 0;
+    try {
+      const gridResult = parseSoaGrid(parseResult.tableHtml);
+      const signal = deriveVisitCountSignal(parseResult.chunks);
+      soaExpectedFromSignal = signal.estimatedTreatmentVisits;
+      soaDecision = evaluateSoaGate(gridResult, signal.estimatedTreatmentVisits);
+      if (soaDecision.useGrid && extractedFields) {
+        // Capture the LLM extraction BEFORE overriding so we can recover the
+        // per-procedure metadata the grid can't see (role_hint / conditions /
+        // timing / source_fields) by label-match — the visit×procedure structure
+        // still comes deterministically from the grid.
+        const llmSchedule = extractedFields.schedule_of_events;
+        const { schedule, citations } = gridToScheduleOfEvents(gridResult.visits);
+        const enrichedCount = enrichScheduleFromLlm(schedule, llmSchedule);
+        extractedFields.schedule_of_events = schedule;
+        console.log("[ingest] soa_grid_enriched", { document_id: docId, procedures_enriched: enrichedCount });
+        const citMap = (extractedFields._reducto_citations && typeof extractedFields._reducto_citations === "object")
+          ? extractedFields._reducto_citations as Record<string, unknown>
+          : {};
+        citMap.schedule_of_events = citations;
+        extractedFields._reducto_citations = citMap;
+        console.log("[ingest] soa_grid_used", {
+          document_id: docId,
+          visits: schedule.length,
+          method: soaDecision.method,
+          guards: gridResult.guards,
+        });
+      } else {
+        console.warn("[ingest] soa_grid_fallback", {
+          document_id: docId,
+          reasons: soaDecision.reasons,
+          estimated_treatment_visits: signal.estimatedTreatmentVisits,
+          tables_seen: parseResult.tableHtml.length,
+        });
+      }
+    } catch (err) {
+      // A parser fault must never abort ingest — fall back to the LLM extraction.
+      console.error("[ingest] soa_grid_error", {
+        document_id: docId,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
 
     // ---------------------------------------------------------------------
@@ -2263,6 +2402,11 @@ export async function processIngestCompletion(
             procedures: Array.isArray(s.procedures)
               ? (s.procedures as unknown[]).filter((p): p is string => typeof p === "string")
               : [],
+            // Protocol visit sequence from the SoA grid (null on the LLM path) —
+            // the workspace RPC orders by this so visits render in protocol order.
+            column_order: typeof (s as { column_order?: unknown }).column_order === "number"
+              ? Math.trunc((s as { column_order: number }).column_order)
+              : null,
             cross_references: sanitizeCrossRefs(s.cross_references),
             source_document_id: docId,
           }));
@@ -2351,8 +2495,12 @@ export async function processIngestCompletion(
             // thin-passthrough Sprint 1 representation. See
             // parser-integration.md §6 for the failure-mode contract.
             // -----------------------------------------------------------
+            let vewResult: { unmatchedWithProcedures: string[]; keyCollisions: string[] } = {
+              unmatchedWithProcedures: [],
+              keyCollisions: [],
+            };
             try {
-              await persistVisitExecutionWorkspaces(supabase, {
+              vewResult = await persistVisitExecutionWorkspaces(supabase, {
                 protocolId: resolvedProtocolId,
                 schedule: expandedSchedule as ScheduleEntry[],
                 openaiKey,
@@ -2381,6 +2529,14 @@ export async function processIngestCompletion(
                 reason: f.detection_reason,
                 source: "aggregate" as const,
               }));
+              // Workstream C: a visit that carried procedures but matched no
+              // template had its procedures dropped — surface it in the banner,
+              // not just the logs.
+              const unmatchedGaps = vewResult.unmatchedWithProcedures.map((label) => ({
+                label,
+                reason: "had procedures but matched no visit template",
+                source: "unmatched" as const,
+              }));
               const llmGaps = await detectMissingVisits({
                 visitNames: templateNames,
                 scheduleText: dedupedRows
@@ -2395,7 +2551,7 @@ export async function processIngestCompletion(
               // deterministic reason is kept over the LLM's prose. Aggregate flags
               // (label = full gap_text) are distinct and unaffected.
               const seenLabels = new Set<string>();
-              const missing = [...sequenceGaps, ...aggGaps, ...llmGaps].filter((g) => {
+              const missing = [...sequenceGaps, ...aggGaps, ...unmatchedGaps, ...llmGaps].filter((g) => {
                 const key = (g.label ?? "").trim().toLowerCase();
                 if (!key) return true;
                 if (seenLabels.has(key)) return false;
@@ -2409,6 +2565,12 @@ export async function processIngestCompletion(
                   expected_count: templateNames.length + missing.length,
                   found_count: templateNames.length,
                   missing,
+                  // Workstream B: how the schedule was extracted (grid =
+                  // deterministic; llm_fallback = flagged) + the independent
+                  // count signal. CoverageBanner surfaces both so a fallback or
+                  // a low-confidence parse is visible, never silent.
+                  extraction_method: soaDecision.method,
+                  expected_from_signal: soaExpectedFromSignal,
                 },
                 { onConflict: "protocol_id,source_document_id" },
               );
@@ -2419,6 +2581,7 @@ export async function processIngestCompletion(
                   protocol_id: resolvedProtocolId,
                   found: templateNames.length,
                   missing: missing.length,
+                  extraction_method: soaDecision.method,
                 });
               }
             } catch (covErr) {

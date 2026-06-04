@@ -33,6 +33,27 @@ export function visitMatchKey(visitName: string, studyDay: number | string): str
   return `${canonicalVisitName(String(visitName).trim()).toLowerCase()}|${studyDay}`;
 }
 
+/**
+ * Pick the right template when several share one visitMatchKey (a residual
+ * collision after dedup — e.g. two near-identical names that canonicalize the
+ * same). Prefer an EXACT raw-name match, then a canonical-name match, then the
+ * first. Returns { pick, collided } so the caller can log a collision loudly
+ * instead of silently dropping the other visit's procedures (the #259 risk).
+ */
+export function pickTemplateForVisit<T extends { visit_name: string }>(
+  bucket: readonly T[],
+  rawVisitName: string,
+): { pick: T | null; collided: boolean } {
+  if (bucket.length === 0) return { pick: null, collided: false };
+  if (bucket.length === 1) return { pick: bucket[0], collided: false };
+  const raw = rawVisitName.trim();
+  const canon = canonicalVisitName(raw).toLowerCase();
+  const pick = bucket.find((t) => t.visit_name === raw)
+    ?? bucket.find((t) => t.visit_name.toLowerCase() === canon)
+    ?? bucket[0];
+  return { pick, collided: true };
+}
+
 export interface DedupableVisitRow {
   visit_name: string;
   study_day: number;

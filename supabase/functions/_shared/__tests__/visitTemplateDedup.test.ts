@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dedupeVisitTemplateRowsByQuality, staleTemplateIds, visitMatchKey } from '../visitTemplateDedup.ts';
+import { dedupeVisitTemplateRowsByQuality, pickTemplateForVisit, staleTemplateIds, visitMatchKey } from '../visitTemplateDedup.ts';
 
 // =============================================================================
 // visitMatchKey — the schedule-entry ↔ visit-template match key. Locks the
@@ -142,5 +142,43 @@ describe('staleTemplateIds', () => {
 
   it('no existing rows → nothing to prune', () => {
     expect(staleTemplateIds([], [row()])).toEqual([]);
+  });
+});
+
+// =============================================================================
+// pickTemplateForVisit — collision-safe lookup (workstream C). When two
+// templates share one visitMatchKey, disambiguate by exact name instead of the
+// old last-write-wins Map that silently dropped one visit's procedures.
+// =============================================================================
+describe('pickTemplateForVisit (collision-safe lookup)', () => {
+  it('returns the only template when there is no collision', () => {
+    const r = pickTemplateForVisit([{ visit_name: 'Treatment Visit 7', id: 'a' }], 'Treatment Visit 7');
+    expect(r.pick?.id).toBe('a');
+    expect(r.collided).toBe(false);
+  });
+
+  it('disambiguates a collision by EXACT raw name, flagging the collision', () => {
+    const bucket = [
+      { visit_name: 'Visit 2', id: 'a' },
+      { visit_name: 'Baseline Visit 2', id: 'b' },
+    ];
+    const r = pickTemplateForVisit(bucket, 'Baseline Visit 2');
+    expect(r.pick?.id).toBe('b'); // not the first (last-write-wins would have dropped it)
+    expect(r.collided).toBe(true);
+  });
+
+  it('falls back to canonical match, then first, on a collision', () => {
+    const bucket = [
+      { visit_name: 'Treatment Visit 1', id: 'a' },
+      { visit_name: 'Treatment Visit 1 (Cycle 1)', id: 'b' },
+    ];
+    // raw "Treatment Visit 1 (Day 1, Cycle 1)" canonicalizes to "Treatment Visit 1" → matches 'a'
+    const r = pickTemplateForVisit(bucket, 'Treatment Visit 1 (Day 1, Cycle 1)');
+    expect(r.pick?.id).toBe('a');
+    expect(r.collided).toBe(true);
+  });
+
+  it('returns null for an empty bucket', () => {
+    expect(pickTemplateForVisit([], 'Anything').pick).toBeNull();
   });
 });

@@ -454,8 +454,17 @@ export interface VisitExecutionWorkspace {
 export interface VisitCoverageGap {
   label: string;
   reason: string;
-  source: 'sequence' | 'aggregate' | 'llm';
+  source: 'sequence' | 'aggregate' | 'llm' | 'unmatched';
 }
+
+/**
+ * How schedule_of_events was extracted, recorded per coverage row.
+ * - 'grid'                — deterministic SoA-grid parse (the normal path)
+ * - 'grid_low_confidence' — grid used, but self-consistency flagged it
+ * - 'llm_fallback'        — grid gate failed → LLM extraction (flag + re-run)
+ * - null                  — written before the grid change
+ */
+export type VisitExtractionMethod = 'grid' | 'grid_low_confidence' | 'llm_fallback' | null;
 
 export interface VisitCoverage {
   expected_count: number;
@@ -463,6 +472,8 @@ export interface VisitCoverage {
   missing: VisitCoverageGap[];
   detected_at: string;
   resolution: string;
+  extraction_method: VisitExtractionMethod;
+  expected_from_signal: number | null;
 }
 
 

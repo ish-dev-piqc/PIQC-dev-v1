@@ -104,6 +104,7 @@ export async function fetchVisitCoverage(
   if (!data || typeof data !== 'object') return { ok: true, data: null };
 
   const d = data as Partial<VisitCoverage>;
+  const method = d.extraction_method;
   return {
     ok: true,
     data: {
@@ -112,6 +113,11 @@ export async function fetchVisitCoverage(
       missing: Array.isArray(d.missing) ? (d.missing as VisitCoverageGap[]) : [],
       detected_at: typeof d.detected_at === 'string' ? d.detected_at : '',
       resolution: typeof d.resolution === 'string' ? d.resolution : 'pending',
+      extraction_method:
+        method === 'grid' || method === 'grid_low_confidence' || method === 'llm_fallback'
+          ? method
+          : null,
+      expected_from_signal: typeof d.expected_from_signal === 'number' ? d.expected_from_signal : null,
     },
   };
 }

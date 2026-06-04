@@ -32,6 +32,7 @@ const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
 
 const STALE_THRESHOLD_MINUTES = 10;
 const MAX_RECOVERIES_PER_CALL = 5;
+const MAX_RECOVERIES_PER_CALL_CRON = 20;
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -48,17 +49,28 @@ Deno.serve(async (req: Request) => {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-  // Auth — only authenticated callers (the dashboard mount path).
+  // Auth — two modes:
+  //   • user mode    (dashboard mount): a user JWT → recover only that user's docs
+  //   • cron mode    (pg_cron safety net): the service_role bearer → recover ANY
+  //     stuck doc, resolving each doc's owner for the completion's userEmail.
   const authHeader = req.headers.get("Authorization");
-  const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  let bearerRole: string | null = null;
+  try {
+    bearerRole = JSON.parse(atob((bearer ?? "").split(".")[1] ?? "")).role ?? null;
+  } catch {
+    bearerRole = null;
+  }
+  const cronMode = bearerRole === "service_role" || bearer === serviceRoleKey;
+
   let userId: string | null = null;
   let userEmail: string | null = null;
-  if (userToken) {
-    const { data: { user } } = await createClient(supabaseUrl, serviceRoleKey).auth.getUser(userToken);
+  if (!cronMode && bearer) {
+    const { data: { user } } = await createClient(supabaseUrl, serviceRoleKey).auth.getUser(bearer);
     userId = user?.id ?? null;
     userEmail = user?.email ?? null;
   }
-  if (!userId) {
+  if (!cronMode && !userId) {
     return new Response(JSON.stringify({ error: "Authentication required" }), {
       status: 401,
       headers: jsonHeaders,
@@ -79,15 +91,16 @@ Deno.serve(async (req: Request) => {
     Date.now() - STALE_THRESHOLD_MINUTES * 60_000,
   ).toISOString();
 
-  const { data: stuck, error: selectErr } = await supabase
+  let query = supabase
     .from("documents")
-    .select("id, reducto_job_id, updated_at")
-    .eq("user_id", userId)
+    .select("id, reducto_job_id, updated_at, user_id")
     .eq("status", "pending")
     .not("reducto_job_id", "is", null)
     .lt("updated_at", staleCutoff)
     .order("updated_at", { ascending: true })
-    .limit(MAX_RECOVERIES_PER_CALL);
+    .limit(cronMode ? MAX_RECOVERIES_PER_CALL_CRON : MAX_RECOVERIES_PER_CALL);
+  if (!cronMode && userId) query = query.eq("user_id", userId);
+  const { data: stuck, error: selectErr } = await query;
 
   if (selectErr) {
     console.error("[ingest-recover] select_failed", { error: selectErr.message });
@@ -107,17 +120,30 @@ Deno.serve(async (req: Request) => {
   let failedCount = 0;
   let stillRunning = 0;
 
-  for (const row of stuck as Array<{ id: string; reducto_job_id: string }>) {
+  for (const row of stuck as Array<{ id: string; reducto_job_id: string; user_id: string }>) {
     try {
       const jobResult = await fetchReductoJobResult(row.reducto_job_id, reductoKey);
       const status = jobResult.status.toLowerCase();
 
       if (status === "completed") {
+        // In cron mode each doc has its own owner — resolve it for the
+        // completion's B2.4 missing-org fallback.
+        let rowUserId = userId;
+        let rowUserEmail = userEmail;
+        if (cronMode) {
+          rowUserId = row.user_id;
+          try {
+            const { data: u } = await supabase.auth.admin.getUserById(row.user_id);
+            rowUserEmail = u?.user?.email ?? null;
+          } catch {
+            rowUserEmail = null;
+          }
+        }
         const result = await processIngestCompletion(supabase, {
           docId: row.id,
           reductoJobId: row.reducto_job_id,
-          userId,
-          userEmail,
+          userId: rowUserId!,
+          userEmail: rowUserEmail,
           openaiKey,
           reductoKey,
         });
