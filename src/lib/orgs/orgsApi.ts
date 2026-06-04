@@ -32,7 +32,10 @@
 import { supabase } from '../supabase';
 import type {
   AcceptedGuestInvite,
+  ChatDecision,
+  ChatMention,
   ChatProtocolSummary,
+  NewChatDecisionInput,
   NewProtocolGuestInput,
   NewProtocolMemberInput,
   Org,
@@ -51,6 +54,8 @@ import type {
   ProtocolMessage,
 } from '../../types/orgs';
 import { adaptAccessRequest, adaptAccessRequests } from './accessRequestsAdapter';
+import { adaptChatDecision, adaptChatDecisions } from './chatDecisionsAdapter';
+import { adaptChatMentions } from './chatMentionsAdapter';
 import { adaptGuest, adaptGuests } from './guestsAdapter';
 import { adaptOrgMessage, adaptOrgMessages } from './orgMessagesAdapter';
 import { adaptProtocolMember, adaptProtocolMembers } from './protocolMembersAdapter';
@@ -436,6 +441,108 @@ export async function postOrgMessage(
   if (error) return fail('postOrgMessage', error);
   if (!data) return err('Insert returned no row.');
   return { ok: true, data: adaptOrgMessage(data) };
+}
+
+
+// ===========================================================================
+// Chat mentions — populated by triggers on the message tables. Clients can
+// only SELECT their own mentions and UPDATE read_at. Used by the chat
+// sidebar to badge channels where the current user was @-mentioned in
+// unread messages.
+// ===========================================================================
+
+export async function listMyUnreadMentions(): Promise<Result<ChatMention[]>> {
+  const { data, error } = await supabase
+    .from('chat_mentions')
+    .select(
+      'id, org_message_id, protocol_message_id, org_id, protocol_id, mentioned_user_id, mentioned_by_user_id, created_at, read_at',
+    )
+    .is('read_at', null);
+  if (error) return fail('listMyUnreadMentions', error);
+  return { ok: true, data: adaptChatMentions(data ?? []) };
+}
+
+export async function markChatMentionsRead(
+  kind: 'org' | 'protocol',
+  channelId: string,
+): Promise<Result<void>> {
+  const { error } = await supabase.rpc('mark_chat_mentions_read', {
+    p_kind: kind,
+    p_channel_id: channelId,
+  });
+  if (error) return fail('markChatMentionsRead', error);
+  return { ok: true, data: undefined };
+}
+
+
+// ===========================================================================
+// Chat decisions — first-class promoted decisions linked to a source
+// message. Immutable in v1 (no UPDATE); admins can DELETE for moderation.
+// ===========================================================================
+
+const CHAT_DECISION_COLUMNS =
+  'id, title, rationale, org_id, protocol_id, source_org_message_id, source_protocol_message_id, decided_by_user_id, decided_at, created_by_user_id, created_at';
+
+export async function createChatDecision(
+  input: NewChatDecisionInput,
+): Promise<Result<ChatDecision>> {
+  try {
+    const { data: userData, error: userErr } = await supabase.auth.getUser();
+    if (userErr) throw userErr;
+    const user = userData?.user;
+    if (!user) return err('Not authenticated.');
+
+    const title = input.title.trim();
+    if (!title) return err('Title is required.');
+    if (title.length > 200) return err('Title is too long (200 character max).');
+    const rationale = input.rationale?.trim() ?? null;
+    if (rationale && rationale.length > 4000) {
+      return err('Rationale is too long (4000 character max).');
+    }
+
+    const insertPayload = {
+      title,
+      rationale: rationale || null,
+      org_id: input.org_id ?? null,
+      protocol_id: input.protocol_id ?? null,
+      source_org_message_id: input.source_org_message_id ?? null,
+      source_protocol_message_id: input.source_protocol_message_id ?? null,
+      decided_by_user_id: input.decided_by_user_id ?? user.id,
+      decided_at: input.decided_at ?? new Date().toISOString(),
+      created_by_user_id: user.id,
+    };
+
+    const { data, error } = await supabase
+      .from('chat_decisions')
+      .insert(insertPayload)
+      .select(CHAT_DECISION_COLUMNS)
+      .single();
+    if (error) return fail('createChatDecision', error);
+    if (!data) return err('Insert returned no row.');
+    return { ok: true, data: adaptChatDecision(data) };
+  } catch (e) {
+    return fail('createChatDecision', e);
+  }
+}
+
+export async function listChannelDecisions(
+  kind: 'org' | 'protocol',
+  channelId: string,
+): Promise<Result<ChatDecision[]>> {
+  const column = kind === 'org' ? 'org_id' : 'protocol_id';
+  const { data, error } = await supabase
+    .from('chat_decisions')
+    .select(CHAT_DECISION_COLUMNS)
+    .eq(column, channelId)
+    .order('decided_at', { ascending: false });
+  if (error) return fail('listChannelDecisions', error);
+  return { ok: true, data: adaptChatDecisions(data ?? []) };
+}
+
+export async function deleteChatDecision(id: string): Promise<Result<void>> {
+  const { error } = await supabase.from('chat_decisions').delete().eq('id', id);
+  if (error) return fail('deleteChatDecision', error);
+  return { ok: true, data: undefined };
 }
 
 

@@ -154,6 +154,48 @@ export interface ChatProtocolSummary {
   name: string;
 }
 
+/** Materialized mention row, populated by AFTER-INSERT triggers on the
+ *  message tables. Exactly one of the two FK columns is set; the matching
+ *  channel reference (org_id or protocol_id) is denormalized in too. */
+export interface ChatMention {
+  id: string;
+  org_message_id: string | null;
+  protocol_message_id: string | null;
+  org_id: string | null;
+  protocol_id: string | null;
+  mentioned_user_id: string;
+  mentioned_by_user_id: string | null;
+  created_at: string;
+  read_at: string | null;
+}
+
+/** First-class decision captured from a chat message. Immutable post-creation
+ *  (no UPDATE policy); admins can DELETE for moderation. */
+export interface ChatDecision {
+  id: string;
+  title: string;
+  rationale: string | null;
+  org_id: string | null;
+  protocol_id: string | null;
+  source_org_message_id: string | null;
+  source_protocol_message_id: string | null;
+  decided_by_user_id: string | null;
+  decided_at: string;
+  created_by_user_id: string | null;
+  created_at: string;
+}
+
+export interface NewChatDecisionInput {
+  title: string;
+  rationale?: string | null;
+  org_id?: string;
+  protocol_id?: string;
+  source_org_message_id?: string;
+  source_protocol_message_id?: string;
+  decided_by_user_id?: string | null;
+  decided_at?: string;
+}
+
 
 // ---------------------------------------------------------------------------
 // Access requests
