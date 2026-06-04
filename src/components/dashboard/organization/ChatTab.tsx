@@ -7,7 +7,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
-  MoreHorizontal,
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useAuth } from '../../../context/AuthContext';
@@ -379,6 +378,15 @@ export default function ChatTab() {
     | null
   >(null);
 
+  // Friendly composer placeholder → userId map. We insert `@FirstName ` into
+  // the textarea (so the user sees a name, not a UUID) and remember which
+  // user that maps to. On send, every still-present placeholder gets
+  // substituted with the `<@<uuid>>` wire token. Orphaned entries (user
+  // edited the text out) silently drop on send.
+  const [pendingMentions, setPendingMentions] = useState<
+    Map<string, string>
+  >(new Map());
+
   // Org-member list used by the picker. Sorted by name for predictable order.
   const memberList = useMemo(
     () =>
@@ -445,6 +453,9 @@ export default function ChatTab() {
 
   function pickMention(userId: string) {
     if (!mentionPicker) return;
+    const member = profiles.get(userId);
+    const firstName = (member?.name ?? 'user').split(/\s+/)[0];
+    const placeholder = `@${firstName}`;
     const before = composer.slice(0, mentionPicker.tokenStart);
     // Replace from tokenStart up to the current caret position. Use the
     // textarea's live selection so we don't blow away anything the user
@@ -453,13 +464,19 @@ export default function ChatTab() {
       textareaRef.current?.selectionStart ??
       mentionPicker.tokenStart + 1 + mentionPicker.filter.length;
     const after = composer.slice(caret);
-    const token = `<@${userId}> `;
-    const nextValue = before + token + after;
-    const nextCaret = before.length + token.length;
+    const insertion = `${placeholder} `;
+    const nextValue = before + insertion + after;
+    const nextCaret = before.length + insertion.length;
     setComposer(nextValue);
+    // Track the placeholder → userId mapping for substitution on send.
+    // Same placeholder picked again just overwrites with the latest userId
+    // — acceptable v1 behavior for same-first-name collisions.
+    setPendingMentions((prev) => {
+      const next = new Map(prev);
+      next.set(placeholder, userId);
+      return next;
+    });
     setMentionPicker(null);
-    // Restore focus + caret on the next frame so React has flushed the
-    // textarea value.
     requestAnimationFrame(() => {
       const ta = textareaRef.current;
       if (!ta) return;
@@ -467,6 +484,28 @@ export default function ChatTab() {
       ta.selectionStart = nextCaret;
       ta.selectionEnd = nextCaret;
     });
+  }
+
+  /**
+   * Build the wire-format body: every still-present `@FirstName` placeholder
+   * gets substituted with the `<@<uuid>>` token consumed by the renderer.
+   * Orphans (placeholder that's no longer in the body because the user
+   * edited it out) drop silently.
+   *
+   * Matches placeholder as a word boundary so "@May" doesn't half-match
+   * "@Maya". Replacement is global (every occurrence of the placeholder
+   * within the body gets substituted).
+   */
+  function substituteMentions(body: string): string {
+    let out = body;
+    for (const [placeholder, userId] of pendingMentions) {
+      // Escape regex specials in the placeholder name + add a trailing
+      // boundary so "@Maya" doesn't match within "@MayaBeth".
+      const esc = placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(`${esc}(?=$|[^A-Za-z0-9_])`, 'g');
+      out = out.replace(re, `<@${userId}>`);
+    }
+    return out;
   }
 
   // Active channel data — selected from whichever context is in use.
@@ -492,19 +531,17 @@ export default function ChatTab() {
 
   const channelSubLabel = useMemo(() => {
     if (activeChannel.kind === 'org') {
-      return activeOrg ? `Visible to everyone in ${activeOrg.name}.` : '';
+      return activeOrg ? `Visible to everyone in ${activeOrg.name}` : '';
     }
-    const p = chatProtocols.find((x) => x.id === activeChannel.id);
-    return p?.name
-      ? `Coordinators and team members on ${p.code}. Viewers and guests don't see this channel.`
-      : '';
-  }, [activeChannel, chatProtocols, activeOrg]);
+    return 'Coordinators + team members';
+  }, [activeChannel, activeOrg]);
 
   // Reset composer state when switching channels so half-typed messages
   // from another channel don't leak into the new one.
   useEffect(() => {
     setComposer('');
     setSendError(null);
+    setPendingMentions(new Map());
   }, [activeChannel]);
 
   // Also clear unread when the new channel's data finishes loading — keeps
@@ -547,13 +584,15 @@ export default function ChatTab() {
     if (!canSend) return;
     setSending(true);
     setSendError(null);
-    const res = await active.post(composerTrimmed);
+    const wireBody = substituteMentions(composerTrimmed);
+    const res = await active.post(wireBody);
     setSending(false);
     if (!res.ok) {
       setSendError(res.error ?? 'Failed to send message.');
       return;
     }
     setComposer('');
+    setPendingMentions(new Map());
     textareaRef.current?.focus();
   }
 
@@ -829,10 +868,13 @@ export default function ChatTab() {
             {activeChannel.kind === 'org' ? '#general' : `#${channelLabel}`}
           </h3>
           {channelSubLabel && (
-            <p className={`${subColor} text-[11px] truncate flex-1 min-w-0`}>
+            <p className={`${subColor} text-[11px] truncate flex-1 min-w-0 hidden md:block`}>
               {channelSubLabel}
             </p>
           )}
+          {/* Spacer keeps the decisions button right-anchored even when the
+              subtitle is hidden on narrow viewports. */}
+          <div className="flex-1 md:hidden" />
           <button
             type="button"
             onClick={() => setDecisionsPanelOpen(true)}
@@ -925,7 +967,7 @@ export default function ChatTab() {
                     >
                       {renderMessageBody(m.body, isSelf)}
                     </div>
-                    <MessageActionsMenu
+                    <MessagePromoteButton
                       isSelf={isSelf}
                       isLight={isLight}
                       onPromote={() =>
@@ -1077,12 +1119,13 @@ export default function ChatTab() {
 }
 
 // ============================================================================
-// MessageActionsMenu — small ⋯ button that appears on hover over a bubble.
-// Click opens a menu with "Promote to decision". Positioned outside the
-// bubble (left for self, right for others) so it doesn't overlap text.
+// MessagePromoteButton — single icon button shown on bubble hover. Replaces
+// the previous dropdown menu so it doesn't overflow on mobile. Tooltip
+// communicates the action. Promote is the only per-message action today;
+// when we add more, a dropdown can return with viewport-aware positioning.
 // ============================================================================
 
-function MessageActionsMenu({
+function MessagePromoteButton({
   isSelf,
   isLight,
   onPromote,
@@ -1091,57 +1134,22 @@ function MessageActionsMenu({
   isLight: boolean;
   onPromote: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const triggerPosClass = isSelf
+  const positionClass = isSelf
     ? 'left-0 -translate-x-full pr-1'
     : 'right-0 translate-x-full pl-1';
-  const menuPosClass = isSelf ? 'right-full mr-1' : 'left-full ml-1';
   return (
-    <div
-      className={`absolute top-1 ${triggerPosClass} opacity-0 group-hover:opacity-100 focus-within:opacity-100`}
+    <button
+      type="button"
+      onClick={onPromote}
+      className={`absolute top-1 ${positionClass} opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 rounded ${
+        isLight
+          ? 'text-[#334155]/60 hover:bg-[#0F172A]/[0.06]'
+          : 'text-[#CBD5E1]/60 hover:bg-white/[0.06]'
+      }`}
+      aria-label="Promote to decision"
+      title="Promote to decision"
     >
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={`p-1 rounded ${
-          isLight
-            ? 'text-[#334155]/60 hover:bg-[#0F172A]/[0.06]'
-            : 'text-[#CBD5E1]/60 hover:bg-white/[0.06]'
-        }`}
-        aria-label="Message actions"
-      >
-        <MoreHorizontal size={13} />
-      </button>
-      {open && (
-        <>
-          <div
-            className="fixed inset-0 z-10"
-            onClick={() => setOpen(false)}
-            aria-hidden="true"
-          />
-          <div
-            className={`absolute top-0 z-20 min-w-[180px] rounded-md border shadow-lg py-1 ${menuPosClass} ${
-              isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/10'
-            }`}
-          >
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onPromote();
-              }}
-              className={`w-full inline-flex items-center gap-2 text-xs px-3 py-1.5 ${
-                isLight
-                  ? 'text-[#0F172A] hover:bg-[#0F172A]/[0.05]'
-                  : 'text-[#CBD5E1] hover:bg-white/[0.05]'
-              }`}
-            >
-              <ClipboardCheck size={11} />
-              Promote to decision
-            </button>
-          </div>
-        </>
-      )}
-    </div>
+      <ClipboardCheck size={13} />
+    </button>
   );
 }
