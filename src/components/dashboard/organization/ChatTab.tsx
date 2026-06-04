@@ -22,7 +22,10 @@ import {
   uploadChatAttachment,
 } from '../../../lib/orgs/orgsApi';
 import { useChannelAttachments } from '../../../hooks/useChannelAttachments';
+import { useProtocol } from '../../../context/ProtocolContext';
+import { useSiteData } from '../../../context/SiteDataContext';
 import AttachmentRender from './chat/AttachmentRender';
+import ReferenceChip, { type ReferenceKind } from './chat/ReferenceChip';
 // Reuse the shared protocol palette so the dot here matches the one shown
 // on visit chips, calendar accents, and the protocol picker. lib/site is
 // the canonical home for this palette; the import is allowed because
@@ -77,6 +80,16 @@ const SIDEBAR_WIDE_STORAGE_KEY = 'piq-chat-sidebar-wide-v1';
 const MENTION_TOKEN_REGEX =
   /<@([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})>/g;
 
+// Matches `[protocol:CODE]`, `[participant:CODE]`, `[visit:UUID]` reference
+// tokens. Capture groups: 1 = kind, 2 = id.
+const REFERENCE_TOKEN_REGEX = /\[(protocol|participant|visit):([A-Za-z0-9_-]+)\]/g;
+
+interface InlineToken {
+  start: number;
+  end: number;
+  node: React.ReactNode;
+}
+
 /**
  * Look backwards from cursorPos for an `@` that starts a mention. Returns
  * the position of the `@` and the filter typed since (no whitespace in v1).
@@ -96,6 +109,30 @@ function detectMentionAtCursor(
       return null;
     }
     // Any whitespace before @ means we're past the mention
+    if (/\s/.test(ch)) return null;
+  }
+  return null;
+}
+
+/**
+ * Mirror of detectMentionAtCursor for `[`-triggered references. Returns
+ * null if the cursor isn't inside a `[…` token.
+ */
+function detectReferenceAtCursor(
+  text: string,
+  cursorPos: number,
+): { start: number; filter: string } | null {
+  for (let i = cursorPos - 1; i >= 0; i--) {
+    const ch = text[i];
+    if (ch === '[') {
+      if (i === 0 || /\s/.test(text[i - 1])) {
+        const filter = text.slice(i + 1, cursorPos);
+        // If the user already closed the bracket, this isn't a live picker.
+        if (filter.includes(']')) return null;
+        return { start: i, filter };
+      }
+      return null;
+    }
     if (/\s/.test(ch)) return null;
   }
   return null;
@@ -167,6 +204,8 @@ export default function ChatTab() {
   const { session } = useAuth();
   const currentUserId = session?.user?.id ?? null;
   const { activeOrg } = useOrg();
+  const { protocols } = useProtocol();
+  const { visits, participants } = useSiteData();
   const orgChat = useOrgChat();
   const protocolChat = useProtocolChat();
 
@@ -248,9 +287,11 @@ export default function ChatTab() {
 
   const {
     decisions,
+    acksByDecisionId,
     loading: decisionsLoading,
     add: addDecisionLocal,
     remove: removeDecisionLocal,
+    upsertAck: upsertAckLocal,
   } = useChatDecisions({ kind: channelKind, channelId: channelRefId });
 
   // --- Attachments ----------------------------------------------------------
@@ -394,22 +435,19 @@ export default function ChatTab() {
    * lastIndex per call since the same regex instance is reused.
    */
   function renderMessageBody(body: string, isSelfMessage: boolean): React.ReactNode[] {
-    const nodes: React.ReactNode[] = [];
-    MENTION_TOKEN_REGEX.lastIndex = 0;
-    let cursor = 0;
-    let match: RegExpExecArray | null;
+    // First pass: collect all token matches (mentions + references) with
+    // their character ranges, then sort by start position to emit a single
+    // ordered sequence of text + chip nodes.
+    const tokens: InlineToken[] = [];
     let key = 0;
-    while ((match = MENTION_TOKEN_REGEX.exec(body)) !== null) {
-      if (match.index > cursor) {
-        nodes.push(body.slice(cursor, match.index));
-      }
-      const mentionedUserId = match[1];
+
+    MENTION_TOKEN_REGEX.lastIndex = 0;
+    let mm: RegExpExecArray | null;
+    while ((mm = MENTION_TOKEN_REGEX.exec(body)) !== null) {
+      const mentionedUserId = mm[1];
       const member = profiles.get(mentionedUserId);
       const displayName = member?.name ?? 'unknown';
       const isSelfMention = mentionedUserId === currentUserId;
-      // Self-mention gets a stronger background so the user notices being
-      // pinged. Otherwise the chip uses a subtle tint that reads on both
-      // self-bubble (brand) and other-bubble (muted) backgrounds.
       const chipClass = isSelfMention
         ? isLight
           ? 'bg-amber-200 text-amber-900'
@@ -419,20 +457,44 @@ export default function ChatTab() {
           : isLight
             ? 'bg-brand-600/15 text-brand-600'
             : 'bg-brand-300/15 text-brand-300';
-      nodes.push(
-        <span
-          key={`m-${key++}`}
-          className={`inline-block rounded px-1 font-medium ${chipClass}`}
-          title={member?.name ?? 'Unknown user'}
-        >
-          @{member ? displayName.split(/\s+/)[0] : 'unknown'}
-        </span>,
-      );
-      cursor = match.index + match[0].length;
+      tokens.push({
+        start: mm.index,
+        end: mm.index + mm[0].length,
+        node: (
+          <span
+            key={`m-${key++}`}
+            className={`inline-block rounded px-1 font-medium ${chipClass}`}
+            title={member?.name ?? 'Unknown user'}
+          >
+            @{member ? displayName.split(/\s+/)[0] : 'unknown'}
+          </span>
+        ),
+      });
     }
-    if (cursor < body.length) {
-      nodes.push(body.slice(cursor));
+
+    REFERENCE_TOKEN_REGEX.lastIndex = 0;
+    let rm: RegExpExecArray | null;
+    while ((rm = REFERENCE_TOKEN_REGEX.exec(body)) !== null) {
+      const kind = rm[1] as ReferenceKind;
+      const refId = rm[2];
+      tokens.push({
+        start: rm.index,
+        end: rm.index + rm[0].length,
+        node: <ReferenceChip key={`r-${key++}`} kind={kind} refId={refId} />,
+      });
     }
+
+    tokens.sort((a, b) => a.start - b.start);
+
+    const nodes: React.ReactNode[] = [];
+    let cursor = 0;
+    for (const t of tokens) {
+      if (t.start < cursor) continue; // overlapping; skip
+      if (t.start > cursor) nodes.push(body.slice(cursor, t.start));
+      nodes.push(t.node);
+      cursor = t.end;
+    }
+    if (cursor < body.length) nodes.push(body.slice(cursor));
     return nodes;
   }
 
@@ -461,6 +523,105 @@ export default function ChatTab() {
   const [pendingMentions, setPendingMentions] = useState<
     Map<string, string>
   >(new Map());
+
+  // --- Reference picker -----------------------------------------------------
+  // Mirrors mentionPicker but triggered by `[`. Items are pulled from
+  // protocols (full accessible list) + active protocol's visits + active
+  // protocol's participants.
+  const [referencePicker, setReferencePicker] = useState<
+    | { tokenStart: number; filter: string; selectedIdx: number }
+    | null
+  >(null);
+
+  type RefCandidate =
+    | { kind: 'protocol'; id: string; primary: string; secondary: string }
+    | { kind: 'participant'; id: string; primary: string; secondary: string }
+    | { kind: 'visit'; id: string; primary: string; secondary: string };
+
+  const referenceCandidates: RefCandidate[] = useMemo(() => {
+    const out: RefCandidate[] = [];
+    for (const p of protocols) {
+      out.push({
+        kind: 'protocol',
+        id: p.code,
+        primary: p.code,
+        secondary: p.name,
+      });
+    }
+    for (const v of visits) {
+      out.push({
+        kind: 'visit',
+        id: v.id,
+        primary: v.visitName,
+        secondary: `${v.participantId} · Day ${v.studyDay} · ${v.date}`,
+      });
+    }
+    for (const p of participants) {
+      out.push({
+        kind: 'participant',
+        id: p.id,
+        primary: p.id,
+        secondary: `${p.status}${p.next_visit_name ? ` · next: ${p.next_visit_name}` : ''}`,
+      });
+    }
+    return out;
+  }, [protocols, visits, participants]);
+
+  const filteredReferences = useMemo(() => {
+    if (!referencePicker) return [];
+    const q = referencePicker.filter.toLowerCase();
+    if (!q) return referenceCandidates.slice(0, 10);
+    const matches = referenceCandidates.filter((c) => {
+      const haystack = `${c.kind} ${c.primary} ${c.secondary}`.toLowerCase();
+      return haystack.includes(q);
+    });
+    return matches.slice(0, 10);
+  }, [referenceCandidates, referencePicker]);
+
+  useEffect(() => {
+    if (!referencePicker) return;
+    if (referencePicker.selectedIdx >= filteredReferences.length) {
+      setReferencePicker({
+        ...referencePicker,
+        selectedIdx: Math.max(0, filteredReferences.length - 1),
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredReferences.length]);
+
+  function refreshReferencePickerFromCaret(nextValue: string, caretPos: number) {
+    const detected = detectReferenceAtCursor(nextValue, caretPos);
+    if (!detected) {
+      if (referencePicker) setReferencePicker(null);
+      return;
+    }
+    setReferencePicker({
+      tokenStart: detected.start,
+      filter: detected.filter,
+      selectedIdx: 0,
+    });
+  }
+
+  function pickReference(candidate: RefCandidate) {
+    if (!referencePicker) return;
+    const before = composer.slice(0, referencePicker.tokenStart);
+    const caret =
+      textareaRef.current?.selectionStart ??
+      referencePicker.tokenStart + 1 + referencePicker.filter.length;
+    const after = composer.slice(caret);
+    const insertion = `[${candidate.kind}:${candidate.id}] `;
+    const nextValue = before + insertion + after;
+    const nextCaret = before.length + insertion.length;
+    setComposer(nextValue);
+    setReferencePicker(null);
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current;
+      if (!ta) return;
+      ta.focus();
+      ta.selectionStart = nextCaret;
+      ta.selectionEnd = nextCaret;
+    });
+  }
 
   // Org-member list used by the picker. Sorted by name for predictable order.
   const memberList = useMemo(
@@ -519,11 +680,14 @@ export default function ChatTab() {
     const caret = e.target.selectionStart ?? value.length;
     setComposer(value);
     refreshMentionPickerFromCaret(value, caret);
+    refreshReferencePickerFromCaret(value, caret);
   }
 
   function handleComposerSelect(e: React.SyntheticEvent<HTMLTextAreaElement>) {
     const el = e.currentTarget;
-    refreshMentionPickerFromCaret(el.value, el.selectionStart ?? el.value.length);
+    const caret = el.selectionStart ?? el.value.length;
+    refreshMentionPickerFromCaret(el.value, caret);
+    refreshReferencePickerFromCaret(el.value, caret);
   }
 
   function pickMention(userId: string) {
@@ -714,6 +878,40 @@ export default function ChatTab() {
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // Reference picker takes precedence when open.
+    if (referencePicker && filteredReferences.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setReferencePicker({
+          ...referencePicker,
+          selectedIdx: Math.min(
+            referencePicker.selectedIdx + 1,
+            filteredReferences.length - 1,
+          ),
+        });
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setReferencePicker({
+          ...referencePicker,
+          selectedIdx: Math.max(referencePicker.selectedIdx - 1, 0),
+        });
+        return;
+      }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const candidate = filteredReferences[referencePicker.selectedIdx];
+        if (candidate) pickReference(candidate);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setReferencePicker(null);
+        return;
+      }
+    }
+
     // Mention picker keyboard nav takes precedence when open.
     if (mentionPicker && filteredMentionResults.length > 0) {
       if (e.key === 'ArrowDown') {
@@ -1075,24 +1273,50 @@ export default function ChatTab() {
                       {author.isAdmin && ' · admin'}
                     </p>
                   )}
-                  {decisionForMessage && (
-                    <button
-                      type="button"
-                      onClick={() => setDecisionsPanelOpen(true)}
-                      className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider rounded px-1.5 py-0.5 mb-1 ${
-                        isLight
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-amber-500/20 text-amber-300'
-                      }`}
-                      title={`Decision: ${decisionForMessage.title}`}
-                    >
-                      <ClipboardCheck size={10} />
-                      Decision
-                      <span className="truncate max-w-[160px] normal-case font-medium tracking-normal">
-                        — {decisionForMessage.title}
-                      </span>
-                    </button>
-                  )}
+                  {decisionForMessage && (() => {
+                    const decAcks = acksByDecisionId.get(decisionForMessage.id) ?? [];
+                    const ackedCount = decAcks.filter((a) => a.acknowledged_at).length;
+                    const allAcked = decAcks.length > 0 && ackedCount === decAcks.length;
+                    const someAcked = decAcks.length > 0 && ackedCount < decAcks.length;
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => setDecisionsPanelOpen(true)}
+                        className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider rounded px-1.5 py-0.5 mb-1 ${
+                          isLight
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-amber-500/20 text-amber-300'
+                        }`}
+                        title={
+                          decAcks.length > 0
+                            ? `Decision (${ackedCount}/${decAcks.length} acknowledged): ${decisionForMessage.title}`
+                            : `Decision: ${decisionForMessage.title}`
+                        }
+                      >
+                        <ClipboardCheck size={10} />
+                        Decision
+                        <span className="truncate max-w-[160px] normal-case font-medium tracking-normal">
+                          — {decisionForMessage.title}
+                        </span>
+                        {someAcked && (
+                          <span
+                            className={`inline-flex w-1.5 h-1.5 rounded-full ${
+                              isLight ? 'bg-amber-600' : 'bg-amber-400'
+                            }`}
+                            title="Pending acknowledgments"
+                          />
+                        )}
+                        {allAcked && (
+                          <span
+                            className={`inline-flex w-1.5 h-1.5 rounded-full ${
+                              isLight ? 'bg-emerald-600' : 'bg-emerald-400'
+                            }`}
+                            title="Fully acknowledged"
+                          />
+                        )}
+                      </button>
+                    );
+                  })()}
                   <div className="group relative max-w-[80%]">
                     <div
                       className={`rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words ${
@@ -1183,6 +1407,65 @@ export default function ChatTab() {
         )}
 
         <div className={`relative border-t ${border} p-2 flex items-end gap-2`}>
+          {referencePicker && filteredReferences.length > 0 && (
+            <div
+              role="listbox"
+              aria-label="Insert reference"
+              className={`absolute bottom-full left-2 right-2 mb-2 max-w-sm rounded-md border shadow-lg overflow-hidden ${
+                isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/10'
+              }`}
+            >
+              <p
+                className={`px-3 py-1.5 text-[10px] uppercase tracking-wider font-semibold ${labelColor} border-b ${border}`}
+              >
+                Reference a protocol, visit, or participant
+              </p>
+              <ul className="max-h-64 overflow-y-auto py-1">
+                {filteredReferences.map((c, idx) => (
+                  <li key={`${c.kind}:${c.id}`}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={idx === referencePicker.selectedIdx}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => pickReference(c)}
+                      className={`w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 ${
+                        idx === referencePicker.selectedIdx
+                          ? isLight
+                            ? 'bg-brand-600/[0.08] text-[#0F172A]'
+                            : 'bg-brand-300/[0.12] text-white'
+                          : isLight
+                            ? 'text-[#0F172A] hover:bg-[#0F172A]/[0.04]'
+                            : 'text-[#CBD5E1] hover:bg-white/[0.04]'
+                      }`}
+                    >
+                      <span
+                        className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded ${
+                          c.kind === 'protocol'
+                            ? isLight
+                              ? 'bg-brand-600/15 text-brand-600'
+                              : 'bg-brand-300/20 text-brand-300'
+                            : c.kind === 'participant'
+                              ? isLight
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-emerald-500/20 text-emerald-300'
+                              : isLight
+                                ? 'bg-indigo-100 text-indigo-800'
+                                : 'bg-indigo-500/20 text-indigo-300'
+                        }`}
+                      >
+                        {c.kind}
+                      </span>
+                      <span className="truncate flex-1">{c.primary}</span>
+                      <span className={`${mutedColor} text-[10px] truncate max-w-[40%]`}>
+                        {c.secondary}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {mentionPicker && filteredMentionResults.length > 0 && (
             <div
               role="listbox"
@@ -1307,11 +1590,14 @@ export default function ChatTab() {
       {decisionsPanelOpen && (
         <DecisionList
           decisions={decisions}
+          acksByDecisionId={acksByDecisionId}
           isAdmin={isOrgAdmin}
+          currentUserId={currentUserId}
           members={profiles}
           onClose={() => setDecisionsPanelOpen(false)}
           onJumpToSource={jumpToSourceMessage}
           onDeleted={removeDecisionLocal}
+          onAcknowledged={upsertAckLocal}
         />
       )}
     </section>
