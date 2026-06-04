@@ -9,6 +9,7 @@ import Footer from './components/Footer';
 import Chatbot from './components/Chatbot';
 import Dashboard, { type DashboardTab, type SettingsSection } from './components/dashboard/Dashboard';
 import { ORG_TAB_STORAGE_KEY } from './components/dashboard/organization/OrganizationPage';
+import MentionsInbox from './components/dashboard/organization/chat/MentionsInbox';
 import Login from './components/auth/Login';
 import ForgotPassword from './components/auth/ForgotPassword';
 import ProfileCompletion from './components/auth/ProfileCompletion';
@@ -82,6 +83,7 @@ function AppContent() {
   // Result of the accept-invite handler — surfaced as a banner on the
   // dashboard. null when no recent invite was accepted (or after dismiss).
   const [inviteResult, setInviteResult] = useState<InviteAcceptResult | null>(null);
+  const [mentionsInboxOpen, setMentionsInboxOpen] = useState(false);
   const { session, loading, profile, profileLoading } = useAuth();
   const { theme } = useTheme();
   const { isRedirecting } = useCheckoutRedirect();
@@ -225,6 +227,32 @@ function AppContent() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  /** Deep-link to a specific chat channel and (optionally) a message ID
+   *  that ChatTab should scroll to + briefly highlight on mount. Used by
+   *  the mentions inbox to take the user from "you were @mentioned" to
+   *  the exact message in one click. */
+  const handleNavigateToOrgChat = (
+    channelKey: 'org' | `protocol:${string}`,
+    messageId?: string,
+  ) => {
+    if (dashboardTab !== 'organization' && dashboardTab !== 'settings') {
+      setPreviousDashboardTab(dashboardTab);
+    }
+    try {
+      localStorage.setItem(ORG_TAB_STORAGE_KEY, 'chat');
+      localStorage.setItem('piq-chat-channel-v1', channelKey);
+      if (messageId) {
+        localStorage.setItem('piq-chat-pending-highlight-v1', messageId);
+      }
+    } catch {
+      /* ignore */
+    }
+    setDashboardTab('organization');
+    setView('dashboard');
+    setMentionsInboxOpen(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleExitOrganization = () => {
     setDashboardTab(previousDashboardTab);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -278,6 +306,7 @@ function AppContent() {
           onDashboardHome={handleDashboardHome}
           onOpenSettingsSection={handleOpenSettingsSection}
           onOpenOrganization={handleOpenOrganization}
+          onOpenMentionsInbox={() => setMentionsInboxOpen(true)}
         />
         {inviteResult && (
           <InviteWelcomeBanner
@@ -293,6 +322,12 @@ function AppContent() {
           onExitOrganization={handleExitOrganization}
           onNavigateToOrgTeam={handleNavigateToOrgTeam}
         />
+        {mentionsInboxOpen && (
+          <MentionsInbox
+            onClose={() => setMentionsInboxOpen(false)}
+            onNavigate={handleNavigateToOrgChat}
+          />
+        )}
       </div>
     );
   }

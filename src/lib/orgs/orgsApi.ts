@@ -482,6 +482,96 @@ export async function markChatMentionsRead(
   return { ok: true, data: undefined };
 }
 
+/** Hydrated mention rows for the inbox: each carries the message body
+ *  preview + channel kind/id so the inbox can render without a per-row
+ *  follow-up fetch. RLS on chat_mentions limits visibility to the caller. */
+export interface MentionInboxRow {
+  id: string;
+  mentioned_by_user_id: string | null;
+  created_at: string;
+  read_at: string | null;
+  channel_kind: 'org' | 'protocol';
+  channel_id: string;
+  message_id: string;
+  body_preview: string;
+}
+
+export async function listMyMentionsWithContext(
+  limit = 200,
+): Promise<Result<MentionInboxRow[]>> {
+  // Pull every mention for the caller (RLS-gated to self), then in
+  // parallel fetch the parent message bodies. We do the join client-side
+  // because PostgREST's nested embed across an XOR FK shape needs both
+  // FKs declared, and the existing schema doesn't expose them in a way
+  // PostgREST picks up automatically.
+  const { data: mentions, error } = await supabase
+    .from('chat_mentions')
+    .select(
+      'id, org_message_id, protocol_message_id, org_id, protocol_id, mentioned_by_user_id, created_at, read_at',
+    )
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) return fail('listMyMentionsWithContext', error);
+  const rows = (mentions ?? []) as Array<{
+    id: string;
+    org_message_id: string | null;
+    protocol_message_id: string | null;
+    org_id: string | null;
+    protocol_id: string | null;
+    mentioned_by_user_id: string | null;
+    created_at: string;
+    read_at: string | null;
+  }>;
+  if (rows.length === 0) return { ok: true, data: [] };
+
+  const orgMessageIds = rows
+    .map((r) => r.org_message_id)
+    .filter((x): x is string => !!x);
+  const protocolMessageIds = rows
+    .map((r) => r.protocol_message_id)
+    .filter((x): x is string => !!x);
+
+  const [orgMsgRes, protoMsgRes] = await Promise.all([
+    orgMessageIds.length > 0
+      ? supabase.from('org_messages').select('id, body').in('id', orgMessageIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; body: string }>, error: null }),
+    protocolMessageIds.length > 0
+      ? supabase
+          .from('protocol_messages')
+          .select('id, body')
+          .in('id', protocolMessageIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; body: string }>, error: null }),
+  ]);
+
+  const bodyByMessageId = new Map<string, string>();
+  for (const m of (orgMsgRes.data ?? []) as Array<{ id: string; body: string }>) {
+    bodyByMessageId.set(m.id, m.body);
+  }
+  for (const m of (protoMsgRes.data ?? []) as Array<{ id: string; body: string }>) {
+    bodyByMessageId.set(m.id, m.body);
+  }
+
+  const inbox: MentionInboxRow[] = [];
+  for (const r of rows) {
+    const messageId = r.org_message_id ?? r.protocol_message_id;
+    const channelId = r.org_id ?? r.protocol_id;
+    if (!messageId || !channelId) continue;
+    const channel_kind: 'org' | 'protocol' = r.org_message_id ? 'org' : 'protocol';
+    const body = bodyByMessageId.get(messageId) ?? '(message no longer available)';
+    inbox.push({
+      id: r.id,
+      mentioned_by_user_id: r.mentioned_by_user_id,
+      created_at: r.created_at,
+      read_at: r.read_at,
+      channel_kind,
+      channel_id: channelId,
+      message_id: messageId,
+      body_preview: body.length > 200 ? `${body.slice(0, 200)}…` : body,
+    });
+  }
+  return { ok: true, data: inbox };
+}
+
 
 // ===========================================================================
 // Chat decisions — first-class promoted decisions linked to a source

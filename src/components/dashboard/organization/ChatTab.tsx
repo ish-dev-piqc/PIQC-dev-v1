@@ -815,6 +815,30 @@ export default function ChatTab() {
     wasAtBottomRef.current = true;
   }, [active.loading, activeChannel]);
 
+  // Pending-highlight pickup — used by the mentions inbox to deep-link
+  // to a specific message. handleNavigateToOrgChat in App.tsx writes the
+  // target message id to localStorage; this effect picks it up once the
+  // active channel's messages are loaded.
+  useEffect(() => {
+    if (active.loading) return;
+    let pending: string | null = null;
+    try {
+      pending = localStorage.getItem('piq-chat-pending-highlight-v1');
+    } catch {
+      /* ignore */
+    }
+    if (!pending) return;
+    const present = active.messages.some((m) => m.id === pending);
+    if (!present) return;
+    try {
+      localStorage.removeItem('piq-chat-pending-highlight-v1');
+    } catch {
+      /* ignore */
+    }
+    jumpToSourceMessage(pending);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active.loading, active.messages.length, activeChannelKey]);
+
   const composerTooLong = composer.length > MAX_MESSAGE_LENGTH;
   const composerTrimmed = composer.trim();
   const hasValidAttachments = pendingFiles.some((p) => !p.error);
