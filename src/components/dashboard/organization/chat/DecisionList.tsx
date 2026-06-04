@@ -1,30 +1,44 @@
 import { useState } from 'react';
-import { ClipboardCheck, Trash2, X, ExternalLink } from 'lucide-react';
+import {
+  Check,
+  ClipboardCheck,
+  Clock,
+  ExternalLink,
+  Loader2,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
-import { deleteChatDecision } from '../../../../lib/orgs/orgsApi';
+import {
+  acknowledgeDecision,
+  deleteChatDecision,
+} from '../../../../lib/orgs/orgsApi';
 import type {
   ChatDecision,
+  ChatDecisionAck,
   OrgMemberWithProfile,
 } from '../../../../types/orgs';
 
 // =============================================================================
 // DecisionList — side panel listing decisions for the active chat channel.
-// Newest-first. Admins see a Delete button per row; everyone sees Jump-to-
-// source when the source message still exists.
+// Newest-first. Per-row ack progress + an Acknowledge button for required
+// users who haven't acked yet.
 // =============================================================================
 
 interface DecisionListProps {
   decisions: ChatDecision[];
+  acksByDecisionId: Map<string, ChatDecisionAck[]>;
   isAdmin: boolean;
+  currentUserId: string | null;
   members: Map<string, OrgMemberWithProfile>;
   onClose: () => void;
   onJumpToSource: (sourceMessageId: string) => void;
   onDeleted: (decisionId: string) => void;
+  onAcknowledged: (ack: ChatDecisionAck) => void;
 }
 
 function formatTimestamp(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString(undefined, {
+  return new Date(iso).toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -54,11 +68,14 @@ function RationaleBlock({ text }: { text: string }) {
 
 export default function DecisionList({
   decisions,
+  acksByDecisionId,
   isAdmin,
+  currentUserId,
   members,
   onClose,
   onJumpToSource,
   onDeleted,
+  onAcknowledged,
 }: DecisionListProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
@@ -130,6 +147,7 @@ export default function DecisionList({
             decisions.map((d) => {
               const sourceId =
                 d.source_org_message_id ?? d.source_protocol_message_id;
+              const acks = acksByDecisionId.get(d.id) ?? [];
               return (
                 <article
                   key={d.id}
@@ -171,6 +189,17 @@ export default function DecisionList({
                       </p>
                     )}
                   </div>
+
+                  {acks.length > 0 && (
+                    <AckStatusSection
+                      acks={acks}
+                      currentUserId={currentUserId}
+                      nameOf={nameOf}
+                      isLight={isLight}
+                      onAcknowledged={onAcknowledged}
+                    />
+                  )}
+
                   {sourceId && (
                     <button
                       type="button"
@@ -194,6 +223,194 @@ export default function DecisionList({
           )}
         </div>
       </aside>
+    </div>
+  );
+}
+
+function AckStatusSection({
+  acks,
+  currentUserId,
+  nameOf,
+  isLight,
+  onAcknowledged,
+}: {
+  acks: ChatDecisionAck[];
+  currentUserId: string | null;
+  nameOf: (uid: string | null) => string;
+  isLight: boolean;
+  onAcknowledged: (ack: ChatDecisionAck) => void;
+}) {
+  const acknowledged = acks.filter((a) => a.acknowledged_at !== null);
+  const pending = acks.filter((a) => a.acknowledged_at === null);
+
+  const myAck = currentUserId ? acks.find((a) => a.required_user_id === currentUserId) : null;
+  const myAckPending = myAck && myAck.acknowledged_at === null;
+
+  const subColor = 'text-fg-sub';
+  const labelColor = 'text-fg-label';
+
+  return (
+    <div
+      className={`mt-2 pt-2 border-t ${isLight ? 'border-[#E2E8F0]' : 'border-white/10'} space-y-2`}
+    >
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <p className={`${labelColor} text-[10px] uppercase tracking-wider font-semibold`}>
+          Acknowledged{' '}
+          <span
+            className={
+              acknowledged.length === acks.length
+                ? isLight
+                  ? 'text-emerald-700'
+                  : 'text-emerald-300'
+                : isLight
+                  ? 'text-amber-700'
+                  : 'text-amber-300'
+            }
+          >
+            {acknowledged.length} of {acks.length}
+          </span>
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {acknowledged.map((a) => (
+          <span
+            key={a.id}
+            className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded ${
+              isLight
+                ? 'bg-emerald-100 text-emerald-800'
+                : 'bg-emerald-500/[0.15] text-emerald-300'
+            }`}
+            title={
+              a.acknowledged_note
+                ? `${nameOf(a.required_user_id)} — ${a.acknowledged_note}`
+                : nameOf(a.required_user_id)
+            }
+          >
+            <Check size={9} />
+            {nameOf(a.required_user_id)}
+          </span>
+        ))}
+        {pending.map((a) => (
+          <span
+            key={a.id}
+            className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded ${
+              isLight
+                ? 'bg-[#F2F2F2] text-[#334155]/70'
+                : 'bg-white/[0.06] text-[#CBD5E1]/65'
+            }`}
+            title={`${nameOf(a.required_user_id)} hasn't acknowledged yet`}
+          >
+            <Clock size={9} />
+            {nameOf(a.required_user_id)}
+          </span>
+        ))}
+      </div>
+
+      {myAckPending && myAck && (
+        <AcknowledgeBlock
+          ack={myAck}
+          isLight={isLight}
+          onAcknowledged={onAcknowledged}
+        />
+      )}
+      {myAck && myAck.acknowledged_at && (
+        <p className={`${subColor} text-[11px]`}>
+          You acknowledged on {new Date(myAck.acknowledged_at).toLocaleString()}.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function AcknowledgeBlock({
+  ack,
+  isLight,
+  onAcknowledged,
+}: {
+  ack: ChatDecisionAck;
+  isLight: boolean;
+  onAcknowledged: (ack: ChatDecisionAck) => void;
+}) {
+  const [note, setNote] = useState('');
+  const [open, setOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit() {
+    setSubmitting(true);
+    setError(null);
+    const res = await acknowledgeDecision(ack.id, note);
+    setSubmitting(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    onAcknowledged(res.data);
+    setOpen(false);
+    setNote('');
+  }
+
+  const inputBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#1E293B] border-white/10';
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md transition-colors ${
+          isLight
+            ? 'bg-amber-500 text-white hover:bg-amber-600'
+            : 'bg-amber-400 text-[#0F172A] hover:bg-amber-300'
+        }`}
+      >
+        <Check size={12} />
+        Acknowledge
+      </button>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <textarea
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="Optional note (e.g., 'agree with the timing change')"
+        rows={2}
+        maxLength={2000}
+        className={`w-full px-2 py-1.5 text-xs rounded-md border ${inputBg} resize-none focus:outline-none focus:ring-2 focus:ring-brand-600/30`}
+      />
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={submitting}
+          className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md ${
+            isLight
+              ? 'bg-amber-500 text-white hover:bg-amber-600'
+              : 'bg-amber-400 text-[#0F172A] hover:bg-amber-300'
+          } disabled:opacity-60`}
+        >
+          {submitting ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+          Confirm acknowledgment
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            setNote('');
+          }}
+          className={`text-xs px-2 py-1.5 rounded ${
+            isLight ? 'text-[#334155]/70 hover:bg-[#0F172A]/[0.05]' : 'text-[#CBD5E1]/70 hover:bg-white/[0.05]'
+          }`}
+        >
+          Cancel
+        </button>
+      </div>
+      {error && (
+        <p className={`text-[11px] ${isLight ? 'text-rose-700' : 'text-rose-300'}`}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }

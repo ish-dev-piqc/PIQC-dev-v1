@@ -34,6 +34,7 @@ import type {
   AcceptedGuestInvite,
   ChatAttachment,
   ChatDecision,
+  ChatDecisionAck,
   ChatMention,
   ChatProtocolSummary,
   NewChatAttachmentInput,
@@ -57,6 +58,10 @@ import type {
 } from '../../types/orgs';
 import { adaptAccessRequest, adaptAccessRequests } from './accessRequestsAdapter';
 import { adaptChatAttachment, adaptChatAttachments } from './chatAttachmentsAdapter';
+import {
+  adaptChatDecisionAck,
+  adaptChatDecisionAcks,
+} from './chatDecisionAcksAdapter';
 import { adaptChatDecision, adaptChatDecisions } from './chatDecisionsAdapter';
 import { adaptChatMentions } from './chatMentionsAdapter';
 import { adaptGuest, adaptGuests } from './guestsAdapter';
@@ -522,10 +527,72 @@ export async function createChatDecision(
       .single();
     if (error) return fail('createChatDecision', error);
     if (!data) return err('Insert returned no row.');
-    return { ok: true, data: adaptChatDecision(data) };
+    const decision = adaptChatDecision(data);
+
+    // Optional ack requirements — insert after the decision so the FK is
+    // satisfied. Failures are non-fatal: the decision still exists; the
+    // caller surfaces a warning. RLS on chat_decision_acks ensures only
+    // the just-created decision's author (= current user) can insert here.
+    const requiredUserIds = input.required_user_ids ?? [];
+    if (requiredUserIds.length > 0) {
+      const ackRows = requiredUserIds.map((uid) => ({
+        decision_id: decision.id,
+        required_user_id: uid,
+      }));
+      const { error: ackErr } = await supabase
+        .from('chat_decision_acks')
+        .insert(ackRows);
+      if (ackErr) {
+        console.warn('[createChatDecision] ack insert failed:', ackErr.message);
+      }
+    }
+
+    return { ok: true, data: decision };
   } catch (e) {
     return fail('createChatDecision', e);
   }
+}
+
+/** Fetch ack rows for a set of decisions. Returns flat list — caller groups
+ *  by `decision_id`. */
+export async function listDecisionAcks(
+  decisionIds: string[],
+): Promise<Result<ChatDecisionAck[]>> {
+  if (decisionIds.length === 0) return { ok: true, data: [] };
+  const { data, error } = await supabase
+    .from('chat_decision_acks')
+    .select(
+      'id, decision_id, required_user_id, acknowledged_at, acknowledged_note, created_at',
+    )
+    .in('decision_id', decisionIds);
+  if (error) return fail('listDecisionAcks', error);
+  return { ok: true, data: adaptChatDecisionAcks(data ?? []) };
+}
+
+/** Mark a single ack row as acknowledged. RLS gates: only the
+ *  `required_user_id` matching auth.uid() succeeds. */
+export async function acknowledgeDecision(
+  ackId: string,
+  note?: string,
+): Promise<Result<ChatDecisionAck>> {
+  const trimmedNote = note?.trim() ?? null;
+  if (trimmedNote && trimmedNote.length > 2000) {
+    return err('Note is too long (2000 character max).');
+  }
+  const { data, error } = await supabase
+    .from('chat_decision_acks')
+    .update({
+      acknowledged_at: new Date().toISOString(),
+      acknowledged_note: trimmedNote,
+    })
+    .eq('id', ackId)
+    .select(
+      'id, decision_id, required_user_id, acknowledged_at, acknowledged_note, created_at',
+    )
+    .single();
+  if (error) return fail('acknowledgeDecision', error);
+  if (!data) return err('Update returned no row.');
+  return { ok: true, data: adaptChatDecisionAck(data) };
 }
 
 export async function listChannelDecisions(

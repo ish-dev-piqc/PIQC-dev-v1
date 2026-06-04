@@ -194,6 +194,19 @@ export interface NewChatDecisionInput {
   source_protocol_message_id?: string;
   decided_by_user_id?: string | null;
   decided_at?: string;
+  /** Optional list of users who must acknowledge the decision. Empty (or
+   *  omitted) means the decision is informational; no acks expected. */
+  required_user_ids?: string[];
+}
+
+/** Per-user acknowledgment requirement on a chat_decision. */
+export interface ChatDecisionAck {
+  id: string;
+  decision_id: string;
+  required_user_id: string;
+  acknowledged_at: string | null;
+  acknowledged_note: string | null;
+  created_at: string;
 }
 
 // ---------------------------------------------------------------------------

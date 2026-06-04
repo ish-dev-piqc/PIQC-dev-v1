@@ -248,9 +248,11 @@ export default function ChatTab() {
 
   const {
     decisions,
+    acksByDecisionId,
     loading: decisionsLoading,
     add: addDecisionLocal,
     remove: removeDecisionLocal,
+    upsertAck: upsertAckLocal,
   } = useChatDecisions({ kind: channelKind, channelId: channelRefId });
 
   // --- Attachments ----------------------------------------------------------
@@ -1075,24 +1077,50 @@ export default function ChatTab() {
                       {author.isAdmin && ' · admin'}
                     </p>
                   )}
-                  {decisionForMessage && (
-                    <button
-                      type="button"
-                      onClick={() => setDecisionsPanelOpen(true)}
-                      className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider rounded px-1.5 py-0.5 mb-1 ${
-                        isLight
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-amber-500/20 text-amber-300'
-                      }`}
-                      title={`Decision: ${decisionForMessage.title}`}
-                    >
-                      <ClipboardCheck size={10} />
-                      Decision
-                      <span className="truncate max-w-[160px] normal-case font-medium tracking-normal">
-                        — {decisionForMessage.title}
-                      </span>
-                    </button>
-                  )}
+                  {decisionForMessage && (() => {
+                    const decAcks = acksByDecisionId.get(decisionForMessage.id) ?? [];
+                    const ackedCount = decAcks.filter((a) => a.acknowledged_at).length;
+                    const allAcked = decAcks.length > 0 && ackedCount === decAcks.length;
+                    const someAcked = decAcks.length > 0 && ackedCount < decAcks.length;
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => setDecisionsPanelOpen(true)}
+                        className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider rounded px-1.5 py-0.5 mb-1 ${
+                          isLight
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-amber-500/20 text-amber-300'
+                        }`}
+                        title={
+                          decAcks.length > 0
+                            ? `Decision (${ackedCount}/${decAcks.length} acknowledged): ${decisionForMessage.title}`
+                            : `Decision: ${decisionForMessage.title}`
+                        }
+                      >
+                        <ClipboardCheck size={10} />
+                        Decision
+                        <span className="truncate max-w-[160px] normal-case font-medium tracking-normal">
+                          — {decisionForMessage.title}
+                        </span>
+                        {someAcked && (
+                          <span
+                            className={`inline-flex w-1.5 h-1.5 rounded-full ${
+                              isLight ? 'bg-amber-600' : 'bg-amber-400'
+                            }`}
+                            title="Pending acknowledgments"
+                          />
+                        )}
+                        {allAcked && (
+                          <span
+                            className={`inline-flex w-1.5 h-1.5 rounded-full ${
+                              isLight ? 'bg-emerald-600' : 'bg-emerald-400'
+                            }`}
+                            title="Fully acknowledged"
+                          />
+                        )}
+                      </button>
+                    );
+                  })()}
                   <div className="group relative max-w-[80%]">
                     <div
                       className={`rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words ${
@@ -1307,11 +1335,14 @@ export default function ChatTab() {
       {decisionsPanelOpen && (
         <DecisionList
           decisions={decisions}
+          acksByDecisionId={acksByDecisionId}
           isAdmin={isOrgAdmin}
+          currentUserId={currentUserId}
           members={profiles}
           onClose={() => setDecisionsPanelOpen(false)}
           onJumpToSource={jumpToSourceMessage}
           onDeleted={removeDecisionLocal}
+          onAcknowledged={upsertAckLocal}
         />
       )}
     </section>

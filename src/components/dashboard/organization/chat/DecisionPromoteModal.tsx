@@ -73,8 +73,18 @@ export default function DecisionPromoteModal({
     const pad = (n: number) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   });
+  const [requiredUserIds, setRequiredUserIds] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function toggleRequiredUser(userId: string) {
+    setRequiredUserIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  }
 
   const titleRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -107,6 +117,7 @@ export default function DecisionPromoteModal({
       rationale: rationale.trim() || null,
       decided_by_user_id: decidedBy || null,
       decided_at: new Date(decidedAtLocal).toISOString(),
+      required_user_ids: Array.from(requiredUserIds),
     };
     if (kind === 'org') {
       input.org_id = channelId;
@@ -244,6 +255,60 @@ export default function DecisionPromoteModal({
                 className={`w-full text-sm rounded-md border px-2 py-1.5 ${inputBg} ${headingColor} focus:outline-none focus:ring-2 focus:ring-brand-600/30`}
               />
             </div>
+          </div>
+
+          <div>
+            <label className={`block text-[10px] uppercase tracking-wider font-semibold mb-1 ${labelColor}`}>
+              Require acknowledgment from (optional)
+            </label>
+            <p className={`${subColor} text-[11px] leading-relaxed mb-2`}>
+              Selected users must explicitly acknowledge the decision before
+              it shows as complete. Leave empty for informational decisions.
+            </p>
+            <div
+              className={`max-h-40 overflow-y-auto rounded-md border ${border} divide-y ${
+                isLight ? 'divide-[#E2E8F0]' : 'divide-white/10'
+              }`}
+            >
+              {members.length === 0 ? (
+                <p className={`${subColor} text-xs px-3 py-2`}>No org members.</p>
+              ) : (
+                members.map((m) => {
+                  const checked = requiredUserIds.has(m.user_id);
+                  return (
+                    <label
+                      key={m.user_id}
+                      className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer ${
+                        checked
+                          ? isLight
+                            ? 'bg-amber-50'
+                            : 'bg-amber-500/[0.08]'
+                          : isLight
+                            ? 'hover:bg-[#0F172A]/[0.04]'
+                            : 'hover:bg-white/[0.04]'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleRequiredUser(m.user_id)}
+                      />
+                      <span className={`text-sm truncate flex-1 ${headingColor}`}>
+                        {m.name}
+                      </span>
+                      {m.role === 'admin' && (
+                        <span className={`${subColor} text-[10px] uppercase`}>admin</span>
+                      )}
+                    </label>
+                  );
+                })
+              )}
+            </div>
+            {requiredUserIds.size > 0 && (
+              <p className={`${subColor} text-[11px] mt-1`}>
+                {requiredUserIds.size} required acknowledgment{requiredUserIds.size === 1 ? '' : 's'}
+              </p>
+            )}
           </div>
 
           {error && (
