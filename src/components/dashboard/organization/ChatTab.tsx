@@ -4,7 +4,6 @@ import {
   Send,
   Loader2,
   AlertTriangle,
-  Hash,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -17,6 +16,11 @@ import {
   listMyChatProtocols,
   listOrgMembersWithProfile,
 } from '../../../lib/orgs/orgsApi';
+// Reuse the shared protocol palette so the dot here matches the one shown
+// on visit chips, calendar accents, and the protocol picker. lib/site is
+// the canonical home for this palette; the import is allowed because
+// organization/ isn't in the mode-isolation scanned domains.
+import { getProtocolColors } from '../../../lib/site/protocolColors';
 import type {
   ChatProtocolSummary,
   OrgMemberWithProfile,
@@ -363,9 +367,25 @@ export default function ChatTab() {
           sidebarWide ? 'px-2.5 py-1.5 justify-start' : 'px-1.5 py-1.5 justify-center'
         }`}
       >
-        <span className="flex-shrink-0">{icon}</span>
+        <span className="flex-shrink-0 flex items-center justify-center">{icon}</span>
         {sidebarWide && <span className="truncate">{label}</span>}
       </button>
+    );
+  }
+
+  /** Colored dot identifying a protocol — matches the shared palette used by
+   *  visit chips, calendar accents, and the protocol picker. Wider in the
+   *  collapsed sidebar (where it stands in for the icon) and tighter inline. */
+  function ProtocolDot({ code }: { code: string }) {
+    const colors = getProtocolColors(code);
+    const dotClass = isLight ? colors.dotLight : colors.dotDark;
+    return (
+      <span
+        className={`${dotClass} rounded-full inline-block ${
+          sidebarWide ? 'w-2 h-2' : 'w-2.5 h-2.5'
+        }`}
+        aria-hidden="true"
+      />
     );
   }
 
@@ -429,7 +449,7 @@ export default function ChatTab() {
                 activeChannel.kind === 'protocol' && activeChannel.id === p.id
               }
               onClick={() => setActiveChannel({ kind: 'protocol', id: p.id })}
-              icon={<Hash size={13} />}
+              icon={<ProtocolDot code={p.code} />}
               label={p.code}
               title={p.name || p.code}
             />
@@ -440,11 +460,11 @@ export default function ChatTab() {
       {/* Main pane */}
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Channel header */}
-        <header className={`flex items-baseline gap-2 px-4 py-2.5 border-b ${border}`}>
+        <header className={`flex items-center gap-2 px-4 py-2.5 border-b ${border}`}>
           {activeChannel.kind === 'org' ? (
             <MessageCircle size={13} className={mutedColor} />
           ) : (
-            <Hash size={13} className={mutedColor} />
+            <ProtocolDot code={channelLabel} />
           )}
           <h3 className={`${headingColor} text-sm font-semibold`}>
             {activeChannel.kind === 'org' ? '#general' : `#${channelLabel}`}
