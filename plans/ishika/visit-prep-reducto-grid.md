@@ -35,7 +35,7 @@ visit with verbatim per-visit procedures, with **zero change to the Ask-tab chun
 - NEW `supabase/functions/reducto-webhook/index.ts` — direct-webhook finalizer (waitUntil).
 - `supabase/functions/ingest-recover/index.ts` — add a service-role/cron mode (scan all stuck docs).
 - `supabase/config.toml` — `reducto-webhook` verify_jwt=false.
-- NEW migration `20260703000000_visit_coverage_extraction_method.sql` — add `extraction_method` +
+- NEW migration `20260703000003_visit_coverage_extraction_method.sql` — add `extraction_method` +
   `expected_from_signal` to `protocol_visit_coverage`; `CREATE OR REPLACE visit_execution_get_coverage`.
 - NEW migration `20260703000001_ingest_recover_cron.sql` — self-guarding pg_cron recover schedule.
 - NEW migration `20260703000002_visit_execution_get_workspace_v6_column_order.sql` — add
