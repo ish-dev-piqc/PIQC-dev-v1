@@ -39,6 +39,10 @@ visit with verbatim per-visit procedures, with **zero change to the Ask-tab chun
   visit_execution_get_coverage`; (+ pg_cron recover schedule).
 - `src/types/visit-execution/index.ts`, `src/lib/visit-execution/visitExecutionApi.ts`,
   `src/components/dashboard/visit-execution/CoverageBanner.tsx` — type mirror + banner copy.
+- `src/lib/visit-execution/visitExecutionAdapter.ts`,
+  `src/components/dashboard/visit-execution/VisitExecutionTab.tsx` — drive-by: add the
+  `source_quote: null` traceability field #257 added to the interface but missed in these
+  thin-adapter literals (pre-existing `tsc` regression; keeps this PR's typecheck green).
 
 ## Out of scope
 - The `/extract` LLM for non-grid fields (title/endpoints/eligibility) — unchanged.

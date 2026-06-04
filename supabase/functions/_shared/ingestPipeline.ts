@@ -23,7 +23,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { mapReductoExtractToSotr } from "./sourceEvidenceAdapter.ts";
-import { dedupeVisitTemplateRowsByQuality, staleTemplateIds, visitMatchKey } from "./visitTemplateDedup.ts";
+import { dedupeVisitTemplateRowsByQuality, pickTemplateForVisit, staleTemplateIds, visitMatchKey } from "./visitTemplateDedup.ts";
 import { canonicalVisitName, normalizeVisitName } from "./visitNameNormalize.ts";
 import { evaluateSoaGate, gridToScheduleOfEvents, parseSoaGrid } from "./soaGridParser.ts";
 import type { SoaGateDecision } from "./soaGridParser.ts";
@@ -1738,8 +1738,8 @@ async function persistVisitExecutionWorkspaces(
     // confidence the Protocol tab shows. Empty map = prior null-confidence behaviour.
     confidenceByVisitName: Map<string, VisitConfidenceLink>;
   },
-): Promise<void> {
-  if (args.schedule.length === 0) return;
+): Promise<{ unmatchedWithProcedures: string[]; keyCollisions: string[] }> {
+  if (args.schedule.length === 0) return { unmatchedWithProcedures: [], keyCollisions: [] };
 
   // Load the visit_template rows we just wrote so we can map visit_name +
   // study_day → visit_template_id (the persist RPC keys on UUIDs, not names).
@@ -1750,21 +1750,29 @@ async function persistVisitExecutionWorkspaces(
 
   if (error) {
     console.error("[ingest] vew_load_templates_failed", { error: error.message });
-    return;
+    return { unmatchedWithProcedures: [], keyCollisions: [] };
   }
 
   type TemplateRow = { id: string; visit_name: string; study_day: number };
-  const byKey = new Map<string, TemplateRow>();
+  // Bucket by key (not last-write-wins): if two templates canonicalize to the
+  // same (name, study_day) key, keeping BOTH lets the lookup disambiguate by
+  // exact name instead of silently dropping one visit's procedures (#259's
+  // residual collision risk). visitMatchKey canonicalizes the name — the stored
+  // template name is already canonical, the raw schedule entry below is not;
+  // using the SAME key fn on both sides is what stops them drifting.
+  const byKey = new Map<string, TemplateRow[]>();
   for (const t of (templates ?? []) as TemplateRow[]) {
-    // visitMatchKey canonicalizes the name — the stored template name is already
-    // canonical, the raw schedule entry below is not; using the SAME key fn on
-    // both sides is what stops them drifting (the silent-drop regression).
-    byKey.set(visitMatchKey(t.visit_name, t.study_day), t);
+    const k = visitMatchKey(t.visit_name, t.study_day);
+    const bucket = byKey.get(k);
+    if (bucket) bucket.push(t);
+    else byKey.set(k, [t]);
   }
   // Loud guard: any schedule entry that carried procedures but matched no
   // template means data is being dropped — surface it instead of silently
   // skipping (the old failure mode that hid the missing Treatment Visits).
   const unmatchedWithProcedures: string[] = [];
+  // Loud guard: two templates collided on one key — we picked one by exact name.
+  const keyCollisions: string[] = [];
 
   const visitsPayload: Array<Record<string, unknown>> = [];
 
@@ -1787,13 +1795,20 @@ async function persistVisitExecutionWorkspaces(
     const studyDay = coerceStudyDay(entry.study_day);
     if (studyDay === null) continue;
     const key = visitMatchKey(entry.visit_name, studyDay);
-    const tpl = byKey.get(key);
-    if (!tpl) {
+    const bucket = byKey.get(key);
+    if (!bucket || bucket.length === 0) {
       const hadProcedures =
         normalizeStructuredProcedures(entry.procedures_structured).length > 0 ||
         (Array.isArray(entry.procedures) && entry.procedures.length > 0);
       if (hadProcedures) unmatchedWithProcedures.push(String(entry.visit_name).trim());
       continue;
+    }
+    // Disambiguate a collision by exact visit_name (raw, then canonical); never
+    // silently drop the other visit's procedures.
+    const { pick, collided } = pickTemplateForVisit(bucket, String(entry.visit_name));
+    const tpl = pick!; // bucket is non-empty here
+    if (collided) {
+      keyCollisions.push(`${key} → [${bucket.map((t) => t.visit_name).join(" | ")}] picked "${tpl.visit_name}"`);
     }
 
     const structuredProcs = normalizeStructuredProcedures(entry.procedures_structured);
@@ -1869,8 +1884,15 @@ async function persistVisitExecutionWorkspaces(
       visits: unmatchedWithProcedures,
     });
   }
+  if (keyCollisions.length > 0) {
+    console.error("[ingest] vew_template_key_collisions", {
+      protocol_id: args.protocolId,
+      count: keyCollisions.length,
+      collisions: keyCollisions,
+    });
+  }
 
-  if (visitsPayload.length === 0) return;
+  if (visitsPayload.length === 0) return { unmatchedWithProcedures, keyCollisions };
 
   const proceduresInPayload = visitsPayload.reduce(
     (n, v) =>
@@ -1891,7 +1913,7 @@ async function persistVisitExecutionWorkspaces(
 
   if (rpcError) {
     console.error("[ingest] vew_persist_rpc_failed", { error: rpcError.message });
-    return;
+    return { unmatchedWithProcedures, keyCollisions };
   }
   // Surface the silent-empty case: the RPC "succeeded" but wrote no
   // requirements despite a non-empty payload. Previously this read as a
@@ -1907,6 +1929,7 @@ async function persistVisitExecutionWorkspaces(
     });
   }
   console.log("[ingest] vew_persist_succeeded", { protocol_id: args.protocolId, result: data });
+  return { unmatchedWithProcedures, keyCollisions };
 }
 
 // -----------------------------------------------------------------------------
@@ -1992,9 +2015,11 @@ export async function processIngestCompletion(
     // schedule_of_events shape, so only this one step changes.
     // ---------------------------------------------------------------------
     let soaDecision: SoaGateDecision = { useGrid: false, method: "llm_fallback", reasons: ["grid not attempted"] };
+    let soaExpectedFromSignal = 0;
     try {
       const gridResult = parseSoaGrid(parseResult.tableHtml);
       const signal = deriveVisitCountSignal(parseResult.chunks);
+      soaExpectedFromSignal = signal.estimatedTreatmentVisits;
       soaDecision = evaluateSoaGate(gridResult, signal.estimatedTreatmentVisits);
       if (soaDecision.useGrid && extractedFields) {
         const { schedule, citations } = gridToScheduleOfEvents(gridResult.visits);
@@ -2424,8 +2449,12 @@ export async function processIngestCompletion(
             // thin-passthrough Sprint 1 representation. See
             // parser-integration.md §6 for the failure-mode contract.
             // -----------------------------------------------------------
+            let vewResult: { unmatchedWithProcedures: string[]; keyCollisions: string[] } = {
+              unmatchedWithProcedures: [],
+              keyCollisions: [],
+            };
             try {
-              await persistVisitExecutionWorkspaces(supabase, {
+              vewResult = await persistVisitExecutionWorkspaces(supabase, {
                 protocolId: resolvedProtocolId,
                 schedule: expandedSchedule as ScheduleEntry[],
                 openaiKey,
@@ -2454,6 +2483,14 @@ export async function processIngestCompletion(
                 reason: f.detection_reason,
                 source: "aggregate" as const,
               }));
+              // Workstream C: a visit that carried procedures but matched no
+              // template had its procedures dropped — surface it in the banner,
+              // not just the logs.
+              const unmatchedGaps = vewResult.unmatchedWithProcedures.map((label) => ({
+                label,
+                reason: "had procedures but matched no visit template",
+                source: "unmatched" as const,
+              }));
               const llmGaps = await detectMissingVisits({
                 visitNames: templateNames,
                 scheduleText: dedupedRows
@@ -2468,7 +2505,7 @@ export async function processIngestCompletion(
               // deterministic reason is kept over the LLM's prose. Aggregate flags
               // (label = full gap_text) are distinct and unaffected.
               const seenLabels = new Set<string>();
-              const missing = [...sequenceGaps, ...aggGaps, ...llmGaps].filter((g) => {
+              const missing = [...sequenceGaps, ...aggGaps, ...unmatchedGaps, ...llmGaps].filter((g) => {
                 const key = (g.label ?? "").trim().toLowerCase();
                 if (!key) return true;
                 if (seenLabels.has(key)) return false;
@@ -2482,6 +2519,12 @@ export async function processIngestCompletion(
                   expected_count: templateNames.length + missing.length,
                   found_count: templateNames.length,
                   missing,
+                  // Workstream B: how the schedule was extracted (grid =
+                  // deterministic; llm_fallback = flagged) + the independent
+                  // count signal. CoverageBanner surfaces both so a fallback or
+                  // a low-confidence parse is visible, never silent.
+                  extraction_method: soaDecision.method,
+                  expected_from_signal: soaExpectedFromSignal,
                 },
                 { onConflict: "protocol_id,source_document_id" },
               );
@@ -2492,6 +2535,7 @@ export async function processIngestCompletion(
                   protocol_id: resolvedProtocolId,
                   found: templateNames.length,
                   missing: missing.length,
+                  extraction_method: soaDecision.method,
                 });
               }
             } catch (covErr) {
