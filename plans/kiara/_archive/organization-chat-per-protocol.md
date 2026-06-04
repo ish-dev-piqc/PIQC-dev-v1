@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: organization-chat-per-protocol
-status: active
+status: merged
+merged: 2026-06-04
 started: 2026-06-03
-target_pr:
+target_pr: #263
 ---
 
 # PR 4b: Per-protocol chat channels
