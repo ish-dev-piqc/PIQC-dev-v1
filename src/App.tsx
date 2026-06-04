@@ -20,6 +20,7 @@ import { ProtocolProvider } from './context/ProtocolContext';
 import { OrgProvider } from './context/OrgContext';
 import { OrgChatProvider } from './context/OrgChatContext';
 import { ProtocolChatProvider } from './context/ProtocolChatContext';
+import { UnreadMentionsProvider } from './context/UnreadMentionsContext';
 import { SiteDataProvider } from './context/SiteDataContext';
 import { AuditProvider } from './context/AuditContext';
 import { AuditDataProvider } from './context/AuditDataContext';
@@ -329,15 +330,17 @@ export default function App() {
               <OrgProvider>
                 <OrgChatProvider>
                   <ProtocolChatProvider>
-                    <SiteDataProvider>
-                      <AuditProvider>
-                        <AuditDataProvider>
-                          <HeatmapProvider>
-                            <AppContent />
-                          </HeatmapProvider>
-                        </AuditDataProvider>
-                      </AuditProvider>
-                    </SiteDataProvider>
+                    <UnreadMentionsProvider>
+                      <SiteDataProvider>
+                        <AuditProvider>
+                          <AuditDataProvider>
+                            <HeatmapProvider>
+                              <AppContent />
+                            </HeatmapProvider>
+                          </AuditDataProvider>
+                        </AuditProvider>
+                      </SiteDataProvider>
+                    </UnreadMentionsProvider>
                   </ProtocolChatProvider>
                 </OrgChatProvider>
               </OrgProvider>
