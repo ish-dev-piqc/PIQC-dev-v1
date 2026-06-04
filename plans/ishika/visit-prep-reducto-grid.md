@@ -1,9 +1,9 @@
 ---
 owner: ish-dev-piqc
 feature: Visit Prep — deterministic SoA grid extraction + upload reliability
-status: active
+status: in-review
 started: 2026-06-04
-target_pr:
+target_pr: feature/ish-reducto-update
 approved_by: rv61 (supabase/ — ingest pipeline, edge fns, migration)
 ---
 
