@@ -6,6 +6,8 @@ import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
+  ClipboardCheck,
+  MoreHorizontal,
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useAuth } from '../../../context/AuthContext';
@@ -13,6 +15,7 @@ import { useOrg } from '../../../context/OrgContext';
 import { useOrgChat } from '../../../context/OrgChatContext';
 import { useProtocolChat } from '../../../context/ProtocolChatContext';
 import {
+  listChannelDecisions,
   listMyChatProtocols,
   listOrgMembersWithProfile,
 } from '../../../lib/orgs/orgsApi';
@@ -22,7 +25,15 @@ import {
 // organization/ isn't in the mode-isolation scanned domains.
 import { getProtocolColors } from '../../../lib/site/protocolColors';
 import { useChatUnread, type ChatChannelKey } from '../../../hooks/useChatUnread';
+import {
+  adaptChatDecision,
+  type ChatDecisionRow,
+} from '../../../lib/orgs/chatDecisionsAdapter';
+import { supabase } from '../../../lib/supabase';
+import DecisionPromoteModal from './chat/DecisionPromoteModal';
+import DecisionList from './chat/DecisionList';
 import type {
+  ChatDecision,
   ChatProtocolSummary,
   OrgMemberWithProfile,
 } from '../../../types/orgs';
@@ -200,12 +211,104 @@ export default function ChatTab() {
     [chatProtocols],
   );
 
-  const { counts: unreadCounts, markAsRead, unreadCap } = useChatUnread({
+  const {
+    counts: unreadCounts,
+    mentionCounts,
+    markAsRead,
+    unreadCap,
+  } = useChatUnread({
     orgId: activeOrg?.id ?? null,
     protocolIds,
     activeChannelKey,
     currentUserId,
   });
+
+  // --- Decisions for the active channel -------------------------------------
+  const [decisions, setDecisions] = useState<ChatDecision[]>([]);
+  const [decisionsLoading, setDecisionsLoading] = useState(false);
+  const [decisionsPanelOpen, setDecisionsPanelOpen] = useState(false);
+  const [promoteSource, setPromoteSource] = useState<
+    { id: string; body: string; authorUserId: string | null; createdAt: string } | null
+  >(null);
+  const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null);
+
+  const decisionsBySourceId = useMemo(() => {
+    const m = new Map<string, ChatDecision>();
+    for (const d of decisions) {
+      const src = d.source_org_message_id ?? d.source_protocol_message_id;
+      if (src) m.set(src, d);
+    }
+    return m;
+  }, [decisions]);
+
+  const isOrgAdmin = activeOrg?.my_role === 'admin';
+  const channelKind: 'org' | 'protocol' =
+    activeChannel.kind === 'org' ? 'org' : 'protocol';
+  const channelRefId: string | null =
+    activeChannel.kind === 'org'
+      ? activeOrg?.id ?? null
+      : activeChannel.kind === 'protocol'
+        ? activeChannel.id
+        : null;
+
+  useEffect(() => {
+    if (!channelRefId) return;
+    let cancelled = false;
+    setDecisionsLoading(true);
+    listChannelDecisions(channelKind, channelRefId).then((res) => {
+      if (cancelled) return;
+      setDecisionsLoading(false);
+      if (res.ok) setDecisions(res.data);
+    });
+    const filterField = channelKind === 'org' ? 'org_id' : 'protocol_id';
+    const ch = supabase
+      .channel(`chat_decisions:${channelKind}:${channelRefId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_decisions',
+          filter: `${filterField}=eq.${channelRefId}`,
+        },
+        (payload) => {
+          const d = adaptChatDecision(payload.new as ChatDecisionRow);
+          setDecisions((prev) => {
+            if (prev.some((x) => x.id === d.id)) return prev;
+            return [d, ...prev];
+          });
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'chat_decisions',
+          filter: `${filterField}=eq.${channelRefId}`,
+        },
+        (payload) => {
+          const id = (payload.old as { id?: string }).id;
+          if (!id) return;
+          setDecisions((prev) => prev.filter((x) => x.id !== id));
+        },
+      )
+      .subscribe();
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(ch);
+    };
+  }, [channelKind, channelRefId]);
+
+  function jumpToSourceMessage(sourceMessageId: string) {
+    setDecisionsPanelOpen(false);
+    setHighlightMessageId(sourceMessageId);
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`chat-msg-${sourceMessageId}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    setTimeout(() => setHighlightMessageId(null), 2000);
+  }
 
   // Persist channel + sidebar state.
   useEffect(() => {
@@ -607,6 +710,32 @@ export default function ChatTab() {
     );
   }
 
+  function MentionBadge({ count, wide }: { count: number; wide: boolean }) {
+    if (count <= 0) return null;
+    if (wide) {
+      return (
+        <span
+          className={`flex-shrink-0 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold rounded-full ${
+            isLight ? 'bg-amber-500 text-white' : 'bg-amber-400 text-[#0F172A]'
+          }`}
+          aria-label={`${count} unread mentions`}
+          title="You were @mentioned"
+        >
+          @
+        </span>
+      );
+    }
+    return (
+      <span
+        className={`absolute bottom-0 right-0 w-2 h-2 rounded-full ${
+          isLight ? 'bg-amber-500' : 'bg-amber-400'
+        }`}
+        aria-label={`${count} unread mentions`}
+        title="You were @mentioned"
+      />
+    );
+  }
+
   function ChannelRow({
     active,
     onClick,
@@ -614,6 +743,7 @@ export default function ChatTab() {
     label,
     title,
     unread,
+    mentions,
   }: {
     active: boolean;
     onClick: () => void;
@@ -621,6 +751,7 @@ export default function ChatTab() {
     label: string;
     title?: string;
     unread: number;
+    mentions: number;
   }) {
     return (
       <button
@@ -634,9 +765,15 @@ export default function ChatTab() {
         <span className="flex-shrink-0 flex items-center justify-center relative">
           {icon}
           {!sidebarWide && <UnreadBadge count={unread} wide={false} />}
+          {!sidebarWide && <MentionBadge count={mentions} wide={false} />}
         </span>
         {sidebarWide && <span className="truncate">{label}</span>}
-        {sidebarWide && <UnreadBadge count={unread} wide={true} />}
+        {sidebarWide && (
+          <span className="ml-auto flex items-center gap-1 flex-shrink-0">
+            <MentionBadge count={mentions} wide={true} />
+            <UnreadBadge count={unread} wide={true} />
+          </span>
+        )}
       </button>
     );
   }
@@ -701,6 +838,7 @@ export default function ChatTab() {
             label="general"
             title="Org-wide channel"
             unread={unreadCounts.get('org') ?? 0}
+            mentions={mentionCounts.get('org') ?? 0}
           />
 
           {chatProtocols.length > 0 && (
@@ -722,6 +860,7 @@ export default function ChatTab() {
               label={p.code}
               title={p.name || p.code}
               unread={unreadCounts.get(`protocol:${p.id}`) ?? 0}
+              mentions={mentionCounts.get(`protocol:${p.id}`) ?? 0}
             />
           ))}
         </nav>
@@ -740,8 +879,28 @@ export default function ChatTab() {
             {activeChannel.kind === 'org' ? '#general' : `#${channelLabel}`}
           </h3>
           {channelSubLabel && (
-            <p className={`${subColor} text-[11px] truncate`}>{channelSubLabel}</p>
+            <p className={`${subColor} text-[11px] truncate flex-1 min-w-0`}>
+              {channelSubLabel}
+            </p>
           )}
+          <button
+            type="button"
+            onClick={() => setDecisionsPanelOpen(true)}
+            disabled={decisionsLoading && decisions.length === 0}
+            className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded ${
+              isLight
+                ? 'text-amber-700 hover:bg-amber-100'
+                : 'text-amber-300 hover:bg-amber-500/[0.1]'
+            }`}
+            aria-label="View decisions for this channel"
+            title="Decisions"
+          >
+            <ClipboardCheck size={12} />
+            <span className="hidden sm:inline">
+              {decisions.length} decision{decisions.length === 1 ? '' : 's'}
+            </span>
+            <span className="sm:hidden">{decisions.length}</span>
+          </button>
         </header>
 
         {active.error && (
@@ -770,10 +929,19 @@ export default function ChatTab() {
             active.messages.map((m) => {
               const isSelf = m.author_user_id === currentUserId;
               const author = authorOf(m.author_user_id);
+              const decisionForMessage = decisionsBySourceId.get(m.id);
+              const isHighlighted = highlightMessageId === m.id;
               return (
                 <div
                   key={m.id}
-                  className={`flex flex-col ${isSelf ? 'items-end' : 'items-start'}`}
+                  id={`chat-msg-${m.id}`}
+                  className={`flex flex-col ${isSelf ? 'items-end' : 'items-start'} ${
+                    isHighlighted
+                      ? isLight
+                        ? 'bg-amber-50 rounded-lg -mx-2 px-2 py-1 transition-colors'
+                        : 'bg-amber-500/[0.08] rounded-lg -mx-2 px-2 py-1 transition-colors'
+                      : ''
+                  }`}
                 >
                   {!isSelf && (
                     <p className={`${mutedColor} text-[10px] mb-0.5 ml-1`}>
@@ -781,12 +949,44 @@ export default function ChatTab() {
                       {author.isAdmin && ' · admin'}
                     </p>
                   )}
-                  <div
-                    className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words ${
-                      isSelf ? selfBubble : otherBubble
-                    }`}
-                  >
-                    {renderMessageBody(m.body, isSelf)}
+                  {decisionForMessage && (
+                    <button
+                      type="button"
+                      onClick={() => setDecisionsPanelOpen(true)}
+                      className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider rounded px-1.5 py-0.5 mb-1 ${
+                        isLight
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-amber-500/20 text-amber-300'
+                      }`}
+                      title={`Decision: ${decisionForMessage.title}`}
+                    >
+                      <ClipboardCheck size={10} />
+                      Decision
+                      <span className="truncate max-w-[160px] normal-case font-medium tracking-normal">
+                        — {decisionForMessage.title}
+                      </span>
+                    </button>
+                  )}
+                  <div className="group relative max-w-[80%]">
+                    <div
+                      className={`rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words ${
+                        isSelf ? selfBubble : otherBubble
+                      }`}
+                    >
+                      {renderMessageBody(m.body, isSelf)}
+                    </div>
+                    <MessageActionsMenu
+                      isSelf={isSelf}
+                      isLight={isLight}
+                      onPromote={() =>
+                        setPromoteSource({
+                          id: m.id,
+                          body: m.body,
+                          authorUserId: m.author_user_id,
+                          createdAt: m.created_at,
+                        })
+                      }
+                    />
                   </div>
                   <p
                     className={`${mutedColor} text-[10px] mt-0.5 ${
@@ -898,6 +1098,105 @@ export default function ChatTab() {
           </p>
         )}
       </div>
+
+      {/* Decision promotion modal — only when promoting a specific message. */}
+      {promoteSource && channelRefId && (
+        <DecisionPromoteModal
+          kind={channelKind}
+          channelId={channelRefId}
+          sourceMessage={promoteSource}
+          members={Array.from(profiles.values())}
+          onClose={() => setPromoteSource(null)}
+          onCreated={(d) =>
+            setDecisions((prev) => {
+              if (prev.some((x) => x.id === d.id)) return prev;
+              return [d, ...prev];
+            })
+          }
+        />
+      )}
+
+      {/* Decisions panel — slide-in from the right. */}
+      {decisionsPanelOpen && (
+        <DecisionList
+          decisions={decisions}
+          isAdmin={isOrgAdmin}
+          members={profiles}
+          onClose={() => setDecisionsPanelOpen(false)}
+          onJumpToSource={jumpToSourceMessage}
+          onDeleted={(id) => setDecisions((prev) => prev.filter((d) => d.id !== id))}
+        />
+      )}
     </section>
+  );
+}
+
+// ============================================================================
+// MessageActionsMenu — small ⋯ button that appears on hover over a bubble.
+// Click opens a menu with "Promote to decision". Positioned outside the
+// bubble (left for self, right for others) so it doesn't overlap text.
+// ============================================================================
+
+function MessageActionsMenu({
+  isSelf,
+  isLight,
+  onPromote,
+}: {
+  isSelf: boolean;
+  isLight: boolean;
+  onPromote: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const triggerPosClass = isSelf
+    ? 'left-0 -translate-x-full pr-1'
+    : 'right-0 translate-x-full pl-1';
+  const menuPosClass = isSelf ? 'right-full mr-1' : 'left-full ml-1';
+  return (
+    <div
+      className={`absolute top-1 ${triggerPosClass} opacity-0 group-hover:opacity-100 focus-within:opacity-100`}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`p-1 rounded ${
+          isLight
+            ? 'text-[#334155]/60 hover:bg-[#0F172A]/[0.06]'
+            : 'text-[#CBD5E1]/60 hover:bg-white/[0.06]'
+        }`}
+        aria-label="Message actions"
+      >
+        <MoreHorizontal size={13} />
+      </button>
+      {open && (
+        <>
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+          />
+          <div
+            className={`absolute top-0 z-20 min-w-[180px] rounded-md border shadow-lg py-1 ${menuPosClass} ${
+              isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/10'
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onPromote();
+              }}
+              className={`w-full inline-flex items-center gap-2 text-xs px-3 py-1.5 ${
+                isLight
+                  ? 'text-[#0F172A] hover:bg-[#0F172A]/[0.05]'
+                  : 'text-[#CBD5E1] hover:bg-white/[0.05]'
+              }`}
+            >
+              <ClipboardCheck size={11} />
+              Promote to decision
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }

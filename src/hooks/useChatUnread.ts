@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import {
+  listMyUnreadMentions,
+  markChatMentionsRead,
+} from '../lib/orgs/orgsApi';
+import { adaptChatMention, type ChatMentionRow } from '../lib/orgs/chatMentionsAdapter';
 
 // =============================================================================
 // useChatUnread — per-channel unread counts for the chat sidebar.
@@ -77,7 +82,10 @@ interface UseChatUnreadParams {
 
 export interface UseChatUnreadResult {
   counts: Map<ChatChannelKey, number>;
-  /** Reset count to 0 and stamp `last_viewed_at = now()` for this channel. */
+  /** Unread @mention counts per channel — separate badge from `counts`. */
+  mentionCounts: Map<ChatChannelKey, number>;
+  /** Reset count to 0 and stamp `last_viewed_at = now()` for this channel.
+   *  Also marks `chat_mentions` for the current user in this channel as read. */
   markAsRead: (key: ChatChannelKey) => void;
   /** Numeric cap used for display ("99+" beyond this). */
   unreadCap: number;
@@ -90,6 +98,9 @@ export function useChatUnread({
   currentUserId,
 }: UseChatUnreadParams): UseChatUnreadResult {
   const [counts, setCounts] = useState<Map<ChatChannelKey, number>>(new Map());
+  const [mentionCounts, setMentionCounts] = useState<Map<ChatChannelKey, number>>(
+    new Map(),
+  );
 
   // Stable refs so the realtime callbacks always see the latest values
   // without re-subscribing on every render.
@@ -97,6 +108,8 @@ export function useChatUnread({
   activeKeyRef.current = activeChannelKey;
   const currentUserIdRef = useRef<string | null>(currentUserId);
   currentUserIdRef.current = currentUserId;
+  const orgIdRef = useRef<string | null>(orgId);
+  orgIdRef.current = orgId;
 
   const markAsRead = useCallback((key: ChatChannelKey) => {
     setCounts((prev) => {
@@ -106,6 +119,19 @@ export function useChatUnread({
       return next;
     });
     writeLastViewed(key, new Date().toISOString());
+
+    setMentionCounts((prev) => {
+      if ((prev.get(key) ?? 0) === 0) return prev;
+      const next = new Map(prev);
+      next.set(key, 0);
+      return next;
+    });
+    if (key === 'org' && orgIdRef.current) {
+      void markChatMentionsRead('org', orgIdRef.current);
+    } else if (key.startsWith('protocol:')) {
+      const protocolId = key.slice('protocol:'.length);
+      void markChatMentionsRead('protocol', protocolId);
+    }
   }, []);
 
   // Whenever the active channel changes, treat the new active as read.
@@ -228,5 +254,112 @@ export function useChatUnread({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId, channelKeys.join('|')]);
 
-  return { counts, markAsRead, unreadCap: UNREAD_CAP };
+  // -------------------------------------------------------------------------
+  // Mention counts — separate subscription on chat_mentions. The trigger
+  // that populates this table denormalizes org_id / protocol_id, so we can
+  // derive the channel key without a join.
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    if (!orgId || !currentUserId) {
+      setMentionCounts(new Map());
+      return;
+    }
+    let cancelled = false;
+
+    async function fetchInitial() {
+      const res = await listMyUnreadMentions();
+      if (cancelled) return;
+      if (!res.ok) return;
+      const next = new Map<ChatChannelKey, number>();
+      for (const m of res.data) {
+        if (m.org_id) {
+          if (m.org_id !== orgId) continue;
+          next.set('org', (next.get('org') ?? 0) + 1);
+        } else if (m.protocol_id) {
+          const key: ChatChannelKey = `protocol:${m.protocol_id}`;
+          next.set(key, (next.get(key) ?? 0) + 1);
+        }
+      }
+      if (next.has(activeKeyRef.current)) {
+        next.set(activeKeyRef.current, 0);
+      }
+      setMentionCounts(next);
+    }
+    fetchInitial();
+
+    const channel = supabase
+      .channel(`chat_mentions:user:${currentUserId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_mentions',
+          filter: `mentioned_user_id=eq.${currentUserId}`,
+        },
+        (payload) => {
+          const row = payload.new as ChatMentionRow;
+          const mention = adaptChatMention(row);
+          let key: ChatChannelKey | null = null;
+          if (mention.org_id) {
+            if (mention.org_id !== orgIdRef.current) return;
+            key = 'org';
+          } else if (mention.protocol_id) {
+            key = `protocol:${mention.protocol_id}`;
+          }
+          if (!key) return;
+          if (key === activeKeyRef.current) {
+            if (key === 'org' && orgIdRef.current) {
+              void markChatMentionsRead('org', orgIdRef.current);
+            } else if (key.startsWith('protocol:')) {
+              void markChatMentionsRead('protocol', key.slice('protocol:'.length));
+            }
+            return;
+          }
+          setMentionCounts((prev) => {
+            const next = new Map(prev);
+            next.set(key as ChatChannelKey, (next.get(key as ChatChannelKey) ?? 0) + 1);
+            return next;
+          });
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'chat_mentions',
+          filter: `mentioned_user_id=eq.${currentUserId}`,
+        },
+        (payload) => {
+          const oldRow = payload.old as Partial<ChatMentionRow> | null;
+          const newRow = payload.new as ChatMentionRow;
+          if (oldRow?.read_at !== null && oldRow?.read_at !== undefined) return;
+          if (newRow.read_at === null) return;
+          let key: ChatChannelKey | null = null;
+          if (newRow.org_id) {
+            if (newRow.org_id !== orgIdRef.current) return;
+            key = 'org';
+          } else if (newRow.protocol_id) {
+            key = `protocol:${newRow.protocol_id}`;
+          }
+          if (!key) return;
+          setMentionCounts((prev) => {
+            const cur = prev.get(key as ChatChannelKey) ?? 0;
+            if (cur <= 0) return prev;
+            const next = new Map(prev);
+            next.set(key as ChatChannelKey, Math.max(0, cur - 1));
+            return next;
+          });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, [orgId, currentUserId]);
+
+  return { counts, mentionCounts, markAsRead, unreadCap: UNREAD_CAP };
 }
