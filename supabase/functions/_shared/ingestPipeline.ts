@@ -25,7 +25,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { mapReductoExtractToSotr } from "./sourceEvidenceAdapter.ts";
 import { dedupeVisitTemplateRowsByQuality, pickTemplateForVisit, staleTemplateIds, visitMatchKey } from "./visitTemplateDedup.ts";
 import { canonicalVisitName, normalizeVisitName } from "./visitNameNormalize.ts";
-import { evaluateSoaGate, gridToScheduleOfEvents, parseSoaGrid } from "./soaGridParser.ts";
+import { enrichScheduleFromLlm, evaluateSoaGate, gridToScheduleOfEvents, parseSoaGrid } from "./soaGridParser.ts";
 import type { SoaGateDecision } from "./soaGridParser.ts";
 import { deriveVisitCountSignal } from "./soaColumnCount.ts";
 import {
@@ -2056,8 +2056,15 @@ export async function processIngestCompletion(
       soaExpectedFromSignal = signal.estimatedTreatmentVisits;
       soaDecision = evaluateSoaGate(gridResult, signal.estimatedTreatmentVisits);
       if (soaDecision.useGrid && extractedFields) {
+        // Capture the LLM extraction BEFORE overriding so we can recover the
+        // per-procedure metadata the grid can't see (role_hint / conditions /
+        // timing / source_fields) by label-match — the visit×procedure structure
+        // still comes deterministically from the grid.
+        const llmSchedule = extractedFields.schedule_of_events;
         const { schedule, citations } = gridToScheduleOfEvents(gridResult.visits);
+        const enrichedCount = enrichScheduleFromLlm(schedule, llmSchedule);
         extractedFields.schedule_of_events = schedule;
+        console.log("[ingest] soa_grid_enriched", { document_id: docId, procedures_enriched: enrichedCount });
         const citMap = (extractedFields._reducto_citations && typeof extractedFields._reducto_citations === "object")
           ? extractedFields._reducto_citations as Record<string, unknown>
           : {};
@@ -2395,6 +2402,11 @@ export async function processIngestCompletion(
             procedures: Array.isArray(s.procedures)
               ? (s.procedures as unknown[]).filter((p): p is string => typeof p === "string")
               : [],
+            // Protocol visit sequence from the SoA grid (null on the LLM path) —
+            // the workspace RPC orders by this so visits render in protocol order.
+            column_order: typeof (s as { column_order?: unknown }).column_order === "number"
+              ? Math.trunc((s as { column_order: number }).column_order)
+              : null,
             cross_references: sanitizeCrossRefs(s.cross_references),
             source_document_id: docId,
           }));

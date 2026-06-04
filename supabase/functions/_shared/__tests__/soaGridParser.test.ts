@@ -4,6 +4,7 @@ import {
   parseVisitHeader,
   classifyMark,
   gridToScheduleOfEvents,
+  enrichScheduleFromLlm,
   evaluateSoaGate,
   type TableBlock,
 } from "../soaGridParser.ts";
@@ -140,24 +141,72 @@ describe("gridToScheduleOfEvents (golden file)", () => {
     expect(schedule).toHaveLength(visits.length);
     const screening = schedule.find((s) => s.visit_name === "Screening")!;
     expect(screening.procedures).toContain("Informed Consent");
+    // marked procedures emit classification=null so buildPersistPayloadForVisit's
+    // assignClassification heuristic can derive required/safety_critical/endpoint
+    // from the label (emitting "required" here would short-circuit that).
     expect(screening.procedures_structured[0]).toMatchObject({
       label: "Informed Consent",
-      classification: "required",
+      classification: null,
       protocol_section: "Schedule of Assessments",
     });
   });
 
-  it("marks conditional (X) procedures classification=conditional", () => {
-    const cond = schedule.flatMap((s) => s.procedures_structured).filter((p) => p.classification === "conditional");
+  it("marks conditional (X) procedures classification=conditional, everything else null", () => {
+    const all = schedule.flatMap((s) => s.procedures_structured);
+    const cond = all.filter((p) => p.classification === "conditional");
     expect(cond.length).toBeGreaterThan(0);
     expect(cond.every((p) => /MRI of CNS/i.test(p.label))).toBe(true);
+    // no marked procedure is hardcoded to "required"
+    expect(all.every((p) => p.classification === "conditional" || p.classification === null)).toBe(true);
   });
 
-  it("emits a SoA-page citation aligned to each visit", () => {
+  it("orders visits by protocol column sequence — EOT after the treatment visits, not at day 14", () => {
+    const order = schedule.map((s) => s.visit_name);
+    const idx = (n: string) => order.indexOf(n);
+    // column_order is a strict 0..N-1 protocol sequence
+    expect(schedule.map((s) => s.column_order)).toEqual(schedule.map((_, i) => i).sort((a, b) => a - b));
+    expect(idx("Screening")).toBeLessThan(idx("Treatment Visit 1"));
+    expect(idx("Treatment Visit 12")).toBeLessThan(idx("EOT Visit")); // EOT after all TVs (study_day=14 would mis-sort it)
+    expect(idx("Treatment Visit 1")).toBeLessThan(idx("Treatment Visit 12"));
+  });
+
+  it("emits a high-confidence SoA-page citation for every visit", () => {
     expect(citations).toHaveLength(schedule.length);
     const idx = schedule.findIndex((s) => s.visit_name === "Screening");
-    expect(citations[idx]?.section).toBe("Schedule of Assessments");
-    expect(citations[idx]?.pages.length).toBeGreaterThan(0);
+    expect(citations[idx].section).toBe("Schedule of Assessments");
+    expect(citations[idx].pages.length).toBeGreaterThan(0);
+    expect(citations.every((c) => c.confidence === "high")).toBe(true); // deterministic parse
+  });
+});
+
+describe("enrichScheduleFromLlm", () => {
+  it("recovers role_hint / conditions / timing the grid can't see, by label match", () => {
+    const { schedule } = gridToScheduleOfEvents(parseSoaGrid(TABLES).visits);
+    const llm = [
+      {
+        procedures_structured: [
+          { label: "Hematology", role_hint: "Lab", conditions: [{ condition_text: "x", consequence_text: "y" }] },
+          { label: "ECG", role_hint: "Nurse", timing: { label: "pre-dose" } },
+        ],
+      },
+    ];
+    const n = enrichScheduleFromLlm(schedule, llm);
+    expect(n).toBeGreaterThan(0);
+    const hema = schedule.flatMap((s) => s.procedures_structured).find((p) => p.label === "Hematology");
+    expect(hema?.role_hint).toBe("Lab");
+    expect((hema?.conditions as unknown[]).length).toBe(1);
+    const ecg = schedule.flatMap((s) => s.procedures_structured).find((p) => p.label === "ECG");
+    expect(ecg?.role_hint).toBe("Nurse");
+    expect(ecg?.timing).toMatchObject({ label: "pre-dose" });
+  });
+
+  it("does not overwrite a value the grid already set, and is a no-op with no LLM data", () => {
+    const { schedule } = gridToScheduleOfEvents(parseSoaGrid(TABLES).visits);
+    schedule[0].procedures_structured[0].role_hint = "Coordinator";
+    enrichScheduleFromLlm(schedule, [{ procedures_structured: [{ label: schedule[0].procedures_structured[0].label, role_hint: "Lab" }] }]);
+    expect(schedule[0].procedures_structured[0].role_hint).toBe("Coordinator"); // not overwritten
+    expect(enrichScheduleFromLlm(schedule, [])).toBe(0);
+    expect(enrichScheduleFromLlm(schedule, null)).toBe(0);
   });
 });
 

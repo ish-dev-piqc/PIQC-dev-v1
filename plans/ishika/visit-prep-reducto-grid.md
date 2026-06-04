@@ -38,6 +38,9 @@ visit with verbatim per-visit procedures, with **zero change to the Ask-tab chun
 - NEW migration `20260703000000_visit_coverage_extraction_method.sql` — add `extraction_method` +
   `expected_from_signal` to `protocol_visit_coverage`; `CREATE OR REPLACE visit_execution_get_coverage`.
 - NEW migration `20260703000001_ingest_recover_cron.sql` — self-guarding pg_cron recover schedule.
+- NEW migration `20260703000002_visit_execution_get_workspace_v6_column_order.sql` — add
+  `protocol_visit_templates.column_order` + `CREATE OR REPLACE` the workspace RPC to order visits by
+  protocol column sequence (post-verification fix: EOT/relative-day visits sorted wrong by study_day).
 - `src/types/visit-execution/index.ts`, `src/lib/visit-execution/visitExecutionApi.ts`,
   `src/components/dashboard/visit-execution/CoverageBanner.tsx` — type mirror + banner copy.
 - `src/lib/visit-execution/visitExecutionAdapter.ts`,
