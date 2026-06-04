@@ -51,9 +51,38 @@ import type {
 
 const MAX_MESSAGE_LENGTH = 10000;
 const SCROLL_BOTTOM_THRESHOLD_PX = 80;
+const MENTION_PICKER_MAX_RESULTS = 8;
 
 const CHANNEL_STORAGE_KEY = 'piq-chat-channel-v1';
 const SIDEBAR_WIDE_STORAGE_KEY = 'piq-chat-sidebar-wide-v1';
+
+// Matches a `<@<uuid>>` mention token embedded in a message body.
+const MENTION_TOKEN_REGEX =
+  /<@([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})>/g;
+
+/**
+ * Look backwards from cursorPos for an `@` that starts a mention. Returns
+ * the position of the `@` and the filter typed since (no whitespace in v1).
+ * Returns null if the cursor isn't inside a mention-eligible word.
+ */
+function detectMentionAtCursor(
+  text: string,
+  cursorPos: number,
+): { start: number; filter: string } | null {
+  for (let i = cursorPos - 1; i >= 0; i--) {
+    const ch = text[i];
+    if (ch === '@') {
+      // @ must be at start of text or preceded by whitespace
+      if (i === 0 || /\s/.test(text[i - 1])) {
+        return { start: i, filter: text.slice(i + 1, cursorPos) };
+      }
+      return null;
+    }
+    // Any whitespace before @ means we're past the mention
+    if (/\s/.test(ch)) return null;
+  }
+  return null;
+}
 
 type ActiveChannel =
   | { kind: 'org' }
@@ -232,6 +261,54 @@ export default function ChatTab() {
     };
   }, [profiles]);
 
+  /**
+   * Parse a message body and return React nodes — plain text spans with
+   * `<@uuid>` tokens replaced by MentionChip components. Reset the regex's
+   * lastIndex per call since the same regex instance is reused.
+   */
+  function renderMessageBody(body: string, isSelfMessage: boolean): React.ReactNode[] {
+    const nodes: React.ReactNode[] = [];
+    MENTION_TOKEN_REGEX.lastIndex = 0;
+    let cursor = 0;
+    let match: RegExpExecArray | null;
+    let key = 0;
+    while ((match = MENTION_TOKEN_REGEX.exec(body)) !== null) {
+      if (match.index > cursor) {
+        nodes.push(body.slice(cursor, match.index));
+      }
+      const mentionedUserId = match[1];
+      const member = profiles.get(mentionedUserId);
+      const displayName = member?.name ?? 'unknown';
+      const isSelfMention = mentionedUserId === currentUserId;
+      // Self-mention gets a stronger background so the user notices being
+      // pinged. Otherwise the chip uses a subtle tint that reads on both
+      // self-bubble (brand) and other-bubble (muted) backgrounds.
+      const chipClass = isSelfMention
+        ? isLight
+          ? 'bg-amber-200 text-amber-900'
+          : 'bg-amber-500/30 text-amber-200'
+        : isSelfMessage
+          ? 'bg-white/20 text-inherit'
+          : isLight
+            ? 'bg-brand-600/15 text-brand-600'
+            : 'bg-brand-300/15 text-brand-300';
+      nodes.push(
+        <span
+          key={`m-${key++}`}
+          className={`inline-block rounded px-1 font-medium ${chipClass}`}
+          title={member?.name ?? 'Unknown user'}
+        >
+          @{member ? displayName.split(/\s+/)[0] : 'unknown'}
+        </span>,
+      );
+      cursor = match.index + match[0].length;
+    }
+    if (cursor < body.length) {
+      nodes.push(body.slice(cursor));
+    }
+    return nodes;
+  }
+
   // --- Composer + scroll -----------------------------------------------------
   const [composer, setComposer] = useState('');
   const [sending, setSending] = useState(false);
@@ -239,6 +316,105 @@ export default function ChatTab() {
   const listRef = useRef<HTMLDivElement>(null);
   const wasAtBottomRef = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // --- Mention picker --------------------------------------------------------
+  // null = picker closed. When open, tokenStart is the index of the `@` in
+  // composer text, filter is the chars typed after it, and selectedIdx is
+  // the highlighted row in the popover.
+  const [mentionPicker, setMentionPicker] = useState<
+    | { tokenStart: number; filter: string; selectedIdx: number }
+    | null
+  >(null);
+
+  // Org-member list used by the picker. Sorted by name for predictable order.
+  const memberList = useMemo(
+    () =>
+      Array.from(profiles.values()).sort((a, b) =>
+        a.name.localeCompare(b.name),
+      ),
+    [profiles],
+  );
+
+  const filteredMentionResults = useMemo(() => {
+    if (!mentionPicker) return [];
+    const q = mentionPicker.filter.toLowerCase();
+    if (!q) return memberList.slice(0, MENTION_PICKER_MAX_RESULTS);
+    // Starts-with matches first, then contains. Stable sort within each.
+    const startsWith: typeof memberList = [];
+    const contains: typeof memberList = [];
+    for (const m of memberList) {
+      const name = m.name.toLowerCase();
+      if (name.startsWith(q)) startsWith.push(m);
+      else if (name.includes(q)) contains.push(m);
+    }
+    return [...startsWith, ...contains].slice(0, MENTION_PICKER_MAX_RESULTS);
+  }, [memberList, mentionPicker]);
+
+  // Keep selectedIdx clamped to results length.
+  useEffect(() => {
+    if (!mentionPicker) return;
+    if (mentionPicker.selectedIdx >= filteredMentionResults.length) {
+      setMentionPicker({
+        ...mentionPicker,
+        selectedIdx: Math.max(0, filteredMentionResults.length - 1),
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredMentionResults.length]);
+
+  function refreshMentionPickerFromCaret(
+    nextValue: string,
+    caretPos: number,
+  ) {
+    const detected = detectMentionAtCursor(nextValue, caretPos);
+    if (!detected) {
+      if (mentionPicker) setMentionPicker(null);
+      return;
+    }
+    setMentionPicker({
+      tokenStart: detected.start,
+      filter: detected.filter,
+      selectedIdx: 0,
+    });
+  }
+
+  function handleComposerChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const value = e.target.value;
+    const caret = e.target.selectionStart ?? value.length;
+    setComposer(value);
+    refreshMentionPickerFromCaret(value, caret);
+  }
+
+  function handleComposerSelect(e: React.SyntheticEvent<HTMLTextAreaElement>) {
+    const el = e.currentTarget;
+    refreshMentionPickerFromCaret(el.value, el.selectionStart ?? el.value.length);
+  }
+
+  function pickMention(userId: string) {
+    if (!mentionPicker) return;
+    const before = composer.slice(0, mentionPicker.tokenStart);
+    // Replace from tokenStart up to the current caret position. Use the
+    // textarea's live selection so we don't blow away anything the user
+    // typed after the filter.
+    const caret =
+      textareaRef.current?.selectionStart ??
+      mentionPicker.tokenStart + 1 + mentionPicker.filter.length;
+    const after = composer.slice(caret);
+    const token = `<@${userId}> `;
+    const nextValue = before + token + after;
+    const nextCaret = before.length + token.length;
+    setComposer(nextValue);
+    setMentionPicker(null);
+    // Restore focus + caret on the next frame so React has flushed the
+    // textarea value.
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current;
+      if (!ta) return;
+      ta.focus();
+      ta.selectionStart = nextCaret;
+      ta.selectionEnd = nextCaret;
+    });
+  }
 
   // Active channel data — selected from whichever context is in use.
   const active =
@@ -329,6 +505,39 @@ export default function ChatTab() {
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // Mention picker keyboard nav takes precedence when open.
+    if (mentionPicker && filteredMentionResults.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionPicker({
+          ...mentionPicker,
+          selectedIdx: Math.min(
+            mentionPicker.selectedIdx + 1,
+            filteredMentionResults.length - 1,
+          ),
+        });
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionPicker({
+          ...mentionPicker,
+          selectedIdx: Math.max(mentionPicker.selectedIdx - 1, 0),
+        });
+        return;
+      }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const member = filteredMentionResults[mentionPicker.selectedIdx];
+        if (member) pickMention(member.user_id);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMentionPicker(null);
+        return;
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       void handleSend();
@@ -577,7 +786,7 @@ export default function ChatTab() {
                       isSelf ? selfBubble : otherBubble
                     }`}
                   >
-                    {m.body}
+                    {renderMessageBody(m.body, isSelf)}
                   </div>
                   <p
                     className={`${mutedColor} text-[10px] mt-0.5 ${
@@ -604,13 +813,63 @@ export default function ChatTab() {
           </div>
         )}
 
-        <div className={`border-t ${border} p-2 flex items-end gap-2`}>
+        <div className={`relative border-t ${border} p-2 flex items-end gap-2`}>
+          {mentionPicker && filteredMentionResults.length > 0 && (
+            <div
+              role="listbox"
+              aria-label="Mention member"
+              className={`absolute bottom-full left-2 right-2 mb-2 max-w-xs rounded-md border shadow-lg overflow-hidden ${
+                isLight
+                  ? 'bg-white border-[#E2E8F0]'
+                  : 'bg-[#0F172A] border-white/10'
+              }`}
+            >
+              <p className={`px-3 py-1.5 text-[10px] uppercase tracking-wider font-semibold ${labelColor} border-b ${border}`}>
+                Mention a member
+              </p>
+              <ul className="max-h-56 overflow-y-auto py-1">
+                {filteredMentionResults.map((m, idx) => (
+                  <li key={m.user_id}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={idx === mentionPicker.selectedIdx}
+                      onMouseDown={(e) => {
+                        // Prevent blur on the textarea before we pick.
+                        e.preventDefault();
+                      }}
+                      onClick={() => pickMention(m.user_id)}
+                      className={`w-full text-left px-3 py-1.5 text-sm flex items-center justify-between gap-2 ${
+                        idx === mentionPicker.selectedIdx
+                          ? isLight
+                            ? 'bg-brand-600/[0.08] text-[#0F172A]'
+                            : 'bg-brand-300/[0.12] text-white'
+                          : isLight
+                            ? 'text-[#0F172A] hover:bg-[#0F172A]/[0.04]'
+                            : 'text-[#CBD5E1] hover:bg-white/[0.04]'
+                      }`}
+                    >
+                      <span className="truncate">{m.name}</span>
+                      {m.role === 'admin' && (
+                        <span className={`${mutedColor} text-[10px] uppercase`}>admin</span>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <textarea
             ref={textareaRef}
             value={composer}
-            onChange={(e) => setComposer(e.target.value)}
+            onChange={handleComposerChange}
             onKeyDown={handleKeyDown}
-            placeholder={`Message #${channelLabel}… (Enter to send, Shift+Enter for newline)`}
+            onSelect={handleComposerSelect}
+            onBlur={() => {
+              // Defer so a click on a picker row registers before close.
+              setTimeout(() => setMentionPicker(null), 100);
+            }}
+            placeholder={`Message #${channelLabel}… (@ to mention, Enter to send, Shift+Enter for newline)`}
             rows={2}
             maxLength={MAX_MESSAGE_LENGTH + 50}
             className={`flex-1 min-w-0 px-2 py-1.5 text-sm rounded-md border ${inputBg} ${headingColor} placeholder:${subColor} focus:outline-none focus:ring-2 focus:ring-brand-600/30 resize-none`}
