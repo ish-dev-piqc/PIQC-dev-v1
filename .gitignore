@@ -36,3 +36,6 @@ vitest.config.ts.timestamp-*.mjs
 
 # Vite config reload artifacts
 vite.config.ts.timestamp-*.mjs
+
+# Visit-worksheet export artifacts (test output / local drafts)
+*worksheet_draft*.pdf
