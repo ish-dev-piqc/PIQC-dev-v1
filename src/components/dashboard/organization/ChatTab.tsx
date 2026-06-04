@@ -15,7 +15,6 @@ import { useOrg } from '../../../context/OrgContext';
 import { useOrgChat } from '../../../context/OrgChatContext';
 import { useProtocolChat } from '../../../context/ProtocolChatContext';
 import {
-  listChannelDecisions,
   listMyChatProtocols,
   listOrgMembersWithProfile,
 } from '../../../lib/orgs/orgsApi';
@@ -25,15 +24,10 @@ import {
 // organization/ isn't in the mode-isolation scanned domains.
 import { getProtocolColors } from '../../../lib/site/protocolColors';
 import { useChatUnread, type ChatChannelKey } from '../../../hooks/useChatUnread';
-import {
-  adaptChatDecision,
-  type ChatDecisionRow,
-} from '../../../lib/orgs/chatDecisionsAdapter';
-import { supabase } from '../../../lib/supabase';
+import { useChatDecisions } from '../../../hooks/useChatDecisions';
 import DecisionPromoteModal from './chat/DecisionPromoteModal';
 import DecisionList from './chat/DecisionList';
 import type {
-  ChatDecision,
   ChatProtocolSummary,
   OrgMemberWithProfile,
 } from '../../../types/orgs';
@@ -224,22 +218,11 @@ export default function ChatTab() {
   });
 
   // --- Decisions for the active channel -------------------------------------
-  const [decisions, setDecisions] = useState<ChatDecision[]>([]);
-  const [decisionsLoading, setDecisionsLoading] = useState(false);
   const [decisionsPanelOpen, setDecisionsPanelOpen] = useState(false);
   const [promoteSource, setPromoteSource] = useState<
     { id: string; body: string; authorUserId: string | null; createdAt: string } | null
   >(null);
   const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null);
-
-  const decisionsBySourceId = useMemo(() => {
-    const m = new Map<string, ChatDecision>();
-    for (const d of decisions) {
-      const src = d.source_org_message_id ?? d.source_protocol_message_id;
-      if (src) m.set(src, d);
-    }
-    return m;
-  }, [decisions]);
 
   const isOrgAdmin = activeOrg?.my_role === 'admin';
   const channelKind: 'org' | 'protocol' =
@@ -251,54 +234,21 @@ export default function ChatTab() {
         ? activeChannel.id
         : null;
 
-  useEffect(() => {
-    if (!channelRefId) return;
-    let cancelled = false;
-    setDecisionsLoading(true);
-    listChannelDecisions(channelKind, channelRefId).then((res) => {
-      if (cancelled) return;
-      setDecisionsLoading(false);
-      if (res.ok) setDecisions(res.data);
-    });
-    const filterField = channelKind === 'org' ? 'org_id' : 'protocol_id';
-    const ch = supabase
-      .channel(`chat_decisions:${channelKind}:${channelRefId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'chat_decisions',
-          filter: `${filterField}=eq.${channelRefId}`,
-        },
-        (payload) => {
-          const d = adaptChatDecision(payload.new as ChatDecisionRow);
-          setDecisions((prev) => {
-            if (prev.some((x) => x.id === d.id)) return prev;
-            return [d, ...prev];
-          });
-        },
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'chat_decisions',
-          filter: `${filterField}=eq.${channelRefId}`,
-        },
-        (payload) => {
-          const id = (payload.old as { id?: string }).id;
-          if (!id) return;
-          setDecisions((prev) => prev.filter((x) => x.id !== id));
-        },
-      )
-      .subscribe();
-    return () => {
-      cancelled = true;
-      supabase.removeChannel(ch);
-    };
-  }, [channelKind, channelRefId]);
+  const {
+    decisions,
+    loading: decisionsLoading,
+    add: addDecisionLocal,
+    remove: removeDecisionLocal,
+  } = useChatDecisions({ kind: channelKind, channelId: channelRefId });
+
+  const decisionsBySourceId = useMemo(() => {
+    const m = new Map<string, typeof decisions[number]>();
+    for (const d of decisions) {
+      const src = d.source_org_message_id ?? d.source_protocol_message_id;
+      if (src) m.set(src, d);
+    }
+    return m;
+  }, [decisions]);
 
   function jumpToSourceMessage(sourceMessageId: string) {
     setDecisionsPanelOpen(false);
@@ -1107,12 +1057,7 @@ export default function ChatTab() {
           sourceMessage={promoteSource}
           members={Array.from(profiles.values())}
           onClose={() => setPromoteSource(null)}
-          onCreated={(d) =>
-            setDecisions((prev) => {
-              if (prev.some((x) => x.id === d.id)) return prev;
-              return [d, ...prev];
-            })
-          }
+          onCreated={addDecisionLocal}
         />
       )}
 
@@ -1124,7 +1069,7 @@ export default function ChatTab() {
           members={profiles}
           onClose={() => setDecisionsPanelOpen(false)}
           onJumpToSource={jumpToSourceMessage}
-          onDeleted={(id) => setDecisions((prev) => prev.filter((d) => d.id !== id))}
+          onDeleted={removeDecisionLocal}
         />
       )}
     </section>
