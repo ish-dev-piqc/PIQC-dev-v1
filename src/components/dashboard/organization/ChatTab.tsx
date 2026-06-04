@@ -7,6 +7,9 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
+  Paperclip,
+  File as FileIcon,
+  X as XIcon,
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useAuth } from '../../../context/AuthContext';
@@ -16,7 +19,10 @@ import { useProtocolChat } from '../../../context/ProtocolChatContext';
 import {
   listMyChatProtocols,
   listOrgMembersWithProfile,
+  uploadChatAttachment,
 } from '../../../lib/orgs/orgsApi';
+import { useChannelAttachments } from '../../../hooks/useChannelAttachments';
+import AttachmentRender from './chat/AttachmentRender';
 // Reuse the shared protocol palette so the dot here matches the one shown
 // on visit chips, calendar accents, and the protocol picker. lib/site is
 // the canonical home for this palette; the import is allowed because
@@ -56,6 +62,13 @@ import type {
 const MAX_MESSAGE_LENGTH = 10000;
 const SCROLL_BOTTOM_THRESHOLD_PX = 80;
 const MENTION_PICKER_MAX_RESULTS = 8;
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
 
 const CHANNEL_STORAGE_KEY = 'piq-chat-channel-v1';
 const SIDEBAR_WIDE_STORAGE_KEY = 'piq-chat-sidebar-wide-v1';
@@ -239,6 +252,68 @@ export default function ChatTab() {
     add: addDecisionLocal,
     remove: removeDecisionLocal,
   } = useChatDecisions({ kind: channelKind, channelId: channelRefId });
+
+  // --- Attachments ----------------------------------------------------------
+  const {
+    byMessageId: attachmentsByMessageId,
+    addLocal: addAttachmentLocal,
+    removeLocal: removeAttachmentLocal,
+  } = useChannelAttachments({ kind: channelKind, channelId: channelRefId });
+
+  // Files queued in the composer, waiting to be uploaded when the user sends.
+  const [pendingFiles, setPendingFiles] = useState<
+    { id: string; file: File; error?: string }[]
+  >([]);
+  const [draggingOver, setDraggingOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function addPendingFiles(files: FileList | File[]) {
+    const arr: { id: string; file: File; error?: string }[] = [];
+    for (const f of Array.from(files)) {
+      const error =
+        f.size > MAX_ATTACHMENT_BYTES
+          ? `Too large (${(f.size / 1024 / 1024).toFixed(1)} MB > 10 MB)`
+          : undefined;
+      arr.push({ id: crypto.randomUUID(), file: f, error });
+    }
+    if (arr.length === 0) return;
+    setPendingFiles((prev) => [...prev, ...arr]);
+  }
+
+  function removePendingFile(id: string) {
+    setPendingFiles((prev) => prev.filter((p) => p.id !== id));
+  }
+
+  function handleFilePickerChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (e.target.files && e.target.files.length > 0) {
+      addPendingFiles(e.target.files);
+      // Reset the input so the same file can be picked again later.
+      e.target.value = '';
+    }
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    if (!e.clipboardData?.files || e.clipboardData.files.length === 0) return;
+    e.preventDefault();
+    addPendingFiles(e.clipboardData.files);
+  }
+
+  function handleSectionDragOver(e: React.DragEvent) {
+    if (Array.from(e.dataTransfer.types).includes('Files')) {
+      e.preventDefault();
+      setDraggingOver(true);
+    }
+  }
+  function handleSectionDragLeave(e: React.DragEvent) {
+    if (e.currentTarget === e.target) setDraggingOver(false);
+  }
+  function handleSectionDrop(e: React.DragEvent) {
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      e.preventDefault();
+      setDraggingOver(false);
+      addPendingFiles(e.dataTransfer.files);
+    }
+  }
 
   const decisionsBySourceId = useMemo(() => {
     const m = new Map<string, typeof decisions[number]>();
@@ -578,21 +653,63 @@ export default function ChatTab() {
 
   const composerTooLong = composer.length > MAX_MESSAGE_LENGTH;
   const composerTrimmed = composer.trim();
-  const canSend = composerTrimmed.length > 0 && !composerTooLong && !sending;
+  const hasValidAttachments = pendingFiles.some((p) => !p.error);
+  // A message can be sent with just attachments and no text — supports
+  // "here's the document, no caption" use cases.
+  const canSend =
+    (composerTrimmed.length > 0 || hasValidAttachments) &&
+    !composerTooLong &&
+    !sending;
 
   async function handleSend() {
     if (!canSend) return;
     setSending(true);
     setSendError(null);
-    const wireBody = substituteMentions(composerTrimmed);
+    // Messages tables require length(body) > 0. For attachment-only sends,
+    // use a small paperclip emoji as a placeholder body so the message row
+    // satisfies the CHECK constraint. Users with text + attachments get
+    // their typed body unchanged.
+    const wireBody = composerTrimmed.length > 0
+      ? substituteMentions(composerTrimmed)
+      : '📎';
     const res = await active.post(wireBody);
-    setSending(false);
-    if (!res.ok) {
+    if (!res.ok || !res.data) {
+      setSending(false);
       setSendError(res.error ?? 'Failed to send message.');
       return;
     }
+
+    // Upload any pending attachments tied to the just-inserted message.
+    // Failures don't block the message — surfaced inline so the user can
+    // retry by re-attaching and sending an empty follow-up.
+    const validFiles = pendingFiles.filter((p) => !p.error);
+    if (validFiles.length > 0 && channelRefId) {
+      const messageId = res.data.id;
+      const uploads = await Promise.all(
+        validFiles.map((p) =>
+          uploadChatAttachment({
+            file: p.file,
+            ...(channelKind === 'org'
+              ? { org_message_id: messageId, org_id: channelRefId }
+              : { protocol_message_id: messageId, protocol_id: channelRefId }),
+          }),
+        ),
+      );
+      const failed: string[] = [];
+      for (let i = 0; i < uploads.length; i++) {
+        const u = uploads[i];
+        if (u.ok) addAttachmentLocal(u.data);
+        else failed.push(`${validFiles[i].file.name}: ${u.error}`);
+      }
+      if (failed.length > 0) {
+        setSendError(`Message sent, but ${failed.length} attachment${failed.length === 1 ? '' : 's'} failed: ${failed.join('; ')}`);
+      }
+    }
+
+    setSending(false);
     setComposer('');
     setPendingMentions(new Map());
+    setPendingFiles([]);
     textareaRef.current?.focus();
   }
 
@@ -785,9 +902,26 @@ export default function ChatTab() {
 
   return (
     <section
-      className={`flex border ${border} rounded-md overflow-hidden`}
+      className={`relative flex border ${border} rounded-md overflow-hidden`}
       style={{ height: 'min(70vh, 600px)' }}
+      onDragOver={handleSectionDragOver}
+      onDragLeave={handleSectionDragLeave}
+      onDrop={handleSectionDrop}
     >
+      {draggingOver && (
+        <div
+          className={`absolute inset-0 z-30 flex items-center justify-center pointer-events-none border-2 border-dashed rounded-md ${
+            isLight
+              ? 'bg-brand-600/[0.08] border-brand-600/40'
+              : 'bg-brand-300/[0.12] border-brand-300/40'
+          }`}
+        >
+          <p className={`text-sm font-medium ${isLight ? 'text-brand-600' : 'text-brand-300'}`}>
+            Drop files to attach
+          </p>
+        </div>
+      )}
+
       {/* Sidebar */}
       <aside
         className={`${sidebarBg} border-r ${border} flex flex-col flex-shrink-0 transition-[width] duration-150 ${
@@ -967,6 +1101,13 @@ export default function ChatTab() {
                     >
                       {renderMessageBody(m.body, isSelf)}
                     </div>
+                    <AttachmentRender
+                      attachments={attachmentsByMessageId.get(m.id) ?? []}
+                      canDelete={(a) =>
+                        a.uploaded_by_user_id === currentUserId || isOrgAdmin
+                      }
+                      onDeleted={removeAttachmentLocal}
+                    />
                     <MessagePromoteButton
                       isSelf={isSelf}
                       isLight={isLight}
@@ -1002,6 +1143,42 @@ export default function ChatTab() {
           >
             <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
             <span>{sendError}</span>
+          </div>
+        )}
+
+        {pendingFiles.length > 0 && (
+          <div className={`mx-3 mt-2 flex flex-wrap gap-2 ${border}`}>
+            {pendingFiles.map((p) => (
+              <div
+                key={p.id}
+                className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs ${
+                  p.error
+                    ? isLight
+                      ? 'bg-rose-50 border-rose-200 text-rose-700'
+                      : 'bg-rose-500/[0.06] border-rose-500/30 text-rose-300'
+                    : isLight
+                      ? 'bg-[#F1F5F9] border-[#E2E8F0] text-[#0F172A]'
+                      : 'bg-white/[0.04] border-white/10 text-[#CBD5E1]'
+                }`}
+                title={p.error ? `${p.file.name} — ${p.error}` : p.file.name}
+              >
+                <FileIcon size={11} className="flex-shrink-0" />
+                <span className="truncate max-w-[160px]">{p.file.name}</span>
+                <span className={`flex-shrink-0 ${mutedColor}`}>
+                  {p.error ?? formatBytes(p.file.size)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removePendingFile(p.id)}
+                  className={`flex-shrink-0 p-0.5 rounded ${
+                    isLight ? 'hover:bg-[#0F172A]/[0.05]' : 'hover:bg-white/[0.05]'
+                  }`}
+                  aria-label={`Remove ${p.file.name}`}
+                >
+                  <XIcon size={11} />
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
@@ -1051,12 +1228,35 @@ export default function ChatTab() {
               </ul>
             </div>
           )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            onChange={handleFilePickerChange}
+            className="hidden"
+            aria-hidden="true"
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={sending}
+            className={`p-2 rounded-md flex-shrink-0 ${
+              isLight
+                ? 'text-[#334155]/70 hover:bg-[#0F172A]/[0.05] hover:text-[#0F172A]'
+                : 'text-[#CBD5E1]/70 hover:bg-white/[0.05] hover:text-white'
+            }`}
+            title="Attach file (or drag-drop / paste)"
+            aria-label="Attach file"
+          >
+            <Paperclip size={14} />
+          </button>
           <textarea
             ref={textareaRef}
             value={composer}
             onChange={handleComposerChange}
             onKeyDown={handleKeyDown}
             onSelect={handleComposerSelect}
+            onPaste={handlePaste}
             onBlur={() => {
               // Defer so a click on a picker row registers before close.
               setTimeout(() => setMentionPicker(null), 100);

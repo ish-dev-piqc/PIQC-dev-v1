@@ -196,6 +196,36 @@ export interface NewChatDecisionInput {
   decided_at?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Chat attachments
+// ---------------------------------------------------------------------------
+
+export interface ChatAttachment {
+  id: string;
+  org_message_id: string | null;
+  protocol_message_id: string | null;
+  org_id: string | null;
+  protocol_id: string | null;
+  storage_path: string;
+  mime_type: string;
+  size_bytes: number;
+  original_filename: string;
+  uploaded_by_user_id: string | null;
+  created_at: string;
+}
+
+/** Used by uploadChatAttachment client-side; storage_path is built by the
+ *  API from `<userId>/<uuid>-<filename>`. */
+export interface NewChatAttachmentInput {
+  /** Exactly one of the two — the message the file is attached to. */
+  org_message_id?: string;
+  protocol_message_id?: string;
+  /** Matching channel ref (org_id or protocol_id). */
+  org_id?: string;
+  protocol_id?: string;
+  file: File;
+}
+
 
 // ---------------------------------------------------------------------------
 // Access requests

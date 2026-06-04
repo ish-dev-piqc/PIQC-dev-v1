@@ -34,7 +34,9 @@ interface ProtocolChatContextValue {
   messages: ProtocolMessage[];
   loading: boolean;
   error: string | null;
-  postMessage: (body: string) => Promise<{ ok: boolean; error?: string }>;
+  postMessage: (
+    body: string,
+  ) => Promise<{ ok: boolean; error?: string; data?: ProtocolMessage }>;
   refresh: () => Promise<void>;
 }
 
@@ -44,7 +46,10 @@ const ProtocolChatContext = createContext<ProtocolChatContextValue>({
   messages: [],
   loading: false,
   error: null,
-  postMessage: async () => ({ ok: false, error: 'ProtocolChatProvider not mounted' }),
+  postMessage: async () => ({
+    ok: false,
+    error: 'ProtocolChatProvider not mounted',
+  } as { ok: boolean; error?: string; data?: ProtocolMessage }),
   refresh: async () => {},
 });
 
@@ -125,7 +130,9 @@ export function ProtocolChatProvider({ children }: { children: React.ReactNode }
   }, [activeProtocolId]);
 
   const postMessage = useCallback(
-    async (body: string): Promise<{ ok: boolean; error?: string }> => {
+    async (
+      body: string,
+    ): Promise<{ ok: boolean; error?: string; data?: ProtocolMessage }> => {
       const protocolId = activeIdRef.current;
       if (!protocolId) return { ok: false, error: 'No active protocol channel.' };
       const res = await postProtocolMessage(protocolId, body);
@@ -137,7 +144,7 @@ export function ProtocolChatProvider({ children }: { children: React.ReactNode }
         if (prev.some((m) => m.id === res.data.id)) return prev;
         return [...prev, res.data];
       });
-      return { ok: true };
+      return { ok: true, data: res.data };
     },
     [],
   );
