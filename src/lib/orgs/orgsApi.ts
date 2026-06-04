@@ -32,6 +32,7 @@
 import { supabase } from '../supabase';
 import type {
   AcceptedGuestInvite,
+  ChatProtocolSummary,
   NewProtocolGuestInput,
   NewProtocolMemberInput,
   Org,
@@ -47,11 +48,16 @@ import type {
   ProtocolGuest,
   ProtocolMember,
   ProtocolMemberPatch,
+  ProtocolMessage,
 } from '../../types/orgs';
 import { adaptAccessRequest, adaptAccessRequests } from './accessRequestsAdapter';
 import { adaptGuest, adaptGuests } from './guestsAdapter';
 import { adaptOrgMessage, adaptOrgMessages } from './orgMessagesAdapter';
 import { adaptProtocolMember, adaptProtocolMembers } from './protocolMembersAdapter';
+import {
+  adaptProtocolMessage,
+  adaptProtocolMessages,
+} from './protocolMessagesAdapter';
 
 export type Result<T> =
   | { ok: true; data: T }
@@ -430,6 +436,133 @@ export async function postOrgMessage(
   if (error) return fail('postOrgMessage', error);
   if (!data) return err('Insert returned no row.');
   return { ok: true, data: adaptOrgMessage(data) };
+}
+
+
+// ===========================================================================
+// Per-protocol chat messages + channel discovery for the chat sidebar.
+// Realtime subscription lives in src/context/ProtocolChatContext.tsx.
+// ===========================================================================
+
+/** Most-recent N messages for a protocol channel, oldest-first for display. */
+export async function listProtocolMessages(
+  protocolId: string,
+  limit = 100,
+): Promise<Result<ProtocolMessage[]>> {
+  const { data, error } = await supabase
+    .from('protocol_messages')
+    .select('id, protocol_id, author_user_id, body, created_at')
+    .eq('protocol_id', protocolId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) return fail('listProtocolMessages', error);
+  const rows = (data ?? []).slice().reverse();
+  return { ok: true, data: adaptProtocolMessages(rows) };
+}
+
+export async function postProtocolMessage(
+  protocolId: string,
+  body: string,
+): Promise<Result<ProtocolMessage>> {
+  const trimmed = body.trim();
+  if (!trimmed) return err('Message cannot be empty.');
+  if (trimmed.length > 10000) return err('Message is too long (10000 character max).');
+
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr) return fail('postProtocolMessage:getUser', userErr);
+  const user = userData?.user;
+  if (!user) return err('Not authenticated.');
+
+  const { data, error } = await supabase
+    .from('protocol_messages')
+    .insert({
+      protocol_id: protocolId,
+      author_user_id: user.id,
+      body: trimmed,
+    })
+    .select('id, protocol_id, author_user_id, body, created_at')
+    .single();
+  if (error) return fail('postProtocolMessage', error);
+  if (!data) return err('Insert returned no row.');
+  return { ok: true, data: adaptProtocolMessage(data) };
+}
+
+/** Protocols the caller can chat in: org admins get every org protocol;
+ *  non-admins get protocols where they're coordinator or member (viewers
+ *  excluded — they're consumers, not collaborators). Used to populate the
+ *  chat sidebar. */
+export async function listMyChatProtocols(
+  orgId: string,
+): Promise<Result<ChatProtocolSummary[]>> {
+  try {
+    const { data: userData, error: userErr } = await supabase.auth.getUser();
+    if (userErr) throw userErr;
+    const user = userData?.user;
+    if (!user) return err('Not authenticated.');
+
+    // Are we an admin of this org?
+    const { data: membership, error: membershipErr } = await supabase
+      .from('org_members')
+      .select('role')
+      .eq('org_id', orgId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (membershipErr) throw membershipErr;
+    const isAdmin = membership?.role === 'admin';
+
+    if (isAdmin) {
+      // Admin: every protocol in the org.
+      const { data, error } = await supabase
+        .from('protocols')
+        .select('id, code:study_number, name:title')
+        .eq('owner_org_id', orgId)
+        .order('study_number', { ascending: true });
+      if (error) throw error;
+      return {
+        ok: true,
+        data: ((data ?? []) as Array<{ id: string; code: string | null; name: string | null }>)
+          .map((p) => ({
+            id: p.id,
+            code: p.code ?? '(unnamed)',
+            name: p.name ?? '',
+          })),
+      };
+    }
+
+    // Non-admin: protocols where we have coordinator or member role.
+    const { data: memberRows, error: memberErr } = await supabase
+      .from('protocol_members')
+      .select('protocol_id')
+      .eq('user_id', user.id)
+      .in('role', ['coordinator', 'member']);
+    if (memberErr) throw memberErr;
+    const protocolIds = ((memberRows ?? []) as Array<{ protocol_id: string }>).map(
+      (r) => r.protocol_id,
+    );
+    if (protocolIds.length === 0) return { ok: true, data: [] };
+
+    // Join with protocols, scoped to the org so we don't include any
+    // out-of-org protocols (defensive — protocol_members shouldn't have
+    // such rows but RLS could be relaxed in the future).
+    const { data: protoRows, error: protoErr } = await supabase
+      .from('protocols')
+      .select('id, code:study_number, name:title')
+      .in('id', protocolIds)
+      .eq('owner_org_id', orgId)
+      .order('study_number', { ascending: true });
+    if (protoErr) throw protoErr;
+    return {
+      ok: true,
+      data: ((protoRows ?? []) as Array<{ id: string; code: string | null; name: string | null }>)
+        .map((p) => ({
+          id: p.id,
+          code: p.code ?? '(unnamed)',
+          name: p.name ?? '',
+        })),
+    };
+  } catch (e) {
+    return fail('listMyChatProtocols', e);
+  }
 }
 
 

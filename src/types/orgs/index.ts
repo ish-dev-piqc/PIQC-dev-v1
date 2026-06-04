@@ -128,6 +128,32 @@ export interface NewOrgMessageInput {
   body: string;
 }
 
+// ---------------------------------------------------------------------------
+// Per-protocol chat messages (PR 4b)
+// ---------------------------------------------------------------------------
+
+export interface ProtocolMessage {
+  id: string;
+  protocol_id: string;
+  /** null when the author was deleted from auth.users (ON DELETE SET NULL). */
+  author_user_id: string | null;
+  body: string;
+  created_at: string;
+}
+
+export interface NewProtocolMessageInput {
+  protocol_id: string;
+  body: string;
+}
+
+/** Minimal protocol shape returned by listMyChatProtocols for the chat
+ *  sidebar — just enough to render the channel labels. */
+export interface ChatProtocolSummary {
+  id: string;
+  code: string;
+  name: string;
+}
+
 
 // ---------------------------------------------------------------------------
 // Access requests
