@@ -21,6 +21,7 @@ import {
 // the canonical home for this palette; the import is allowed because
 // organization/ isn't in the mode-isolation scanned domains.
 import { getProtocolColors } from '../../../lib/site/protocolColors';
+import { useChatUnread, type ChatChannelKey } from '../../../hooks/useChatUnread';
 import type {
   ChatProtocolSummary,
   OrgMemberWithProfile,
@@ -161,6 +162,22 @@ export default function ChatTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChannel]);
 
+  // Channel key form used by the unread hook.
+  const activeChannelKey: ChatChannelKey =
+    activeChannel.kind === 'org' ? 'org' : `protocol:${activeChannel.id}`;
+
+  const protocolIds = useMemo(
+    () => chatProtocols.map((p) => p.id),
+    [chatProtocols],
+  );
+
+  const { counts: unreadCounts, markAsRead, unreadCap } = useChatUnread({
+    orgId: activeOrg?.id ?? null,
+    protocolIds,
+    activeChannelKey,
+    currentUserId,
+  });
+
   // Persist channel + sidebar state.
   useEffect(() => {
     try {
@@ -261,6 +278,14 @@ export default function ChatTab() {
     setSendError(null);
   }, [activeChannel]);
 
+  // Also clear unread when the new channel's data finishes loading — keeps
+  // the badge clean if a fresh message arrived during the fetch.
+  useEffect(() => {
+    if (active.loading) return;
+    markAsRead(activeChannelKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active.loading, activeChannelKey, active.messages.length]);
+
   const handleScroll = () => {
     const el = listRef.current;
     if (!el) return;
@@ -345,30 +370,64 @@ export default function ChatTab() {
   }
 
   // --- Render ----------------------------------------------------------------
+  function UnreadBadge({ count, wide }: { count: number; wide: boolean }) {
+    if (count <= 0) return null;
+    const display = count > unreadCap ? `${unreadCap}+` : String(count);
+    if (wide) {
+      return (
+        <span
+          className={`ml-auto flex-shrink-0 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold rounded-full ${
+            isLight
+              ? 'bg-brand-600 text-white'
+              : 'bg-brand-300 text-[#0F172A]'
+          }`}
+          aria-label={`${count} unread`}
+        >
+          {display}
+        </span>
+      );
+    }
+    // Collapsed sidebar — small filled dot anchored to the icon corner.
+    return (
+      <span
+        className={`absolute top-0 right-0 w-2 h-2 rounded-full ${
+          isLight ? 'bg-brand-600' : 'bg-brand-300'
+        }`}
+        aria-label={`${count} unread`}
+      />
+    );
+  }
+
   function ChannelRow({
     active,
     onClick,
     icon,
     label,
     title,
+    unread,
   }: {
     active: boolean;
     onClick: () => void;
     icon: React.ReactNode;
     label: string;
     title?: string;
+    unread: number;
   }) {
     return (
       <button
         type="button"
         onClick={onClick}
         title={!sidebarWide ? title ?? label : title}
-        className={`${channelRowBase} ${active ? channelRowActive : channelRowInactive} ${
+        className={`${channelRowBase} relative ${active ? channelRowActive : channelRowInactive} ${
           sidebarWide ? 'px-2.5 py-1.5 justify-start' : 'px-1.5 py-1.5 justify-center'
         }`}
       >
-        <span className="flex-shrink-0 flex items-center justify-center">{icon}</span>
+        <span className="flex-shrink-0 flex items-center justify-center relative">
+          {icon}
+          {!sidebarWide && <UnreadBadge count={unread} wide={false} />}
+        </span>
         {sidebarWide && <span className="truncate">{label}</span>}
+        {sidebarWide && <UnreadBadge count={unread} wide={true} />}
       </button>
     );
   }
@@ -432,6 +491,7 @@ export default function ChatTab() {
             icon={<MessageCircle size={13} />}
             label="general"
             title="Org-wide channel"
+            unread={unreadCounts.get('org') ?? 0}
           />
 
           {chatProtocols.length > 0 && (
@@ -452,6 +512,7 @@ export default function ChatTab() {
               icon={<ProtocolDot code={p.code} />}
               label={p.code}
               title={p.name || p.code}
+              unread={unreadCounts.get(`protocol:${p.id}`) ?? 0}
             />
           ))}
         </nav>
