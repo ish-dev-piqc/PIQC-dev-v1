@@ -35,7 +35,9 @@ interface OrgChatContextValue {
   messages: OrgMessage[];
   loading: boolean;
   error: string | null;
-  postMessage: (body: string) => Promise<{ ok: boolean; error?: string }>;
+  postMessage: (
+    body: string,
+  ) => Promise<{ ok: boolean; error?: string; data?: OrgMessage }>;
   refresh: () => Promise<void>;
 }
 
@@ -43,7 +45,10 @@ const OrgChatContext = createContext<OrgChatContextValue>({
   messages: [],
   loading: false,
   error: null,
-  postMessage: async () => ({ ok: false, error: 'OrgChatProvider not mounted' }),
+  postMessage: async () => ({
+    ok: false,
+    error: 'OrgChatProvider not mounted',
+  } as { ok: boolean; error?: string; data?: OrgMessage }),
   refresh: async () => {},
 });
 
@@ -131,7 +136,9 @@ export function OrgChatProvider({ children }: { children: React.ReactNode }) {
   }, [activeOrg?.id]);
 
   const postMessage = useCallback(
-    async (body: string): Promise<{ ok: boolean; error?: string }> => {
+    async (
+      body: string,
+    ): Promise<{ ok: boolean; error?: string; data?: OrgMessage }> => {
       const orgId = orgIdRef.current;
       if (!orgId) return { ok: false, error: 'No active organization.' };
       const res = await postOrgMessage(orgId, body);
@@ -143,7 +150,7 @@ export function OrgChatProvider({ children }: { children: React.ReactNode }) {
         if (prev.some((m) => m.id === res.data.id)) return prev;
         return [...prev, res.data];
       });
-      return { ok: true };
+      return { ok: true, data: res.data };
     },
     [],
   );

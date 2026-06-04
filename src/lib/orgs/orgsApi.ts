@@ -32,9 +32,11 @@
 import { supabase } from '../supabase';
 import type {
   AcceptedGuestInvite,
+  ChatAttachment,
   ChatDecision,
   ChatMention,
   ChatProtocolSummary,
+  NewChatAttachmentInput,
   NewChatDecisionInput,
   NewProtocolGuestInput,
   NewProtocolMemberInput,
@@ -54,6 +56,7 @@ import type {
   ProtocolMessage,
 } from '../../types/orgs';
 import { adaptAccessRequest, adaptAccessRequests } from './accessRequestsAdapter';
+import { adaptChatAttachment, adaptChatAttachments } from './chatAttachmentsAdapter';
 import { adaptChatDecision, adaptChatDecisions } from './chatDecisionsAdapter';
 import { adaptChatMentions } from './chatMentionsAdapter';
 import { adaptGuest, adaptGuests } from './guestsAdapter';
@@ -543,6 +546,124 @@ export async function deleteChatDecision(id: string): Promise<Result<void>> {
   const { error } = await supabase.from('chat_decisions').delete().eq('id', id);
   if (error) return fail('deleteChatDecision', error);
   return { ok: true, data: undefined };
+}
+
+
+// ===========================================================================
+// Chat attachments — files uploaded to the `chat-attachments` Supabase
+// Storage bucket and tied to a chat message via the chat_attachments table.
+// Two-step flow: upload to Storage → insert chat_attachments row.
+// ===========================================================================
+
+const CHAT_ATTACHMENT_COLUMNS =
+  'id, org_message_id, protocol_message_id, org_id, protocol_id, storage_path, mime_type, size_bytes, original_filename, uploaded_by_user_id, created_at';
+
+const CHAT_ATTACHMENTS_BUCKET = 'chat-attachments';
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+
+export async function uploadChatAttachment(
+  input: NewChatAttachmentInput,
+): Promise<Result<ChatAttachment>> {
+  try {
+    const file = input.file;
+    if (file.size <= 0) return err('File is empty.');
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      return err(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB > 10 MB max).`);
+    }
+
+    const { data: userData, error: userErr } = await supabase.auth.getUser();
+    if (userErr) throw userErr;
+    const user = userData?.user;
+    if (!user) return err('Not authenticated.');
+
+    // Safe filename: strip path separators, cap length. The UUID prefix
+    // disambiguates and prevents accidental overwrites.
+    const safeName = file.name
+      .replace(/[\\/:*?"<>|]/g, '_')
+      .slice(0, 120);
+    const objectName = `${user.id}/${crypto.randomUUID()}-${safeName}`;
+
+    const { error: uploadErr } = await supabase.storage
+      .from(CHAT_ATTACHMENTS_BUCKET)
+      .upload(objectName, file, {
+        contentType: file.type || 'application/octet-stream',
+        upsert: false,
+      });
+    if (uploadErr) return fail('uploadChatAttachment:storage', uploadErr);
+
+    const insertPayload = {
+      org_message_id: input.org_message_id ?? null,
+      protocol_message_id: input.protocol_message_id ?? null,
+      org_id: input.org_id ?? null,
+      protocol_id: input.protocol_id ?? null,
+      storage_path: objectName,
+      mime_type: file.type || 'application/octet-stream',
+      size_bytes: file.size,
+      original_filename: file.name,
+      uploaded_by_user_id: user.id,
+    };
+
+    const { data, error } = await supabase
+      .from('chat_attachments')
+      .insert(insertPayload)
+      .select(CHAT_ATTACHMENT_COLUMNS)
+      .single();
+    if (error) {
+      // Best-effort cleanup of the orphan Storage object so we don't leave
+      // junk files behind when the DB write fails (e.g. RLS denies).
+      await supabase.storage.from(CHAT_ATTACHMENTS_BUCKET).remove([objectName]);
+      return fail('uploadChatAttachment:db', error);
+    }
+    if (!data) return err('Insert returned no row.');
+    return { ok: true, data: adaptChatAttachment(data) };
+  } catch (e) {
+    return fail('uploadChatAttachment', e);
+  }
+}
+
+export async function listChannelAttachments(
+  kind: 'org' | 'protocol',
+  channelId: string,
+): Promise<Result<ChatAttachment[]>> {
+  const column = kind === 'org' ? 'org_id' : 'protocol_id';
+  const { data, error } = await supabase
+    .from('chat_attachments')
+    .select(CHAT_ATTACHMENT_COLUMNS)
+    .eq(column, channelId)
+    .order('created_at', { ascending: true });
+  if (error) return fail('listChannelAttachments', error);
+  return { ok: true, data: adaptChatAttachments(data ?? []) };
+}
+
+export async function deleteChatAttachment(attachment: ChatAttachment): Promise<Result<void>> {
+  // Storage delete first; if it fails, we still try the row delete to avoid
+  // stranding a row that points at a nonexistent object (or vice versa).
+  const { error: storageErr } = await supabase.storage
+    .from(CHAT_ATTACHMENTS_BUCKET)
+    .remove([attachment.storage_path]);
+  if (storageErr) {
+    console.warn('[deleteChatAttachment] storage remove failed', storageErr.message);
+  }
+  const { error } = await supabase
+    .from('chat_attachments')
+    .delete()
+    .eq('id', attachment.id);
+  if (error) return fail('deleteChatAttachment', error);
+  return { ok: true, data: undefined };
+}
+
+/** Returns a short-lived signed URL the client can use to download or
+ *  preview the attachment. RLS on storage.objects gates url generation. */
+export async function getAttachmentSignedUrl(
+  storagePath: string,
+  expiresInSeconds = 60,
+): Promise<Result<string>> {
+  const { data, error } = await supabase.storage
+    .from(CHAT_ATTACHMENTS_BUCKET)
+    .createSignedUrl(storagePath, expiresInSeconds);
+  if (error) return fail('getAttachmentSignedUrl', error);
+  if (!data?.signedUrl) return err('No signed URL returned.');
+  return { ok: true, data: data.signedUrl };
 }
 
 
