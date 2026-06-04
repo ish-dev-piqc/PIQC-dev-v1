@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: chat-unread-indicators
-status: active
+status: merged
+merged: 2026-06-04
 started: 2026-06-04
-target_pr:
+target_pr: #265
 ---
 
 # Chat: unread channel indicators
