@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: chat-cross-mode-refs
-status: active
+status: merged
+merged: 2026-06-04
 started: 2026-06-04
-target_pr:
+target_pr: #279
 ---
 
 # Chat: cross-mode references
