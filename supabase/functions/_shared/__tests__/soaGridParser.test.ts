@@ -3,6 +3,8 @@ import {
   parseSoaGrid,
   parseVisitHeader,
   classifyMark,
+  gridToScheduleOfEvents,
+  evaluateSoaGate,
   type TableBlock,
 } from "../soaGridParser.ts";
 // Golden fixture: the real Schedule-of-Assessments table blocks Reducto returned
@@ -127,6 +129,59 @@ describe("parseSoaGrid — golden file (PP06489)", () => {
     const withNotes = result.visits.flatMap((v) => v.procedures.filter((p) => p.note));
     expect(withNotes.length).toBeGreaterThan(20);
     expect(withNotes.some((p) => /before IMP infusion/i.test(p.note!))).toBe(true);
+  });
+});
+
+describe("gridToScheduleOfEvents (golden file)", () => {
+  const { visits } = parseSoaGrid(TABLES);
+  const { schedule, citations } = gridToScheduleOfEvents(visits);
+
+  it("emits one schedule entry per visit, in the downstream shape", () => {
+    expect(schedule).toHaveLength(visits.length);
+    const screening = schedule.find((s) => s.visit_name === "Screening")!;
+    expect(screening.procedures).toContain("Informed Consent");
+    expect(screening.procedures_structured[0]).toMatchObject({
+      label: "Informed Consent",
+      classification: "required",
+      protocol_section: "Schedule of Assessments",
+    });
+  });
+
+  it("marks conditional (X) procedures classification=conditional", () => {
+    const cond = schedule.flatMap((s) => s.procedures_structured).filter((p) => p.classification === "conditional");
+    expect(cond.length).toBeGreaterThan(0);
+    expect(cond.every((p) => /MRI of CNS/i.test(p.label))).toBe(true);
+  });
+
+  it("emits a SoA-page citation aligned to each visit", () => {
+    expect(citations).toHaveLength(schedule.length);
+    const idx = schedule.findIndex((s) => s.visit_name === "Screening");
+    expect(citations[idx]?.section).toBe("Schedule of Assessments");
+    expect(citations[idx]?.pages.length).toBeGreaterThan(0);
+  });
+});
+
+describe("evaluateSoaGate", () => {
+  it("uses the grid when it covers the expected visits cleanly", () => {
+    const result = parseSoaGrid(TABLES);
+    const decision = evaluateSoaGate(result, 12); // PledOx has 12 treatment visits
+    expect(decision.useGrid).toBe(true);
+    expect(decision.method).toBe("grid");
+  });
+
+  it("falls back when the grid under-covers the independent signal", () => {
+    const result = parseSoaGrid(TABLES);
+    const decision = evaluateSoaGate(result, 30); // claim far more visits than present
+    expect(decision.useGrid).toBe(false);
+    expect(decision.method).toBe("llm_fallback");
+    expect(decision.reasons.join(" ")).toMatch(/under-covers/);
+  });
+
+  it("falls back when there is no SoA grid", () => {
+    const result = parseSoaGrid([{ content: "<table><tr><td>prose</td></tr></table>" }]);
+    const decision = evaluateSoaGate(result, 0);
+    expect(decision.useGrid).toBe(false);
+    expect(decision.method).toBe("llm_fallback");
   });
 });
 

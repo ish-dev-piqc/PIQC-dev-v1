@@ -25,6 +25,9 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { mapReductoExtractToSotr } from "./sourceEvidenceAdapter.ts";
 import { dedupeVisitTemplateRowsByQuality, staleTemplateIds, visitMatchKey } from "./visitTemplateDedup.ts";
 import { canonicalVisitName, normalizeVisitName } from "./visitNameNormalize.ts";
+import { evaluateSoaGate, gridToScheduleOfEvents, parseSoaGrid } from "./soaGridParser.ts";
+import type { SoaGateDecision } from "./soaGridParser.ts";
+import { deriveVisitCountSignal } from "./soaColumnCount.ts";
 import {
   detectImplausibleDay,
   expandAggregateVisitRow,
@@ -135,6 +138,27 @@ export function mapRawChunksToChunkData(rawChunks: ReductoChunk[]): ChunkData[] 
       };
     })
     .filter((c): c is ChunkData => c !== null);
+}
+
+/**
+ * Collect the HTML grid of every Table block across the parse, for the
+ * deterministic SoA-grid parse (soaGridParser). This reads block-level table
+ * HTML that mapRawChunksToChunkData discards — it does NOT touch chunk.content
+ * or embeddings, so the Ask-tab RAG path is byte-for-byte unchanged. Only blocks
+ * whose content actually contains an HTML table are kept (a prose-summarized
+ * table is skipped → the fallback gate handles it).
+ */
+export function collectTableHtml(rawChunks: ReductoChunk[]): Array<{ content: string; page: number | null }> {
+  const out: Array<{ content: string; page: number | null }> = [];
+  for (const c of rawChunks) {
+    const blocks: ReductoBlock[] = Array.isArray(c.blocks) ? c.blocks : [];
+    for (const b of blocks) {
+      if (/table/i.test(b.type ?? "") && typeof b.content === "string" && /<t[rd]\b/i.test(b.content)) {
+        out.push({ content: b.content, page: typeof b.bbox?.page === "number" ? b.bbox.page : null });
+      }
+    }
+  }
+  return out;
 }
 
 /** Plain-text fallback for non-PDF text uploads. */
@@ -293,7 +317,7 @@ export async function kickOffReductoParseAsync(
 export async function fetchReductoJobResult(
   jobId: string,
   reductoKey: string,
-): Promise<{ status: string; chunks: ChunkData[] }> {
+): Promise<{ status: string; chunks: ChunkData[]; tableHtml: Array<{ content: string; page: number | null }> }> {
   return withRetry(async () => {
     const res = await fetch(`${REDUCTO_BASE_URL}/job/${jobId}`, {
       method: "GET",
@@ -346,7 +370,11 @@ export async function fetchReductoJobResult(
       });
     }
 
-    return { status, chunks: mapRawChunksToChunkData(rawChunks) };
+    return {
+      status,
+      chunks: mapRawChunksToChunkData(rawChunks),
+      tableHtml: collectTableHtml(rawChunks),
+    };
   }, "fetchReductoJobResult");
 }
 
@@ -1951,6 +1979,51 @@ export async function processIngestCompletion(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new Error(`Reducto extract pass failed: ${msg}`);
+    }
+
+    // ---------------------------------------------------------------------
+    // 1b. Deterministic SoA grid extraction (workstream A).
+    // Read the SoA HTML grid Reducto already returns and OVERRIDE the LLM's
+    // schedule_of_events with the verbatim per-visit checklists — unless the
+    // automatic gate decides the grid is unreliable (no grid / under-covers /
+    // empty column / structural failure), in which case we keep the LLM
+    // extraction and flag extraction_method='llm_fallback' (never silent).
+    // Everything downstream (SOTR, templates, coverage) consumes the same
+    // schedule_of_events shape, so only this one step changes.
+    // ---------------------------------------------------------------------
+    let soaDecision: SoaGateDecision = { useGrid: false, method: "llm_fallback", reasons: ["grid not attempted"] };
+    try {
+      const gridResult = parseSoaGrid(parseResult.tableHtml);
+      const signal = deriveVisitCountSignal(parseResult.chunks);
+      soaDecision = evaluateSoaGate(gridResult, signal.estimatedTreatmentVisits);
+      if (soaDecision.useGrid && extractedFields) {
+        const { schedule, citations } = gridToScheduleOfEvents(gridResult.visits);
+        extractedFields.schedule_of_events = schedule;
+        const citMap = (extractedFields._reducto_citations && typeof extractedFields._reducto_citations === "object")
+          ? extractedFields._reducto_citations as Record<string, unknown>
+          : {};
+        citMap.schedule_of_events = citations;
+        extractedFields._reducto_citations = citMap;
+        console.log("[ingest] soa_grid_used", {
+          document_id: docId,
+          visits: schedule.length,
+          method: soaDecision.method,
+          guards: gridResult.guards,
+        });
+      } else {
+        console.warn("[ingest] soa_grid_fallback", {
+          document_id: docId,
+          reasons: soaDecision.reasons,
+          estimated_treatment_visits: signal.estimatedTreatmentVisits,
+          tables_seen: parseResult.tableHtml.length,
+        });
+      }
+    } catch (err) {
+      // A parser fault must never abort ingest — fall back to the LLM extraction.
+      console.error("[ingest] soa_grid_error", {
+        document_id: docId,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
 
     // ---------------------------------------------------------------------

@@ -37,6 +37,8 @@ export interface SoaVisit {
   window_minus_days: number;
   window_plus_days: number;
   procedures: SoaProcedure[];
+  /** PDF pages of the SoA table(s) this visit's column came from (for citations). */
+  source_pages: number[];
 }
 
 export interface SoaGridResult {
@@ -47,6 +49,7 @@ export interface SoaGridResult {
     rawMarkCount: number; // mark-bearing cells seen across SoA grids
     emittedMarkCount: number; // (visit, procedure) marks emitted
     unresolvedSpans: number; // rowspan/colspan cells we couldn't place cleanly
+    emptyVisitColumns: number; // visit columns parsed with zero procedures (alignment failure)
     lowConfidence: boolean; // self-consistency mismatch or no SoA tables
     notes: string[];
   };
@@ -304,6 +307,7 @@ export function parseSoaGrid(tables: readonly TableBlock[]): SoaGridResult {
     rawMarkCount: 0,
     emittedMarkCount: 0,
     unresolvedSpans: 0,
+    emptyVisitColumns: 0,
     lowConfidence: false,
     notes: [] as string[],
   };
@@ -354,10 +358,14 @@ export function parseSoaGrid(tables: readonly TableBlock[]): SoaGridResult {
             window_minus_days: meta.window_minus_days,
             window_plus_days: meta.window_plus_days,
             procedures: [],
+            source_pages: [],
           };
           byKey.set(key, visit);
         } else if (visit.study_day == null && meta.study_day != null) {
           visit.study_day = meta.study_day; // backfill from a richer continuation header
+        }
+        if (typeof tb.page === "number" && !visit.source_pages.includes(tb.page)) {
+          visit.source_pages.push(tb.page);
         }
         if (meta.footnoteCapped && !guards.notes.includes("footnote-glued header number corrected")) {
           guards.notes.push("footnote-glued header number corrected");
@@ -371,6 +379,7 @@ export function parseSoaGrid(tables: readonly TableBlock[]): SoaGridResult {
     }
   }
 
+  guards.emptyVisitColumns = [...byKey.values()].filter((v) => v.procedures.length === 0).length;
   const visits = [...byKey.values()].filter((v) => v.procedures.length > 0);
   // self-consistency: emitted marks should be within a sane band of raw marks
   // (raw counts only literal X; conditional/✓ differ, so allow generous slack).
@@ -382,4 +391,133 @@ export function parseSoaGrid(tables: readonly TableBlock[]): SoaGridResult {
     guards.notes.push(`emitted ${guards.emittedMarkCount} marks vs ${guards.rawMarkCount} raw — possible lossy parse`);
   }
   return { visits, guards };
+}
+
+// =============================================================================
+// Grid → schedule_of_events  +  the automatic fallback decision gate
+// =============================================================================
+
+/** One schedule_of_events entry in the shape downstream (SOTR + visit templates) consumes. */
+export interface ScheduleOfEventsItem {
+  visit_name: string;
+  study_day: number | null;
+  window_minus_days: number;
+  window_plus_days: number;
+  procedures: string[];
+  procedures_structured: Array<{
+    label: string;
+    description: string | null;
+    phase: null;
+    classification: "required" | "conditional" | null;
+    role_hint: null;
+    soa_column: string;
+    protocol_section: string;
+    protocol_page: number | null;
+    conditions: unknown[];
+    timing: null;
+    source_fields: unknown[];
+  }>;
+  visit_purpose: string;
+  schedule_variant: string;
+  cross_references: unknown[];
+}
+
+/** Normalized citation shape matching ingestPipeline's normalizeReductoCitation output. */
+export interface SoaCitation {
+  text: string;
+  pages: number[];
+  section: string;
+}
+
+/**
+ * Convert grid visits into the schedule_of_events array + a parallel citation
+ * array (aligned by index, for `_reducto_citations.schedule_of_events`). The
+ * citation points at the actual SoA page — more faithful than the LLM's guess.
+ * Conditional "(X)" → classification "conditional"; uncertain → null (the
+ * adapter marks those `needs_review`); marked → "required".
+ */
+export function gridToScheduleOfEvents(
+  visits: readonly SoaVisit[],
+): { schedule: ScheduleOfEventsItem[]; citations: Array<SoaCitation | null> } {
+  const schedule: ScheduleOfEventsItem[] = [];
+  const citations: Array<SoaCitation | null> = [];
+  for (const v of visits) {
+    schedule.push({
+      visit_name: v.visit_name,
+      study_day: v.study_day,
+      window_minus_days: v.window_minus_days,
+      window_plus_days: v.window_plus_days,
+      procedures: v.procedures.map((p) => p.label),
+      procedures_structured: v.procedures.map((p) => ({
+        label: p.label,
+        description: p.note,
+        phase: null,
+        classification: p.mark === "conditional" ? "conditional" : p.mark === "uncertain" ? null : "required",
+        role_hint: null,
+        soa_column: v.visit_name,
+        protocol_section: "Schedule of Assessments",
+        protocol_page: v.source_pages[0] ?? null,
+        conditions: [],
+        timing: null,
+        source_fields: [],
+      })),
+      visit_purpose: "", // downstream generateVisitPurpose enriches
+      schedule_variant: "",
+      cross_references: [],
+    });
+    citations.push(
+      v.source_pages.length > 0
+        ? {
+          text: `${v.visit_name} — ${v.procedures.slice(0, 4).map((p) => p.label).join(", ")}`,
+          pages: v.source_pages,
+          section: "Schedule of Assessments",
+        }
+        : null,
+    );
+  }
+  return { schedule, citations };
+}
+
+export interface SoaGateDecision {
+  /** true → use the deterministic grid; false → fall back to the LLM extraction. */
+  useGrid: boolean;
+  /** Persisted on the coverage row; surfaced in the banner (never silent). */
+  method: "grid" | "grid_low_confidence" | "llm_fallback";
+  /** Human-readable reasons the gate fired (for logs + the banner). */
+  reasons: string[];
+}
+
+const TREATMENT_VISIT_RE = /^(?:treatment\s+visit|visit)\s+\d+$/i;
+
+/**
+ * The automatic, per-document fallback gate (plan A-fallback). Accept the grid
+ * UNLESS any check fails:
+ *   1. no SoA grid found
+ *   2. under-covers — grid's numbered treatment visits < the independent signal
+ *   3. an empty visit column (alignment failure)
+ *   4. structural failure — unresolved spans, or self-consistency low-confidence
+ * Pass all → grid (deterministic, the normal path). Any fail → llm_fallback,
+ * flagged on the coverage row.
+ */
+export function evaluateSoaGate(
+  result: SoaGridResult,
+  expectedTreatmentVisits: number,
+): SoaGateDecision {
+  const reasons: string[] = [];
+  const { guards, visits } = result;
+
+  if (guards.soaTablesFound === 0 || visits.length === 0) reasons.push("no SoA grid found");
+
+  const gridTreatmentVisits = visits.filter((v) => TREATMENT_VISIT_RE.test(v.visit_name)).length;
+  if (expectedTreatmentVisits > 0 && gridTreatmentVisits < expectedTreatmentVisits) {
+    reasons.push(`grid under-covers: ${gridTreatmentVisits} treatment visits vs ~${expectedTreatmentVisits} expected`);
+  }
+  if (guards.emptyVisitColumns > 0) reasons.push(`${guards.emptyVisitColumns} empty visit column(s)`);
+  if (guards.unresolvedSpans > 0) reasons.push(`${guards.unresolvedSpans} unresolved row/col span(s)`);
+
+  if (reasons.length > 0) return { useGrid: false, method: "llm_fallback", reasons };
+  if (guards.lowConfidence) {
+    return { useGrid: true, method: "grid_low_confidence", reasons: guards.notes };
+  }
+  return { useGrid: true, method: "grid", reasons: [] };
 }
