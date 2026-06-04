@@ -46,8 +46,15 @@ verify_jwt = false
 [functions.ingest-status]
 verify_jwt = true
 
-# Stuck-pending safety net — called from authenticated dashboard mount.
-# Scans the caller's documents that have been pending >10min and processes
-# any that Reducto reports complete. Authenticated.
+# Stuck-pending safety net — called from authenticated dashboard mount, and
+# (service-role mode) from the pg_cron recover schedule. Scans documents pending
+# >10min and processes any that Reducto reports complete. Authenticated.
 [functions.ingest-recover]
 verify_jwt = true
+
+# Reducto direct-webhook finalizer (workstream D). Reducto POSTs completed jobs
+# here server-to-server, so finalization doesn't depend on the browser. Reducto
+# can't mint a Supabase JWT, so this is unverified at the gateway and instead
+# checks the REDUCTO_WEBHOOK_SECRET passed as ?token= on the registered URL.
+[functions.reducto-webhook]
+verify_jwt = false

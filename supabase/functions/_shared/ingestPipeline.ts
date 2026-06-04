@@ -255,6 +255,12 @@ export async function uploadToReducto(pdfBytes: Uint8Array, reductoKey: string):
 export async function kickOffReductoParseAsync(
   fileId: string,
   reductoKey: string,
+  // Workstream D: when a webhook URL is supplied, Reducto POSTs the completed
+  // job to it directly (server-to-server, retried 3×), so finalization no longer
+  // depends on the browser polling /ingest-status — the long-PDF "stuck pending"
+  // fix. metadata.document_id is echoed back so the webhook knows which doc.
+  // Omitted (undefined) → identical to the prior polling-only behaviour.
+  webhook?: { url: string; documentId: string },
 ): Promise<string> {
   return withRetry(async () => {
     const res = await fetch(`${REDUCTO_BASE_URL}/parse_async`, {
@@ -284,6 +290,12 @@ export async function kickOffReductoParseAsync(
           agentic: [{ scope: "table" }, { scope: "figure" }],
           intelligent_ordering: true,
         },
+        ...(webhook
+          ? {
+            async_config: { webhook: { mode: "direct", url: webhook.url } },
+            metadata: { document_id: webhook.documentId },
+          }
+          : {}),
       }),
     });
 
@@ -1776,11 +1788,6 @@ async function persistVisitExecutionWorkspaces(
 
   const visitsPayload: Array<Record<string, unknown>> = [];
 
-  // Serial across visits is deliberate: each visit fires two parallel LLM
-  // calls (purpose + missing-req), so parallelizing the outer loop would
-  // multiply OpenAI concurrency by N visits and trip rate limits on larger
-  // protocols. Trade-off accepted: ~3s × N visits sequential vs ~3s total
-  // but rate-limit risky. Revisit if ingest latency becomes a complaint.
   // Schedule span for the implausible-day check (#3a) — scaled to the protocol's
   // own length so the rules generalize across short and long studies.
   const maxStudyDay = args.schedule.reduce((m, e) => {
@@ -1788,6 +1795,18 @@ async function persistVisitExecutionWorkspaces(
     return d !== null && d > m ? d : m;
   }, 0);
 
+  // Phase 1 (sequential, cheap): match each schedule entry to its template,
+  // disambiguate collisions, and gather the per-visit inputs. The mutations
+  // here (unmatched / collision guards) stay single-threaded.
+  interface PreparedVisit {
+    entry: ScheduleEntry;
+    templateId: string;
+    extractedLabels: string[];
+    visitSectionText: string;
+    reductoPurpose: string;
+    studyDay: number;
+  }
+  const prepared: PreparedVisit[] = [];
   for (const entry of args.schedule) {
     if (typeof entry.visit_name !== "string") continue;
     // Coerce identically to the template-build step (step 5) so this key matches
@@ -1820,58 +1839,73 @@ async function persistVisitExecutionWorkspaces(
         ? (entry.procedures as unknown[]).filter((p): p is string => typeof p === "string")
         : [];
 
-    const visitSectionText = pickVisitSectionText(entry);
+    prepared.push({
+      entry,
+      templateId: tpl.id,
+      extractedLabels,
+      visitSectionText: pickVisitSectionText(entry),
+      reductoPurpose: typeof entry.visit_purpose === "string" ? entry.visit_purpose.trim() : "",
+      studyDay,
+    });
+  }
 
-    // LLM passes in parallel per visit. Both fail gracefully — purpose returns
-    // null, missing-req returns a synthetic 'coverage_check_unavailable' gap.
-    //
-    // Visit-purpose: short-circuit ONLY if Reducto's extracted value clears
-    // the quality floor (substantive prose, not "Day 1"). Below the floor we
-    // still call the dedicated LLM prompt so the mastery principle holds.
-    const reductoPurpose = typeof entry.visit_purpose === "string"
-      ? entry.visit_purpose.trim()
-      : "";
+  // Phase 2 (bounded-parallel): each visit fires up to two LLM calls (purpose +
+  // missing-req). Previously fully serial to bound OpenAI concurrency; a bounded
+  // pool keeps that ceiling (POOL × 2 in-flight) while collapsing wall-clock from
+  // ~3s × N to ~3s × ceil(N / POOL) — the long-protocol completion no longer
+  // risks the 150s function cap. Results are written by index to preserve order.
+  const POOL = 4;
+  const results: Array<Record<string, unknown> | null> = new Array(prepared.length).fill(null);
+  let cursor = 0;
+  const runVisit = async (p: PreparedVisit, index: number): Promise<void> => {
+    // Visit-purpose: short-circuit ONLY if Reducto's extracted value clears the
+    // quality floor (substantive prose, not "Day 1"). Below the floor call the
+    // dedicated LLM prompt. Both LLM passes fail gracefully (null / synthetic gap).
     const purposeTask: Promise<string | null> =
-      reductoPurpose.length > 0 && reductoPurposeMeetsQualityFloor(reductoPurpose)
-        ? Promise.resolve(reductoPurpose)
+      p.reductoPurpose.length > 0 && reductoPurposeMeetsQualityFloor(p.reductoPurpose)
+        ? Promise.resolve(p.reductoPurpose)
         : generateVisitPurpose({
-            visit_name: String(entry.visit_name).trim(),
-            study_day: Math.trunc(entry.study_day),
-            visit_section_text: visitSectionText,
+            visit_name: String(p.entry.visit_name).trim(),
+            study_day: Math.trunc(p.entry.study_day),
+            visit_section_text: p.visitSectionText,
             openaiKey: args.openaiKey,
           });
 
     const [purpose, gaps] = await Promise.all([
       purposeTask,
       detectMissingRequirements({
-        visit_name: String(entry.visit_name).trim(),
-        study_day: Math.trunc(entry.study_day),
-        extracted_labels: extractedLabels,
-        visit_section_text: visitSectionText,
+        visit_name: String(p.entry.visit_name).trim(),
+        study_day: Math.trunc(p.entry.study_day),
+        extracted_labels: p.extractedLabels,
+        visit_section_text: p.visitSectionText,
         openaiKey: args.openaiKey,
       }),
     ]);
 
     // #3a: flag a study_day that contradicts the visit name (e.g. EOT dated
     // early) as a per-visit review signal. Flag only — never correct the day.
-    const dayGap = detectImplausibleDay(String(entry.visit_name).trim(), studyDay, maxStudyDay);
+    const dayGap = detectImplausibleDay(String(p.entry.visit_name).trim(), p.studyDay, maxStudyDay);
     const allGaps = dayGap ? [...gaps, dayGap] : gaps;
 
-    const conf =
-      typeof entry.visit_name === "string"
-        ? args.confidenceByVisitName.get(normalizeVisitNameKey(entry.visit_name))
-        : undefined;
-    visitsPayload.push(
-      await buildPersistPayloadForVisit(
-        tpl.id,
-        entry,
-        allGaps,
-        purpose,
-        conf?.extractedItemId ?? null,
-        conf?.confidenceState ?? null,
-      ),
+    const conf = args.confidenceByVisitName.get(normalizeVisitNameKey(String(p.entry.visit_name)));
+    results[index] = await buildPersistPayloadForVisit(
+      p.templateId,
+      p.entry,
+      allGaps,
+      purpose,
+      conf?.extractedItemId ?? null,
+      conf?.confidenceState ?? null,
     );
-  }
+  };
+  const worker = async (): Promise<void> => {
+    while (true) {
+      const i = cursor++;
+      if (i >= prepared.length) return;
+      await runVisit(prepared[i], i);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(POOL, prepared.length) }, worker));
+  for (const r of results) if (r) visitsPayload.push(r);
 
   // Loud guard: schedule entries that carried procedures but matched NO template
   // had their procedures dropped. This is the exact failure mode that hid the

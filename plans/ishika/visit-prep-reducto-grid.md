@@ -31,12 +31,13 @@ visit with verbatim per-visit procedures, with **zero change to the Ask-tab chun
 - NEW `supabase/functions/_shared/soaColumnCount.ts` — pure independent expected-visit-count signal.
 - `supabase/functions/_shared/visitTemplateDedup.ts` — `visitMatchKey` (collision support if needed).
 - NEW `supabase/functions/_shared/__tests__/soaGridParser.test.ts`, `soaColumnCount.test.ts` (+ byKey).
-- `supabase/functions/ingest-status/index.ts` — background/staged completion (`waitUntil`).
-- NEW/re-create `supabase/functions/reducto-webhook/index.ts` — direct-webhook finalizer.
-- `supabase/functions/ingest-recover/index.ts` — reused by cron.
-- NEW migration `supabase/migrations/2026XXXX_visit_coverage_extraction_status.sql` — add
-  `extraction_status` + `expected_from_signal` to `protocol_visit_coverage`; `CREATE OR REPLACE
-  visit_execution_get_coverage`; (+ pg_cron recover schedule).
+- `supabase/functions/ingest/index.ts` — pass the direct-webhook URL + document_id to the parse.
+- NEW `supabase/functions/reducto-webhook/index.ts` — direct-webhook finalizer (waitUntil).
+- `supabase/functions/ingest-recover/index.ts` — add a service-role/cron mode (scan all stuck docs).
+- `supabase/config.toml` — `reducto-webhook` verify_jwt=false.
+- NEW migration `20260703000000_visit_coverage_extraction_method.sql` — add `extraction_method` +
+  `expected_from_signal` to `protocol_visit_coverage`; `CREATE OR REPLACE visit_execution_get_coverage`.
+- NEW migration `20260703000001_ingest_recover_cron.sql` — self-guarding pg_cron recover schedule.
 - `src/types/visit-execution/index.ts`, `src/lib/visit-execution/visitExecutionApi.ts`,
   `src/components/dashboard/visit-execution/CoverageBanner.tsx` — type mirror + banner copy.
 - `src/lib/visit-execution/visitExecutionAdapter.ts`,
@@ -49,6 +50,10 @@ visit with verbatim per-visit procedures, with **zero change to the Ask-tab chun
 - Ask-tab RAG: `chunk.content`, embeddings, `embedding_optimized` — **unchanged** (verified).
 - `#255` (popup fix + dashboard-mount recover) — already merged to main.
 - Temp recovery scaffolding (`admin-finalize-doc`/`admin-ingest` fns, deployed) — delete separately.
+- **Staged "mark-ready-before-enrichment" completion** — NOT in this PR. The per-visit LLM loop is
+  now bounded-parallel (POOL=4) which collapses long-protocol completion wall-clock; the
+  webhook+cron decouples it from the browser. Reordering `status='ready'` ahead of enrichment is a
+  riskier change that needs live timing data + codeowner (rv61) review — deferred as a follow-up.
 
 ## Architecture layers
 Pipeline (extraction + persist) · RPC (`visit_execution_get_coverage`) · migration · type · component · edge fns (webhook, cron).

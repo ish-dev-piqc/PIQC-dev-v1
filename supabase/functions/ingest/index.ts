@@ -231,10 +231,21 @@ Deno.serve(async (req: Request) => {
       }
 
       // Step 4: Upload PDF to Reducto + kick off async parse. Job runs in
-      // Reducto's cloud (no time pressure on us). Frontend polls
-      // /ingest-status with this job_id to complete the work when done.
+      // Reducto's cloud (no time pressure on us). When REDUCTO_WEBHOOK_SECRET is
+      // configured, Reducto POSTs the completed job to /reducto-webhook directly
+      // (server-side, browser-independent — the long-PDF reliability fix);
+      // otherwise the frontend polls /ingest-status as before. The cron recover
+      // is the safety net for a missed webhook either way.
       const fileId = await uploadToReducto(pdfBytes, reductoKey);
-      const reductoJobId = await kickOffReductoParseAsync(fileId, reductoKey);
+      const webhookSecret = Deno.env.get("REDUCTO_WEBHOOK_SECRET");
+      const supabaseUrl = Deno.env.get("SUPABASE_URL");
+      const webhook = webhookSecret && supabaseUrl
+        ? {
+          url: `${supabaseUrl}/functions/v1/reducto-webhook?token=${encodeURIComponent(webhookSecret)}`,
+          documentId: docId,
+        }
+        : undefined;
+      const reductoJobId = await kickOffReductoParseAsync(fileId, reductoKey, webhook);
 
       // Step 5: Stash the job_id so /ingest-recover can find this doc if
       // Reducto's webhook delivery fails.
