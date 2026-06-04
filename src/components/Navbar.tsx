@@ -10,6 +10,7 @@ import { useHeatmap } from '../context/HeatmapContext';
 import { useDemoMode } from '../context/DemoModeContext';
 import { getProtocolColors } from '../lib/site/protocolColors';
 import MembersDrawer from './dashboard/orgs/MembersDrawer';
+import { useUnreadMentionsDisplay } from '../context/UnreadMentionsContext';
 import OrgSwitcher from './dashboard/orgs/OrgSwitcher';
 import RequestAccessButton from './dashboard/orgs/RequestAccessButton';
 import ProtocolUploadModal from './dashboard/site/ProtocolUploadModal';
@@ -29,6 +30,11 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  // Global unread @-mention count — same indicator used inside the Chat tab's
+  // per-channel badges, but visible from any page in the app so users don't
+  // miss being mentioned while on Today/Visits/etc.
+  const { count: unreadMentionCount, display: unreadMentionDisplay } =
+    useUnreadMentionsDisplay();
   const [membersDrawerOpen, setMembersDrawerOpen] = useState(false);
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [protocolMenuOpen, setProtocolMenuOpen] = useState(false);
@@ -584,9 +590,21 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-150 group ${isLight ? 'hover:bg-[#0F172A]/[0.06]' : 'hover:bg-white/[0.06]'}`}
+                  aria-label={
+                    unreadMentionCount > 0
+                      ? `Account menu — ${unreadMentionCount} unread mention${unreadMentionCount === 1 ? '' : 's'}`
+                      : 'Account menu'
+                  }
                 >
-                  <div className="w-7 h-7 rounded-full bg-brand-600/20 border border-brand-600/30 flex items-center justify-center">
+                  <div className="relative w-7 h-7 rounded-full bg-brand-600/20 border border-brand-600/30 flex items-center justify-center">
                     <User size={13} className="text-brand-300" />
+                    {unreadMentionCount > 0 && (
+                      <span
+                        className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 ${isLight ? 'bg-amber-500 border-white' : 'bg-amber-400 border-[#0F172A]'}`}
+                        title={`${unreadMentionCount} unread @mention${unreadMentionCount === 1 ? '' : 's'}`}
+                        aria-hidden="true"
+                      />
+                    )}
                   </div>
                   <span className={`text-sm ${isLight ? 'text-[#334155]/60 group-hover:text-[#0F172A]' : 'text-[#CBD5E1]/60 group-hover:text-white'} transition-colors max-w-[140px] truncate`}>
                     {user?.email ?? 'Account'}
@@ -638,6 +656,14 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                       >
                         <Building2 size={14} />
                         Organization
+                        {unreadMentionCount > 0 && (
+                          <span
+                            className={`ml-auto inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${isLight ? 'bg-amber-500 text-white' : 'bg-amber-400 text-[#0F172A]'}`}
+                            title={`${unreadMentionCount} unread @mention${unreadMentionCount === 1 ? '' : 's'}`}
+                          >
+                            @{unreadMentionDisplay}
+                          </span>
+                        )}
                       </button>
                       <p className={`px-3 pt-3 pb-1.5 text-[11px] uppercase tracking-wider ${isLight ? 'text-[#334155]/35' : 'text-[#CBD5E1]/35'}`}>
                         Appearance
@@ -794,6 +820,14 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
               >
                 <Building2 size={14} />
                 Organization
+                {unreadMentionCount > 0 && (
+                  <span
+                    className={`ml-auto inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${isLight ? 'bg-amber-500 text-white' : 'bg-amber-400 text-[#0F172A]'}`}
+                    title={`${unreadMentionCount} unread @mention${unreadMentionCount === 1 ? '' : 's'}`}
+                  >
+                    @{unreadMentionDisplay}
+                  </span>
+                )}
               </button>
               <p className={`px-3 pt-3 pb-1.5 text-[11px] uppercase tracking-wider ${isLight ? 'text-[#334155]/35' : 'text-[#CBD5E1]/35'}`}>
                 Appearance

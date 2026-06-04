@@ -12,6 +12,7 @@ import {
 import { useTheme } from '../../../context/ThemeContext';
 import { useOrg } from '../../../context/OrgContext';
 import { useProtocol } from '../../../context/ProtocolContext';
+import { useUnreadMentionsDisplay } from '../../../context/UnreadMentionsContext';
 import MembersTab from './MembersTab';
 import ManageTab from './ManageTab';
 import ChatTab from './ChatTab';
@@ -68,6 +69,8 @@ export default function OrganizationPage({ onExit }: OrganizationPageProps) {
   const isLight = theme === 'light';
   const { activeOrg } = useOrg();
   const { protocols, activeProtocol, setActiveProtocol } = useProtocol();
+  const { count: unreadMentionCount, display: unreadMentionDisplay } =
+    useUnreadMentionsDisplay();
   // Read from localStorage on each mount so refresh restores the last
   // sub-tab. Deep-link entry points (e.g. cert-warning band → Team) write
   // directly to localStorage in App.tsx before navigating, so the read
@@ -137,6 +140,16 @@ export default function OrganizationPage({ onExit }: OrganizationPageProps) {
                 >
                   <Icon size={15} className={isActive ? 'text-brand-300' : ''} />
                   {t.label}
+                  {t.id === 'chat' && unreadMentionCount > 0 && (
+                    <span
+                      className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                        isLight ? 'bg-amber-500 text-white' : 'bg-amber-400 text-[#0F172A]'
+                      }`}
+                      title={`${unreadMentionCount} unread @mention${unreadMentionCount === 1 ? '' : 's'}`}
+                    >
+                      @{unreadMentionDisplay}
+                    </span>
+                  )}
                 </button>
               );
             })}
