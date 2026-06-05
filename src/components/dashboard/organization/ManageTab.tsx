@@ -11,6 +11,7 @@ import {
   Layers,
   Loader2,
   ArrowRight,
+  HardDrive,
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useDemoMode } from '../../../context/DemoModeContext';
@@ -29,6 +30,10 @@ import {
   updateOrgMemberRole,
   updateProtocolMemberRole,
 } from '../../../lib/orgs/orgsApi';
+import {
+  countOrphanChatAttachments,
+  deleteOrphanChatAttachments,
+} from '../../../lib/orgs/chatAttachmentsCleanupApi';
 import type {
   OrgInvite,
   OrgMemberWithProfile,
@@ -78,6 +83,40 @@ export default function ManageTab() {
   // Invite form
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<OrgRole>('member');
+
+  // Storage maintenance — orphan chat-attachment sweep. Two-step flow:
+  // null  → not yet checked
+  // n>=0  → preview count; "Delete" button visible
+  // 'deleting' / 'deleted:n' / error string covers the rest.
+  type OrphanState =
+    | { kind: 'idle' }
+    | { kind: 'counting' }
+    | { kind: 'previewed'; count: number }
+    | { kind: 'deleting'; count: number }
+    | { kind: 'done'; deleted: number }
+    | { kind: 'error'; message: string };
+  const [orphanState, setOrphanState] = useState<OrphanState>({ kind: 'idle' });
+
+  const handleFindOrphans = useCallback(async () => {
+    setOrphanState({ kind: 'counting' });
+    const res = await countOrphanChatAttachments();
+    if (!res.ok) {
+      setOrphanState({ kind: 'error', message: res.error });
+      return;
+    }
+    setOrphanState({ kind: 'previewed', count: res.data });
+  }, []);
+
+  const handleDeleteOrphans = useCallback(async () => {
+    if (orphanState.kind !== 'previewed') return;
+    setOrphanState({ kind: 'deleting', count: orphanState.count });
+    const res = await deleteOrphanChatAttachments();
+    if (!res.ok) {
+      setOrphanState({ kind: 'error', message: res.error });
+      return;
+    }
+    setOrphanState({ kind: 'done', deleted: res.data });
+  }, [orphanState]);
   const [creatingInvite, setCreatingInvite] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   // After invite creation, briefly show "✓ Email sent to <email>" or a
@@ -1182,6 +1221,121 @@ export default function ManageTab() {
               </div>
             )}
           </>
+        )}
+      </section>
+
+      {/* -------------------------------------------------------------------
+          Storage maintenance — orphan chat-attachment sweep.
+          Two-click: "Find orphans" → "Delete N files".
+      ------------------------------------------------------------------- */}
+      <section className={`p-5 rounded-md ${sectionBg} border ${border} max-w-3xl`}>
+        <h3 className={`${labelColor} text-[10px] uppercase tracking-wider font-semibold mb-1 flex items-center gap-1.5`}>
+          <HardDrive size={11} />
+          Storage maintenance
+        </h3>
+        <p className={`${subColor} text-xs mb-3 leading-relaxed`}>
+          Find and delete orphan chat attachments — files in Storage with no matching message. Safe to delete.
+        </p>
+
+        {orphanState.kind === 'idle' && (
+          <button
+            type="button"
+            onClick={handleFindOrphans}
+            className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${buttonGhost}`}
+          >
+            Find orphans
+          </button>
+        )}
+
+        {orphanState.kind === 'counting' && (
+          <p className={`${subColor} text-xs inline-flex items-center gap-1.5`}>
+            <Loader2 size={12} className="animate-spin" />
+            Scanning Storage…
+          </p>
+        )}
+
+        {orphanState.kind === 'previewed' && orphanState.count === 0 && (
+          <div className="space-y-2">
+            <p className={`${headingColor} text-sm inline-flex items-center gap-1.5`}>
+              <Check size={14} className={isLight ? 'text-emerald-600' : 'text-emerald-400'} />
+              Bucket is clean — no orphan files.
+            </p>
+            <button
+              type="button"
+              onClick={() => setOrphanState({ kind: 'idle' })}
+              className={`text-xs px-2.5 py-1 rounded-md ${buttonGhost}`}
+            >
+              Done
+            </button>
+          </div>
+        )}
+
+        {orphanState.kind === 'previewed' && orphanState.count > 0 && (
+          <div className={`space-y-2 p-3 rounded-md border ${border}`}>
+            <p className={`${headingColor} text-sm`}>
+              Found {orphanState.count} orphan file{orphanState.count === 1 ? '' : 's'}. Delete all?
+            </p>
+            <p className={`${subColor} text-[11px]`}>
+              This can't be undone.
+            </p>
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setOrphanState({ kind: 'idle' })}
+                className={`text-xs px-3 py-1.5 rounded-md ${buttonGhost}`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteOrphans}
+                className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
+                  isLight
+                    ? 'bg-rose-600 text-white hover:bg-rose-700'
+                    : 'bg-rose-500 text-white hover:bg-rose-400'
+                }`}
+              >
+                <Trash2 size={12} />
+                Delete {orphanState.count} file{orphanState.count === 1 ? '' : 's'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {orphanState.kind === 'deleting' && (
+          <p className={`${subColor} text-xs inline-flex items-center gap-1.5`}>
+            <Loader2 size={12} className="animate-spin" />
+            Deleting {orphanState.count} file{orphanState.count === 1 ? '' : 's'}…
+          </p>
+        )}
+
+        {orphanState.kind === 'done' && (
+          <div className="space-y-2">
+            <p className={`${headingColor} text-sm inline-flex items-center gap-1.5`}>
+              <Check size={14} className={isLight ? 'text-emerald-600' : 'text-emerald-400'} />
+              Deleted {orphanState.deleted} orphan file{orphanState.deleted === 1 ? '' : 's'}.
+            </p>
+            <button
+              type="button"
+              onClick={() => setOrphanState({ kind: 'idle' })}
+              className={`text-xs px-2.5 py-1 rounded-md ${buttonGhost}`}
+            >
+              Done
+            </button>
+          </div>
+        )}
+
+        {orphanState.kind === 'error' && (
+          <div className={`px-3 py-2 rounded-md text-xs ${isLight ? 'bg-rose-50 text-rose-700' : 'bg-rose-500/[0.06] text-rose-300'}`}>
+            {orphanState.message}{' '}
+            <button
+              type="button"
+              onClick={() => setOrphanState({ kind: 'idle' })}
+              className="underline ml-1"
+            >
+              Reset
+            </button>
+          </div>
         )}
       </section>
     </div>
