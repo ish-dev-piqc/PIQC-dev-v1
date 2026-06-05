@@ -121,6 +121,12 @@ export interface OrgMessage {
   author_user_id: string | null;
   body: string;
   created_at: string;
+  /** Non-null when the message has been edited; carries the edit timestamp. */
+  edited_at: string | null;
+  /** Non-null when the message was soft-deleted; UI shows a placeholder
+   *  and hides attachments + reactions. The row + body + attachments stay
+   *  intact in the DB so the audit trail is preserved. */
+  deleted_at: string | null;
 }
 
 export interface NewOrgMessageInput {
@@ -139,6 +145,8 @@ export interface ProtocolMessage {
   author_user_id: string | null;
   body: string;
   created_at: string;
+  edited_at: string | null;
+  deleted_at: string | null;
 }
 
 export interface NewProtocolMessageInput {
@@ -292,6 +300,24 @@ export interface AcceptedGuestInvite {
   guest_id: string;
   protocol_id: string;
   accepted_at: string;
+}
+
+
+// ---------------------------------------------------------------------------
+// Chat reactions (emoji on messages)
+// ---------------------------------------------------------------------------
+
+/** A single reaction row. Exactly one of `org_message_id` /
+ *  `protocol_message_id` is set, with the channel ref denormalized in. */
+export interface ChatReaction {
+  id: string;
+  org_message_id: string | null;
+  protocol_message_id: string | null;
+  org_id: string | null;
+  protocol_id: string | null;
+  user_id: string;
+  emoji: string;
+  created_at: string;
 }
 
 

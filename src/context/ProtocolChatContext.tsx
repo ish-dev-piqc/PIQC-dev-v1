@@ -123,6 +123,23 @@ export function ProtocolChatProvider({ children }: { children: React.ReactNode }
           setMessages((prev) => prev.filter((m) => m.id !== oldId));
         },
       )
+      .on(
+        'postgres_changes',
+        {
+          // UPDATE — edits + soft-deletes flow through.
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'protocol_messages',
+          filter: `protocol_id=eq.${activeProtocolId}`,
+        },
+        (payload) => {
+          const raw = payload.new as ProtocolMessageRow;
+          const next = adaptProtocolMessage(raw);
+          setMessages((prev) =>
+            prev.map((m) => (m.id === next.id ? next : m)),
+          );
+        },
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);

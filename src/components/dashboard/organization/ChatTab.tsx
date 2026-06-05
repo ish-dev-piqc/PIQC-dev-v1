@@ -10,6 +10,7 @@ import {
   Paperclip,
   File as FileIcon,
   X as XIcon,
+  Check,
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useAuth } from '../../../context/AuthContext';
@@ -17,10 +18,19 @@ import { useOrg } from '../../../context/OrgContext';
 import { useOrgChat } from '../../../context/OrgChatContext';
 import { useProtocolChat } from '../../../context/ProtocolChatContext';
 import {
+  addReaction,
+  editOrgMessage,
+  editProtocolMessage,
   listMyChatProtocols,
   listOrgMembersWithProfile,
+  removeReaction,
+  softDeleteOrgMessage,
+  softDeleteProtocolMessage,
   uploadChatAttachment,
 } from '../../../lib/orgs/orgsApi';
+import { useChatReactions } from '../../../hooks/useChatReactions';
+import MessageActions from './chat/MessageActions';
+import ReactionChips from './chat/ReactionChips';
 import { useChannelAttachments } from '../../../hooks/useChannelAttachments';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useSiteData } from '../../../context/SiteDataContext';
@@ -147,6 +157,8 @@ interface ChatMessageLike {
   author_user_id: string | null;
   body: string;
   created_at: string;
+  edited_at: string | null;
+  deleted_at: string | null;
 }
 
 function readStoredChannel(): ActiveChannel | null {
@@ -274,6 +286,11 @@ export default function ChatTab() {
     { id: string; body: string; authorUserId: string | null; createdAt: string } | null
   >(null);
   const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null);
+  // Inline edit state. Editing one message at a time. editingValue is the
+  // textarea draft; null editingMessageId means no edit in progress.
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const isOrgAdmin = activeOrg?.my_role === 'admin';
   const channelKind: 'org' | 'protocol' =
@@ -762,6 +779,83 @@ export default function ChatTab() {
           error: protocolChat.error,
           post: protocolChat.postMessage,
         };
+
+  // --- Reactions ----------------------------------------------------------
+  // Fetch + realtime sub for the active channel's reactions. Returns
+  // chipsByMessageId, a derived Map<messageId, ReactionChip[]> for the UI.
+  const messageIdsForReactions = useMemo(
+    () => active.messages.map((m) => m.id),
+    [active.messages],
+  );
+  const { chipsByMessageId } = useChatReactions({
+    org_id: activeChannel.kind === 'org' ? activeOrg?.id ?? null : null,
+    protocol_id:
+      activeChannel.kind === 'protocol' ? activeChannel.id : null,
+    messageIds: messageIdsForReactions,
+    currentUserId,
+  });
+
+  // Toggle the caller's own reaction on a message. Click adds it if not
+  // present; click again removes. addReaction handles the unique-constraint
+  // collision gracefully (the server returns an error which we swallow —
+  // the realtime echo from the existing row keeps the chip count correct).
+  async function handleReactionToggle(messageId: string, emoji: string) {
+    if (!currentUserId) return;
+    const chips = chipsByMessageId.get(messageId) ?? [];
+    const existing = chips.find((c) => c.emoji === emoji && c.selfReacted);
+    const orgId = activeChannel.kind === 'org' ? activeOrg?.id ?? undefined : undefined;
+    const protocolId =
+      activeChannel.kind === 'protocol' ? activeChannel.id : undefined;
+    const isOrg = activeChannel.kind === 'org';
+    if (existing) {
+      await removeReaction({
+        org_message_id: isOrg ? messageId : undefined,
+        protocol_message_id: !isOrg ? messageId : undefined,
+        emoji,
+      });
+    } else {
+      await addReaction({
+        org_message_id: isOrg ? messageId : undefined,
+        protocol_message_id: !isOrg ? messageId : undefined,
+        org_id: orgId,
+        protocol_id: protocolId,
+        emoji,
+      });
+    }
+  }
+
+  async function handleStartEdit(message: ChatMessageLike) {
+    setEditingMessageId(message.id);
+    setEditingValue(message.body);
+  }
+
+  function handleCancelEdit() {
+    setEditingMessageId(null);
+    setEditingValue('');
+  }
+
+  async function handleSaveEdit() {
+    if (!editingMessageId) return;
+    const next = editingValue.trim();
+    if (!next) return;
+    setSavingEdit(true);
+    const res =
+      activeChannel.kind === 'org'
+        ? await editOrgMessage(editingMessageId, next)
+        : await editProtocolMessage(editingMessageId, next);
+    setSavingEdit(false);
+    if (res.ok) handleCancelEdit();
+  }
+
+  async function handleSoftDelete(messageId: string) {
+    if (!confirm('Delete this message? It will be replaced with a "deleted" placeholder.'))
+      return;
+    if (activeChannel.kind === 'org') {
+      await softDeleteOrgMessage(messageId);
+    } else {
+      await softDeleteProtocolMessage(messageId);
+    }
+  }
 
   const channelLabel = useMemo(() => {
     if (activeChannel.kind === 'org') return 'general';
@@ -1342,33 +1436,111 @@ export default function ChatTab() {
                     );
                   })()}
                   <div className="group relative max-w-[80%]">
-                    <div
-                      className={`rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words ${
-                        isSelf ? selfBubble : otherBubble
-                      }`}
-                    >
-                      {renderMessageBody(m.body, isSelf)}
-                    </div>
-                    <AttachmentRender
-                      attachments={attachmentsByMessageId.get(m.id) ?? []}
-                      canDelete={(a) =>
-                        a.uploaded_by_user_id === currentUserId || isOrgAdmin
-                      }
-                      onDeleted={removeAttachmentLocal}
-                    />
-                    <MessagePromoteButton
-                      isSelf={isSelf}
-                      isLight={isLight}
-                      onPromote={() =>
-                        setPromoteSource({
-                          id: m.id,
-                          body: m.body,
-                          authorUserId: m.author_user_id,
-                          createdAt: m.created_at,
-                        })
-                      }
-                    />
+                    {m.deleted_at ? (
+                      <div
+                        className={`rounded-2xl px-3 py-2 text-sm italic ${
+                          isLight
+                            ? 'bg-[#F1F5F9] text-[#334155]/55'
+                            : 'bg-white/[0.02] text-[#CBD5E1]/45'
+                        }`}
+                      >
+                        (this message was deleted)
+                      </div>
+                    ) : editingMessageId === m.id ? (
+                      <div className="flex flex-col gap-1">
+                        <textarea
+                          value={editingValue}
+                          onChange={(e) => setEditingValue(e.target.value)}
+                          rows={Math.min(6, editingValue.split('\n').length)}
+                          className={`text-sm rounded-md border px-2 py-1.5 ${
+                            isLight
+                              ? 'bg-white border-[#E2E8F0] text-[#0F172A]'
+                              : 'bg-[#1E293B] border-white/10 text-white'
+                          } focus:outline-none focus:ring-2 focus:ring-brand-600/30`}
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Escape') {
+                              e.preventDefault();
+                              handleCancelEdit();
+                            } else if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              handleSaveEdit();
+                            }
+                          }}
+                        />
+                        <div className="flex items-center gap-1.5 self-end">
+                          <button
+                            type="button"
+                            onClick={handleCancelEdit}
+                            disabled={savingEdit}
+                            className={`text-[11px] px-2 py-1 rounded-md ${
+                              isLight
+                                ? 'text-[#334155]/70 hover:bg-[#0F172A]/[0.05]'
+                                : 'text-[#CBD5E1]/70 hover:bg-white/[0.05]'
+                            }`}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSaveEdit}
+                            disabled={savingEdit || !editingValue.trim()}
+                            className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-md ${
+                              isLight
+                                ? 'bg-brand-600 text-white hover:bg-brand-700'
+                                : 'bg-brand-500 text-white hover:bg-brand-400'
+                            } disabled:opacity-50`}
+                          >
+                            <Check size={11} />
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        className={`rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words ${
+                          isSelf ? selfBubble : otherBubble
+                        }`}
+                      >
+                        {renderMessageBody(m.body, isSelf)}
+                      </div>
+                    )}
+                    {!m.deleted_at && (
+                      <AttachmentRender
+                        attachments={attachmentsByMessageId.get(m.id) ?? []}
+                        canDelete={(a) =>
+                          a.uploaded_by_user_id === currentUserId || isOrgAdmin
+                        }
+                        onDeleted={removeAttachmentLocal}
+                      />
+                    )}
+                    {!m.deleted_at && editingMessageId !== m.id && (
+                      <MessageActions
+                        isSelf={isSelf}
+                        canEdit={isSelf}
+                        canDelete={isSelf || isOrgAdmin}
+                        canReact={!!currentUserId}
+                        onPromote={() =>
+                          setPromoteSource({
+                            id: m.id,
+                            body: m.body,
+                            authorUserId: m.author_user_id,
+                            createdAt: m.created_at,
+                          })
+                        }
+                        onEdit={() => handleStartEdit(m)}
+                        onDelete={() => handleSoftDelete(m.id)}
+                        onReact={(emoji) => handleReactionToggle(m.id, emoji)}
+                      />
+                    )}
                   </div>
+                  {!m.deleted_at && (
+                    <ReactionChips
+                      chips={chipsByMessageId.get(m.id) ?? []}
+                      isSelfMessage={isSelf}
+                      onToggle={(emoji) => handleReactionToggle(m.id, emoji)}
+                    />
+                  )}
                   <p
                     className={`${mutedColor} text-[10px] mt-0.5 ${
                       isSelf ? 'mr-1' : 'ml-1'
@@ -1376,6 +1548,14 @@ export default function ChatTab() {
                     title={new Date(m.created_at).toLocaleString()}
                   >
                     {formatRelative(m.created_at)}
+                    {m.edited_at && !m.deleted_at && (
+                      <span
+                        className="ml-1 italic"
+                        title={`Edited ${new Date(m.edited_at).toLocaleString()}`}
+                      >
+                        (edited)
+                      </span>
+                    )}
                   </p>
                 </div>
               );
@@ -1628,38 +1808,5 @@ export default function ChatTab() {
   );
 }
 
-// ============================================================================
-// MessagePromoteButton — single icon button shown on bubble hover. Replaces
-// the previous dropdown menu so it doesn't overflow on mobile. Tooltip
-// communicates the action. Promote is the only per-message action today;
-// when we add more, a dropdown can return with viewport-aware positioning.
-// ============================================================================
-
-function MessagePromoteButton({
-  isSelf,
-  isLight,
-  onPromote,
-}: {
-  isSelf: boolean;
-  isLight: boolean;
-  onPromote: () => void;
-}) {
-  const positionClass = isSelf
-    ? 'left-0 -translate-x-full pr-1'
-    : 'right-0 translate-x-full pl-1';
-  return (
-    <button
-      type="button"
-      onClick={onPromote}
-      className={`absolute top-1 ${positionClass} opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 rounded ${
-        isLight
-          ? 'text-[#334155]/60 hover:bg-[#0F172A]/[0.06]'
-          : 'text-[#CBD5E1]/60 hover:bg-white/[0.06]'
-      }`}
-      aria-label="Promote to decision"
-      title="Promote to decision"
-    >
-      <ClipboardCheck size={13} />
-    </button>
-  );
-}
+// MessagePromoteButton was a single-action hover button; replaced by
+// MessageActions (see ./chat/MessageActions.tsx) which is a multi-icon row.

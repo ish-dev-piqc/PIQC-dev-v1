@@ -129,6 +129,25 @@ export function OrgChatProvider({ children }: { children: React.ReactNode }) {
           setMessages((prev) => prev.filter((m) => m.id !== oldId));
         },
       )
+      .on(
+        'postgres_changes',
+        {
+          // UPDATE — picks up edits (body / edited_at) and soft-deletes
+          // (deleted_at). Replaces the cached row in-place so the UI
+          // reflects the new state without a full refetch.
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'org_messages',
+          filter: `org_id=eq.${orgId}`,
+        },
+        (payload) => {
+          const raw = payload.new as OrgMessageRow;
+          const next = adaptOrgMessage(raw);
+          setMessages((prev) =>
+            prev.map((m) => (m.id === next.id ? next : m)),
+          );
+        },
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
