@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: chat-storage-orphan-cleanup
-status: active
+status: merged
+merged: 2026-06-05
 started: 2026-06-04
-target_pr:
+target_pr: #289
 ---
 
 # Chat: orphan Storage cleanup
