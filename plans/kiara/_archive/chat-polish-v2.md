@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: chat-polish-v2
-status: active
+status: merged
+merged: 2026-06-05
 started: 2026-06-04
-target_pr:
+target_pr: #291
 ---
 
 # Chat polish v2 — edit / soft-delete / reactions
