@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Search,
   X,
@@ -44,6 +44,29 @@ export default function ParticipantsTab() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [openParticipant, setOpenParticipant] = useState<SiteParticipant | null>(null);
   const [formMode, setFormMode] = useState<'create' | null>(null);
+
+  // Deep-link pickup — chat reference chips can drop a participant
+  // id/code into `piq-pending-participant-v1` then navigate the user
+  // here. Once the participants list is loaded, find the participant
+  // (if loaded on the active protocol) and auto-open its profile.
+  useEffect(() => {
+    if (loading || !participants.length) return;
+    let pending: string | null = null;
+    try {
+      pending = localStorage.getItem('piq-pending-participant-v1');
+    } catch {
+      /* ignore */
+    }
+    if (!pending) return;
+    const target = participants.find((p) => p.id === pending);
+    if (!target) return;
+    try {
+      localStorage.removeItem('piq-pending-participant-v1');
+    } catch {
+      /* ignore */
+    }
+    setOpenParticipant(target);
+  }, [loading, participants]);
 
   // Scope to the active protocol — empty array when no protocol selected so
   // the hooks below can run unconditionally.

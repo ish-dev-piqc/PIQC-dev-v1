@@ -22,6 +22,7 @@ import { OrgProvider } from './context/OrgContext';
 import { OrgChatProvider } from './context/OrgChatContext';
 import { ProtocolChatProvider } from './context/ProtocolChatContext';
 import { UnreadMentionsProvider } from './context/UnreadMentionsContext';
+import { ChatNavigationProvider } from './context/ChatNavigationContext';
 import { SiteDataProvider } from './context/SiteDataContext';
 import { AuditProvider } from './context/AuditContext';
 import { AuditDataProvider } from './context/AuditDataContext';
@@ -253,6 +254,34 @@ function AppContent() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  /** "Go to visit" from a chat reference chip — switches to Site Mode's
+   *  Visits tab; VisitsTab reads `piq-pending-visit-v1` on mount and
+   *  auto-opens the detail drawer. */
+  const handleNavigateToVisit = (visitId: string) => {
+    try {
+      localStorage.setItem('piq-pending-visit-v1', visitId);
+    } catch {
+      /* ignore */
+    }
+    setDashboardTab('visits');
+    setView('dashboard');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  /** "Go to participant" from a chat reference chip — switches to
+   *  Site Mode's Participants tab; ParticipantsTab reads
+   *  `piq-pending-participant-v1` on mount and auto-opens the profile. */
+  const handleNavigateToParticipant = (participantCode: string) => {
+    try {
+      localStorage.setItem('piq-pending-participant-v1', participantCode);
+    } catch {
+      /* ignore */
+    }
+    setDashboardTab('participants');
+    setView('dashboard');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleExitOrganization = () => {
     setDashboardTab(previousDashboardTab);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -299,36 +328,43 @@ function AppContent() {
 
   if (view === 'dashboard') {
     return (
-      <div className={`${modeClass} min-h-screen ${pageBg} ${textColor} antialiased`}>
-        <Navbar
-          view={view}
-          onViewChange={handleViewChange}
-          onDashboardHome={handleDashboardHome}
-          onOpenSettingsSection={handleOpenSettingsSection}
-          onOpenOrganization={handleOpenOrganization}
-          onOpenMentionsInbox={() => setMentionsInboxOpen(true)}
-        />
-        {inviteResult && (
-          <InviteWelcomeBanner
-            result={inviteResult}
-            onDismiss={() => setInviteResult(null)}
+      <ChatNavigationProvider
+        value={{
+          navigateToVisit: handleNavigateToVisit,
+          navigateToParticipant: handleNavigateToParticipant,
+        }}
+      >
+        <div className={`${modeClass} min-h-screen ${pageBg} ${textColor} antialiased`}>
+          <Navbar
+            view={view}
+            onViewChange={handleViewChange}
+            onDashboardHome={handleDashboardHome}
+            onOpenSettingsSection={handleOpenSettingsSection}
+            onOpenOrganization={handleOpenOrganization}
+            onOpenMentionsInbox={() => setMentionsInboxOpen(true)}
           />
-        )}
-        <Dashboard
-          activeTab={dashboardTab}
-          onTabChange={setDashboardTab}
-          settingsSection={settingsSection}
-          onSettingsSectionChange={setSettingsSection}
-          onExitOrganization={handleExitOrganization}
-          onNavigateToOrgTeam={handleNavigateToOrgTeam}
-        />
-        {mentionsInboxOpen && (
-          <MentionsInbox
-            onClose={() => setMentionsInboxOpen(false)}
-            onNavigate={handleNavigateToOrgChat}
+          {inviteResult && (
+            <InviteWelcomeBanner
+              result={inviteResult}
+              onDismiss={() => setInviteResult(null)}
+            />
+          )}
+          <Dashboard
+            activeTab={dashboardTab}
+            onTabChange={setDashboardTab}
+            settingsSection={settingsSection}
+            onSettingsSectionChange={setSettingsSection}
+            onExitOrganization={handleExitOrganization}
+            onNavigateToOrgTeam={handleNavigateToOrgTeam}
           />
-        )}
-      </div>
+          {mentionsInboxOpen && (
+            <MentionsInbox
+              onClose={() => setMentionsInboxOpen(false)}
+              onNavigate={handleNavigateToOrgChat}
+            />
+          )}
+        </div>
+      </ChatNavigationProvider>
     );
   }
 
