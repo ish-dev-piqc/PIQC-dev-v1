@@ -293,3 +293,35 @@ export interface AcceptedGuestInvite {
   protocol_id: string;
   accepted_at: string;
 }
+
+
+// ---------------------------------------------------------------------------
+// Org activity log
+// ---------------------------------------------------------------------------
+
+/** Closed set of event_type values written by the org_events triggers. The
+ *  Postgres column is TEXT without a CHECK constraint (extension-friendly);
+ *  this union is the source of truth on the TS side. */
+export type OrgEventType =
+  | 'org_member_added'
+  | 'org_member_removed'
+  | 'org_member_role_changed'
+  | 'protocol_member_added'
+  | 'protocol_member_removed'
+  | 'protocol_member_role_changed'
+  | 'invite_created'
+  | 'invite_cancelled'
+  | 'access_request_approved';
+
+/** Raw org_events row. payload shape varies per event_type — narrow at
+ *  the describe()-site, not here. */
+export interface OrgEvent {
+  id: string;
+  org_id: string;
+  event_type: OrgEventType;
+  actor_user_id: string | null;
+  target_user_id: string | null;
+  target_protocol_id: string | null;
+  payload: Record<string, unknown>;
+  created_at: string;
+}

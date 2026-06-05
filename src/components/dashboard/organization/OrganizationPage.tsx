@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  Activity,
   ArrowLeft,
   Building2,
   ClipboardList,
@@ -16,6 +17,7 @@ import { useUnreadMentionsDisplay } from '../../../context/UnreadMentionsContext
 import MembersTab from './MembersTab';
 import ManageTab from './ManageTab';
 import ChatTab from './ChatTab';
+import ActivityTab from './ActivityTab';
 import UnifiedTeamList from './team/UnifiedTeamList';
 
 // =============================================================================
@@ -34,7 +36,7 @@ import UnifiedTeamList from './team/UnifiedTeamList';
 //                Admin-only; hidden from the tab strip for site members.
 // =============================================================================
 
-export type OrgTab = 'members' | 'team' | 'chat' | 'manage';
+export type OrgTab = 'members' | 'team' | 'chat' | 'manage' | 'activity';
 
 interface OrganizationPageProps {
   onExit?: () => void;
@@ -46,6 +48,7 @@ const VALID_ORG_TABS: ReadonlySet<OrgTab> = new Set<OrgTab>([
   'team',
   'chat',
   'manage',
+  'activity',
 ]);
 
 function readStoredOrgTab(): OrgTab | null {
@@ -90,8 +93,15 @@ export default function OrganizationPage({ onExit }: OrganizationPageProps) {
   }, [activeTab]);
 
   const isAdmin = activeOrg?.my_role === 'admin';
+  // Activity log + Manage are both admin-only. Tabs stay in this order:
+  // Members → Team → Chat → Activity → Manage so the audit-trail surface
+  // sits adjacent to the membership-management surfaces it describes.
   const tabs: { id: OrgTab; label: string; icon: typeof UsersIcon }[] = isAdmin
-    ? [...BASE_TABS, { id: 'manage', label: 'Manage', icon: Settings }]
+    ? [
+        ...BASE_TABS,
+        { id: 'activity', label: 'Activity', icon: Activity },
+        { id: 'manage', label: 'Manage', icon: Settings },
+      ]
     : BASE_TABS;
 
   const tabBarBg = isLight
@@ -248,6 +258,8 @@ export default function OrganizationPage({ onExit }: OrganizationPageProps) {
           )}
 
           {activeTab === 'chat' && <ChatTab />}
+
+          {activeTab === 'activity' && isAdmin && <ActivityTab />}
 
           {activeTab === 'manage' && isAdmin && <ManageTab />}
         </div>
