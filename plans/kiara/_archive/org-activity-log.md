@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: org-activity-log
-status: active
+status: merged
+merged: 2026-06-05
 started: 2026-06-04
-target_pr:
+target_pr: #287
 ---
 
 # Organization page: Activity log tab
