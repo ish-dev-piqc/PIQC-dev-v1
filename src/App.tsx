@@ -9,6 +9,7 @@ import Footer from './components/Footer';
 import Chatbot from './components/Chatbot';
 import Dashboard, { type DashboardTab, type SettingsSection } from './components/dashboard/Dashboard';
 import { ORG_TAB_STORAGE_KEY } from './components/dashboard/organization/OrganizationPage';
+import MentionsInbox from './components/dashboard/organization/chat/MentionsInbox';
 import Login from './components/auth/Login';
 import ForgotPassword from './components/auth/ForgotPassword';
 import ProfileCompletion from './components/auth/ProfileCompletion';
@@ -21,6 +22,7 @@ import { OrgProvider } from './context/OrgContext';
 import { OrgChatProvider } from './context/OrgChatContext';
 import { ProtocolChatProvider } from './context/ProtocolChatContext';
 import { UnreadMentionsProvider } from './context/UnreadMentionsContext';
+import { ChatNavigationProvider } from './context/ChatNavigationContext';
 import { SiteDataProvider } from './context/SiteDataContext';
 import { AuditProvider } from './context/AuditContext';
 import { AuditDataProvider } from './context/AuditDataContext';
@@ -82,6 +84,7 @@ function AppContent() {
   // Result of the accept-invite handler — surfaced as a banner on the
   // dashboard. null when no recent invite was accepted (or after dismiss).
   const [inviteResult, setInviteResult] = useState<InviteAcceptResult | null>(null);
+  const [mentionsInboxOpen, setMentionsInboxOpen] = useState(false);
   const { session, loading, profile, profileLoading } = useAuth();
   const { theme } = useTheme();
   const { isRedirecting } = useCheckoutRedirect();
@@ -225,6 +228,60 @@ function AppContent() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  /** Deep-link to a specific chat channel and (optionally) a message ID
+   *  that ChatTab should scroll to + briefly highlight on mount. Used by
+   *  the mentions inbox to take the user from "you were @mentioned" to
+   *  the exact message in one click. */
+  const handleNavigateToOrgChat = (
+    channelKey: 'org' | `protocol:${string}`,
+    messageId?: string,
+  ) => {
+    if (dashboardTab !== 'organization' && dashboardTab !== 'settings') {
+      setPreviousDashboardTab(dashboardTab);
+    }
+    try {
+      localStorage.setItem(ORG_TAB_STORAGE_KEY, 'chat');
+      localStorage.setItem('piq-chat-channel-v1', channelKey);
+      if (messageId) {
+        localStorage.setItem('piq-chat-pending-highlight-v1', messageId);
+      }
+    } catch {
+      /* ignore */
+    }
+    setDashboardTab('organization');
+    setView('dashboard');
+    setMentionsInboxOpen(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  /** "Go to visit" from a chat reference chip — switches to Site Mode's
+   *  Visits tab; VisitsTab reads `piq-pending-visit-v1` on mount and
+   *  auto-opens the detail drawer. */
+  const handleNavigateToVisit = (visitId: string) => {
+    try {
+      localStorage.setItem('piq-pending-visit-v1', visitId);
+    } catch {
+      /* ignore */
+    }
+    setDashboardTab('visits');
+    setView('dashboard');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  /** "Go to participant" from a chat reference chip — switches to
+   *  Site Mode's Participants tab; ParticipantsTab reads
+   *  `piq-pending-participant-v1` on mount and auto-opens the profile. */
+  const handleNavigateToParticipant = (participantCode: string) => {
+    try {
+      localStorage.setItem('piq-pending-participant-v1', participantCode);
+    } catch {
+      /* ignore */
+    }
+    setDashboardTab('participants');
+    setView('dashboard');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleExitOrganization = () => {
     setDashboardTab(previousDashboardTab);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -271,29 +328,43 @@ function AppContent() {
 
   if (view === 'dashboard') {
     return (
-      <div className={`${modeClass} min-h-screen ${pageBg} ${textColor} antialiased`}>
-        <Navbar
-          view={view}
-          onViewChange={handleViewChange}
-          onDashboardHome={handleDashboardHome}
-          onOpenSettingsSection={handleOpenSettingsSection}
-          onOpenOrganization={handleOpenOrganization}
-        />
-        {inviteResult && (
-          <InviteWelcomeBanner
-            result={inviteResult}
-            onDismiss={() => setInviteResult(null)}
+      <ChatNavigationProvider
+        value={{
+          navigateToVisit: handleNavigateToVisit,
+          navigateToParticipant: handleNavigateToParticipant,
+        }}
+      >
+        <div className={`${modeClass} min-h-screen ${pageBg} ${textColor} antialiased`}>
+          <Navbar
+            view={view}
+            onViewChange={handleViewChange}
+            onDashboardHome={handleDashboardHome}
+            onOpenSettingsSection={handleOpenSettingsSection}
+            onOpenOrganization={handleOpenOrganization}
+            onOpenMentionsInbox={() => setMentionsInboxOpen(true)}
           />
-        )}
-        <Dashboard
-          activeTab={dashboardTab}
-          onTabChange={setDashboardTab}
-          settingsSection={settingsSection}
-          onSettingsSectionChange={setSettingsSection}
-          onExitOrganization={handleExitOrganization}
-          onNavigateToOrgTeam={handleNavigateToOrgTeam}
-        />
-      </div>
+          {inviteResult && (
+            <InviteWelcomeBanner
+              result={inviteResult}
+              onDismiss={() => setInviteResult(null)}
+            />
+          )}
+          <Dashboard
+            activeTab={dashboardTab}
+            onTabChange={setDashboardTab}
+            settingsSection={settingsSection}
+            onSettingsSectionChange={setSettingsSection}
+            onExitOrganization={handleExitOrganization}
+            onNavigateToOrgTeam={handleNavigateToOrgTeam}
+          />
+          {mentionsInboxOpen && (
+            <MentionsInbox
+              onClose={() => setMentionsInboxOpen(false)}
+              onNavigate={handleNavigateToOrgChat}
+            />
+          )}
+        </div>
+      </ChatNavigationProvider>
     );
   }
 
