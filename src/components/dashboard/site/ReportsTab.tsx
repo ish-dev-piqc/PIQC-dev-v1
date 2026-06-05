@@ -7,6 +7,7 @@ import {
   Users,
   Download,
   FileText,
+  Sheet,
   TrendingUp,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
@@ -15,6 +16,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useSiteData } from '../../../context/SiteDataContext';
 import { getProtocolColors } from '../../../lib/site/protocolColors';
+import { buildReportWorkbook } from '../../../lib/site/reportsExport';
 import type { SiteVisit } from '../../../lib/site/types';
 import VisitDetailDrawer from './VisitDetailDrawer';
 
@@ -148,6 +150,30 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
     URL.revokeObjectURL(url);
   };
 
+  const exportXLSX = () => {
+    const scopeLabel = activeProtocol ? activeProtocol.code : 'All protocols';
+    const protocolCodeById = new Map<string, string>(
+      protocols.map((p) => [p.id, p.code]),
+    );
+    const blob = buildReportWorkbook({
+      scopeLabel,
+      generatedAt: todayStr,
+      stats,
+      visits: scopedVisits,
+      participants: scopedParticipants,
+      // Cross-protocol breakdown only when scope is "all protocols";
+      // the per-protocol table is meaningless when filtered to one.
+      protocolRows: activeProtocol ? [] : protocolRows,
+      protocolCodeById,
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `report_${activeProtocol ? activeProtocol.code : 'all-protocols'}_${todayStr}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const exportPDF = () => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
     const scopeLabel = activeProtocol ? activeProtocol.code : 'All protocols';
@@ -259,6 +285,15 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
             >
               <Download size={13} />
               Export CSV
+            </button>
+            <button
+              type="button"
+              onClick={exportXLSX}
+              className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+              title="Multi-sheet workbook — summary, visits, participants, deviations"
+            >
+              <Sheet size={13} />
+              Export XLSX
             </button>
             <button
               type="button"
