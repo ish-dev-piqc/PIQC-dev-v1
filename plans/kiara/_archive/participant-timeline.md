@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: participant-timeline
-status: active
+status: merged
+merged: 2026-06-06
 started: 2026-06-04
-target_pr:
+target_pr: #299
 ---
 
 # Participant timeline — unified feed in profile drawer
