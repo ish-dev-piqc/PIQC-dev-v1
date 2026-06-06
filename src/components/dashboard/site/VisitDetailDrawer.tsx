@@ -19,6 +19,7 @@ import type { SiteVisit, VisitStatus } from '../../../lib/site/types';
 import type { Protocol } from '../../../context/ProtocolContext';
 import ParticipantProfileDrawer from './ParticipantProfileDrawer';
 import { updateVisit } from '../../../lib/site/siteApi';
+import InlineEditableText from './InlineEditableText';
 import {
   parseYmd,
   isSameDay,
@@ -252,16 +253,29 @@ export default function VisitDetailDrawer({
             </div>
           )}
 
-          {/* Deviation callout */}
-          {visit.status === 'deviation' && visit.deviationReason && (
+          {/* Deviation callout — visible whenever the visit's status is
+              deviation, even if reason text hasn't been entered yet. The
+              inline editor surfaces the empty-state CTA so coordinators can
+              fill it in right here. */}
+          {visit.status === 'deviation' && (
             <div className={`border rounded-lg p-3 ${deviationBg}`}>
               <div className="flex items-start gap-2">
                 <FileWarning size={14} className="text-amber-500 flex-shrink-0 mt-0.5" />
-                <div>
+                <div className="flex-1 min-w-0">
                   <div className="text-[11px] uppercase tracking-wider font-semibold mb-1 text-amber-700">
                     Deviation logged
                   </div>
-                  <p className={`text-sm ${headingColor}`}>{visit.deviationReason}</p>
+                  <InlineEditableText
+                    value={visit.deviationReason ?? null}
+                    placeholder="What deviated from the protocol?"
+                    emptyLabel="Add deviation reason…"
+                    onSave={async (next) => {
+                      const r = await updateVisit(visit.id, {
+                        deviation_reason: next,
+                      });
+                      if (!r.ok) throw new Error(r.error);
+                    }}
+                  />
                 </div>
               </div>
             </div>
@@ -380,17 +394,24 @@ export default function VisitDetailDrawer({
             </div>
           )}
 
-          {/* Prior visit note */}
-          {visit.priorNote && (
-            <div>
-              <div className={`text-[11px] uppercase tracking-wider font-semibold mb-2 ${sectionHeader}`}>
-                Context
-              </div>
-              <div className={`border rounded-lg p-3 ${panelBg}`}>
-                <p className={`${subColor} text-sm`}>{visit.priorNote}</p>
-              </div>
+          {/* Prior visit note — always rendered now so coordinators can
+              add context inline even when no note exists yet. */}
+          <div>
+            <div className={`text-[11px] uppercase tracking-wider font-semibold mb-2 ${sectionHeader}`}>
+              Context
             </div>
-          )}
+            <div className={`border rounded-lg p-3 ${panelBg}`}>
+              <InlineEditableText
+                value={visit.priorNote ?? null}
+                placeholder="Anything the team should know before this visit?"
+                emptyLabel="Add a note…"
+                onSave={async (next) => {
+                  const r = await updateVisit(visit.id, { prior_note: next });
+                  if (!r.ok) throw new Error(r.error);
+                }}
+              />
+            </div>
+          </div>
         </div>
 
         {/* Footer */}
