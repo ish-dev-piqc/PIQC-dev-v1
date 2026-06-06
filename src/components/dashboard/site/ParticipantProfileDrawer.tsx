@@ -20,7 +20,8 @@ import { useSwipeDismiss } from '../../../hooks/useSwipeDismiss';
 import { useSiteData } from '../../../context/SiteDataContext';
 import type { ParticipantStatus, VisitStatus } from '../../../lib/site/types';
 import { PARTICIPANT_STATUS_LABELS } from '../../../lib/site/labels';
-import { deleteParticipant } from '../../../lib/site/siteApi';
+import { deleteParticipant, updateParticipant } from '../../../lib/site/siteApi';
+import InlineEditableText from './InlineEditableText';
 import type { Protocol } from '../../../context/ProtocolContext';
 import ParticipantFormDrawer from './ParticipantFormDrawer';
 
@@ -301,13 +302,21 @@ export default function ParticipantProfileDrawer({ participantId, protocols, onC
                 />
               </div>
 
-              {/* Notes */}
-              {participant.notes && (
-                <div className={`${panelBg} rounded-xl border px-4 py-3`}>
-                  <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold mb-1.5">Notes</p>
-                  <p className="text-fg-sub text-xs leading-relaxed">{participant.notes}</p>
-                </div>
-              )}
+              {/* Notes — always rendered so coordinators can add inline. */}
+              <div className={`${panelBg} rounded-xl border px-4 py-3`}>
+                <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold mb-1.5">Notes</p>
+                <InlineEditableText
+                  value={participant.notes ?? null}
+                  placeholder="Anything to remember about this participant?"
+                  emptyLabel="Add a note…"
+                  onSave={async (next) => {
+                    const r = await updateParticipant(participant.uuid, {
+                      notes: next,
+                    });
+                    if (!r.ok) throw new Error(r.error);
+                  }}
+                />
+              </div>
 
               {/* Visit history */}
               <div>
