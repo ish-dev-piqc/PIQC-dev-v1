@@ -707,6 +707,47 @@ export async function deleteChatDecision(id: string): Promise<Result<void>> {
   return { ok: true, data: undefined };
 }
 
+/** Decisions whose title or rationale contains a `[participant:CODE]`
+ *  reference. Used by the participant timeline. Scope: the participant's
+ *  protocol channel plus the active org's #general channel — those are
+ *  where participant-related decisions typically get captured.
+ *
+ *  v1 uses a substring match on `[participant:CODE]`. False positives are
+ *  unlikely given the token shape and the small decision-row volume.
+ *  Each call hits at most 200 rows (100 per channel). */
+export async function listDecisionsReferencingParticipant(args: {
+  participantCode: string;
+  protocolId: string;
+  orgId: string | null;
+}): Promise<Result<ChatDecision[]>> {
+  const token = `%[participant:${args.participantCode}]%`;
+  const both: ChatDecision[] = [];
+
+  const { data: protoRows, error: protoErr } = await supabase
+    .from('chat_decisions')
+    .select(CHAT_DECISION_COLUMNS)
+    .eq('protocol_id', args.protocolId)
+    .or(`title.ilike.${token},rationale.ilike.${token}`)
+    .order('decided_at', { ascending: false })
+    .limit(100);
+  if (protoErr) return fail('listDecisionsReferencingParticipant:proto', protoErr);
+  both.push(...adaptChatDecisions(protoRows ?? []));
+
+  if (args.orgId) {
+    const { data: orgRows, error: orgErr } = await supabase
+      .from('chat_decisions')
+      .select(CHAT_DECISION_COLUMNS)
+      .eq('org_id', args.orgId)
+      .or(`title.ilike.${token},rationale.ilike.${token}`)
+      .order('decided_at', { ascending: false })
+      .limit(100);
+    if (orgErr) return fail('listDecisionsReferencingParticipant:org', orgErr);
+    both.push(...adaptChatDecisions(orgRows ?? []));
+  }
+
+  return { ok: true, data: both };
+}
+
 
 // ===========================================================================
 // Chat attachments — files uploaded to the `chat-attachments` Supabase

@@ -332,6 +332,7 @@ function AppContent() {
         value={{
           navigateToVisit: handleNavigateToVisit,
           navigateToParticipant: handleNavigateToParticipant,
+          navigateToOrgChat: handleNavigateToOrgChat,
         }}
       >
         <div className={`${modeClass} min-h-screen ${pageBg} ${textColor} antialiased`}>
