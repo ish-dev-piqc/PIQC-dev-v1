@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: today-realtime-freshness
-status: active
+status: merged
+merged: 2026-06-06
 started: 2026-06-04
-target_pr:
+target_pr: #297
 ---
 
 # Today tab — realtime freshness banner
