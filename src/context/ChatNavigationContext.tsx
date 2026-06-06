@@ -15,11 +15,19 @@ import { createContext, useContext } from 'react';
 interface ChatNavigationContextValue {
   navigateToVisit: (visitId: string) => void;
   navigateToParticipant: (participantCode: string) => void;
+  /** Open the Organization → Chat tab on a specific channel; optionally
+   *  scroll-and-highlight a specific message. Same handler used by the
+   *  mentions inbox (App.tsx's handleNavigateToOrgChat). */
+  navigateToOrgChat: (
+    channelKey: 'org' | `protocol:${string}`,
+    messageId?: string,
+  ) => void;
 }
 
 const ChatNavigationContext = createContext<ChatNavigationContextValue>({
   navigateToVisit: () => {},
   navigateToParticipant: () => {},
+  navigateToOrgChat: () => {},
 });
 
 export function ChatNavigationProvider({
