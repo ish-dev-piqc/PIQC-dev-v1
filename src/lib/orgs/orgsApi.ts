@@ -66,6 +66,7 @@ import {
 import { adaptChatDecision, adaptChatDecisions } from './chatDecisionsAdapter';
 import { adaptChatMentions } from './chatMentionsAdapter';
 import { adaptChatReactions } from './chatReactionsAdapter';
+import { escapeIlikePattern } from './chatSearchAdapter';
 import { adaptGuest, adaptGuests } from './guestsAdapter';
 import { adaptOrgMessage, adaptOrgMessages } from './orgMessagesAdapter';
 import { adaptProtocolMember, adaptProtocolMembers } from './protocolMembersAdapter';
@@ -1081,6 +1082,90 @@ const REACTION_SELECT =
 /** Fetch every reaction on the given message ids for one channel side
  *  (org_message_id IN ... OR protocol_message_id IN ...). Empty input
  *  short-circuits to an empty result. */
+// ===========================================================================
+// Chat search — substring match across both message tables. RLS gates the
+// caller to channels they can access; nothing else is needed for permission
+// scoping. Results are merged and re-sorted newest first.
+// ===========================================================================
+
+export interface ChatSearchHit {
+  id: string;
+  body: string;
+  author_user_id: string | null;
+  created_at: string;
+  /** Exactly one of the two — discriminates the channel. */
+  org_id: string | null;
+  protocol_id: string | null;
+}
+
+export async function searchChatMessages(args: {
+  query: string;
+  limit?: number;
+}): Promise<Result<ChatSearchHit[]>> {
+  const limit = args.limit ?? 50;
+  const trimmed = args.query.trim();
+  if (trimmed.length < 2) return { ok: true, data: [] };
+
+  const pattern = `%${escapeIlikePattern(trimmed)}%`;
+
+  const [orgRes, protoRes] = await Promise.all([
+    supabase
+      .from('org_messages')
+      .select('id, org_id, author_user_id, body, created_at')
+      .ilike('body', pattern)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(limit),
+    supabase
+      .from('protocol_messages')
+      .select('id, protocol_id, author_user_id, body, created_at')
+      .ilike('body', pattern)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(limit),
+  ]);
+
+  if (orgRes.error) return fail('searchChatMessages:org', orgRes.error);
+  if (protoRes.error) return fail('searchChatMessages:proto', protoRes.error);
+
+  const orgRows = (orgRes.data ?? []) as Array<{
+    id: string;
+    org_id: string;
+    author_user_id: string | null;
+    body: string;
+    created_at: string;
+  }>;
+  const protoRows = (protoRes.data ?? []) as Array<{
+    id: string;
+    protocol_id: string;
+    author_user_id: string | null;
+    body: string;
+    created_at: string;
+  }>;
+
+  const merged: ChatSearchHit[] = [
+    ...orgRows.map((r) => ({
+      id: r.id,
+      body: r.body,
+      author_user_id: r.author_user_id,
+      created_at: r.created_at,
+      org_id: r.org_id,
+      protocol_id: null,
+    })),
+    ...protoRows.map((r) => ({
+      id: r.id,
+      body: r.body,
+      author_user_id: r.author_user_id,
+      created_at: r.created_at,
+      org_id: null,
+      protocol_id: r.protocol_id,
+    })),
+  ];
+  merged.sort((a, b) => b.created_at.localeCompare(a.created_at));
+  return { ok: true, data: merged.slice(0, limit) };
+}
+
+
 export async function listReactionsForOrgMessages(
   messageIds: string[],
 ): Promise<Result<ChatReaction[]>> {
