@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: chat-thread-replies
-status: active
+status: merged
+merged: 2026-06-07
 started: 2026-06-04
-target_pr:
+target_pr: #301
 ---
 
 # Chat thread replies
