@@ -18,6 +18,7 @@ import { useSiteData } from '../../../context/SiteDataContext';
 import { useDemoMode } from '../../../context/DemoModeContext';
 import SiteWelcomePanel from './SiteWelcomePanel';
 import TodayFreshnessBanner from './TodayFreshnessBanner';
+import AuditSignalsBanner from './AuditSignalsBanner';
 import { useAuth } from '../../../context/AuthContext';
 import VisitDetailDrawer from './VisitDetailDrawer';
 import HeatIndicator from '../../heatmap/HeatIndicator';
@@ -370,6 +371,11 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
     <div className="h-full flex flex-col overflow-hidden">
       {/* Greeting */}
       <div className="px-6 pt-6 pb-4 flex-shrink-0">
+        {!isHome && (
+          <div className="mb-3">
+            <AuditSignalsBanner protocolId={activeProtocol.id} />
+          </div>
+        )}
         {(newVisitCount > 0 || newParticipantCount > 0) && (
           <div className="mb-3">
             <TodayFreshnessBanner
