@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: chat-search
-status: active
+status: merged
+merged: 2026-06-07
 started: 2026-06-04
-target_pr:
+target_pr: #305
 ---
 
 # Chat search — query across all accessible channels
