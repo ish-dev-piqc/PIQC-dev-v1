@@ -106,8 +106,8 @@ export default function NotificationsSettings({
           </h3>
         </div>
 
-        {/* Coming-soon banner — sets honest expectations until the
-            follow-up PR wires the actual sending paths. */}
+        {/* Daily digest is still pending wiring (separate cron job lands
+            in a follow-up). Mention + decision emails are live. */}
         <div
           className={`flex items-start gap-2 px-3 py-2 mb-4 rounded-md text-xs ${
             isLight
@@ -117,8 +117,8 @@ export default function NotificationsSettings({
         >
           <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
           <p>
-            Email sending isn't live yet. Your preferences are saved here and
-            will take effect when the email pipeline lands in the next release.
+            Daily digest emails aren't sending yet — the scheduler lands in a
+            follow-up release. Mention and decision emails are live.
           </p>
         </div>
 
