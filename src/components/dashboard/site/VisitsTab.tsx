@@ -16,6 +16,8 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useSiteData } from '../../../context/SiteDataContext';
 import VisitDetailDrawer from './VisitDetailDrawer';
+import { buildVisitIcsBlob } from '../../../lib/site/calendarExport';
+import { CalendarPlus } from 'lucide-react';
 import VisitConfidenceChip from './VisitConfidenceChip';
 import { getProtocolColorsById } from '../../../lib/site/protocolColors';
 import type { SiteVisit, VisitStatus } from '../../../lib/site/types';
@@ -221,6 +223,36 @@ export default function VisitsTab() {
           <p className={`${subColor} text-sm`}>
             {scoped.length} total · {counts.UPCOMING} upcoming
           </p>
+          <button
+            type="button"
+            onClick={() => {
+              const blob = buildVisitIcsBlob({
+                visits: visible,
+                protocolCodeById: new Map(protocols.map((p) => [p.id, p.code])),
+                calendarName: activeProtocol
+                  ? `${activeProtocol.code} visits`
+                  : 'PIQC visits',
+              });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `visits_${activeProtocol?.code ?? 'all'}_${new Date()
+                .toISOString()
+                .slice(0, 10)}.ics`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            disabled={visible.length === 0}
+            className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
+              isLight
+                ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+                : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]'
+            } disabled:opacity-50`}
+            title="Download as .ics for Outlook / Google Calendar"
+          >
+            <CalendarPlus size={13} />
+            Export calendar
+          </button>
           <button
             type="button"
             onClick={() => setScheduleFormOpen(true)}
