@@ -38,6 +38,8 @@ import type {
   ChatMention,
   ChatProtocolSummary,
   ChatReaction,
+  NotificationPreferences,
+  NotificationPreferencesPatch,
   NewChatAttachmentInput,
   NewChatDecisionInput,
   NewProtocolGuestInput,
@@ -67,6 +69,10 @@ import { adaptChatDecision, adaptChatDecisions } from './chatDecisionsAdapter';
 import { adaptChatMentions } from './chatMentionsAdapter';
 import { adaptChatReactions } from './chatReactionsAdapter';
 import { escapeIlikePattern } from './chatSearchAdapter';
+import {
+  adaptNotificationPreferences,
+  defaultNotificationPreferences,
+} from './notificationPreferencesAdapter';
 import { adaptGuest, adaptGuests } from './guestsAdapter';
 import { adaptOrgMessage, adaptOrgMessages } from './orgMessagesAdapter';
 import { adaptProtocolMember, adaptProtocolMembers } from './protocolMembersAdapter';
@@ -1163,6 +1169,62 @@ export async function searchChatMessages(args: {
   ];
   merged.sort((a, b) => b.created_at.localeCompare(a.created_at));
   return { ok: true, data: merged.slice(0, limit) };
+}
+
+
+// ===========================================================================
+// Notification preferences — per-user toggles for email notifications.
+// Email-sending wiring lives in a follow-up PR; this surface just persists
+// the user's intent.
+// ===========================================================================
+
+const NOTIF_PREFS_COLUMNS =
+  'user_id, notify_mentions_email, notify_decisions_email, daily_digest, created_at, updated_at';
+
+export async function getMyNotificationPreferences(): Promise<
+  Result<NotificationPreferences>
+> {
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr) return fail('getMyNotificationPreferences:getUser', userErr);
+  const user = userData?.user;
+  if (!user) return err('Not authenticated.');
+
+  const { data, error } = await supabase
+    .from('user_notification_preferences')
+    .select(NOTIF_PREFS_COLUMNS)
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (error) return fail('getMyNotificationPreferences', error);
+  if (!data) return { ok: true, data: defaultNotificationPreferences(user.id) };
+  return { ok: true, data: adaptNotificationPreferences(data) };
+}
+
+export async function upsertMyNotificationPreferences(
+  patch: NotificationPreferencesPatch,
+): Promise<Result<NotificationPreferences>> {
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr) return fail('upsertMyNotificationPreferences:getUser', userErr);
+  const user = userData?.user;
+  if (!user) return err('Not authenticated.');
+
+  // upsert requires the full PK column. Merge incoming patch over current
+  // row; missing keys retain their defaults (false) on first insert.
+  const { data, error } = await supabase
+    .from('user_notification_preferences')
+    .upsert(
+      {
+        user_id: user.id,
+        notify_mentions_email: patch.notify_mentions_email ?? undefined,
+        notify_decisions_email: patch.notify_decisions_email ?? undefined,
+        daily_digest: patch.daily_digest ?? undefined,
+      },
+      { onConflict: 'user_id' },
+    )
+    .select(NOTIF_PREFS_COLUMNS)
+    .single();
+  if (error) return fail('upsertMyNotificationPreferences', error);
+  if (!data) return err('Upsert returned no row.');
+  return { ok: true, data: adaptNotificationPreferences(data) };
 }
 
 
