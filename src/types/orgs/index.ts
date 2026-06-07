@@ -127,6 +127,9 @@ export interface OrgMessage {
    *  and hides attachments + reactions. The row + body + attachments stay
    *  intact in the DB so the audit trail is preserved. */
   deleted_at: string | null;
+  /** Thread reply pointer — null = top-level message in the channel;
+   *  non-null = reply to that message. */
+  parent_message_id: string | null;
 }
 
 export interface NewOrgMessageInput {
@@ -147,6 +150,7 @@ export interface ProtocolMessage {
   created_at: string;
   edited_at: string | null;
   deleted_at: string | null;
+  parent_message_id: string | null;
 }
 
 export interface NewProtocolMessageInput {

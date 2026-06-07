@@ -24,6 +24,8 @@ import {
   listMyChatProtocols,
   listOrgMembersWithProfile,
   removeReaction,
+  replyToOrgMessage,
+  replyToProtocolMessage,
   softDeleteOrgMessage,
   softDeleteProtocolMessage,
   uploadChatAttachment,
@@ -31,6 +33,8 @@ import {
 import { useChatReactions } from '../../../hooks/useChatReactions';
 import MessageActions from './chat/MessageActions';
 import ReactionChips from './chat/ReactionChips';
+import ThreadReplyChip from './chat/ThreadReplyChip';
+import ChatThreadPanel from './chat/ChatThreadPanel';
 import { useChannelAttachments } from '../../../hooks/useChannelAttachments';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useSiteData } from '../../../context/SiteDataContext';
@@ -159,6 +163,7 @@ interface ChatMessageLike {
   created_at: string;
   edited_at: string | null;
   deleted_at: string | null;
+  parent_message_id: string | null;
 }
 
 function readStoredChannel(): ActiveChannel | null {
@@ -291,6 +296,8 @@ export default function ChatTab() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+  // Thread panel — null when closed; message id of the parent when open.
+  const [activeThreadParentId, setActiveThreadParentId] = useState<string | null>(null);
 
   const isOrgAdmin = activeOrg?.my_role === 'admin';
   const channelKind: 'org' | 'protocol' =
@@ -857,6 +864,50 @@ export default function ChatTab() {
     }
   }
 
+  async function handleSendThreadReply(
+    parentId: string,
+    body: string,
+  ): Promise<{ ok: boolean; error?: string }> {
+    const res =
+      activeChannel.kind === 'org'
+        ? await replyToOrgMessage(parentId, body)
+        : await replyToProtocolMessage(parentId, body);
+    if (!res.ok) return { ok: false, error: res.error };
+    return { ok: true };
+  }
+
+  // Reply-counts and last-reply-at derived from the full messages list.
+  // Top-level rendering filters parent_message_id === null; this map
+  // populates the chip beneath top-level bubbles. Cheap at typical sizes.
+  const threadStats = useMemo(() => {
+    const stats = new Map<string, { count: number; lastAt: string }>();
+    for (const m of active.messages) {
+      if (!m.parent_message_id) continue;
+      const cur = stats.get(m.parent_message_id);
+      if (!cur) {
+        stats.set(m.parent_message_id, { count: 1, lastAt: m.created_at });
+      } else {
+        cur.count += 1;
+        if (m.created_at > cur.lastAt) cur.lastAt = m.created_at;
+      }
+    }
+    return stats;
+  }, [active.messages]);
+
+  // Top-level only — replies render inside ChatThreadPanel.
+  const topLevelMessages = useMemo(
+    () => active.messages.filter((m) => !m.parent_message_id),
+    [active.messages],
+  );
+
+  const activeThreadParent = useMemo(
+    () =>
+      activeThreadParentId
+        ? active.messages.find((m) => m.id === activeThreadParentId) ?? null
+        : null,
+    [activeThreadParentId, active.messages],
+  );
+
   const channelLabel = useMemo(() => {
     if (activeChannel.kind === 'org') return 'general';
     return chatProtocols.find((p) => p.id === activeChannel.id)?.code ?? 'protocol';
@@ -1363,12 +1414,12 @@ export default function ChatTab() {
         >
           {active.loading ? (
             <p className={`${subColor} text-sm`}>Loading messages…</p>
-          ) : active.messages.length === 0 ? (
+          ) : topLevelMessages.length === 0 ? (
             <p className={`${subColor} text-sm text-center py-8`}>
               No messages yet. Be the first to say something.
             </p>
           ) : (
-            active.messages.map((m) => {
+            topLevelMessages.map((m) => {
               const isSelf = m.author_user_id === currentUserId;
               const author = authorOf(m.author_user_id);
               const decisionForMessage = decisionsBySourceId.get(m.id);
@@ -1520,6 +1571,7 @@ export default function ChatTab() {
                         canEdit={isSelf}
                         canDelete={isSelf || isOrgAdmin}
                         canReact={!!currentUserId}
+                        canReply={!m.parent_message_id}
                         onPromote={() =>
                           setPromoteSource({
                             id: m.id,
@@ -1531,6 +1583,7 @@ export default function ChatTab() {
                         onEdit={() => handleStartEdit(m)}
                         onDelete={() => handleSoftDelete(m.id)}
                         onReact={(emoji) => handleReactionToggle(m.id, emoji)}
+                        onReply={() => setActiveThreadParentId(m.id)}
                       />
                     )}
                   </div>
@@ -1539,6 +1592,16 @@ export default function ChatTab() {
                       chips={chipsByMessageId.get(m.id) ?? []}
                       isSelfMessage={isSelf}
                       onToggle={(emoji) => handleReactionToggle(m.id, emoji)}
+                    />
+                  )}
+                  {/* Thread chip — rendered even when parent is soft-deleted,
+                      so existing threads remain navigable. */}
+                  {threadStats.get(m.id) && (
+                    <ThreadReplyChip
+                      count={threadStats.get(m.id)!.count}
+                      lastReplyAt={threadStats.get(m.id)!.lastAt}
+                      isSelfMessage={isSelf}
+                      onOpen={() => setActiveThreadParentId(m.id)}
                     />
                   )}
                   <p
@@ -1802,6 +1865,17 @@ export default function ChatTab() {
           onJumpToSource={jumpToSourceMessage}
           onDeleted={removeDecisionLocal}
           onAcknowledged={upsertAckLocal}
+        />
+      )}
+
+      {/* Thread panel — slide-in from the right when a thread is active. */}
+      {activeThreadParent && (
+        <ChatThreadPanel
+          parent={activeThreadParent}
+          allMessages={active.messages}
+          authorOf={authorOf}
+          onReply={(body) => handleSendThreadReply(activeThreadParent.id, body)}
+          onClose={() => setActiveThreadParentId(null)}
         />
       )}
     </section>

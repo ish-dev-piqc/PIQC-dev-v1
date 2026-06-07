@@ -416,7 +416,7 @@ export async function listOrgMessages(
 ): Promise<Result<OrgMessage[]>> {
   const { data, error } = await supabase
     .from('org_messages')
-    .select('id, org_id, author_user_id, body, created_at, edited_at, deleted_at')
+    .select('id, org_id, author_user_id, body, created_at, edited_at, deleted_at, parent_message_id')
     .eq('org_id', orgId)
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -446,7 +446,7 @@ export async function postOrgMessage(
       author_user_id: user.id,
       body: trimmed,
     })
-    .select('id, org_id, author_user_id, body, created_at, edited_at, deleted_at')
+    .select('id, org_id, author_user_id, body, created_at, edited_at, deleted_at, parent_message_id')
     .single();
   if (error) return fail('postOrgMessage', error);
   if (!data) return err('Insert returned no row.');
@@ -879,7 +879,7 @@ export async function listProtocolMessages(
 ): Promise<Result<ProtocolMessage[]>> {
   const { data, error } = await supabase
     .from('protocol_messages')
-    .select('id, protocol_id, author_user_id, body, created_at, edited_at, deleted_at')
+    .select('id, protocol_id, author_user_id, body, created_at, edited_at, deleted_at, parent_message_id')
     .eq('protocol_id', protocolId)
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -908,7 +908,7 @@ export async function postProtocolMessage(
       author_user_id: user.id,
       body: trimmed,
     })
-    .select('id, protocol_id, author_user_id, body, created_at, edited_at, deleted_at')
+    .select('id, protocol_id, author_user_id, body, created_at, edited_at, deleted_at, parent_message_id')
     .single();
   if (error) return fail('postProtocolMessage', error);
   if (!data) return err('Insert returned no row.');
@@ -923,9 +923,89 @@ export async function postProtocolMessage(
 // ===========================================================================
 
 const MESSAGE_SELECT_ORG =
-  'id, org_id, author_user_id, body, created_at, edited_at, deleted_at';
+  'id, org_id, author_user_id, body, created_at, edited_at, deleted_at, parent_message_id';
 const MESSAGE_SELECT_PROTO =
-  'id, protocol_id, author_user_id, body, created_at, edited_at, deleted_at';
+  'id, protocol_id, author_user_id, body, created_at, edited_at, deleted_at, parent_message_id';
+
+
+// ---------------------------------------------------------------------------
+// Thread replies — insert a child message with parent_message_id set.
+// org_id / protocol_id resolved from the parent so the client doesn't
+// have to pass them.
+// ---------------------------------------------------------------------------
+
+export async function replyToOrgMessage(
+  parentMessageId: string,
+  body: string,
+): Promise<Result<OrgMessage>> {
+  const trimmed = body.trim();
+  if (!trimmed) return err('Reply cannot be empty.');
+  if (trimmed.length > 10000) return err('Reply is too long (10000 character max).');
+
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr) return fail('replyToOrgMessage:getUser', userErr);
+  const user = userData?.user;
+  if (!user) return err('Not authenticated.');
+
+  // Resolve org_id from the parent so the row has a valid channel ref.
+  const { data: parent, error: parentErr } = await supabase
+    .from('org_messages')
+    .select('org_id')
+    .eq('id', parentMessageId)
+    .single();
+  if (parentErr) return fail('replyToOrgMessage:parent', parentErr);
+  if (!parent) return err('Parent message not found.');
+
+  const { data, error } = await supabase
+    .from('org_messages')
+    .insert({
+      org_id: parent.org_id,
+      author_user_id: user.id,
+      body: trimmed,
+      parent_message_id: parentMessageId,
+    })
+    .select(MESSAGE_SELECT_ORG)
+    .single();
+  if (error) return fail('replyToOrgMessage', error);
+  if (!data) return err('Insert returned no row.');
+  return { ok: true, data: adaptOrgMessage(data) };
+}
+
+export async function replyToProtocolMessage(
+  parentMessageId: string,
+  body: string,
+): Promise<Result<ProtocolMessage>> {
+  const trimmed = body.trim();
+  if (!trimmed) return err('Reply cannot be empty.');
+  if (trimmed.length > 10000) return err('Reply is too long (10000 character max).');
+
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr) return fail('replyToProtocolMessage:getUser', userErr);
+  const user = userData?.user;
+  if (!user) return err('Not authenticated.');
+
+  const { data: parent, error: parentErr } = await supabase
+    .from('protocol_messages')
+    .select('protocol_id')
+    .eq('id', parentMessageId)
+    .single();
+  if (parentErr) return fail('replyToProtocolMessage:parent', parentErr);
+  if (!parent) return err('Parent message not found.');
+
+  const { data, error } = await supabase
+    .from('protocol_messages')
+    .insert({
+      protocol_id: parent.protocol_id,
+      author_user_id: user.id,
+      body: trimmed,
+      parent_message_id: parentMessageId,
+    })
+    .select(MESSAGE_SELECT_PROTO)
+    .single();
+  if (error) return fail('replyToProtocolMessage', error);
+  if (!data) return err('Insert returned no row.');
+  return { ok: true, data: adaptProtocolMessage(data) };
+}
 
 /** Edit own org message. Sets body + bumps edited_at to now(). */
 export async function editOrgMessage(

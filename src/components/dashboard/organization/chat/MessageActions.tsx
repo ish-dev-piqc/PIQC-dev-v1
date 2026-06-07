@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ClipboardCheck, Pencil, Smile, Trash2 } from 'lucide-react';
+import { ClipboardCheck, MessageSquare, Pencil, Smile, Trash2 } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
 import ReactionPicker from './ReactionPicker';
 
@@ -21,10 +21,15 @@ interface MessageActionsProps {
   canEdit: boolean;
   canDelete: boolean;
   canReact: boolean;
+  /** True when the message can have a thread started on it (top-level
+   *  message, not itself a reply, not soft-deleted). Hides the Reply icon
+   *  when false. */
+  canReply: boolean;
   onPromote: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onReact: (emoji: string) => void;
+  onReply: () => void;
 }
 
 export default function MessageActions({
@@ -32,10 +37,12 @@ export default function MessageActions({
   canEdit,
   canDelete,
   canReact,
+  canReply,
   onPromote,
   onEdit,
   onDelete,
   onReact,
+  onReply,
 }: MessageActionsProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
@@ -57,6 +64,17 @@ export default function MessageActions({
       className={`absolute z-10 top-1 ${positionClass} opacity-0 group-hover:opacity-100 focus-within:opacity-100`}
     >
       <div className={`flex items-center gap-0.5 rounded-md border shadow-sm px-0.5 py-0.5 ${borderClass} ${bgClass}`}>
+        {canReply && (
+          <button
+            type="button"
+            onClick={onReply}
+            className={buttonBase}
+            aria-label="Reply in thread"
+            title="Reply in thread"
+          >
+            <MessageSquare size={13} />
+          </button>
+        )}
         <button
           type="button"
           onClick={onPromote}
