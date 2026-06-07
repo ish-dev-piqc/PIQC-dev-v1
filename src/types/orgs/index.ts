@@ -308,6 +308,31 @@ export interface AcceptedGuestInvite {
 
 
 // ---------------------------------------------------------------------------
+// User notification preferences
+// ---------------------------------------------------------------------------
+
+/** Per-user toggles for email notifications. Defaults to all-off; the row
+ *  may not exist for users who've never visited the settings page — UI
+ *  treats absence as defaults. */
+export interface NotificationPreferences {
+  user_id: string;
+  notify_mentions_email: boolean;
+  notify_decisions_email: boolean;
+  daily_digest: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Patch shape for upsertMyNotificationPreferences — partial of the three
+ *  boolean columns. */
+export interface NotificationPreferencesPatch {
+  notify_mentions_email?: boolean;
+  notify_decisions_email?: boolean;
+  daily_digest?: boolean;
+}
+
+
+// ---------------------------------------------------------------------------
 // Chat reactions (emoji on messages)
 // ---------------------------------------------------------------------------
 

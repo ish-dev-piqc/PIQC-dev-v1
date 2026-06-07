@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { MessageSquare, LayoutDashboard, Activity, FileText, Database, UserCircle2, Users, CalendarCheck, CreditCard, Loader2, CheckCircle2, AlertCircle, ClipboardList, type LucideIcon } from 'lucide-react';
+import { MessageSquare, LayoutDashboard, Activity, FileText, Database, UserCircle2, Users, CalendarCheck, CreditCard, Bell, Loader2, CheckCircle2, AlertCircle, ClipboardList, type LucideIcon } from 'lucide-react';
+import NotificationsSettings from './NotificationsSettings';
 import DashboardChat from './DashboardChat';
 import KnowledgeBase from './KnowledgeBase';
 import TodayTab from './site/TodayTab';
@@ -45,7 +46,7 @@ export type DashboardTab =
   | 'reports'
   | 'organization'
   | 'settings';
-export type SettingsSection = 'account' | 'security' | 'billing';
+export type SettingsSection = 'account' | 'security' | 'billing' | 'notifications';
 
 interface TabConfig {
   id: DashboardTab;
@@ -226,6 +227,7 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
 
   const navItems: Array<{ id: SettingsSection; label: string; icon: LucideIcon }> = [
     { id: 'account', label: 'Account', icon: UserCircle2 },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'billing', label: 'Billing', icon: CreditCard },
   ];
 
@@ -585,9 +587,13 @@ function SettingsTab({ activeSection, onSectionChange }: SettingsTabProps) {
       );
     }
 
-    // Security section was removed — only 'account' and 'billing' are
-    // navigable now. This branch is unreachable from the UI but kept as a
-    // graceful fallback if a stale URL fragment lands here.
+    if (activeSection === 'notifications') {
+      return <NotificationsSettings isLight={isLight} cardClass={cardClass} />;
+    }
+
+    // Security section was removed — only 'account', 'notifications', and
+    // 'billing' are navigable now. This branch is unreachable from the UI
+    // but kept as a graceful fallback if a stale URL fragment lands here.
     return null;
   };
 
