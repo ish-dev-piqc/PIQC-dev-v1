@@ -11,6 +11,7 @@ import {
   File as FileIcon,
   X as XIcon,
   Check,
+  Search,
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useAuth } from '../../../context/AuthContext';
@@ -35,6 +36,7 @@ import MessageActions from './chat/MessageActions';
 import ReactionChips from './chat/ReactionChips';
 import ThreadReplyChip from './chat/ThreadReplyChip';
 import ChatThreadPanel from './chat/ChatThreadPanel';
+import ChatSearchPanel from './chat/ChatSearchPanel';
 import { useChannelAttachments } from '../../../hooks/useChannelAttachments';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useSiteData } from '../../../context/SiteDataContext';
@@ -298,6 +300,8 @@ export default function ChatTab() {
   const [savingEdit, setSavingEdit] = useState(false);
   // Thread panel — null when closed; message id of the parent when open.
   const [activeThreadParentId, setActiveThreadParentId] = useState<string | null>(null);
+  // Search panel — boolean toggle. Persistence not needed; closing clears.
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const isOrgAdmin = activeOrg?.my_role === 'admin';
   const channelKind: 'org' | 'protocol' =
@@ -1305,19 +1309,34 @@ export default function ChatTab() {
               Channels
             </p>
           )}
-          <button
-            type="button"
-            onClick={() => setSidebarWide((w) => !w)}
-            className={`p-1 rounded ${
-              isLight
-                ? 'text-[#334155]/70 hover:bg-[#0F172A]/[0.05]'
-                : 'text-[#CBD5E1]/70 hover:bg-white/[0.05]'
-            }`}
-            aria-label={sidebarWide ? 'Collapse channel list' : 'Expand channel list'}
-            title={sidebarWide ? 'Collapse' : 'Expand'}
-          >
-            {sidebarWide ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
-          </button>
+          <div className="flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              className={`p-1 rounded ${
+                isLight
+                  ? 'text-[#334155]/70 hover:bg-[#0F172A]/[0.05]'
+                  : 'text-[#CBD5E1]/70 hover:bg-white/[0.05]'
+              }`}
+              aria-label="Search messages"
+              title="Search messages"
+            >
+              <Search size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setSidebarWide((w) => !w)}
+              className={`p-1 rounded ${
+                isLight
+                  ? 'text-[#334155]/70 hover:bg-[#0F172A]/[0.05]'
+                  : 'text-[#CBD5E1]/70 hover:bg-white/[0.05]'
+              }`}
+              aria-label={sidebarWide ? 'Collapse channel list' : 'Expand channel list'}
+              title={sidebarWide ? 'Collapse' : 'Expand'}
+            >
+              {sidebarWide ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+            </button>
+          </div>
         </div>
 
         <nav className="flex-1 overflow-y-auto py-2 px-1.5 space-y-0.5">
@@ -1878,6 +1897,10 @@ export default function ChatTab() {
           onClose={() => setActiveThreadParentId(null)}
         />
       )}
+
+      {/* Search panel — slide-in. Closes on outside click / ESC / result
+          click (the deep-link handler also calls onClose). */}
+      {searchOpen && <ChatSearchPanel onClose={() => setSearchOpen(false)} />}
     </section>
   );
 }
