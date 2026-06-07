@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: notification-settings
-status: active
+status: merged
+merged: 2026-06-07
 started: 2026-06-04
-target_pr:
+target_pr: #307
 ---
 
 # Notification settings — per-user preferences
