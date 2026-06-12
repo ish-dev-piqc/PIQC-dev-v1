@@ -37,6 +37,9 @@ import type {
   ChatDecisionAck,
   ChatMention,
   ChatProtocolSummary,
+  ChatReaction,
+  NotificationPreferences,
+  NotificationPreferencesPatch,
   NewChatAttachmentInput,
   NewChatDecisionInput,
   NewProtocolGuestInput,
@@ -64,6 +67,12 @@ import {
 } from './chatDecisionAcksAdapter';
 import { adaptChatDecision, adaptChatDecisions } from './chatDecisionsAdapter';
 import { adaptChatMentions } from './chatMentionsAdapter';
+import { adaptChatReactions } from './chatReactionsAdapter';
+import { escapeIlikePattern } from './chatSearchAdapter';
+import {
+  adaptNotificationPreferences,
+  defaultNotificationPreferences,
+} from './notificationPreferencesAdapter';
 import { adaptGuest, adaptGuests } from './guestsAdapter';
 import { adaptOrgMessage, adaptOrgMessages } from './orgMessagesAdapter';
 import { adaptProtocolMember, adaptProtocolMembers } from './protocolMembersAdapter';
@@ -414,7 +423,7 @@ export async function listOrgMessages(
 ): Promise<Result<OrgMessage[]>> {
   const { data, error } = await supabase
     .from('org_messages')
-    .select('id, org_id, author_user_id, body, created_at')
+    .select('id, org_id, author_user_id, body, created_at, edited_at, deleted_at, parent_message_id')
     .eq('org_id', orgId)
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -444,7 +453,7 @@ export async function postOrgMessage(
       author_user_id: user.id,
       body: trimmed,
     })
-    .select('id, org_id, author_user_id, body, created_at')
+    .select('id, org_id, author_user_id, body, created_at, edited_at, deleted_at, parent_message_id')
     .single();
   if (error) return fail('postOrgMessage', error);
   if (!data) return err('Insert returned no row.');
@@ -480,6 +489,96 @@ export async function markChatMentionsRead(
   });
   if (error) return fail('markChatMentionsRead', error);
   return { ok: true, data: undefined };
+}
+
+/** Hydrated mention rows for the inbox: each carries the message body
+ *  preview + channel kind/id so the inbox can render without a per-row
+ *  follow-up fetch. RLS on chat_mentions limits visibility to the caller. */
+export interface MentionInboxRow {
+  id: string;
+  mentioned_by_user_id: string | null;
+  created_at: string;
+  read_at: string | null;
+  channel_kind: 'org' | 'protocol';
+  channel_id: string;
+  message_id: string;
+  body_preview: string;
+}
+
+export async function listMyMentionsWithContext(
+  limit = 200,
+): Promise<Result<MentionInboxRow[]>> {
+  // Pull every mention for the caller (RLS-gated to self), then in
+  // parallel fetch the parent message bodies. We do the join client-side
+  // because PostgREST's nested embed across an XOR FK shape needs both
+  // FKs declared, and the existing schema doesn't expose them in a way
+  // PostgREST picks up automatically.
+  const { data: mentions, error } = await supabase
+    .from('chat_mentions')
+    .select(
+      'id, org_message_id, protocol_message_id, org_id, protocol_id, mentioned_by_user_id, created_at, read_at',
+    )
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) return fail('listMyMentionsWithContext', error);
+  const rows = (mentions ?? []) as Array<{
+    id: string;
+    org_message_id: string | null;
+    protocol_message_id: string | null;
+    org_id: string | null;
+    protocol_id: string | null;
+    mentioned_by_user_id: string | null;
+    created_at: string;
+    read_at: string | null;
+  }>;
+  if (rows.length === 0) return { ok: true, data: [] };
+
+  const orgMessageIds = rows
+    .map((r) => r.org_message_id)
+    .filter((x): x is string => !!x);
+  const protocolMessageIds = rows
+    .map((r) => r.protocol_message_id)
+    .filter((x): x is string => !!x);
+
+  const [orgMsgRes, protoMsgRes] = await Promise.all([
+    orgMessageIds.length > 0
+      ? supabase.from('org_messages').select('id, body').in('id', orgMessageIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; body: string }>, error: null }),
+    protocolMessageIds.length > 0
+      ? supabase
+          .from('protocol_messages')
+          .select('id, body')
+          .in('id', protocolMessageIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; body: string }>, error: null }),
+  ]);
+
+  const bodyByMessageId = new Map<string, string>();
+  for (const m of (orgMsgRes.data ?? []) as Array<{ id: string; body: string }>) {
+    bodyByMessageId.set(m.id, m.body);
+  }
+  for (const m of (protoMsgRes.data ?? []) as Array<{ id: string; body: string }>) {
+    bodyByMessageId.set(m.id, m.body);
+  }
+
+  const inbox: MentionInboxRow[] = [];
+  for (const r of rows) {
+    const messageId = r.org_message_id ?? r.protocol_message_id;
+    const channelId = r.org_id ?? r.protocol_id;
+    if (!messageId || !channelId) continue;
+    const channel_kind: 'org' | 'protocol' = r.org_message_id ? 'org' : 'protocol';
+    const body = bodyByMessageId.get(messageId) ?? '(message no longer available)';
+    inbox.push({
+      id: r.id,
+      mentioned_by_user_id: r.mentioned_by_user_id,
+      created_at: r.created_at,
+      read_at: r.read_at,
+      channel_kind,
+      channel_id: channelId,
+      message_id: messageId,
+      body_preview: body.length > 200 ? `${body.slice(0, 200)}…` : body,
+    });
+  }
+  return { ok: true, data: inbox };
 }
 
 
@@ -615,6 +714,47 @@ export async function deleteChatDecision(id: string): Promise<Result<void>> {
   return { ok: true, data: undefined };
 }
 
+/** Decisions whose title or rationale contains a `[participant:CODE]`
+ *  reference. Used by the participant timeline. Scope: the participant's
+ *  protocol channel plus the active org's #general channel — those are
+ *  where participant-related decisions typically get captured.
+ *
+ *  v1 uses a substring match on `[participant:CODE]`. False positives are
+ *  unlikely given the token shape and the small decision-row volume.
+ *  Each call hits at most 200 rows (100 per channel). */
+export async function listDecisionsReferencingParticipant(args: {
+  participantCode: string;
+  protocolId: string;
+  orgId: string | null;
+}): Promise<Result<ChatDecision[]>> {
+  const token = `%[participant:${args.participantCode}]%`;
+  const both: ChatDecision[] = [];
+
+  const { data: protoRows, error: protoErr } = await supabase
+    .from('chat_decisions')
+    .select(CHAT_DECISION_COLUMNS)
+    .eq('protocol_id', args.protocolId)
+    .or(`title.ilike.${token},rationale.ilike.${token}`)
+    .order('decided_at', { ascending: false })
+    .limit(100);
+  if (protoErr) return fail('listDecisionsReferencingParticipant:proto', protoErr);
+  both.push(...adaptChatDecisions(protoRows ?? []));
+
+  if (args.orgId) {
+    const { data: orgRows, error: orgErr } = await supabase
+      .from('chat_decisions')
+      .select(CHAT_DECISION_COLUMNS)
+      .eq('org_id', args.orgId)
+      .or(`title.ilike.${token},rationale.ilike.${token}`)
+      .order('decided_at', { ascending: false })
+      .limit(100);
+    if (orgErr) return fail('listDecisionsReferencingParticipant:org', orgErr);
+    both.push(...adaptChatDecisions(orgRows ?? []));
+  }
+
+  return { ok: true, data: both };
+}
+
 
 // ===========================================================================
 // Chat attachments — files uploaded to the `chat-attachments` Supabase
@@ -746,7 +886,7 @@ export async function listProtocolMessages(
 ): Promise<Result<ProtocolMessage[]>> {
   const { data, error } = await supabase
     .from('protocol_messages')
-    .select('id, protocol_id, author_user_id, body, created_at')
+    .select('id, protocol_id, author_user_id, body, created_at, edited_at, deleted_at, parent_message_id')
     .eq('protocol_id', protocolId)
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -775,11 +915,398 @@ export async function postProtocolMessage(
       author_user_id: user.id,
       body: trimmed,
     })
-    .select('id, protocol_id, author_user_id, body, created_at')
+    .select('id, protocol_id, author_user_id, body, created_at, edited_at, deleted_at, parent_message_id')
     .single();
   if (error) return fail('postProtocolMessage', error);
   if (!data) return err('Insert returned no row.');
   return { ok: true, data: adaptProtocolMessage(data) };
+}
+
+
+// ===========================================================================
+// Chat polish v2 — edit, soft-delete, reactions.
+// Wrappers around direct table updates / inserts. RLS handles author /
+// admin gating; the client doesn't repeat the check.
+// ===========================================================================
+
+const MESSAGE_SELECT_ORG =
+  'id, org_id, author_user_id, body, created_at, edited_at, deleted_at, parent_message_id';
+const MESSAGE_SELECT_PROTO =
+  'id, protocol_id, author_user_id, body, created_at, edited_at, deleted_at, parent_message_id';
+
+
+// ---------------------------------------------------------------------------
+// Thread replies — insert a child message with parent_message_id set.
+// org_id / protocol_id resolved from the parent so the client doesn't
+// have to pass them.
+// ---------------------------------------------------------------------------
+
+export async function replyToOrgMessage(
+  parentMessageId: string,
+  body: string,
+): Promise<Result<OrgMessage>> {
+  const trimmed = body.trim();
+  if (!trimmed) return err('Reply cannot be empty.');
+  if (trimmed.length > 10000) return err('Reply is too long (10000 character max).');
+
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr) return fail('replyToOrgMessage:getUser', userErr);
+  const user = userData?.user;
+  if (!user) return err('Not authenticated.');
+
+  // Resolve org_id from the parent so the row has a valid channel ref.
+  const { data: parent, error: parentErr } = await supabase
+    .from('org_messages')
+    .select('org_id')
+    .eq('id', parentMessageId)
+    .single();
+  if (parentErr) return fail('replyToOrgMessage:parent', parentErr);
+  if (!parent) return err('Parent message not found.');
+
+  const { data, error } = await supabase
+    .from('org_messages')
+    .insert({
+      org_id: parent.org_id,
+      author_user_id: user.id,
+      body: trimmed,
+      parent_message_id: parentMessageId,
+    })
+    .select(MESSAGE_SELECT_ORG)
+    .single();
+  if (error) return fail('replyToOrgMessage', error);
+  if (!data) return err('Insert returned no row.');
+  return { ok: true, data: adaptOrgMessage(data) };
+}
+
+export async function replyToProtocolMessage(
+  parentMessageId: string,
+  body: string,
+): Promise<Result<ProtocolMessage>> {
+  const trimmed = body.trim();
+  if (!trimmed) return err('Reply cannot be empty.');
+  if (trimmed.length > 10000) return err('Reply is too long (10000 character max).');
+
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr) return fail('replyToProtocolMessage:getUser', userErr);
+  const user = userData?.user;
+  if (!user) return err('Not authenticated.');
+
+  const { data: parent, error: parentErr } = await supabase
+    .from('protocol_messages')
+    .select('protocol_id')
+    .eq('id', parentMessageId)
+    .single();
+  if (parentErr) return fail('replyToProtocolMessage:parent', parentErr);
+  if (!parent) return err('Parent message not found.');
+
+  const { data, error } = await supabase
+    .from('protocol_messages')
+    .insert({
+      protocol_id: parent.protocol_id,
+      author_user_id: user.id,
+      body: trimmed,
+      parent_message_id: parentMessageId,
+    })
+    .select(MESSAGE_SELECT_PROTO)
+    .single();
+  if (error) return fail('replyToProtocolMessage', error);
+  if (!data) return err('Insert returned no row.');
+  return { ok: true, data: adaptProtocolMessage(data) };
+}
+
+/** Edit own org message. Sets body + bumps edited_at to now(). */
+export async function editOrgMessage(
+  id: string,
+  body: string,
+): Promise<Result<OrgMessage>> {
+  const trimmed = body.trim();
+  if (!trimmed) return err('Message cannot be empty.');
+  if (trimmed.length > 10000) return err('Message is too long (10000 character max).');
+  const { data, error } = await supabase
+    .from('org_messages')
+    .update({ body: trimmed, edited_at: new Date().toISOString() })
+    .eq('id', id)
+    .select(MESSAGE_SELECT_ORG)
+    .single();
+  if (error) return fail('editOrgMessage', error);
+  if (!data) return err('Edit returned no row.');
+  return { ok: true, data: adaptOrgMessage(data) };
+}
+
+/** Edit own protocol message. */
+export async function editProtocolMessage(
+  id: string,
+  body: string,
+): Promise<Result<ProtocolMessage>> {
+  const trimmed = body.trim();
+  if (!trimmed) return err('Message cannot be empty.');
+  if (trimmed.length > 10000) return err('Message is too long (10000 character max).');
+  const { data, error } = await supabase
+    .from('protocol_messages')
+    .update({ body: trimmed, edited_at: new Date().toISOString() })
+    .eq('id', id)
+    .select(MESSAGE_SELECT_PROTO)
+    .single();
+  if (error) return fail('editProtocolMessage', error);
+  if (!data) return err('Edit returned no row.');
+  return { ok: true, data: adaptProtocolMessage(data) };
+}
+
+/** Soft-delete an org message. Author or org admin. Sets deleted_at;
+ *  leaves body intact so the audit trail is preserved. UI renders the
+ *  placeholder based on deleted_at being non-null. */
+export async function softDeleteOrgMessage(id: string): Promise<Result<OrgMessage>> {
+  const { data, error } = await supabase
+    .from('org_messages')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
+    .select(MESSAGE_SELECT_ORG)
+    .single();
+  if (error) return fail('softDeleteOrgMessage', error);
+  if (!data) return err('Delete returned no row.');
+  return { ok: true, data: adaptOrgMessage(data) };
+}
+
+/** Soft-delete a protocol message. Author or org admin. */
+export async function softDeleteProtocolMessage(
+  id: string,
+): Promise<Result<ProtocolMessage>> {
+  const { data, error } = await supabase
+    .from('protocol_messages')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
+    .select(MESSAGE_SELECT_PROTO)
+    .single();
+  if (error) return fail('softDeleteProtocolMessage', error);
+  if (!data) return err('Delete returned no row.');
+  return { ok: true, data: adaptProtocolMessage(data) };
+}
+
+const REACTION_SELECT =
+  'id, org_message_id, protocol_message_id, org_id, protocol_id, user_id, emoji, created_at';
+
+/** Fetch every reaction on the given message ids for one channel side
+ *  (org_message_id IN ... OR protocol_message_id IN ...). Empty input
+ *  short-circuits to an empty result. */
+// ===========================================================================
+// Chat search — substring match across both message tables. RLS gates the
+// caller to channels they can access; nothing else is needed for permission
+// scoping. Results are merged and re-sorted newest first.
+// ===========================================================================
+
+export interface ChatSearchHit {
+  id: string;
+  body: string;
+  author_user_id: string | null;
+  created_at: string;
+  /** Exactly one of the two — discriminates the channel. */
+  org_id: string | null;
+  protocol_id: string | null;
+}
+
+export async function searchChatMessages(args: {
+  query: string;
+  limit?: number;
+}): Promise<Result<ChatSearchHit[]>> {
+  const limit = args.limit ?? 50;
+  const trimmed = args.query.trim();
+  if (trimmed.length < 2) return { ok: true, data: [] };
+
+  const pattern = `%${escapeIlikePattern(trimmed)}%`;
+
+  const [orgRes, protoRes] = await Promise.all([
+    supabase
+      .from('org_messages')
+      .select('id, org_id, author_user_id, body, created_at')
+      .ilike('body', pattern)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(limit),
+    supabase
+      .from('protocol_messages')
+      .select('id, protocol_id, author_user_id, body, created_at')
+      .ilike('body', pattern)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(limit),
+  ]);
+
+  if (orgRes.error) return fail('searchChatMessages:org', orgRes.error);
+  if (protoRes.error) return fail('searchChatMessages:proto', protoRes.error);
+
+  const orgRows = (orgRes.data ?? []) as Array<{
+    id: string;
+    org_id: string;
+    author_user_id: string | null;
+    body: string;
+    created_at: string;
+  }>;
+  const protoRows = (protoRes.data ?? []) as Array<{
+    id: string;
+    protocol_id: string;
+    author_user_id: string | null;
+    body: string;
+    created_at: string;
+  }>;
+
+  const merged: ChatSearchHit[] = [
+    ...orgRows.map((r) => ({
+      id: r.id,
+      body: r.body,
+      author_user_id: r.author_user_id,
+      created_at: r.created_at,
+      org_id: r.org_id,
+      protocol_id: null,
+    })),
+    ...protoRows.map((r) => ({
+      id: r.id,
+      body: r.body,
+      author_user_id: r.author_user_id,
+      created_at: r.created_at,
+      org_id: null,
+      protocol_id: r.protocol_id,
+    })),
+  ];
+  merged.sort((a, b) => b.created_at.localeCompare(a.created_at));
+  return { ok: true, data: merged.slice(0, limit) };
+}
+
+
+// ===========================================================================
+// Notification preferences — per-user toggles for email notifications.
+// Email-sending wiring lives in a follow-up PR; this surface just persists
+// the user's intent.
+// ===========================================================================
+
+const NOTIF_PREFS_COLUMNS =
+  'user_id, notify_mentions_email, notify_decisions_email, daily_digest, created_at, updated_at';
+
+export async function getMyNotificationPreferences(): Promise<
+  Result<NotificationPreferences>
+> {
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr) return fail('getMyNotificationPreferences:getUser', userErr);
+  const user = userData?.user;
+  if (!user) return err('Not authenticated.');
+
+  const { data, error } = await supabase
+    .from('user_notification_preferences')
+    .select(NOTIF_PREFS_COLUMNS)
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (error) return fail('getMyNotificationPreferences', error);
+  if (!data) return { ok: true, data: defaultNotificationPreferences(user.id) };
+  return { ok: true, data: adaptNotificationPreferences(data) };
+}
+
+export async function upsertMyNotificationPreferences(
+  patch: NotificationPreferencesPatch,
+): Promise<Result<NotificationPreferences>> {
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr) return fail('upsertMyNotificationPreferences:getUser', userErr);
+  const user = userData?.user;
+  if (!user) return err('Not authenticated.');
+
+  // upsert requires the full PK column. Merge incoming patch over current
+  // row; missing keys retain their defaults (false) on first insert.
+  const { data, error } = await supabase
+    .from('user_notification_preferences')
+    .upsert(
+      {
+        user_id: user.id,
+        notify_mentions_email: patch.notify_mentions_email ?? undefined,
+        notify_decisions_email: patch.notify_decisions_email ?? undefined,
+        daily_digest: patch.daily_digest ?? undefined,
+      },
+      { onConflict: 'user_id' },
+    )
+    .select(NOTIF_PREFS_COLUMNS)
+    .single();
+  if (error) return fail('upsertMyNotificationPreferences', error);
+  if (!data) return err('Upsert returned no row.');
+  return { ok: true, data: adaptNotificationPreferences(data) };
+}
+
+
+export async function listReactionsForOrgMessages(
+  messageIds: string[],
+): Promise<Result<ChatReaction[]>> {
+  if (messageIds.length === 0) return { ok: true, data: [] };
+  const { data, error } = await supabase
+    .from('chat_reactions')
+    .select(REACTION_SELECT)
+    .in('org_message_id', messageIds)
+    .order('created_at', { ascending: true });
+  if (error) return fail('listReactionsForOrgMessages', error);
+  return { ok: true, data: adaptChatReactions(data ?? []) };
+}
+
+export async function listReactionsForProtocolMessages(
+  messageIds: string[],
+): Promise<Result<ChatReaction[]>> {
+  if (messageIds.length === 0) return { ok: true, data: [] };
+  const { data, error } = await supabase
+    .from('chat_reactions')
+    .select(REACTION_SELECT)
+    .in('protocol_message_id', messageIds)
+    .order('created_at', { ascending: true });
+  if (error) return fail('listReactionsForProtocolMessages', error);
+  return { ok: true, data: adaptChatReactions(data ?? []) };
+}
+
+interface AddReactionInput {
+  /** Exactly one of the two — channel side the message is on. */
+  org_message_id?: string;
+  protocol_message_id?: string;
+  org_id?: string;
+  protocol_id?: string;
+  emoji: string;
+}
+
+/** Insert a reaction row. The unique constraint on (message_id, user_id,
+ *  emoji) means duplicate clicks safely no-op via the conflict error. */
+export async function addReaction(
+  input: AddReactionInput,
+): Promise<Result<ChatReaction>> {
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr) return fail('addReaction:getUser', userErr);
+  const user = userData?.user;
+  if (!user) return err('Not authenticated.');
+
+  const { data, error } = await supabase
+    .from('chat_reactions')
+    .insert({
+      org_message_id: input.org_message_id ?? null,
+      protocol_message_id: input.protocol_message_id ?? null,
+      org_id: input.org_id ?? null,
+      protocol_id: input.protocol_id ?? null,
+      user_id: user.id,
+      emoji: input.emoji,
+    })
+    .select(REACTION_SELECT)
+    .single();
+  if (error) return fail('addReaction', error);
+  if (!data) return err('Insert returned no row.');
+  return { ok: true, data: adaptChatReactions([data])[0] };
+}
+
+/** Remove the caller's own reaction matching (message, emoji). */
+export async function removeReaction(input: {
+  org_message_id?: string;
+  protocol_message_id?: string;
+  emoji: string;
+}): Promise<Result<void>> {
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr) return fail('removeReaction:getUser', userErr);
+  const user = userData?.user;
+  if (!user) return err('Not authenticated.');
+
+  let q = supabase.from('chat_reactions').delete().eq('user_id', user.id).eq('emoji', input.emoji);
+  if (input.org_message_id) q = q.eq('org_message_id', input.org_message_id);
+  if (input.protocol_message_id) q = q.eq('protocol_message_id', input.protocol_message_id);
+  const { error } = await q;
+  if (error) return fail('removeReaction', error);
+  return { ok: true, data: undefined };
 }
 
 /** Protocols the caller can chat in: org admins get every org protocol;

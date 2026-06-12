@@ -121,6 +121,15 @@ export interface OrgMessage {
   author_user_id: string | null;
   body: string;
   created_at: string;
+  /** Non-null when the message has been edited; carries the edit timestamp. */
+  edited_at: string | null;
+  /** Non-null when the message was soft-deleted; UI shows a placeholder
+   *  and hides attachments + reactions. The row + body + attachments stay
+   *  intact in the DB so the audit trail is preserved. */
+  deleted_at: string | null;
+  /** Thread reply pointer — null = top-level message in the channel;
+   *  non-null = reply to that message. */
+  parent_message_id: string | null;
 }
 
 export interface NewOrgMessageInput {
@@ -139,6 +148,9 @@ export interface ProtocolMessage {
   author_user_id: string | null;
   body: string;
   created_at: string;
+  edited_at: string | null;
+  deleted_at: string | null;
+  parent_message_id: string | null;
 }
 
 export interface NewProtocolMessageInput {
@@ -292,4 +304,79 @@ export interface AcceptedGuestInvite {
   guest_id: string;
   protocol_id: string;
   accepted_at: string;
+}
+
+
+// ---------------------------------------------------------------------------
+// User notification preferences
+// ---------------------------------------------------------------------------
+
+/** Per-user toggles for email notifications. Defaults to all-off; the row
+ *  may not exist for users who've never visited the settings page — UI
+ *  treats absence as defaults. */
+export interface NotificationPreferences {
+  user_id: string;
+  notify_mentions_email: boolean;
+  notify_decisions_email: boolean;
+  daily_digest: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Patch shape for upsertMyNotificationPreferences — partial of the three
+ *  boolean columns. */
+export interface NotificationPreferencesPatch {
+  notify_mentions_email?: boolean;
+  notify_decisions_email?: boolean;
+  daily_digest?: boolean;
+}
+
+
+// ---------------------------------------------------------------------------
+// Chat reactions (emoji on messages)
+// ---------------------------------------------------------------------------
+
+/** A single reaction row. Exactly one of `org_message_id` /
+ *  `protocol_message_id` is set, with the channel ref denormalized in. */
+export interface ChatReaction {
+  id: string;
+  org_message_id: string | null;
+  protocol_message_id: string | null;
+  org_id: string | null;
+  protocol_id: string | null;
+  user_id: string;
+  emoji: string;
+  created_at: string;
+}
+
+
+// ---------------------------------------------------------------------------
+// Org activity log
+// ---------------------------------------------------------------------------
+
+/** Closed set of event_type values written by the org_events triggers. The
+ *  Postgres column is TEXT without a CHECK constraint (extension-friendly);
+ *  this union is the source of truth on the TS side. */
+export type OrgEventType =
+  | 'org_member_added'
+  | 'org_member_removed'
+  | 'org_member_role_changed'
+  | 'protocol_member_added'
+  | 'protocol_member_removed'
+  | 'protocol_member_role_changed'
+  | 'invite_created'
+  | 'invite_cancelled'
+  | 'access_request_approved';
+
+/** Raw org_events row. payload shape varies per event_type — narrow at
+ *  the describe()-site, not here. */
+export interface OrgEvent {
+  id: string;
+  org_id: string;
+  event_type: OrgEventType;
+  actor_user_id: string | null;
+  target_user_id: string | null;
+  target_protocol_id: string | null;
+  payload: Record<string, unknown>;
+  created_at: string;
 }

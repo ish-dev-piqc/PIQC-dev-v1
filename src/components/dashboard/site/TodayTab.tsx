@@ -17,6 +17,8 @@ import { useProtocol } from '../../../context/ProtocolContext';
 import { useSiteData } from '../../../context/SiteDataContext';
 import { useDemoMode } from '../../../context/DemoModeContext';
 import SiteWelcomePanel from './SiteWelcomePanel';
+import TodayFreshnessBanner from './TodayFreshnessBanner';
+import AuditSignalsBanner from './AuditSignalsBanner';
 import { useAuth } from '../../../context/AuthContext';
 import VisitDetailDrawer from './VisitDetailDrawer';
 import HeatIndicator from '../../heatmap/HeatIndicator';
@@ -161,6 +163,53 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
   const [openVisit, setOpenVisit] = useState<SiteVisit | null>(null);
   const [openDay, setOpenDay] = useState<Date | null>(null);
   const [filterPanelOpen, setFilterPanelOpen] = useState<boolean>(true);
+
+  // --- Freshness banner ---------------------------------------------------
+  // Snapshot the ID set of currently-loaded visits + participants on first
+  // non-empty load; whenever the live id sets grow past the snapshot,
+  // surface a "N new since you opened this tab" banner. Dismiss
+  // re-snapshots to current. Reset on protocol switch so each scope gets
+  // its own baseline.
+  const [baselineVisitIds, setBaselineVisitIds] = useState<Set<string> | null>(null);
+  const [baselineParticipantIds, setBaselineParticipantIds] = useState<Set<string> | null>(null);
+
+  useEffect(() => {
+    // Re-baseline on protocol change so the user doesn't see "37 new visits"
+    // when switching from a quiet protocol to a busy one.
+    setBaselineVisitIds(null);
+    setBaselineParticipantIds(null);
+  }, [activeProtocol?.id]);
+
+  useEffect(() => {
+    if (baselineVisitIds === null && allSiteVisits.length > 0) {
+      setBaselineVisitIds(new Set(allSiteVisits.map((v) => v.id)));
+    }
+  }, [baselineVisitIds, allSiteVisits]);
+
+  useEffect(() => {
+    if (baselineParticipantIds === null && allSiteParticipants.length > 0) {
+      setBaselineParticipantIds(new Set(allSiteParticipants.map((p) => p.id)));
+    }
+  }, [baselineParticipantIds, allSiteParticipants]);
+
+  const newVisitCount = useMemo(() => {
+    if (!baselineVisitIds) return 0;
+    let n = 0;
+    for (const v of allSiteVisits) if (!baselineVisitIds.has(v.id)) n++;
+    return n;
+  }, [allSiteVisits, baselineVisitIds]);
+
+  const newParticipantCount = useMemo(() => {
+    if (!baselineParticipantIds) return 0;
+    let n = 0;
+    for (const p of allSiteParticipants) if (!baselineParticipantIds.has(p.id)) n++;
+    return n;
+  }, [allSiteParticipants, baselineParticipantIds]);
+
+  const dismissFreshness = () => {
+    setBaselineVisitIds(new Set(allSiteVisits.map((v) => v.id)));
+    setBaselineParticipantIds(new Set(allSiteParticipants.map((p) => p.id)));
+  };
 
   // Phase E: detect templates extracted but not yet projected — show a banner
   // pointing the user at Set anchor / Re-project.
@@ -322,6 +371,20 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
     <div className="h-full flex flex-col overflow-hidden">
       {/* Greeting */}
       <div className="px-6 pt-6 pb-4 flex-shrink-0">
+        {!isHome && (
+          <div className="mb-3">
+            <AuditSignalsBanner protocolId={activeProtocol.id} />
+          </div>
+        )}
+        {(newVisitCount > 0 || newParticipantCount > 0) && (
+          <div className="mb-3">
+            <TodayFreshnessBanner
+              newVisitCount={newVisitCount}
+              newParticipantCount={newParticipantCount}
+              onDismiss={dismissFreshness}
+            />
+          </div>
+        )}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h2 className={`${headingColor} font-semibold text-xl mb-1`}>

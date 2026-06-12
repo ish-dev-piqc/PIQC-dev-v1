@@ -16,6 +16,8 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useSiteData } from '../../../context/SiteDataContext';
 import VisitDetailDrawer from './VisitDetailDrawer';
+import { buildVisitIcsBlob } from '../../../lib/site/calendarExport';
+import { CalendarPlus } from 'lucide-react';
 import VisitConfidenceChip from './VisitConfidenceChip';
 import { getProtocolColorsById } from '../../../lib/site/protocolColors';
 import type { SiteVisit, VisitStatus } from '../../../lib/site/types';
@@ -70,6 +72,29 @@ export default function VisitsTab() {
   const [participantFilter, setParticipantFilter] = useState<string>('ALL');
   const [openVisit, setOpenVisit] = useState<SiteVisit | null>(null);
   const [scheduleFormOpen, setScheduleFormOpen] = useState(false);
+
+  // Deep-link pickup — chat reference chips can drop a visit UUID into
+  // `piq-pending-visit-v1` then navigate the user here. Once the visits
+  // list is loaded, find the visit (if it belongs to the active protocol
+  // and is loaded) and auto-open its detail drawer.
+  useEffect(() => {
+    if (loading || !visits.length) return;
+    let pending: string | null = null;
+    try {
+      pending = localStorage.getItem('piq-pending-visit-v1');
+    } catch {
+      /* ignore */
+    }
+    if (!pending) return;
+    const target = visits.find((v) => v.id === pending);
+    if (!target) return;
+    try {
+      localStorage.removeItem('piq-pending-visit-v1');
+    } catch {
+      /* ignore */
+    }
+    setOpenVisit(target);
+  }, [loading, visits]);
   // Surfaced briefly after a manual "Schedule visit" so the new row doesn't
   // disappear into the materialized list. Auto-clears after 5s.
   const [recentSchedule, setRecentSchedule] = useState<{ visit_name: string; date: string } | null>(null);
@@ -198,6 +223,36 @@ export default function VisitsTab() {
           <p className={`${subColor} text-sm`}>
             {scoped.length} total · {counts.UPCOMING} upcoming
           </p>
+          <button
+            type="button"
+            onClick={() => {
+              const blob = buildVisitIcsBlob({
+                visits: visible,
+                protocolCodeById: new Map(protocols.map((p) => [p.id, p.code])),
+                calendarName: activeProtocol
+                  ? `${activeProtocol.code} visits`
+                  : 'PIQC visits',
+              });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `visits_${activeProtocol?.code ?? 'all'}_${new Date()
+                .toISOString()
+                .slice(0, 10)}.ics`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            disabled={visible.length === 0}
+            className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
+              isLight
+                ? 'bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+                : 'bg-[#0F172A] border border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]'
+            } disabled:opacity-50`}
+            title="Download as .ics for Outlook / Google Calendar"
+          >
+            <CalendarPlus size={13} />
+            Export calendar
+          </button>
           <button
             type="button"
             onClick={() => setScheduleFormOpen(true)}

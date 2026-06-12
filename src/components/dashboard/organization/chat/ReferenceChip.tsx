@@ -59,6 +59,8 @@ export default function ReferenceChip({ kind, refId }: ReferenceChipProps) {
       setPopover({
         kind: 'participant',
         title: part ? `${part.id}` : `${refId} (not loaded)`,
+        refId,
+        resolved: !!part,
         rows: part
           ? [
               ['Status', part.status],
@@ -82,6 +84,8 @@ export default function ReferenceChip({ kind, refId }: ReferenceChipProps) {
       setPopover({
         kind: 'visit',
         title: visit ? visit.visitName : `${refId} (not loaded)`,
+        refId,
+        resolved: !!visit,
         rows: visit
           ? [
               ['Participant', visit.participantId],

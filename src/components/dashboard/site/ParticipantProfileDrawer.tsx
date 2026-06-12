@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   X,
   AlertTriangle,
@@ -20,7 +20,16 @@ import { useSwipeDismiss } from '../../../hooks/useSwipeDismiss';
 import { useSiteData } from '../../../context/SiteDataContext';
 import type { ParticipantStatus, VisitStatus } from '../../../lib/site/types';
 import { PARTICIPANT_STATUS_LABELS } from '../../../lib/site/labels';
-import { deleteParticipant } from '../../../lib/site/siteApi';
+import { deleteParticipant, updateParticipant } from '../../../lib/site/siteApi';
+import { listDecisionsReferencingParticipant } from '../../../lib/orgs/orgsApi';
+import {
+  mergeParticipantTimeline,
+  type TimelineEvent,
+} from '../../../lib/site/participantTimelineAdapter';
+import { useOrg } from '../../../context/OrgContext';
+import { useChatNavigation } from '../../../context/ChatNavigationContext';
+import InlineEditableText from './InlineEditableText';
+import type { ChatDecision } from '../../../types/orgs';
 import type { Protocol } from '../../../context/ProtocolContext';
 import ParticipantFormDrawer from './ParticipantFormDrawer';
 
@@ -88,6 +97,8 @@ export default function ParticipantProfileDrawer({ participantId, protocols, onC
   const swipe = useSwipeDismiss({ onClose });
 
   const { participants, visits } = useSiteData();
+  const { activeOrg } = useOrg();
+  const { navigateToOrgChat } = useChatNavigation();
   const participant = participants.find((p) => p.id === participantId) ?? null;
   const participantVisits = visits
     .filter((v) => v.participantId === participantId)
@@ -95,6 +106,35 @@ export default function ParticipantProfileDrawer({ participantId, protocols, onC
   const protocol = participant
     ? protocols.find((p) => p.id === participant.protocol_id) ?? null
     : null;
+
+  // --- Decisions referencing this participant ----------------------------
+  // Fetch on mount + when the participant changes. Empty result is fine —
+  // the timeline still renders with visits alone.
+  const [participantDecisions, setParticipantDecisions] = useState<ChatDecision[]>([]);
+  useEffect(() => {
+    if (!participant) {
+      setParticipantDecisions([]);
+      return;
+    }
+    let cancelled = false;
+    listDecisionsReferencingParticipant({
+      participantCode: participant.id,
+      protocolId: participant.protocol_id,
+      orgId: activeOrg?.id ?? null,
+    }).then((res) => {
+      if (cancelled) return;
+      if (res.ok) setParticipantDecisions(res.data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [participant, activeOrg?.id]);
+
+  // Merged timeline (visits + decisions). Re-derives whenever either side
+  // changes; cheap enough to skip useMemo at typical participant size.
+  const timeline: TimelineEvent[] = participant
+    ? mergeParticipantTimeline(participantVisits, participantDecisions)
+    : [];
 
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -301,42 +341,97 @@ export default function ParticipantProfileDrawer({ participantId, protocols, onC
                 />
               </div>
 
-              {/* Notes */}
-              {participant.notes && (
-                <div className={`${panelBg} rounded-xl border px-4 py-3`}>
-                  <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold mb-1.5">Notes</p>
-                  <p className="text-fg-sub text-xs leading-relaxed">{participant.notes}</p>
-                </div>
-              )}
+              {/* Notes — always rendered so coordinators can add inline. */}
+              <div className={`${panelBg} rounded-xl border px-4 py-3`}>
+                <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold mb-1.5">Notes</p>
+                <InlineEditableText
+                  value={participant.notes ?? null}
+                  placeholder="Anything to remember about this participant?"
+                  emptyLabel="Add a note…"
+                  onSave={async (next) => {
+                    const r = await updateParticipant(participant.uuid, {
+                      notes: next,
+                    });
+                    if (!r.ok) throw new Error(r.error);
+                  }}
+                />
+              </div>
 
-              {/* Visit history */}
+              {/* Timeline — merged visits + chat decisions referencing this
+                  participant, reverse-chronological. Replaces the old
+                  Visit history section. */}
               <div>
                 <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold mb-2">
-                  Visit history ({participantVisits.length})
+                  Timeline ({timeline.length})
                 </p>
-                {participantVisits.length === 0 ? (
-                  <p className="text-fg-muted text-xs">No visits recorded.</p>
+                {timeline.length === 0 ? (
+                  <p className="text-fg-muted text-xs">
+                    No activity recorded for this participant yet.
+                  </p>
                 ) : (
                   <div className={`${panelBg} rounded-xl border divide-y ${rowBorder}`}>
-                    {participantVisits.map((v) => (
-                      <div key={v.id} className="px-4 py-3 flex items-start gap-3">
-                        <span className="mt-0.5 flex-shrink-0">{visitStatusIcon(v.status)}</span>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <span className="text-fg-heading text-xs font-medium">{v.visitName}</span>
-                            <span className="text-fg-muted text-[11px]">{formatDate(v.date)}</span>
+                    {timeline.map((ev) => {
+                      if (ev.kind === 'visit') {
+                        const v = ev.visit;
+                        return (
+                          <div key={`v-${v.id}`} className="px-4 py-3 flex items-start gap-3">
+                            <span className="mt-0.5 flex-shrink-0">{visitStatusIcon(v.status)}</span>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <span className="text-fg-heading text-xs font-medium">{v.visitName}</span>
+                                <span className="text-fg-muted text-[11px]">{formatDate(v.date)}</span>
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                <span className="text-fg-muted text-[11px]">{visitStatusLabel(v.status)}</span>
+                                {v.deviationReason && (
+                                  <span className={`text-[11px] truncate ${isLight ? 'text-amber-700' : 'text-amber-400'}`}>
+                                    · {v.deviationReason}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                            <span className="text-fg-muted text-[11px]">{visitStatusLabel(v.status)}</span>
-                            {v.deviationReason && (
-                              <span className={`text-[11px] truncate ${isLight ? 'text-amber-700' : 'text-amber-400'}`}>
-                                · {v.deviationReason}
+                        );
+                      }
+                      // Decision row — click navigates to chat with deep-link
+                      // to the source message via ChatNavigationContext.
+                      const d = ev.decision;
+                      const channelKey: 'org' | `protocol:${string}` = d.org_id
+                        ? 'org'
+                        : `protocol:${d.protocol_id ?? ''}`;
+                      const sourceMessageId =
+                        d.source_org_message_id ?? d.source_protocol_message_id ?? undefined;
+                      return (
+                        <button
+                          key={`d-${d.id}`}
+                          type="button"
+                          onClick={() => navigateToOrgChat(channelKey, sourceMessageId)}
+                          className={`w-full text-left px-4 py-3 flex items-start gap-3 ${
+                            isLight ? 'hover:bg-amber-50/40' : 'hover:bg-white/[0.03]'
+                          }`}
+                        >
+                          <CheckCircle2
+                            size={13}
+                            className={`mt-0.5 flex-shrink-0 ${isLight ? 'text-amber-700' : 'text-amber-300'}`}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <span className="text-fg-heading text-xs font-medium truncate">
+                                Decision: {d.title}
                               </span>
+                              <span className="text-fg-muted text-[11px]">
+                                {formatDate(d.decided_at.slice(0, 10))}
+                              </span>
+                            </div>
+                            {d.rationale && (
+                              <p className="text-fg-muted text-[11px] mt-0.5 line-clamp-2">
+                                {d.rationale}
+                              </p>
                             )}
                           </div>
-                        </div>
-                      </div>
-                    ))}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>

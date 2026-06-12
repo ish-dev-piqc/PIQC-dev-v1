@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Menu, X, LogOut, ChevronDown, User, Home, Sun, Moon, ClipboardList, Flame, UserCircle2, CreditCard, Beaker, Building2, Plus, Users } from 'lucide-react';
+import { Menu, X, LogOut, ChevronDown, User, Home, Sun, Moon, ClipboardList, Flame, UserCircle2, CreditCard, Beaker, Building2, Plus, Users, AtSign } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useMode, type DashboardMode } from '../context/ModeContext';
@@ -24,9 +24,10 @@ interface NavbarProps {
   onDashboardHome: () => void;
   onOpenSettingsSection: (section: SettingsSection) => void;
   onOpenOrganization: () => void;
+  onOpenMentionsInbox?: () => void;
 }
 
-export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSettingsSection, onOpenOrganization }: NavbarProps) {
+export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSettingsSection, onOpenOrganization, onOpenMentionsInbox }: NavbarProps) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -586,6 +587,34 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
 
           {isDashboard ? (
             <nav className="hidden md:flex items-center gap-2">
+              {/* Mentions inbox bell — primary entry to the cross-channel
+                  mention list. Amber dot when there are unread mentions
+                  anywhere. */}
+              <button
+                type="button"
+                onClick={() => onOpenMentionsInbox?.()}
+                className={`relative p-2 rounded-lg transition-colors ${
+                  isLight
+                    ? 'text-[#334155]/70 hover:bg-[#0F172A]/[0.05] hover:text-[#0F172A]'
+                    : 'text-[#CBD5E1]/70 hover:bg-white/[0.05] hover:text-white'
+                }`}
+                aria-label={
+                  unreadMentionCount > 0
+                    ? `Mentions — ${unreadMentionCount} unread`
+                    : 'Mentions'
+                }
+                title="Mentions"
+              >
+                <AtSign size={15} />
+                {unreadMentionCount > 0 && (
+                  <span
+                    className={`absolute top-1 right-1 w-2 h-2 rounded-full ${
+                      isLight ? 'bg-amber-500' : 'bg-amber-400'
+                    }`}
+                    aria-hidden="true"
+                  />
+                )}
+              </button>
               <div className="relative" ref={userMenuRef}>
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
