@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: sponsor-coming-soon
-status: active
+status: merged
+merged: 2026-06-12
 started: 2026-06-04
-target_pr:
+target_pr: #321
 ---
 
 # Sponsor mode — coming-soon page (PR 3 of 6)
