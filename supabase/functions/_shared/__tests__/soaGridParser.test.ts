@@ -346,6 +346,28 @@ describe("assembleVisitsFromGrouping — golden (PP06489)", () => {
     expect(s).toHaveLength(0);
   });
 
+  it("derives study_day from the LLM-cleaned name when the terse source header can't parse (regression: BLKR201 'D1 0' → 'Day 1')", () => {
+    // Production bug: a column header like "D1 0" yields study_day=null, and the
+    // NOT-NULL study_day persist drops the visit — collapsing a 12-visit schedule
+    // to the lone Screening row. The LLM cleans "D1 0" → "Day 1", which parses, so
+    // assembly must prefer the grouped name. Build columns whose headers are terse
+    // codes and whose grouped names are the clean equivalents.
+    const c0 = columns[0];
+    const terse = [
+      { ...c0, idx: 0, header: "D1 0" },
+      { ...c0, idx: 1, header: "D7 X" },
+      { ...c0, idx: 2, header: "Wk 4 visit" }, // "Wk" doesn't parse; name "Week 4" does
+    ];
+    const { schedule: s } = assembleVisitsFromGrouping(terse, {
+      visits: [
+        { name: "Day 1", source_idx: [0] },
+        { name: "Day 7", source_idx: [1] },
+        { name: "Week 4", source_idx: [2] },
+      ],
+    });
+    expect(s.map((v) => v.study_day)).toEqual([1, 7, 28]); // none null → none dropped at persist
+  });
+
   it("preserves conditional (X) marks and keeps marked procedures null (for the safety-critical heuristic)", () => {
     const idGrouping = { visits: columns.map((c) => ({ name: c.header, source_idx: [c.idx] })) };
     const ps = assembleVisitsFromGrouping(columns, idGrouping).schedule.flatMap((s) => s.procedures_structured);

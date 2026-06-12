@@ -701,14 +701,22 @@ export function assembleVisitsFromGrouping(
 
     const columnOrder = Math.min(...srcCols.map((c) => c.idx));
     const pages = [...new Set(srcCols.map((c) => c.page).filter((p): p is number => typeof p === "number"))];
-    const hdr = parseVisitHeader(srcCols[0].header); // best-effort day/window from primary header
     const name = (typeof v.name === "string" && v.name.trim()) ? v.name.trim() : srcCols[0].header;
+    // study_day anchors calendar projection (materialize_protocol_visits) and is
+    // part of the template unique key, so it must be non-null or the persist
+    // step drops the visit. A terse SoA source header ("D1 0", "D7 X") rarely
+    // parses, but the LLM-cleaned name ("Day 1", "Week 4") usually does — so
+    // prefer the name, fall back to the primary source header. Window text lives
+    // in the raw header, so take windows from there first.
+    const fromName = parseVisitHeader(name);
+    const hdr = parseVisitHeader(srcCols[0].header);
+    const studyDay = fromName.study_day ?? hdr.study_day;
 
     schedule.push({
       visit_name: name,
-      study_day: hdr.study_day,
-      window_minus_days: hdr.window_minus_days,
-      window_plus_days: hdr.window_plus_days,
+      study_day: studyDay,
+      window_minus_days: hdr.window_minus_days || fromName.window_minus_days,
+      window_plus_days: hdr.window_plus_days || fromName.window_plus_days,
       column_order: columnOrder,
       procedures: procs.map((p) => p.label),
       procedures_structured: procs.map((p) => ({
