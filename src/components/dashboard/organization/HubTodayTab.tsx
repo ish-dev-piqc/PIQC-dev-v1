@@ -137,7 +137,7 @@ export default function HubTodayTab({ onChangeDashboardTab }: HubTodayTabProps) 
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <div
           className="rounded-md p-3"
           style={{ backgroundColor: isLight ? '#E6F1FB' : 'rgba(53,138,221,0.12)' }}
@@ -192,7 +192,7 @@ export default function HubTodayTab({ onChangeDashboardTab }: HubTodayTabProps) 
       </div>
 
       {/* Mode tiles */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <button
           type="button"
           onClick={() => enterMode('site')}

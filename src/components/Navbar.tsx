@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Menu, X, LogOut, ChevronDown, User, Home, Sun, Moon, ClipboardList, Flame, UserCircle2, CreditCard, Beaker, Building2, Plus, Users, AtSign } from 'lucide-react';
+import { Menu, X, LogOut, ChevronDown, User, Home, Sun, Moon, ClipboardList, Flame, UserCircle2, CreditCard, Beaker, Building2, Plus, Users, AtSign, LayoutGrid, ShieldCheck, MessageCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useMode } from '../context/ModeContext';
@@ -28,9 +28,14 @@ interface NavbarProps {
    *  the previous `onOpenMentionsInbox` after the standalone MentionsInbox
    *  panel was folded into the chat overlay's Mentions channel. */
   onOpenChatOverlayMentions?: () => void;
+  /** Mobile-only rail nav. Mirrors the LeftRail's five entries
+   *  (workspace / site / audit / sponsor / chat) for phone viewports
+   *  where the rail is hidden. App.tsx routes each key to the same state
+   *  changes the rail would. */
+  onMobileWorkspaceNavigate?: (key: 'workspace' | 'site' | 'audit' | 'sponsor' | 'chat') => void;
 }
 
-export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSettingsSection, onOpenOrganization, onOpenChatOverlayMentions }: NavbarProps) {
+export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSettingsSection, onOpenOrganization, onOpenChatOverlayMentions, onMobileWorkspaceNavigate }: NavbarProps) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -749,9 +754,63 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                 <p className={`text-xs ${isLight ? 'text-[#334155]/40' : 'text-[#CBD5E1]/40'} mb-0.5`}>Signed in as</p>
                 <p className={`text-sm ${isLight ? 'text-[#0F172A]' : 'text-white'} font-medium truncate`}>{user?.email}</p>
               </div>
+              {/* Workspace section — mobile parallel of the desktop LeftRail
+                  (hidden below md). Mirrors the rail's five entries. */}
+              {onMobileWorkspaceNavigate && (
+                <>
+                  <p className={`px-3 py-1.5 text-[11px] uppercase tracking-wider ${isLight ? 'text-[#334155]/35' : 'text-[#CBD5E1]/35'}`}>
+                    Workspace
+                  </p>
+                  <button
+                    onClick={() => { onMobileWorkspaceNavigate('workspace'); setMobileOpen(false); }}
+                    className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#334155]/70 hover:text-[#0F172A] hover:bg-[#0F172A]/[0.06]' : 'text-[#CBD5E1]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
+                  >
+                    <LayoutGrid size={14} />
+                    Workspace home
+                  </button>
+                  <button
+                    onClick={() => { onMobileWorkspaceNavigate('site'); setMobileOpen(false); }}
+                    className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#334155]/70 hover:text-[#0F172A] hover:bg-[#0F172A]/[0.06]' : 'text-[#CBD5E1]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
+                  >
+                    <ClipboardList size={14} />
+                    Site mode
+                  </button>
+                  <button
+                    onClick={() => { onMobileWorkspaceNavigate('audit'); setMobileOpen(false); }}
+                    className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#334155]/70 hover:text-[#0F172A] hover:bg-[#0F172A]/[0.06]' : 'text-[#CBD5E1]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
+                  >
+                    <ShieldCheck size={14} />
+                    Audit mode
+                  </button>
+                  <button
+                    onClick={() => { onMobileWorkspaceNavigate('sponsor'); setMobileOpen(false); }}
+                    className={`flex items-center justify-between gap-2.5 w-full px-3 py-2.5 text-sm font-medium opacity-70 ${isLight ? 'text-[#334155]/70 hover:bg-[#0F172A]/[0.06]' : 'text-[#CBD5E1]/70 hover:bg-white/[0.06]'} rounded-lg transition-colors`}
+                  >
+                    <span className="inline-flex items-center gap-2.5">
+                      <Building2 size={14} />
+                      Sponsor mode
+                    </span>
+                    <span className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${isLight ? 'bg-[#EEEDFE] text-[#3C3489]' : 'bg-[rgba(127,119,221,0.18)] text-[#AFA9EC]'}`}>
+                      Soon
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => { onMobileWorkspaceNavigate('chat'); setMobileOpen(false); }}
+                    className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#334155]/70 hover:text-[#0F172A] hover:bg-[#0F172A]/[0.06]' : 'text-[#CBD5E1]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
+                  >
+                    <MessageCircle size={14} />
+                    Chat
+                    {unreadMentionCount > 0 && (
+                      <span className={`ml-auto inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${isLight ? 'bg-[#D85A30] text-white' : 'bg-[#F0997B] text-[#4A1B0C]'}`}>
+                        @{unreadMentionDisplay}
+                      </span>
+                    )}
+                  </button>
+                </>
+              )}
               {/* Settings section — mirrors the desktop user menu so mobile/
                   split-screen users get the same controls as full-screen. */}
-              <p className={`px-3 py-1.5 text-[11px] uppercase tracking-wider ${isLight ? 'text-[#334155]/35' : 'text-[#CBD5E1]/35'}`}>
+              <p className={`px-3 py-1.5 text-[11px] uppercase tracking-wider mt-2 ${isLight ? 'text-[#334155]/35' : 'text-[#CBD5E1]/35'}`}>
                 Settings
               </p>
               <button
