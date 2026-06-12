@@ -65,6 +65,9 @@ export interface SoaGridResult {
 export interface TableBlock {
   content: string;
   page?: number | null;
+  /** Section heading the table sits under (e.g. "SYNOPSIS", "Schedule of
+   * Activities"). Lets the LLM grouper drop synopsis/TOC restatements. Optional. */
+  section?: string | null;
 }
 
 // --- text helpers ------------------------------------------------------------
@@ -103,19 +106,44 @@ function noteOrNull(s: string): string | null {
   return !n || /^\d{1,2}$/.test(n) ? null : n;
 }
 
+// Unambiguous "scheduled" mark glyphs (NOT the ASCII letter x — that needs word
+// boundaries so a note like "max" / "6x" isn't read as a mark). Validated across
+// 5 sponsor protocols: PledOx uses X, CLR uses × (U+00D7), BLKR201 uses → (a span
+// arrow), others use ✓/●. The set is broad on purpose; self-consistency
+// (emitted vs detected marks) flags any glyph still missed instead of silently
+// dropping it.
+const MARK_GLYPHS = "×✓✔✗✕✘●•○◯■□√→⟶➔➝⇒⟵↔☑☒";
+const GLYPH_RE = new RegExp(`[${MARK_GLYPHS}]`, "u");
+
 export function classifyMark(cellText: string): { mark: CellMark; note: string | null } {
   const t = clean(cellText);
   if (!t) return { mark: "empty", note: null };
-  // Parenthesized X → conditional (e.g. "(X)10" — perform only if a condition holds).
-  if (/\(\s*x\s*\)/i.test(t)) {
-    return { mark: "conditional", note: noteOrNull(t.replace(/\(\s*x\s*\)/i, "").replace(/^\d+\s*/, "")) };
+  // Parenthesized mark → conditional (e.g. "(X)" / "(×)" — perform only if a condition holds).
+  if (/\(\s*[x×✓✔]\s*\)/i.test(t)) {
+    return { mark: "conditional", note: noteOrNull(t.replace(/\(\s*[x×✓✔]\s*\)/i, "").replace(/^\d+\s*/, "")) };
   }
-  // A clear mark anywhere → marked; the remaining text is the note (timing etc.).
-  if (/(^|\s)[x✓●•](\s|$)/i.test(t) || /^x\b/i.test(t)) {
-    return { mark: "marked", note: noteOrNull(t.replace(/[x✓●•]/i, "").replace(/^\d+\s*/, "")) };
+  // A clear mark glyph anywhere, or a standalone "x"/"yes" → marked; the remaining
+  // text is the note (timing etc.).
+  if (GLYPH_RE.test(t) || /(^|\s)x(\s|$)/i.test(t) || /^x\b/i.test(t) || /^(yes|y)$/i.test(t)) {
+    const note = t.replace(GLYPH_RE, " ").replace(/(^|\s)x(\s|$)/ig, " ").replace(/^\d+\s*/, "");
+    return { mark: "marked", note: noteOrNull(note) };
   }
   // Non-empty but no recognizable mark — don't guess; flag for review.
   return { mark: "uncertain", note: t };
+}
+
+/** True if any column>0 cell in this row is a scheduled/conditional mark. Used for
+ * STRUCTURAL header-band detection: the header band is the run of leading rows
+ * with no marks (visit-name / day / window rows carry no X); the first row with a
+ * mark is the first procedure row. Vocabulary-free — works for "Study Day" /
+ * "Study Visits" / non-English label columns the old keyword test missed. */
+function rowHasMark(row: string[] | undefined): boolean {
+  if (!row) return false;
+  for (let c = 1; c < row.length; c++) {
+    const m = classifyMark(row[c] ?? "").mark;
+    if (m === "marked" || m === "conditional") return true;
+  }
+  return false;
 }
 
 // --- HTML table → 2-D grid (expands colspan, carries rowspan) ----------------
@@ -283,8 +311,13 @@ function isHeaderBandLabel(s: string): boolean {
 }
 
 function headerBandHeight(grid: string[][]): number {
+  // STRUCTURAL: the band is the leading run of rows with no marks (header rows
+  // carry visit names/days/windows, never X). Vocabulary-free, so it works for
+  // "Study Day"/"Study Visits"/non-English label columns. Falls back to the old
+  // keyword scan only if the structural scan finds no band (defensive).
   let h = 0;
-  while (h < grid.length && h < 8 && isHeaderBandLabel(grid[h][0] ?? "")) h += 1;
+  while (h < grid.length && h < 10 && !rowHasMark(grid[h])) h += 1;
+  if (h === 0) { while (h < grid.length && h < 8 && isHeaderBandLabel(grid[h][0] ?? "")) h += 1; }
   return h;
 }
 
@@ -409,6 +442,131 @@ export function parseSoaGrid(tables: readonly TableBlock[]): SoaGridResult {
 }
 
 // =============================================================================
+// HYBRID PATH — extract every visit COLUMN deterministically (complete + verbatim),
+// for an LLM to GROUP into visits (see ingestPipeline.groupSoaColumnsViaLlm). The
+// LLM is handed only the column headers (never cells), so it cannot under-read or
+// invent — this side owns completeness + self-consistency; the LLM owns grouping.
+// =============================================================================
+
+export interface RawColumn {
+  /** Stable index, left-to-right across all SoA tables in page order. */
+  idx: number;
+  /** Verbatim composite column header (header-band rows joined). */
+  header: string;
+  page: number | null;
+  /** Section heading the source table sits under (lets the grouper drop synopsis/TOC). */
+  section: string;
+  /** Verbatim marked procedure row-labels for this column (deterministic). */
+  procedures: SoaProcedure[];
+  /** Number of marked/conditional procedures (== procedures.length; for the grouper's proc_count). */
+  markCount: number;
+}
+
+export interface RawColumnsResult {
+  columns: RawColumn[];
+  guards: {
+    soaTablesFound: number;
+    nonSoaTablesSkipped: number;
+    rawMarkCount: number;
+    emittedMarkCount: number;
+    selfConsistency: number; // emitted / max(1, rawMarkCount); <0.95 → flag
+    notes: string[];
+  };
+}
+
+const MIN_MARKS_PER_COLUMN = 2;
+const COLUMN_MARK_PURITY = 0.6;
+
+/**
+ * Extract every visit column from the SoA table(s) by MARK DENSITY (vocabulary-
+ * free, so it works for any naming/language): a column is a visit if ≥2 of its
+ * body cells are marks AND ≥60% of its non-empty body cells are marks. Emits one
+ * RawColumn per qualifying column per table — NOT merged by name (grouping/dedup
+ * is the LLM's job). Self-consistency = emitted marks / detected marks.
+ */
+export function extractRawColumns(tables: readonly TableBlock[]): RawColumnsResult {
+  const columns: RawColumn[] = [];
+  const guards = {
+    soaTablesFound: 0,
+    nonSoaTablesSkipped: 0,
+    rawMarkCount: 0,
+    emittedMarkCount: 0,
+    selfConsistency: 1,
+    notes: [] as string[],
+  };
+  let idx = 0;
+
+  for (const tb of tables) {
+    if (typeof tb?.content !== "string" || !/<tr/i.test(tb.content)) continue;
+    const { grid } = htmlTableToGrid(tb.content);
+    if (grid.length < 2) continue;
+    const band = headerBandHeight(grid);
+    if (band < 1 || band >= grid.length) { guards.nonSoaTablesSkipped += 1; continue; }
+    const width = Math.max(...grid.map((r) => r.length));
+
+    // procedure rows = body rows whose col0 is a real label (not a stray sub-header)
+    const bodyRows: number[] = [];
+    for (let r = band; r < grid.length; r++) {
+      const label = clean(grid[r][0] ?? "");
+      if (label && !isHeaderBandLabel(label)) bodyRows.push(r);
+    }
+
+    // classify each column>0 by mark density, with a named-visit rescue for sparse columns
+    const visitCols: number[] = [];
+    for (let c = 1; c < width; c++) {
+      let marks = 0;
+      let nonEmpty = 0;
+      for (const r of bodyRows) {
+        if (clean(grid[r][c] ?? "")) nonEmpty += 1;
+        const m = classifyMark(grid[r][c] ?? "").mark;
+        if (m === "marked" || m === "conditional") marks += 1;
+      }
+      const purity = nonEmpty > 0 ? marks / nonEmpty : 0;
+      const dense = marks >= MIN_MARKS_PER_COLUMN && purity >= COLUMN_MARK_PURITY;
+      // Rescue a sparse but clearly-named visit column (e.g. "Randomization — not a
+      // patient visit" marks only 1 procedure) that mark-density alone would drop.
+      // Mark-density stays the primary, vocabulary-free signal; this only ADDS real
+      // visits it misses, and the LLM grouper still drops anything that isn't one.
+      const namedSparse = marks >= 1 && purity >= 0.5 && looksLikeVisit(compositeHeader(grid, c, band));
+      if (dense || namedSparse) visitCols.push(c);
+    }
+    if (visitCols.length < 2) { guards.nonSoaTablesSkipped += 1; continue; } // not an SoA grid
+    guards.soaTablesFound += 1;
+
+    for (const c of visitCols) {
+      const procedures: SoaProcedure[] = [];
+      for (const r of bodyRows) {
+        const cell = grid[r][c] ?? "";
+        if (GLYPH_RE.test(clean(cell)) || /(^|\s)x(\s|$)/i.test(clean(cell))) guards.rawMarkCount += 1; // self-consistency tally
+        const rowLabel = stripTrailingFootnote(clean(grid[r][0] ?? ""));
+        if (!rowLabel) continue;
+        const { mark, note } = classifyMark(cell);
+        if (mark === "empty" || mark === "uncertain") continue;
+        if (!procedures.some((p) => p.label.toLowerCase() === rowLabel.toLowerCase())) {
+          procedures.push({ label: rowLabel, note, mark });
+          guards.emittedMarkCount += 1;
+        }
+      }
+      columns.push({
+        idx: idx++,
+        header: compositeHeader(grid, c, band) || `(unlabeled column ${c}, p${tb.page ?? "?"})`,
+        page: typeof tb.page === "number" ? tb.page : null,
+        section: typeof tb.section === "string" ? tb.section : "",
+        procedures,
+        markCount: procedures.length,
+      });
+    }
+  }
+
+  guards.selfConsistency = guards.rawMarkCount > 0 ? Math.min(1, guards.emittedMarkCount / guards.rawMarkCount) : 1;
+  if (guards.soaTablesFound === 0) guards.notes.push("no SoA grid table found");
+  if (guards.selfConsistency < 0.95) {
+    guards.notes.push(`self-consistency ${guards.selfConsistency.toFixed(2)} — possible lossy parse / unknown mark glyph`);
+  }
+  return { columns, guards };
+}
+
+// =============================================================================
 // Grid → schedule_of_events  +  the automatic fallback decision gate
 // =============================================================================
 
@@ -502,6 +660,83 @@ export function gridToScheduleOfEvents(
       confidence: "high",
     });
   }
+  return { schedule, citations };
+}
+
+/** The LLM grouper's output: each final visit maps to the RawColumn indices it covers. */
+export interface VisitGrouping {
+  visits: Array<{ name: string; source_idx: number[] }>;
+}
+
+/**
+ * Assemble the LLM grouping over RawColumns into the downstream schedule_of_events
+ * shape. Procedures come ENTIRELY from the deterministic RawColumns (the LLM never
+ * supplies procedures) — the union of the grouped columns, deduped, verbatim.
+ * column_order = min source index (protocol sequence). Unknown source_idx values
+ * are ignored (the LLM cannot invent a column). Pure, vitest-importable.
+ */
+export function assembleVisitsFromGrouping(
+  columns: readonly RawColumn[],
+  grouping: VisitGrouping,
+): { schedule: ScheduleOfEventsItem[]; citations: SoaCitation[] } {
+  const byIdx = new Map(columns.map((c) => [c.idx, c]));
+  const schedule: ScheduleOfEventsItem[] = [];
+  const citations: SoaCitation[] = [];
+
+  for (const v of grouping?.visits ?? []) {
+    const srcCols = (v.source_idx ?? [])
+      .map((i) => byIdx.get(i))
+      .filter((c): c is RawColumn => !!c);
+    if (srcCols.length === 0) continue;
+
+    // union of marked procedures across the grouped columns (verbatim, dedup by label)
+    const procs: SoaProcedure[] = [];
+    const seen = new Set<string>();
+    for (const col of srcCols) {
+      for (const p of col.procedures) {
+        const k = p.label.toLowerCase();
+        if (!seen.has(k)) { seen.add(k); procs.push(p); }
+      }
+    }
+
+    const columnOrder = Math.min(...srcCols.map((c) => c.idx));
+    const pages = [...new Set(srcCols.map((c) => c.page).filter((p): p is number => typeof p === "number"))];
+    const hdr = parseVisitHeader(srcCols[0].header); // best-effort day/window from primary header
+    const name = (typeof v.name === "string" && v.name.trim()) ? v.name.trim() : srcCols[0].header;
+
+    schedule.push({
+      visit_name: name,
+      study_day: hdr.study_day,
+      window_minus_days: hdr.window_minus_days,
+      window_plus_days: hdr.window_plus_days,
+      column_order: columnOrder,
+      procedures: procs.map((p) => p.label),
+      procedures_structured: procs.map((p) => ({
+        label: p.label,
+        description: p.note,
+        phase: null,
+        classification: p.mark === "conditional" ? "conditional" : null,
+        role_hint: null,
+        soa_column: name,
+        protocol_section: "Schedule of Assessments",
+        protocol_page: pages[0] ?? null,
+        conditions: [],
+        timing: null,
+        source_fields: [],
+      })),
+      visit_purpose: "",
+      schedule_variant: "",
+      cross_references: [],
+    });
+    citations.push({
+      text: `${name} — ${procs.slice(0, 4).map((p) => p.label).join(", ")}`,
+      pages,
+      section: "Schedule of Assessments",
+      confidence: "high",
+    });
+  }
+
+  schedule.sort((a, b) => a.column_order - b.column_order);
   return { schedule, citations };
 }
 

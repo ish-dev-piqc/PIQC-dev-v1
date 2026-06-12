@@ -459,12 +459,20 @@ export interface VisitCoverageGap {
 
 /**
  * How schedule_of_events was extracted, recorded per coverage row.
- * - 'grid'                — deterministic SoA-grid parse (the normal path)
- * - 'grid_low_confidence' — grid used, but self-consistency flagged it
- * - 'llm_fallback'        — grid gate failed → LLM extraction (flag + re-run)
+ * - 'grid_grouped'        — deterministic column read + LLM grouping (the normal hybrid path)
+ * - 'grid_ungrouped'      — columns read, but LLM grouping unavailable/lossy → raw columns (flag + review)
+ * - 'grid'                — legacy deterministic grid parse
+ * - 'grid_low_confidence' — legacy grid, self-consistency flagged
+ * - 'llm_fallback'        — no readable grid → LLM extraction (flag + re-run)
  * - null                  — written before the grid change
  */
-export type VisitExtractionMethod = 'grid' | 'grid_low_confidence' | 'llm_fallback' | null;
+export type VisitExtractionMethod =
+  | 'grid_grouped'
+  | 'grid_ungrouped'
+  | 'grid'
+  | 'grid_low_confidence'
+  | 'llm_fallback'
+  | null;
 
 export interface VisitCoverage {
   expected_count: number;

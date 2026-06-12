@@ -19,7 +19,8 @@ export default function CoverageBanner({ coverage }: Props) {
   const isLight = theme === 'light';
 
   const method = coverage?.extraction_method ?? null;
-  const extractionFlagged = method === 'llm_fallback' || method === 'grid_low_confidence';
+  const extractionFlagged =
+    method === 'llm_fallback' || method === 'grid_low_confidence' || method === 'grid_ungrouped';
 
   // Show when there are gaps OR the extraction itself is flagged.
   if (!coverage || (coverage.missing.length === 0 && !extractionFlagged)) return null;
@@ -29,9 +30,11 @@ export default function CoverageBanner({ coverage }: Props) {
   const extractionNote =
     method === 'llm_fallback'
       ? 'Extraction used the AI fallback (the schedule table couldn’t be read directly) — verify the per-visit checklists and re-run if needed.'
-      : method === 'grid_low_confidence'
-        ? 'The schedule table was read but flagged low-confidence — verify the per-visit checklists.'
-        : null;
+      : method === 'grid_ungrouped'
+        ? 'The schedule was read but visit grouping was unavailable — visits may be over-split (e.g. timepoints listed separately); verify the per-visit checklists and re-run if needed.'
+        : method === 'grid_low_confidence'
+          ? 'The schedule table was read but flagged low-confidence — verify the per-visit checklists.'
+          : null;
 
   return (
     <div
