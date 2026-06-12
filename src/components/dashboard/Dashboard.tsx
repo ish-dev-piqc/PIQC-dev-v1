@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { MessageSquare, LayoutDashboard, Activity, FileText, Database, UserCircle2, Users, CalendarCheck, CreditCard, Bell, Loader2, CheckCircle2, AlertCircle, ClipboardList, type LucideIcon } from 'lucide-react';
 import NotificationsSettings from './NotificationsSettings';
+import SponsorComingSoonPage from './SponsorComingSoonPage';
 import DashboardChat from './DashboardChat';
 import KnowledgeBase from './KnowledgeBase';
 import TodayTab from './site/TodayTab';
@@ -795,24 +796,7 @@ export default function Dashboard({
           />
         );
       case 'sponsor':
-        // Placeholder — proper coming-soon page lands in PR 3 of the
-        // workspace-first refactor. Renders inline so the LeftRail's
-        // Sponsor click has somewhere to route.
-        return (
-          <div className="p-8 max-w-2xl mx-auto text-center">
-            <div className={`p-8 rounded-lg border ${isLight ? 'border-[#E2E8F0] bg-[#F8FAFC]' : 'border-white/10 bg-white/[0.03]'}`}>
-              <p className={`text-xs uppercase tracking-wider font-semibold mb-2 ${isLight ? 'text-[#3C3489]' : 'text-[#AFA9EC]'}`}>
-                Sponsor mode
-              </p>
-              <h2 className={`text-xl font-semibold mb-2 ${isLight ? 'text-[#26215C]' : 'text-[#CECBF6]'}`}>
-                Coming soon
-              </h2>
-              <p className={`text-sm ${isLight ? 'text-[#3C3489]/80' : 'text-[#AFA9EC]/80'}`}>
-                Cross-site roll-ups for sponsors and CROs. The full page lands in the next release.
-              </p>
-            </div>
-          </div>
-        );
+        return <SponsorComingSoonPage />;
       case 'settings':
         return (
           <SettingsTab
