@@ -47,6 +47,24 @@ const DASHBOARD_TAB_STORAGE_KEY = 'piq-dashboard-tab-v1';
 // reads. Reading raw localStorage and casting to DashboardTab would let a
 // stale or corrupted value short-circuit the fallback effect inside
 // Dashboard.tsx; this guard returns null on anything unrecognised.
+// Tab sets used by the mobile workspace-nav handler to decide whether the
+// user is already inside Site/Audit Mode (so we don't force-jump them to
+// 'today' / 'audit-overview' when they're already on a meaningful tab).
+const SITE_TAB_SET: ReadonlySet<DashboardTab> = new Set<DashboardTab>([
+  'today',
+  'overview',
+  'visits',
+  'participants',
+  'reports',
+  'visit-execution',
+]);
+const AUDIT_TAB_SET: ReadonlySet<DashboardTab> = new Set<DashboardTab>([
+  'audit-overview',
+  'chat',
+  'knowledge',
+  'workflows',
+]);
+
 const VALID_DASHBOARD_TABS: ReadonlySet<DashboardTab> = new Set<DashboardTab>([
   'audit-overview',
   'chat',
@@ -93,7 +111,7 @@ function AppContent() {
   const { session, loading, profile, profileLoading } = useAuth();
   const { theme } = useTheme();
   const { isRedirecting } = useCheckoutRedirect();
-  const { mode } = useMode();
+  const { mode, setMode } = useMode();
   // Mode-aware class consumed by CSS variables in src/index.css. Applied
   // unconditionally so the brand-color variables resolve correctly even
   // outside the dashboard view (landing / auth default to mode-site →
@@ -350,6 +368,30 @@ function AppContent() {
             onOpenChatOverlayMentions={() => {
               setChatOverlayFilter('mentions');
               setChatOverlayOpen(true);
+            }}
+            onMobileWorkspaceNavigate={(key) => {
+              // Mirrors LeftRail's handleClick. Hidden rail on mobile
+              // routes through this; the desktop rail handles itself.
+              switch (key) {
+                case 'workspace':
+                  setDashboardTab('organization');
+                  return;
+                case 'site':
+                  setMode('site');
+                  if (!SITE_TAB_SET.has(dashboardTab)) setDashboardTab('today');
+                  return;
+                case 'audit':
+                  setMode('audit');
+                  if (!AUDIT_TAB_SET.has(dashboardTab)) setDashboardTab('audit-overview');
+                  return;
+                case 'sponsor':
+                  setDashboardTab('sponsor');
+                  return;
+                case 'chat':
+                  setChatOverlayFilter(undefined);
+                  setChatOverlayOpen((v) => !v);
+                  return;
+              }
             }}
           />
           {inviteResult && (

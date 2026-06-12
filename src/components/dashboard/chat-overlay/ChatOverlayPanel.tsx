@@ -288,10 +288,27 @@ export default function ChatOverlayPanel({
         aria-hidden="true"
       />
       <div
-        className={`fixed top-0 right-0 bottom-0 z-50 w-full max-w-sm flex flex-col border-l ${border} ${bg} shadow-xl`}
+        // Mobile (<md): bottom sheet — slides up from bottom, full width,
+        // ~85vh, top-rounded with a small drag-handle visual.
+        // Desktop (>=md): right-side slide-in, full height, max-w-sm.
+        className={`fixed z-50 flex flex-col ${bg} shadow-xl
+          left-0 right-0 bottom-0 top-auto h-[85vh] max-h-[85vh] rounded-t-2xl border-t ${border}
+          md:left-auto md:right-0 md:top-0 md:bottom-0 md:h-auto md:max-h-none md:w-full md:max-w-sm md:rounded-none md:border-t-0 md:border-l`}
         role="dialog"
         aria-label="Chat"
       >
+        {/* Drag handle — only visible on mobile bottom-sheet. Purely visual
+            for now; touch-drag-to-dismiss can land in a polish follow-up. */}
+        <div
+          className="md:hidden flex justify-center pt-1.5 pb-1"
+          aria-hidden="true"
+        >
+          <span
+            className={`block h-1 w-10 rounded-full ${
+              isLight ? 'bg-[#E2E8F0]' : 'bg-white/15'
+            }`}
+          />
+        </div>
         {/* Header */}
         <div className={`flex-shrink-0 flex items-center justify-between px-3 py-2.5 border-b ${border}`}>
           <div className="flex items-center gap-2 min-w-0">
