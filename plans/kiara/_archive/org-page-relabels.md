@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: org-page-relabels
-status: active
+status: merged
+merged: 2026-06-12
 started: 2026-06-04
-target_pr:
+target_pr: #315
 ---
 
 # Organization page — Members → Organization, Activity → Draft activity
