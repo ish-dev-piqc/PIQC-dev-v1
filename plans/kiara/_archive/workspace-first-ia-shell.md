@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: workspace-first-ia-shell
-status: active
+status: merged
+merged: 2026-06-12
 started: 2026-06-04
-target_pr:
+target_pr: #317
 ---
 
 # Workspace-first IA — shell (PR 1 of 6)
