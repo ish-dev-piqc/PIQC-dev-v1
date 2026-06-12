@@ -163,10 +163,10 @@ export default function ActivityTab() {
         <div>
           <div className="flex items-center gap-2 text-fg-label text-[10px] uppercase tracking-wider font-semibold">
             <Activity size={11} />
-            Activity log
+            Draft activity
           </div>
           <p className="text-fg-sub text-xs mt-1 max-w-xl leading-relaxed">
-            Append-only audit trail of member, role, invite, and access activity. Visible to admins.
+            Working log of member, role, invite, and access changes. Visible to admins. This is a draft surface — not a formal audit trail, since trigger failures can produce gaps.
           </p>
         </div>
         <button

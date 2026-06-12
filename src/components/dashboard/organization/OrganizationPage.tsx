@@ -36,7 +36,7 @@ import UnifiedTeamList from './team/UnifiedTeamList';
 //                Admin-only; hidden from the tab strip for site members.
 // =============================================================================
 
-export type OrgTab = 'members' | 'team' | 'chat' | 'manage' | 'activity';
+export type OrgTab = 'organization' | 'team' | 'chat' | 'manage' | 'activity';
 
 interface OrganizationPageProps {
   onExit?: () => void;
@@ -44,7 +44,7 @@ interface OrganizationPageProps {
 
 export const ORG_TAB_STORAGE_KEY = 'piq-org-tab-v1';
 const VALID_ORG_TABS: ReadonlySet<OrgTab> = new Set<OrgTab>([
-  'members',
+  'organization',
   'team',
   'chat',
   'manage',
@@ -54,7 +54,11 @@ const VALID_ORG_TABS: ReadonlySet<OrgTab> = new Set<OrgTab>([
 function readStoredOrgTab(): OrgTab | null {
   try {
     const v = localStorage.getItem(ORG_TAB_STORAGE_KEY);
-    if (v && VALID_ORG_TABS.has(v as OrgTab)) return v as OrgTab;
+    if (!v) return null;
+    // Migrate the legacy 'members' key — same tab, just renamed to
+    // 'organization' for clarity vs team/protocol membership.
+    if (v === 'members') return 'organization';
+    if (VALID_ORG_TABS.has(v as OrgTab)) return v as OrgTab;
   } catch {
     /* ignore */
   }
@@ -62,7 +66,9 @@ function readStoredOrgTab(): OrgTab | null {
 }
 
 const BASE_TABS: { id: OrgTab; label: string; icon: typeof UsersIcon }[] = [
-  { id: 'members', label: 'Members', icon: UsersIcon },
+  // "Organization" rather than "Members" so the label clearly refers to
+  // the org-level roster, distinct from a protocol's team membership.
+  { id: 'organization', label: 'Organization', icon: UsersIcon },
   { id: 'team', label: 'Team', icon: ClipboardList },
   { id: 'chat', label: 'Chat', icon: MessageCircle },
 ];
@@ -79,7 +85,7 @@ export default function OrganizationPage({ onExit }: OrganizationPageProps) {
   // directly to localStorage in App.tsx before navigating, so the read
   // here picks up their intent without a prop being passed in.
   const [activeTab, setActiveTab] = useState<OrgTab>(
-    () => readStoredOrgTab() ?? 'members',
+    () => readStoredOrgTab() ?? 'organization',
   );
 
   // Persist the active sub-tab so a hard refresh lands the user back on the
@@ -93,13 +99,16 @@ export default function OrganizationPage({ onExit }: OrganizationPageProps) {
   }, [activeTab]);
 
   const isAdmin = activeOrg?.my_role === 'admin';
-  // Activity log + Manage are both admin-only. Tabs stay in this order:
-  // Members → Team → Chat → Activity → Manage so the audit-trail surface
-  // sits adjacent to the membership-management surfaces it describes.
+  // "Draft activity" + Manage are both admin-only. Tabs stay in this
+  // order: Organization → Team → Chat → Draft activity → Manage so the
+  // change-log surface sits adjacent to the management surfaces it
+  // describes. "Draft" because the log is not a formal audit trail —
+  // gaps are possible if a trigger silently fails — and we don't want
+  // the label to overpromise that guarantee.
   const tabs: { id: OrgTab; label: string; icon: typeof UsersIcon }[] = isAdmin
     ? [
         ...BASE_TABS,
-        { id: 'activity', label: 'Activity', icon: Activity },
+        { id: 'activity', label: 'Draft activity', icon: Activity },
         { id: 'manage', label: 'Manage', icon: Settings },
       ]
     : BASE_TABS;
@@ -191,7 +200,7 @@ export default function OrganizationPage({ onExit }: OrganizationPageProps) {
             )}
           </div>
 
-          {activeTab === 'members' && <MembersTab />}
+          {activeTab === 'organization' && <MembersTab />}
 
           {activeTab === 'team' && (
             <div className="space-y-6">
