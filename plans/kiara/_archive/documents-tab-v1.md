@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: documents-tab-v1
-status: active
+status: merged
+merged: 2026-06-12
 started: 2026-06-04
-target_pr:
+target_pr: #325
 ---
 
 # Documents tab v1 (PR 5 of 6)
