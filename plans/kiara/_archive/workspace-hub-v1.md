@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: workspace-hub-v1
-status: active
+status: merged
+merged: 2026-06-12
 started: 2026-06-04
-target_pr:
+target_pr: #319
 ---
 
 # Workspace hub v1 — Today default + Documents stub (PR 2 of 6)
