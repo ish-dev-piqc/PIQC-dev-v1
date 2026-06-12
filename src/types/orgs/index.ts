@@ -237,6 +237,9 @@ export interface ChatAttachment {
   original_filename: string;
   uploaded_by_user_id: string | null;
   created_at: string;
+  /** Non-null when the attachment has been pinned to the workspace hub's
+   *  Documents tab Pinned board. Anyone with channel SELECT can toggle. */
+  pinned_at: string | null;
 }
 
 /** Used by uploadChatAttachment client-side; storage_path is built by the
@@ -249,6 +252,26 @@ export interface NewChatAttachmentInput {
   org_id?: string;
   protocol_id?: string;
   file: File;
+}
+
+
+// ---------------------------------------------------------------------------
+// Protocol documents (manually uploaded library)
+// ---------------------------------------------------------------------------
+
+/** Manually uploaded document tied to a protocol OR an org (XOR scope).
+ *  Distinct from `documents` (Reducto-ingested) and `chat_attachments`
+ *  (chat-shared); the Documents tab unions all three for discoverability. */
+export interface ProtocolDocument {
+  id: string;
+  protocol_id: string | null;
+  org_id: string | null;
+  storage_path: string;
+  mime_type: string;
+  size_bytes: number;
+  original_filename: string;
+  uploaded_by_user_id: string | null;
+  created_at: string;
 }
 
 

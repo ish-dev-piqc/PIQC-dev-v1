@@ -17,6 +17,9 @@ export interface ChatAttachmentRow {
   original_filename: string;
   uploaded_by_user_id: string | null;
   created_at: string;
+  // Added in 20260704000700_protocol_documents.sql; optional so legacy
+  // selects that don't request the column still adapt cleanly.
+  pinned_at?: string | null;
 }
 
 export function adaptChatAttachment(row: ChatAttachmentRow): ChatAttachment {
@@ -32,6 +35,7 @@ export function adaptChatAttachment(row: ChatAttachmentRow): ChatAttachment {
     original_filename: row.original_filename,
     uploaded_by_user_id: row.uploaded_by_user_id,
     created_at: row.created_at,
+    pinned_at: row.pinned_at ?? null,
   };
 }
 
