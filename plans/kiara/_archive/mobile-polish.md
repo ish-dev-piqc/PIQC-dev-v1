@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: mobile-polish
-status: active
+status: merged
+merged: 2026-06-12
 started: 2026-06-04
-target_pr:
+target_pr: #329
 ---
 
 # Mobile polish (PR 6 of 6)
