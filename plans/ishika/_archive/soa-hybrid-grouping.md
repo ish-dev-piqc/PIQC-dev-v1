@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: SoA hybrid extraction (deterministic read + LLM grouping)
-status: in-review
+status: merged
+merged: 2026-06-12
 started: 2026-06-11
-target_pr:
+target_pr: #313
 approved_by: "@rv61"   # supabase/functions/_shared/* is Roger's area
 ---
 
