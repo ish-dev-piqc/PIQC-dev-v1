@@ -675,6 +675,60 @@ export interface VisitGrouping {
  * column_order = min source index (protocol sequence). Unknown source_idx values
  * are ignored (the LLM cannot invent a column). Pure, vitest-importable.
  */
+// Study-day derivation for an assembled visit. study_day is INTEGER NOT NULL and
+// anchors calendar projection + the template unique key, so a null silently drops
+// the visit at persist. Protocols encode the day in many shapes — an explicit
+// "Day/Week/Month N" keyword (parseVisitHeader handles those), a parenthetical
+// "(14±3)" day-with-window (CLR), a bare "D-28" code (PledOx selection visits), or
+// a trailing day-number after a scheduling word ("EOT 28", "Follow-Up 42 ±2",
+// "Dosing 1" — RVW101). We try each in turn, then fall back to the column's
+// left-to-right position so a visit is NEVER dropped and sequence is preserved
+// even when no absolute day is recoverable (`approximate`).
+const SCHEDULE_WORD_RE =
+  /\b(?:eot|eos|end of treatment|end of study|follow.?up|dosing|infusion|treatment|discontinuation|termination|baseline)\b/i;
+function extractDayWindow(text: string): { day: number; window: number } | null {
+  const s = clean(text);
+  // parenthetical "(N)" / "(N±W)" / "(N + W)" — the canonical day-with-window form
+  let m = s.match(/\(\s*(-?\d{1,3})\s*(?:[±+]\s*(\d{1,2}))?\s*(?:days?)?\s*\)/i);
+  if (m) return { day: parseInt(m[1], 10), window: m[2] ? parseInt(m[2], 10) : 0 };
+  // bare "D-28" / "D 28" / "D+1" code (not "Day", which parseVisitHeader owns)
+  m = s.match(/(?:^|\s)D\s*([+-]?\d{1,3})\b/);
+  if (m) return { day: parseInt(m[1], 10), window: 0 };
+  // trailing day-number after a scheduling word: "EOT 28", "Follow-Up 42 ±2",
+  // "Dosing 1". Require the schedule word so a visit ordinal ("Visit 3") is not
+  // misread as a day; take the first standalone integer + optional ± window.
+  if (SCHEDULE_WORD_RE.test(s)) {
+    m = s.match(/(-?\d{1,3})\s*(?:[±+]\s*(\d{1,2}))?\b/);
+    if (m) return { day: parseInt(m[1], 10), window: m[2] ? parseInt(m[2], 10) : 0 };
+  }
+  return null;
+}
+export function deriveStudyDay(
+  name: string,
+  header: string,
+  columnOrder: number,
+): { study_day: number; window_minus_days: number; window_plus_days: number; approximate: boolean } {
+  const fromName = parseVisitHeader(name);
+  const fromHeader = parseVisitHeader(header);
+  const keywordDay = fromName.study_day ?? fromHeader.study_day;
+  const wMinus = fromHeader.window_minus_days || fromName.window_minus_days;
+  const wPlus = fromHeader.window_plus_days || fromName.window_plus_days;
+  if (keywordDay != null) {
+    return { study_day: keywordDay, window_minus_days: wMinus, window_plus_days: wPlus, approximate: false };
+  }
+  const dw = extractDayWindow(name) ?? extractDayWindow(header);
+  if (dw) {
+    return {
+      study_day: dw.day,
+      window_minus_days: wMinus || dw.window,
+      window_plus_days: wPlus || dw.window,
+      approximate: false,
+    };
+  }
+  // last resort: keep the visit, ordered by its SoA column position
+  return { study_day: columnOrder, window_minus_days: wMinus, window_plus_days: wPlus, approximate: true };
+}
+
 export function assembleVisitsFromGrouping(
   columns: readonly RawColumn[],
   grouping: VisitGrouping,
@@ -704,19 +758,16 @@ export function assembleVisitsFromGrouping(
     const name = (typeof v.name === "string" && v.name.trim()) ? v.name.trim() : srcCols[0].header;
     // study_day anchors calendar projection (materialize_protocol_visits) and is
     // part of the template unique key, so it must be non-null or the persist
-    // step drops the visit. A terse SoA source header ("D1 0", "D7 X") rarely
-    // parses, but the LLM-cleaned name ("Day 1", "Week 4") usually does — so
-    // prefer the name, fall back to the primary source header. Window text lives
-    // in the raw header, so take windows from there first.
-    const fromName = parseVisitHeader(name);
-    const hdr = parseVisitHeader(srcCols[0].header);
-    const studyDay = fromName.study_day ?? hdr.study_day;
+    // step drops the visit. deriveStudyDay tries the LLM-cleaned name, the raw
+    // header, parenthetical/bare-code day forms, then falls back to column order
+    // so a visit is never dropped (see deriveStudyDay for the full ladder).
+    const day = deriveStudyDay(name, srcCols[0].header, columnOrder);
 
     schedule.push({
       visit_name: name,
-      study_day: studyDay,
-      window_minus_days: hdr.window_minus_days || fromName.window_minus_days,
-      window_plus_days: hdr.window_plus_days || fromName.window_plus_days,
+      study_day: day.study_day,
+      window_minus_days: day.window_minus_days,
+      window_plus_days: day.window_plus_days,
       column_order: columnOrder,
       procedures: procs.map((p) => p.label),
       procedures_structured: procs.map((p) => ({

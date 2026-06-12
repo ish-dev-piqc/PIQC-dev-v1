@@ -8,6 +8,7 @@ import {
   evaluateSoaGate,
   extractRawColumns,
   assembleVisitsFromGrouping,
+  deriveStudyDay,
   type TableBlock,
 } from "../soaGridParser.ts";
 // Golden fixture: the real Schedule-of-Assessments table blocks Reducto returned
@@ -367,7 +368,53 @@ describe("assembleVisitsFromGrouping — golden (PP06489)", () => {
     });
     expect(s.map((v) => v.study_day)).toEqual([1, 7, 28]); // none null → none dropped at persist
   });
+});
 
+describe("deriveStudyDay — every visit gets a non-null day so the NOT-NULL persist never drops it", () => {
+  it("prefers the explicit Day/Week keyword (cleaned name over terse header)", () => {
+    expect(deriveStudyDay("Day 1", "D1 0", 5).study_day).toBe(1);
+    expect(deriveStudyDay("Week 4", "Wk 4", 5).study_day).toBe(28);
+  });
+
+  it("reads a parenthetical day-with-window: CLR 'V3 2 (14±3)' → day 14, window 3", () => {
+    const d = deriveStudyDay("V3 2 (14±3)", "V3 2 (14±3)", 2);
+    expect(d.study_day).toBe(14);
+    expect(d.window_minus_days).toBe(3);
+    expect(d.window_plus_days).toBe(3);
+    expect(d.approximate).toBe(false);
+    expect(deriveStudyDay("Baseline V2 0 (0)", "", 1).study_day).toBe(0);
+  });
+
+  it("reads a bare 'D-28' / 'D-7' code that is not the word 'Day' (PledOx selection visits)", () => {
+    expect(deriveStudyDay("SELECTION PHASE D-7 W-1", "", 1).study_day).toBe(-7);
+    expect(deriveStudyDay("Visits in Month D-28 W-4", "", 0).study_day).toBe(-28);
+  });
+
+  it("reads a trailing day-number after a scheduling word: RVW101 'EOT 28', 'Follow-Up 42 ±2', 'Dosing 1'", () => {
+    expect(deriveStudyDay("EOT 28", "", 9).study_day).toBe(28);
+    expect(deriveStudyDay("EOS 280", "", 9).study_day).toBe(280);
+    const fu = deriveStudyDay("Safety and PK Follow-Up 42 ±2", "", 9);
+    expect(fu.study_day).toBe(42);
+    expect(fu.window_plus_days).toBe(2);
+    expect(deriveStudyDay("Dosing 1", "", 9).study_day).toBe(1);
+  });
+
+  it("does NOT misread a visit ordinal as a day (no scheduling word → falls back, not '3')", () => {
+    const d = deriveStudyDay("Visit 3", "Visit 3", 7);
+    expect(d.study_day).toBe(7); // column-order fallback, not 3
+    expect(d.approximate).toBe(true);
+  });
+
+  it("falls back to column order for a genuinely dateless visit (CLR 'ED'), never null, sequence preserved", () => {
+    const d = deriveStudyDay("ED", "ED", 12);
+    expect(d.study_day).toBe(12);
+    expect(d.approximate).toBe(true);
+    expect(Number.isInteger(d.study_day)).toBe(true);
+  });
+});
+
+describe("assembleVisitsFromGrouping — safety-critical preservation (PP06489)", () => {
+  const { columns } = extractRawColumns(TABLES);
   it("preserves conditional (X) marks and keeps marked procedures null (for the safety-critical heuristic)", () => {
     const idGrouping = { visits: columns.map((c) => ({ name: c.header, source_idx: [c.idx] })) };
     const ps = assembleVisitsFromGrouping(columns, idGrouping).schedule.flatMap((s) => s.procedures_structured);
