@@ -40,6 +40,7 @@ import type {
   ChatReaction,
   NotificationPreferences,
   NotificationPreferencesPatch,
+  ProtocolDocument,
   NewChatAttachmentInput,
   NewChatDecisionInput,
   NewProtocolGuestInput,
@@ -66,6 +67,10 @@ import {
   adaptChatDecisionAcks,
 } from './chatDecisionAcksAdapter';
 import { adaptChatDecision, adaptChatDecisions } from './chatDecisionsAdapter';
+import {
+  adaptProtocolDocument,
+  adaptProtocolDocuments,
+} from './protocolDocumentsAdapter';
 import { adaptChatMentions } from './chatMentionsAdapter';
 import { adaptChatReactions } from './chatReactionsAdapter';
 import { escapeIlikePattern } from './chatSearchAdapter';
@@ -870,7 +875,7 @@ export async function listDecisionsReferencingParticipant(args: {
 // ===========================================================================
 
 const CHAT_ATTACHMENT_COLUMNS =
-  'id, org_message_id, protocol_message_id, org_id, protocol_id, storage_path, mime_type, size_bytes, original_filename, uploaded_by_user_id, created_at';
+  'id, org_message_id, protocol_message_id, org_id, protocol_id, storage_path, mime_type, size_bytes, original_filename, uploaded_by_user_id, created_at, pinned_at';
 
 const CHAT_ATTACHMENTS_BUCKET = 'chat-attachments';
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
@@ -948,6 +953,174 @@ export async function listChannelAttachments(
   if (error) return fail('listChannelAttachments', error);
   return { ok: true, data: adaptChatAttachments(data ?? []) };
 }
+
+/** Toggle the pinned_at flag on a chat attachment. Sets to now() to pin;
+ *  pass `pin=false` to unpin. RLS allows any channel member to toggle. */
+export async function setChatAttachmentPinned(
+  attachmentId: string,
+  pin: boolean,
+): Promise<Result<ChatAttachment>> {
+  const { data, error } = await supabase
+    .from('chat_attachments')
+    .update({ pinned_at: pin ? new Date().toISOString() : null })
+    .eq('id', attachmentId)
+    .select(CHAT_ATTACHMENT_COLUMNS)
+    .single();
+  if (error) return fail('setChatAttachmentPinned', error);
+  if (!data) return err('Update returned no row.');
+  return { ok: true, data: adaptChatAttachment(data) };
+}
+
+// ===========================================================================
+// Protocol documents — manually uploaded files scoped to a protocol or org.
+// Lives alongside chat_attachments + the Reducto-ingested `documents` table;
+// the Documents tab unions all three for discoverability.
+// ===========================================================================
+
+const PROTOCOL_DOCUMENTS_BUCKET = 'protocol-documents';
+const MAX_PROTOCOL_DOCUMENT_BYTES = 25 * 1024 * 1024;
+const PROTOCOL_DOCUMENT_COLUMNS =
+  'id, protocol_id, org_id, storage_path, mime_type, size_bytes, original_filename, uploaded_by_user_id, created_at';
+
+export async function listProtocolDocuments(
+  scope:
+    | { protocolId: string; orgId?: undefined }
+    | { protocolId?: undefined; orgId: string },
+): Promise<Result<ProtocolDocument[]>> {
+  let q = supabase
+    .from('protocol_documents')
+    .select(PROTOCOL_DOCUMENT_COLUMNS)
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (scope.protocolId) q = q.eq('protocol_id', scope.protocolId);
+  if (scope.orgId) q = q.eq('org_id', scope.orgId).is('protocol_id', null);
+  const { data, error } = await q;
+  if (error) return fail('listProtocolDocuments', error);
+  return { ok: true, data: adaptProtocolDocuments(data ?? []) };
+}
+
+export async function uploadProtocolDocument(input: {
+  file: File;
+  protocolId?: string;
+  orgId?: string;
+}): Promise<Result<ProtocolDocument>> {
+  if (!input.protocolId && !input.orgId) {
+    return err('Pick a protocol or org scope.');
+  }
+  if (input.protocolId && input.orgId) {
+    return err('Document is either protocol- or org-scoped, not both.');
+  }
+  const file = input.file;
+  if (file.size <= 0) return err('File is empty.');
+  if (file.size > MAX_PROTOCOL_DOCUMENT_BYTES) {
+    return err(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB > 25 MB max).`);
+  }
+
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr) return fail('uploadProtocolDocument:getUser', userErr);
+  const user = userData?.user;
+  if (!user) return err('Not authenticated.');
+
+  const safeName = file.name.replace(/[\\/:*?"<>|]/g, '_').slice(0, 120);
+  const prefix = input.protocolId ?? `org-${input.orgId}`;
+  const objectName = `${prefix}/${crypto.randomUUID()}-${safeName}`;
+
+  const { error: uploadErr } = await supabase.storage
+    .from(PROTOCOL_DOCUMENTS_BUCKET)
+    .upload(objectName, file, {
+      contentType: file.type || 'application/octet-stream',
+      upsert: false,
+    });
+  if (uploadErr) return fail('uploadProtocolDocument:storage', uploadErr);
+
+  const { data, error } = await supabase
+    .from('protocol_documents')
+    .insert({
+      protocol_id: input.protocolId ?? null,
+      org_id: input.orgId ?? null,
+      storage_path: objectName,
+      mime_type: file.type || 'application/octet-stream',
+      size_bytes: file.size,
+      original_filename: file.name,
+      uploaded_by_user_id: user.id,
+    })
+    .select(PROTOCOL_DOCUMENT_COLUMNS)
+    .single();
+  if (error) {
+    // Roll back the Storage upload on DB-insert failure to avoid orphans.
+    await supabase.storage.from(PROTOCOL_DOCUMENTS_BUCKET).remove([objectName]);
+    return fail('uploadProtocolDocument:db', error);
+  }
+  if (!data) return err('Insert returned no row.');
+  return { ok: true, data: adaptProtocolDocument(data) };
+}
+
+export async function deleteProtocolDocument(
+  doc: ProtocolDocument,
+): Promise<Result<void>> {
+  // Storage delete first; if it fails we still try the row delete so we
+  // don't leave a row pointing at a missing object.
+  const { error: storageErr } = await supabase.storage
+    .from(PROTOCOL_DOCUMENTS_BUCKET)
+    .remove([doc.storage_path]);
+  if (storageErr) {
+    console.warn('[deleteProtocolDocument] storage remove failed', storageErr.message);
+  }
+  const { error } = await supabase
+    .from('protocol_documents')
+    .delete()
+    .eq('id', doc.id);
+  if (error) return fail('deleteProtocolDocument', error);
+  return { ok: true, data: undefined };
+}
+
+/** Reducto-ingested protocol PDFs from the existing `documents` table.
+ *  Read-only here — the Documents tab labels them with a lock and
+ *  disables the delete action menu. */
+export interface ReductoDocument {
+  id: string;
+  title: string;
+  source: string;
+  created_at: string;
+}
+
+export async function listReductoDocumentsForProtocol(
+  protocolId: string,
+): Promise<Result<ReductoDocument[]>> {
+  const { data, error } = await supabase
+    .from('documents')
+    .select('id, title, source, created_at')
+    .eq('protocol_id', protocolId)
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (error) return fail('listReductoDocumentsForProtocol', error);
+  return { ok: true, data: (data ?? []) as ReductoDocument[] };
+}
+
+/** Signed URL minted on demand for a single bucket object — used by the
+ *  download buttons. 60s expiry is plenty for click-to-download. */
+export async function signProtocolDocumentUrl(
+  storagePath: string,
+): Promise<Result<string>> {
+  const { data, error } = await supabase.storage
+    .from(PROTOCOL_DOCUMENTS_BUCKET)
+    .createSignedUrl(storagePath, 60);
+  if (error) return fail('signProtocolDocumentUrl', error);
+  if (!data?.signedUrl) return err('No URL returned.');
+  return { ok: true, data: data.signedUrl };
+}
+
+export async function signChatAttachmentUrl(
+  storagePath: string,
+): Promise<Result<string>> {
+  const { data, error } = await supabase.storage
+    .from(CHAT_ATTACHMENTS_BUCKET)
+    .createSignedUrl(storagePath, 60);
+  if (error) return fail('signChatAttachmentUrl', error);
+  if (!data?.signedUrl) return err('No URL returned.');
+  return { ok: true, data: data.signedUrl };
+}
+
 
 export async function deleteChatAttachment(attachment: ChatAttachment): Promise<Result<void>> {
   // Storage delete first; if it fails, we still try the row delete to avoid
