@@ -9,7 +9,7 @@ import Footer from './components/Footer';
 import Chatbot from './components/Chatbot';
 import Dashboard, { type DashboardTab, type SettingsSection } from './components/dashboard/Dashboard';
 import { ORG_TAB_STORAGE_KEY } from './components/dashboard/organization/OrganizationPage';
-import MentionsInbox from './components/dashboard/organization/chat/MentionsInbox';
+import ChatOverlayPanel from './components/dashboard/chat-overlay/ChatOverlayPanel';
 import LeftRail from './components/dashboard/LeftRail';
 import Login from './components/auth/Login';
 import ForgotPassword from './components/auth/ForgotPassword';
@@ -86,7 +86,10 @@ function AppContent() {
   // Result of the accept-invite handler — surfaced as a banner on the
   // dashboard. null when no recent invite was accepted (or after dismiss).
   const [inviteResult, setInviteResult] = useState<InviteAcceptResult | null>(null);
-  const [mentionsInboxOpen, setMentionsInboxOpen] = useState(false);
+  // Chat overlay state — opened either by the rail's Chat icon (no
+  // filter, restores last channel) or by the Navbar bell (filter='mentions').
+  const [chatOverlayOpen, setChatOverlayOpen] = useState(false);
+  const [chatOverlayFilter, setChatOverlayFilter] = useState<'mentions' | undefined>(undefined);
   const { session, loading, profile, profileLoading } = useAuth();
   const { theme } = useTheme();
   const { isRedirecting } = useCheckoutRedirect();
@@ -252,7 +255,7 @@ function AppContent() {
     }
     setDashboardTab('organization');
     setView('dashboard');
-    setMentionsInboxOpen(false);
+    setChatOverlayOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -344,7 +347,10 @@ function AppContent() {
             onDashboardHome={handleDashboardHome}
             onOpenSettingsSection={handleOpenSettingsSection}
             onOpenOrganization={handleOpenOrganization}
-            onOpenMentionsInbox={() => setMentionsInboxOpen(true)}
+            onOpenChatOverlayMentions={() => {
+              setChatOverlayFilter('mentions');
+              setChatOverlayOpen(true);
+            }}
           />
           {inviteResult && (
             <InviteWelcomeBanner
@@ -358,6 +364,15 @@ function AppContent() {
             <LeftRail
               dashboardTab={dashboardTab}
               onDashboardTabChange={setDashboardTab}
+              onChatToggle={() => {
+                setChatOverlayOpen((v) => {
+                  // When opening, drop any leftover mentions filter so
+                  // the panel restores its last channel instead.
+                  if (!v) setChatOverlayFilter(undefined);
+                  return !v;
+                });
+              }}
+              chatOverlayOpen={chatOverlayOpen}
             />
             <div className="flex-1 min-w-0 flex flex-col">
               <Dashboard
@@ -370,10 +385,13 @@ function AppContent() {
               />
             </div>
           </div>
-          {mentionsInboxOpen && (
-            <MentionsInbox
-              onClose={() => setMentionsInboxOpen(false)}
-              onNavigate={handleNavigateToOrgChat}
+          {chatOverlayOpen && (
+            <ChatOverlayPanel
+              initialFilter={chatOverlayFilter}
+              onClose={() => {
+                setChatOverlayOpen(false);
+                setChatOverlayFilter(undefined);
+              }}
             />
           )}
         </div>

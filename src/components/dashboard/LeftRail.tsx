@@ -9,6 +9,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useMode, type DashboardMode } from '../../context/ModeContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useUnreadMentionsDisplay } from '../../context/UnreadMentionsContext';
 import type { DashboardTab } from './Dashboard';
 
 // =============================================================================
@@ -33,6 +34,13 @@ import type { DashboardTab } from './Dashboard';
 interface LeftRailProps {
   dashboardTab: DashboardTab;
   onDashboardTabChange: (tab: DashboardTab) => void;
+  /** Toggle the chat overlay open/closed. Wired in PR 4. Optional so
+   *  earlier callers don't have to provide it; the icon goes inert when
+   *  absent. */
+  onChatToggle?: () => void;
+  /** True when the chat overlay is currently open — drives the active
+   *  state on the Chat rail icon. */
+  chatOverlayOpen?: boolean;
 }
 
 type RailKey = 'workspace' | 'site' | 'audit' | 'sponsor' | 'chat';
@@ -87,12 +95,32 @@ function activeKey(dashboardTab: DashboardTab, mode: DashboardMode): RailKey | n
   return null;
 }
 
-export default function LeftRail({ dashboardTab, onDashboardTabChange }: LeftRailProps) {
+/** True when the user is sitting on the hub's Chat tab — Chat icon dims so
+ *  the user knows the overlay is redundant here. Reads from localStorage
+ *  rather than threading another prop; staleness is fine because the dim
+ *  is only an informational cue. */
+function isOnHubChatTab(dashboardTab: DashboardTab): boolean {
+  if (dashboardTab !== 'organization') return false;
+  try {
+    return localStorage.getItem('piq-org-tab-v1') === 'chat';
+  } catch {
+    return false;
+  }
+}
+
+export default function LeftRail({
+  dashboardTab,
+  onDashboardTabChange,
+  onChatToggle,
+  chatOverlayOpen = false,
+}: LeftRailProps) {
   const { theme } = useTheme();
   const { profile } = useAuth();
   const { mode, setMode } = useMode();
+  const { count: unreadMentionCount } = useUnreadMentionsDisplay();
   const isLight = theme === 'light';
   const active = activeKey(dashboardTab, mode);
+  const chatDimmed = isOnHubChatTab(dashboardTab);
 
   // Two-letter initials for the avatar at the bottom of the rail.
   const initials = (profile?.name ?? '')
@@ -129,7 +157,8 @@ export default function LeftRail({ dashboardTab, onDashboardTabChange }: LeftRai
         onDashboardTabChange('sponsor');
         return;
       case 'chat':
-        // PR 4 wires the overlay. No-op until then.
+        if (chatDimmed) return;
+        onChatToggle?.();
         return;
     }
   };
@@ -140,16 +169,19 @@ export default function LeftRail({ dashboardTab, onDashboardTabChange }: LeftRai
       aria-label="Mode navigation"
     >
       {ITEMS.map((item, idx) => {
-        const isActive = active === item.key;
+        const isChat = item.key === 'chat';
+        const isActive =
+          isChat ? chatOverlayOpen && !chatDimmed : active === item.key;
         const palette = PALETTE[item.key];
         const Icon = item.icon;
         const styles = isActive
           ? { backgroundColor: palette.activeBg, color: palette.activeFg }
           : undefined;
+        const dimmed = item.soon || (isChat && chatDimmed);
         const buttonClass = isActive
           ? 'relative w-10 h-10 rounded-md flex items-center justify-center group'
           : `relative w-10 h-10 rounded-md flex items-center justify-center group ${idleFg} ${idleHover} ${
-              item.soon ? 'opacity-55' : ''
+              dimmed ? 'opacity-35' : ''
             }`;
         return (
           <>
@@ -168,6 +200,15 @@ export default function LeftRail({ dashboardTab, onDashboardTabChange }: LeftRai
                   className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full"
                   style={{ backgroundColor: '#BA7517' }}
                   aria-hidden="true"
+                />
+              )}
+              {/* Coral unread dot on the Chat icon when there are unread
+                  mentions and the overlay isn't already open / dimmed. */}
+              {isChat && unreadMentionCount > 0 && !chatOverlayOpen && !chatDimmed && (
+                <span
+                  className="absolute top-1 right-1 w-2 h-2 rounded-full"
+                  style={{ backgroundColor: '#D85A30' }}
+                  aria-label={`${unreadMentionCount} unread`}
                 />
               )}
               <span
