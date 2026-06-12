@@ -10,6 +10,7 @@ import Chatbot from './components/Chatbot';
 import Dashboard, { type DashboardTab, type SettingsSection } from './components/dashboard/Dashboard';
 import { ORG_TAB_STORAGE_KEY } from './components/dashboard/organization/OrganizationPage';
 import MentionsInbox from './components/dashboard/organization/chat/MentionsInbox';
+import LeftRail from './components/dashboard/LeftRail';
 import Login from './components/auth/Login';
 import ForgotPassword from './components/auth/ForgotPassword';
 import ProfileCompletion from './components/auth/ProfileCompletion';
@@ -58,6 +59,7 @@ const VALID_DASHBOARD_TABS: ReadonlySet<DashboardTab> = new Set<DashboardTab>([
   'visits',
   'reports',
   'organization',
+  'sponsor',
   'settings',
 ]);
 
@@ -335,7 +337,7 @@ function AppContent() {
           navigateToOrgChat: handleNavigateToOrgChat,
         }}
       >
-        <div className={`${modeClass} min-h-screen ${pageBg} ${textColor} antialiased`}>
+        <div className={`${modeClass} min-h-screen ${pageBg} ${textColor} antialiased flex flex-col`}>
           <Navbar
             view={view}
             onViewChange={handleViewChange}
@@ -350,14 +352,24 @@ function AppContent() {
               onDismiss={() => setInviteResult(null)}
             />
           )}
-          <Dashboard
-            activeTab={dashboardTab}
-            onTabChange={setDashboardTab}
-            settingsSection={settingsSection}
-            onSettingsSectionChange={setSettingsSection}
-            onExitOrganization={handleExitOrganization}
-            onNavigateToOrgTeam={handleNavigateToOrgTeam}
-          />
+          {/* LeftRail sits to the left of the dashboard body. flex-1 wraps
+              Dashboard so it expands to fill the remaining viewport. */}
+          <div className="flex flex-1 min-h-0">
+            <LeftRail
+              dashboardTab={dashboardTab}
+              onDashboardTabChange={setDashboardTab}
+            />
+            <div className="flex-1 min-w-0 flex flex-col">
+              <Dashboard
+                activeTab={dashboardTab}
+                onTabChange={setDashboardTab}
+                settingsSection={settingsSection}
+                onSettingsSectionChange={setSettingsSection}
+                onExitOrganization={handleExitOrganization}
+                onNavigateToOrgTeam={handleNavigateToOrgTeam}
+              />
+            </div>
+          </div>
           {mentionsInboxOpen && (
             <MentionsInbox
               onClose={() => setMentionsInboxOpen(false)}

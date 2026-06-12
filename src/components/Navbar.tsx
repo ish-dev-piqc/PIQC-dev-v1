@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Menu, X, LogOut, ChevronDown, User, Home, Sun, Moon, ClipboardList, Flame, UserCircle2, CreditCard, Beaker, Building2, Plus, Users, AtSign } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { useMode, type DashboardMode } from '../context/ModeContext';
+import { useMode } from '../context/ModeContext';
 import { useProtocol } from '../context/ProtocolContext';
 import { useOrg } from '../context/OrgContext';
 import { useAudit } from '../context/AuditContext';
@@ -37,12 +37,10 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
   const { count: unreadMentionCount, display: unreadMentionDisplay } =
     useUnreadMentionsDisplay();
   const [membersDrawerOpen, setMembersDrawerOpen] = useState(false);
-  const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [protocolMenuOpen, setProtocolMenuOpen] = useState(false);
   const [addProtocolOpen, setAddProtocolOpen] = useState(false);
   const [auditMenuOpen, setAuditMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
-  const modeMenuRef = useRef<HTMLDivElement>(null);
   const protocolMenuRef = useRef<HTMLDivElement>(null);
   const auditMenuRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
@@ -50,7 +48,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
   const { signOut, user, session } = useAuth();
   const { enabled: heatmapEnabled, toggle: toggleHeatmap } = useHeatmap();
   const { theme, toggleTheme } = useTheme();
-  const { mode, setMode } = useMode();
+  const { mode } = useMode();
   const { protocols, isLoading: protocolsLoading, activeProtocol, setActiveProtocol } = useProtocol();
   const { myProtocolIds, myOrgs } = useOrg();
   const { audits, activeAudit, setActiveAudit } = useAudit();
@@ -69,85 +67,10 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
 
   const isLight = theme === 'light';
 
-  const modeOptions: Array<{ id: DashboardMode; label: string }> = [
-    { id: 'site', label: 'Site Mode' },
-    { id: 'audit', label: 'Audit Mode' },
-  ];
-
-  const renderModeSwitcher = (extraClassName = '') => (
-    <div
-      className={`inline-flex items-center p-0.5 rounded-lg border ${isLight ? 'border-[#E2E8F0] bg-[#F2F2F2]' : 'border-white/[0.08] bg-white/[0.04]'} ${extraClassName}`}
-    >
-      {modeOptions.map(({ id, label }) => {
-        const active = mode === id;
-        const activeClass = isLight
-          ? 'bg-brand-600 text-white shadow-sm'
-          : 'bg-brand-600 text-white shadow-sm';
-        const inactiveClass = isLight
-          ? 'text-[#334155]/60 hover:text-[#0F172A]'
-          : 'text-[#CBD5E1]/60 hover:text-white';
-        return (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setMode(id)}
-            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors duration-150 ${active ? activeClass : inactiveClass}`}
-            aria-pressed={active}
-          >
-            {label}
-          </button>
-        );
-      })}
-    </div>
-  );
-
-  const activeModeLabel = modeOptions.find((m) => m.id === mode)?.label ?? 'Site Mode';
-
-  const renderModeDropdown = () => (
-    <div className="relative" ref={modeMenuRef}>
-      <button
-        type="button"
-        onClick={() => setModeMenuOpen((o) => !o)}
-        className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md border transition-colors ${isLight ? 'border-[#E2E8F0] bg-[#F2F2F2] text-[#334155] hover:bg-[#e4ebf2]' : 'border-white/[0.08] bg-white/[0.04] text-[#CBD5E1] hover:bg-white/[0.08]'}`}
-        aria-haspopup="listbox"
-        aria-expanded={modeMenuOpen}
-      >
-        {activeModeLabel}
-        <ChevronDown size={12} className={`transition-transform duration-150 ${modeMenuOpen ? 'rotate-180' : ''}`} />
-      </button>
-      {modeMenuOpen && (
-        <div
-          className={`absolute left-0 top-full mt-1.5 w-36 rounded-lg shadow-lg border overflow-hidden z-50 ${isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/10'}`}
-          role="listbox"
-        >
-          {modeOptions.map(({ id, label }) => {
-            const active = mode === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => {
-                  setMode(id);
-                  setModeMenuOpen(false);
-                }}
-                className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors ${
-                  active
-                    ? 'bg-brand-600 text-white'
-                    : isLight
-                    ? 'text-[#334155]/70 hover:bg-[#0F172A]/[0.05]'
-                    : 'text-[#CBD5E1]/70 hover:bg-white/[0.05]'
-                }`}
-                role="option"
-                aria-selected={active}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
+  // Mode switching moved to LeftRail (workspace-first IA refactor PR 1).
+  // The previous Navbar `renderModeSwitcher` + `renderModeDropdown` helpers
+  // were deleted in the same PR — git history preserves them for reference
+  // if a rollback is ever needed.
 
   const isHomeScope = activeProtocol === null;
 
@@ -485,9 +408,6 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
         setUserMenuOpen(false);
       }
-      if (modeMenuRef.current && !modeMenuRef.current.contains(e.target as Node)) {
-        setModeMenuOpen(false);
-      }
       if (protocolMenuRef.current && !protocolMenuRef.current.contains(e.target as Node)) {
         setProtocolMenuOpen(false);
       }
@@ -578,8 +498,10 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
               </span>
             </button>
 
-            {isDashboard && <div className="hidden md:inline-flex">{renderModeSwitcher()}</div>}
-            {isDashboard && <div className="md:hidden">{renderModeDropdown()}</div>}
+            {/* Mode switcher moved to LeftRail as part of the workspace-first
+                IA refactor. renderModeSwitcher + renderModeDropdown helpers
+                are kept in this file for one release in case we need a fast
+                rollback; they can be deleted in a follow-up cleanup PR. */}
             {isDashboard && mode === 'site' && renderProtocolPicker()}
             {isDashboard && mode === 'audit' && renderAuditPicker()}
             {isDashboard && <OrgSwitcher />}
