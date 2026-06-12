@@ -24,10 +24,13 @@ interface NavbarProps {
   onDashboardHome: () => void;
   onOpenSettingsSection: (section: SettingsSection) => void;
   onOpenOrganization: () => void;
-  onOpenMentionsInbox?: () => void;
+  /** Opens the chat overlay scrolled to the Mentions filter. Renamed from
+   *  the previous `onOpenMentionsInbox` after the standalone MentionsInbox
+   *  panel was folded into the chat overlay's Mentions channel. */
+  onOpenChatOverlayMentions?: () => void;
 }
 
-export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSettingsSection, onOpenOrganization, onOpenMentionsInbox }: NavbarProps) {
+export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSettingsSection, onOpenOrganization, onOpenChatOverlayMentions }: NavbarProps) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -514,7 +517,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                   anywhere. */}
               <button
                 type="button"
-                onClick={() => onOpenMentionsInbox?.()}
+                onClick={() => onOpenChatOverlayMentions?.()}
                 className={`relative p-2 rounded-lg transition-colors ${
                   isLight
                     ? 'text-[#334155]/70 hover:bg-[#0F172A]/[0.05] hover:text-[#0F172A]'
