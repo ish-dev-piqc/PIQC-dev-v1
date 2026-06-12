@@ -785,7 +785,15 @@ export default function Dashboard({
       case 'organization':
         // Org page is rendered via the early-return branch below; this case
         // remains as a defensive fallback if the branch is ever bypassed.
-        return <OrganizationPage onExit={onExitOrganization} />;
+        return (
+          <OrganizationPage
+            onExit={onExitOrganization}
+            onDashboardTabChange={(tab) => {
+              onTabChange?.(tab);
+              if (!onTabChange) setInternalActiveTab(tab);
+            }}
+          />
+        );
       case 'sponsor':
         // Placeholder — proper coming-soon page lands in PR 3 of the
         // workspace-first refactor. Renders inline so the LeftRail's
@@ -827,7 +835,13 @@ export default function Dashboard({
   if (resolvedActiveTab === 'organization') {
     return (
       <div className={`h-screen ${pageBg} pt-16 flex flex-col overflow-hidden`}>
-        <OrganizationPage onExit={onExitOrganization} />
+        <OrganizationPage
+          onExit={onExitOrganization}
+          onDashboardTabChange={(tab) => {
+            onTabChange?.(tab);
+            if (!onTabChange) setInternalActiveTab(tab);
+          }}
+        />
       </div>
     );
   }

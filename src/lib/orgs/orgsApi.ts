@@ -668,6 +668,89 @@ export async function listDecisionAcks(
   return { ok: true, data: adaptChatDecisionAcks(data ?? []) };
 }
 
+/** Pending decision acks for the current user — joined with the
+ *  underlying decision title + channel. Used by the workspace hub's Today
+ *  tab to surface "decisions waiting on you" at a glance.
+ *
+ *  Returns at most 50 rows; ordering newest-first (most recent decisions
+ *  surface first). RLS scopes ack rows to the caller, so no further
+ *  user_id filter is needed beyond `acknowledged_at IS NULL`. */
+export interface PendingAckRow {
+  ack_id: string;
+  decision_id: string;
+  decision_title: string;
+  decision_decided_at: string;
+  org_id: string | null;
+  protocol_id: string | null;
+}
+
+export async function listMyPendingDecisionAcks(): Promise<
+  Result<PendingAckRow[]>
+> {
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr) return fail('listMyPendingDecisionAcks:getUser', userErr);
+  const user = userData?.user;
+  if (!user) return err('Not authenticated.');
+
+  const { data, error } = await supabase
+    .from('chat_decision_acks')
+    .select(
+      `id,
+       decision_id,
+       chat_decisions!inner (
+         title,
+         decided_at,
+         org_id,
+         protocol_id
+       )`,
+    )
+    .eq('required_user_id', user.id)
+    .is('acknowledged_at', null)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) return fail('listMyPendingDecisionAcks', error);
+
+  // PostgREST's TS inference for embedded relations is conservative: it
+  // models the join as a 1-to-many array even when the FK is many-to-one.
+  // Cast through unknown and normalize either shape (object or array) into
+  // the first row defensively.
+  const rows = (data ?? []) as unknown as Array<{
+    id: string;
+    decision_id: string;
+    chat_decisions:
+      | {
+          title: string;
+          decided_at: string;
+          org_id: string | null;
+          protocol_id: string | null;
+        }
+      | Array<{
+          title: string;
+          decided_at: string;
+          org_id: string | null;
+          protocol_id: string | null;
+        }>
+      | null;
+  }>;
+
+  const out: PendingAckRow[] = [];
+  for (const r of rows) {
+    const decision = Array.isArray(r.chat_decisions)
+      ? r.chat_decisions[0]
+      : r.chat_decisions;
+    if (!decision) continue;
+    out.push({
+      ack_id: r.id,
+      decision_id: r.decision_id,
+      decision_title: decision.title,
+      decision_decided_at: decision.decided_at,
+      org_id: decision.org_id,
+      protocol_id: decision.protocol_id,
+    });
+  }
+  return { ok: true, data: out };
+}
+
 /** Mark a single ack row as acknowledged. RLS gates: only the
  *  `required_user_id` matching auth.uid() succeeds. */
 export async function acknowledgeDecision(

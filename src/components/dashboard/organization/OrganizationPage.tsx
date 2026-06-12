@@ -3,8 +3,10 @@ import {
   Activity,
   ArrowLeft,
   Building2,
+  Calendar,
   ClipboardList,
   Crown,
+  Folder,
   MessageCircle,
   Settings,
   User as UserIcon,
@@ -18,7 +20,10 @@ import MembersTab from './MembersTab';
 import ManageTab from './ManageTab';
 import ChatTab from './ChatTab';
 import ActivityTab from './ActivityTab';
+import HubTodayTab from './HubTodayTab';
+import HubDocumentsTab from './HubDocumentsTab';
 import UnifiedTeamList from './team/UnifiedTeamList';
+import type { DashboardTab } from '../Dashboard';
 
 // =============================================================================
 // OrganizationPage — full-screen Organization destination.
@@ -36,17 +41,29 @@ import UnifiedTeamList from './team/UnifiedTeamList';
 //                Admin-only; hidden from the tab strip for site members.
 // =============================================================================
 
-export type OrgTab = 'organization' | 'team' | 'chat' | 'manage' | 'activity';
+export type OrgTab =
+  | 'today'
+  | 'chat'
+  | 'documents'
+  | 'organization'
+  | 'team'
+  | 'manage'
+  | 'activity';
 
 interface OrganizationPageProps {
   onExit?: () => void;
+  /** Routed from App.tsx so mode-tile clicks inside Today can switch to
+   *  the chosen dashboard tab (e.g. Sponsor → 'sponsor'). */
+  onDashboardTabChange?: (tab: DashboardTab) => void;
 }
 
 export const ORG_TAB_STORAGE_KEY = 'piq-org-tab-v1';
 const VALID_ORG_TABS: ReadonlySet<OrgTab> = new Set<OrgTab>([
+  'today',
+  'chat',
+  'documents',
   'organization',
   'team',
-  'chat',
   'manage',
   'activity',
 ]);
@@ -66,14 +83,18 @@ function readStoredOrgTab(): OrgTab | null {
 }
 
 const BASE_TABS: { id: OrgTab; label: string; icon: typeof UsersIcon }[] = [
+  // Today is the new default — daily-driver landing surface for the
+  // coordinator persona.
+  { id: 'today', label: 'Today', icon: Calendar },
+  { id: 'chat', label: 'Chat', icon: MessageCircle },
+  { id: 'documents', label: 'Documents', icon: Folder },
   // "Organization" rather than "Members" so the label clearly refers to
   // the org-level roster, distinct from a protocol's team membership.
   { id: 'organization', label: 'Organization', icon: UsersIcon },
   { id: 'team', label: 'Team', icon: ClipboardList },
-  { id: 'chat', label: 'Chat', icon: MessageCircle },
 ];
 
-export default function OrganizationPage({ onExit }: OrganizationPageProps) {
+export default function OrganizationPage({ onExit, onDashboardTabChange }: OrganizationPageProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
   const { activeOrg } = useOrg();
@@ -85,7 +106,9 @@ export default function OrganizationPage({ onExit }: OrganizationPageProps) {
   // directly to localStorage in App.tsx before navigating, so the read
   // here picks up their intent without a prop being passed in.
   const [activeTab, setActiveTab] = useState<OrgTab>(
-    () => readStoredOrgTab() ?? 'organization',
+    // Today is the new default. Returning users keep their last tab via
+    // the existing localStorage persistence.
+    () => readStoredOrgTab() ?? 'today',
   );
 
   // Persist the active sub-tab so a hard refresh lands the user back on the
@@ -179,14 +202,17 @@ export default function OrganizationPage({ onExit }: OrganizationPageProps) {
       {/* Scrollable body */}
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
-          {/* Page header — clear org framing */}
+          {/* Page header — workspace framing. Was "Organization" before the
+              workspace-first refactor; relabeled so the chrome reads as
+              "you're at the org's workspace" instead of "you're on the
+              Organization admin page." */}
           <div className={`pb-5 mb-6 border-b ${headerBorder}`}>
             <div className="flex items-center gap-2 text-fg-label text-[10px] uppercase tracking-wider font-semibold">
               <Building2 size={11} />
-              Organization
+              Workspace
             </div>
             <h1 className="text-fg-heading text-2xl font-semibold mt-1">
-              {activeOrg?.name ?? 'Organization'}
+              {activeOrg?.name ?? 'Workspace'}
             </h1>
             {activeOrg && (
               <p className="text-fg-sub text-xs mt-2 flex items-center gap-1.5">
@@ -199,6 +225,14 @@ export default function OrganizationPage({ onExit }: OrganizationPageProps) {
               </p>
             )}
           </div>
+
+          {activeTab === 'today' && (
+            <HubTodayTab
+              onChangeDashboardTab={(tab) => onDashboardTabChange?.(tab)}
+            />
+          )}
+
+          {activeTab === 'documents' && <HubDocumentsTab />}
 
           {activeTab === 'organization' && <MembersTab />}
 
