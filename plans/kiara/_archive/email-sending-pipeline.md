@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: email-sending-pipeline
-status: active
+status: merged
+merged: 2026-06-12
 started: 2026-06-04
-target_pr:
+target_pr: #327
 ---
 
 # Email-sending pipeline — wire notification preferences to Resend
