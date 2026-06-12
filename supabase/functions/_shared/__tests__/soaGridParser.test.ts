@@ -345,4 +345,15 @@ describe("assembleVisitsFromGrouping — golden (PP06489)", () => {
     const { schedule: s } = assembleVisitsFromGrouping(columns, { visits: [{ name: "Bogus", source_idx: [9999] }] });
     expect(s).toHaveLength(0);
   });
+
+  it("preserves conditional (X) marks and keeps marked procedures null (for the safety-critical heuristic)", () => {
+    const idGrouping = { visits: columns.map((c) => ({ name: c.header, source_idx: [c.idx] })) };
+    const ps = assembleVisitsFromGrouping(columns, idGrouping).schedule.flatMap((s) => s.procedures_structured);
+    const conditional = ps.filter((p) => p.classification === "conditional");
+    expect(conditional.length).toBeGreaterThan(0); // PledOx has conditional "(X)" procedures
+    expect(conditional.every((p) => /MRI of CNS/i.test(p.label))).toBe(true);
+    // marked procedures stay classification=null so buildPersistPayloadForVisit's assignClassification
+    // can still derive required / safety_critical / primary_endpoint from the label (never hardcoded)
+    expect(ps.every((p) => p.classification === "conditional" || p.classification === null)).toBe(true);
+  });
 });
