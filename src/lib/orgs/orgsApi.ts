@@ -751,6 +751,30 @@ export async function listMyPendingDecisionAcks(): Promise<
   return { ok: true, data: out };
 }
 
+/** Lead-capture for the Sponsor Mode coming-soon page. Inserts a
+ *  `sponsor_interest` row; server-side trigger stamps user_id from
+ *  auth.uid(). Email is required + trimmed; message is optional. */
+export async function addSponsorInterest(input: {
+  email: string;
+  message?: string;
+}): Promise<Result<void>> {
+  const trimmedEmail = input.email.trim();
+  if (!trimmedEmail || !trimmedEmail.includes('@')) {
+    return err('Please enter a valid email.');
+  }
+  if (trimmedEmail.length > 320) return err('Email is too long.');
+  const trimmedMessage = input.message?.trim() ?? null;
+  if (trimmedMessage && trimmedMessage.length > 2000) {
+    return err('Message is too long (2000 character max).');
+  }
+
+  const { error } = await supabase
+    .from('sponsor_interest')
+    .insert({ email: trimmedEmail, message: trimmedMessage });
+  if (error) return fail('addSponsorInterest', error);
+  return { ok: true, data: undefined };
+}
+
 /** Mark a single ack row as acknowledged. RLS gates: only the
  *  `required_user_id` matching auth.uid() succeeds. */
 export async function acknowledgeDecision(
