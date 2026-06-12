@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: chat-overlay-and-mentions-fold-in
-status: active
+status: merged
+merged: 2026-06-12
 started: 2026-06-04
-target_pr:
+target_pr: #323
 ---
 
 # Chat overlay + mentions fold-in (PR 4 of 6)
