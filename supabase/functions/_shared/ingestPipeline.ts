@@ -25,8 +25,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { mapReductoExtractToSotr } from "./sourceEvidenceAdapter.ts";
 import { dedupeVisitTemplateRowsByQuality, pickTemplateForVisit, staleTemplateIds, visitMatchKey } from "./visitTemplateDedup.ts";
 import { canonicalVisitName, normalizeVisitName } from "./visitNameNormalize.ts";
-import { enrichScheduleFromLlm, evaluateSoaGate, gridToScheduleOfEvents, parseSoaGrid } from "./soaGridParser.ts";
-import type { SoaGateDecision } from "./soaGridParser.ts";
+import { assembleVisitsFromGrouping, enrichScheduleFromLlm, extractRawColumns } from "./soaGridParser.ts";
+import type { RawColumn, VisitGrouping } from "./soaGridParser.ts";
 import { deriveVisitCountSignal } from "./soaColumnCount.ts";
 import {
   detectImplausibleDay,
@@ -148,13 +148,17 @@ export function mapRawChunksToChunkData(rawChunks: ReductoChunk[]): ChunkData[] 
  * whose content actually contains an HTML table are kept (a prose-summarized
  * table is skipped → the fallback gate handles it).
  */
-export function collectTableHtml(rawChunks: ReductoChunk[]): Array<{ content: string; page: number | null }> {
-  const out: Array<{ content: string; page: number | null }> = [];
+export function collectTableHtml(rawChunks: ReductoChunk[]): Array<{ content: string; page: number | null; section: string }> {
+  const out: Array<{ content: string; page: number | null; section: string }> = [];
+  let section = ""; // track the most recent Section Header / Title so the SoA grouper can drop synopsis/TOC tables
   for (const c of rawChunks) {
     const blocks: ReductoBlock[] = Array.isArray(c.blocks) ? c.blocks : [];
     for (const b of blocks) {
+      if ((b.type === "Section Header" || b.type === "Title") && typeof b.content === "string" && b.content.trim()) {
+        section = b.content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      }
       if (/table/i.test(b.type ?? "") && typeof b.content === "string" && /<t[rd]\b/i.test(b.content)) {
-        out.push({ content: b.content, page: typeof b.bbox?.page === "number" ? b.bbox.page : null });
+        out.push({ content: b.content, page: typeof b.bbox?.page === "number" ? b.bbox.page : null, section });
       }
     }
   }
@@ -329,7 +333,7 @@ export async function kickOffReductoParseAsync(
 export async function fetchReductoJobResult(
   jobId: string,
   reductoKey: string,
-): Promise<{ status: string; chunks: ChunkData[]; tableHtml: Array<{ content: string; page: number | null }> }> {
+): Promise<{ status: string; chunks: ChunkData[]; tableHtml: Array<{ content: string; page: number | null; section: string }> }> {
   return withRetry(async () => {
     const res = await fetch(`${REDUCTO_BASE_URL}/job/${jobId}`, {
       method: "GET",
@@ -1219,6 +1223,70 @@ async function openaiChatCompletion(
   }
 }
 
+// =============================================================================
+// SoA visit grouping (hybrid step). The deterministic reader (soaGridParser
+// extractRawColumns) supplies the COMPLETE list of mark-bearing columns; this one
+// LLM call groups/selects them into the final visit list. It is handed ONLY the
+// column headers + metadata (never cell contents), so it cannot under-read or
+// invent procedures — it can only group/drop/dedup. On any failure the caller
+// falls back to an identity grouping (raw columns ungrouped, flagged).
+// =============================================================================
+
+const SOA_GROUPING_SYSTEM =
+  "You are given the COMPLETE list of mark-bearing columns already extracted deterministically " +
+  "from a clinical protocol's Schedule-of-Assessments tables. Each = {idx, header (verbatim), page, section, procs}.\n" +
+  "Your ONLY job: GROUP/SELECT these columns into the final clinical VISIT list for a Visit Prep view. " +
+  "Do NOT add visits or procedures — only organise the columns you are given.\n" +
+  "- DROP columns that are not real study visits (table-of-contents / list-of-tables / synopsis restatement / lab-volume table).\n" +
+  "- The same visit may appear in more than one table (e.g. a terse synopsis code \"D1C1 W0\" AND the full schedule \"Treatment Visit 1, Cycle 1, Week 0\"). These are ONE visit — keep ONLY the source_idx of the column with the MOST DESCRIPTIVE header (e.g. \"Treatment Visit 1…\") and DROP the terse synopsis duplicate; never list the same visit twice.\n" +
+  "- COLLAPSE intra-day timepoints into one visit: several columns of the same day split by hours-post-dose " +
+  "(e.g. \"D1 0\", \"D1 0.5\", \"D1 2\") become ONE \"Day 1\" visit.\n" +
+  "- Keep genuinely distinct visits separate (different days/weeks/cycles, screening, baseline, EOT/ET, follow-ups, sub-study visits).\n" +
+  "- Preserve left-to-right / chronological order.\n" +
+  "Return STRICT JSON: {\"visits\":[{\"name\":\"<verbatim or lightly-cleaned>\",\"source_idx\":[<the idx values you grouped>]}]}";
+
+/**
+ * Group the deterministic RawColumns into the final visit list via ONE gpt-4o
+ * call. Returns null on any failure (caller falls back to identity grouping +
+ * flags `grid_ungrouped`). Pure-ish: no DB, one OpenAI call wrapped in withRetry.
+ */
+async function groupSoaColumnsViaLlm(
+  columns: readonly RawColumn[],
+  openaiKey: string,
+): Promise<VisitGrouping | null> {
+  if (columns.length === 0) return null;
+  const list = columns
+    .map((c) => `${c.idx}: "${c.header.slice(0, 80)}" (p${c.page ?? "?"}, sec="${(c.section || "").slice(0, 40)}", ${c.markCount} procs)`)
+    .join("\n");
+  try {
+    return await withRetry(async () => {
+      const res = await openaiChatCompletion(openaiKey, {
+        model: "gpt-4o", // override the default gpt-4o-mini: grouping needs the stronger judgment (validated)
+        temperature: 0,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: SOA_GROUPING_SYSTEM },
+          { role: "user", content: `Raw columns (${columns.length}):\n${list}` },
+        ],
+      });
+      if (!res.ok) throw new NonRetryableError(`soa_grouping_${res.reason}`); // 4xx — don't retry
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(res.content);
+      } catch {
+        throw new NonRetryableError("soa_grouping_bad_json");
+      }
+      if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as VisitGrouping).visits)) {
+        throw new NonRetryableError("soa_grouping_bad_shape");
+      }
+      return parsed as VisitGrouping;
+    }, "groupSoaColumnsViaLlm");
+  } catch (err) {
+    console.warn("[ingest] soa_grouping_failed", { error: err instanceof Error ? err.message : String(err), columns: columns.length });
+    return null;
+  }
+}
+
 /**
  * Purpose-prose extraction (parser-integration.md §5). Generates a 1-3
  * sentence clinical purpose statement for one visit. Returns null on failure
@@ -2048,44 +2116,57 @@ export async function processIngestCompletion(
     // Everything downstream (SOTR, templates, coverage) consumes the same
     // schedule_of_events shape, so only this one step changes.
     // ---------------------------------------------------------------------
-    let soaDecision: SoaGateDecision = { useGrid: false, method: "llm_fallback", reasons: ["grid not attempted"] };
+    // Hybrid: extractRawColumns reads EVERY visit column + its marked procedures
+    // (self-consistency-checked); ONE gpt-4o call groups the column list into the
+    // final visits (drop non-visits, collapse intra-day timepoints, dedup). The LLM
+    // sees only headers — never cells — so it cannot under-read or invent. On LLM
+    // failure → raw columns ungrouped (flagged grid_ungrouped); no grid at all →
+    // keep the LLM's own schedule_of_events (llm_fallback). Downstream shape unchanged.
+    let soaMethod: "grid_grouped" | "grid_ungrouped" | "llm_fallback" = "llm_fallback";
     let soaExpectedFromSignal = 0;
     try {
-      const gridResult = parseSoaGrid(parseResult.tableHtml);
-      const signal = deriveVisitCountSignal(parseResult.chunks);
-      soaExpectedFromSignal = signal.estimatedTreatmentVisits;
-      soaDecision = evaluateSoaGate(gridResult, signal.estimatedTreatmentVisits);
-      if (soaDecision.useGrid && extractedFields) {
-        // Capture the LLM extraction BEFORE overriding so we can recover the
-        // per-procedure metadata the grid can't see (role_hint / conditions /
-        // timing / source_fields) by label-match — the visit×procedure structure
-        // still comes deterministically from the grid.
+      const { columns, guards } = extractRawColumns(parseResult.tableHtml);
+      soaExpectedFromSignal = deriveVisitCountSignal(parseResult.chunks).estimatedTreatmentVisits;
+      if (columns.length > 0 && extractedFields) {
+        let grouping = await groupSoaColumnsViaLlm(columns, openaiKey);
+        if (grouping && Array.isArray(grouping.visits) && grouping.visits.length > 0) {
+          soaMethod = "grid_grouped";
+        } else {
+          grouping = { visits: columns.map((c) => ({ name: c.header, source_idx: [c.idx] })) }; // identity fallback
+          soaMethod = "grid_ungrouped";
+        }
+        // Capture the LLM extraction BEFORE overriding, to recover per-procedure
+        // metadata the grid can't see (role_hint / conditions / timing / source_fields)
+        // by label-match — the visit×procedure structure stays deterministic.
         const llmSchedule = extractedFields.schedule_of_events;
-        const { schedule, citations } = gridToScheduleOfEvents(gridResult.visits);
+        const { schedule, citations } = assembleVisitsFromGrouping(columns, grouping);
         const enrichedCount = enrichScheduleFromLlm(schedule, llmSchedule);
         extractedFields.schedule_of_events = schedule;
-        console.log("[ingest] soa_grid_enriched", { document_id: docId, procedures_enriched: enrichedCount });
         const citMap = (extractedFields._reducto_citations && typeof extractedFields._reducto_citations === "object")
           ? extractedFields._reducto_citations as Record<string, unknown>
           : {};
         citMap.schedule_of_events = citations;
         extractedFields._reducto_citations = citMap;
-        console.log("[ingest] soa_grid_used", {
+        // A lossy parse (unknown mark glyph) still ships its visits, but is flagged for review.
+        if (guards.selfConsistency < 0.95 && soaMethod === "grid_grouped") soaMethod = "grid_ungrouped";
+        console.log("[ingest] soa_hybrid_used", {
           document_id: docId,
+          raw_columns: columns.length,
           visits: schedule.length,
-          method: soaDecision.method,
-          guards: gridResult.guards,
+          method: soaMethod,
+          self_consistency: Number(guards.selfConsistency.toFixed(2)),
+          enriched: enrichedCount,
+          notes: guards.notes,
         });
       } else {
-        console.warn("[ingest] soa_grid_fallback", {
+        console.warn("[ingest] soa_no_grid", {
           document_id: docId,
-          reasons: soaDecision.reasons,
-          estimated_treatment_visits: signal.estimatedTreatmentVisits,
           tables_seen: parseResult.tableHtml.length,
+          notes: guards.notes,
         });
       }
     } catch (err) {
-      // A parser fault must never abort ingest — fall back to the LLM extraction.
+      // A parser fault must never abort ingest — keep the LLM extraction (llm_fallback).
       console.error("[ingest] soa_grid_error", {
         document_id: docId,
         error: err instanceof Error ? err.message : String(err),
@@ -2569,7 +2650,7 @@ export async function processIngestCompletion(
                   // deterministic; llm_fallback = flagged) + the independent
                   // count signal. CoverageBanner surfaces both so a fallback or
                   // a low-confidence parse is visible, never silent.
-                  extraction_method: soaDecision.method,
+                  extraction_method: soaMethod,
                   expected_from_signal: soaExpectedFromSignal,
                 },
                 { onConflict: "protocol_id,source_document_id" },
@@ -2581,7 +2662,7 @@ export async function processIngestCompletion(
                   protocol_id: resolvedProtocolId,
                   found: templateNames.length,
                   missing: missing.length,
-                  extraction_method: soaDecision.method,
+                  extraction_method: soaMethod,
                 });
               }
             } catch (covErr) {

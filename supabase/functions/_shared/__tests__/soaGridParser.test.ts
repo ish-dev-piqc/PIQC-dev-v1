@@ -6,6 +6,8 @@ import {
   gridToScheduleOfEvents,
   enrichScheduleFromLlm,
   evaluateSoaGate,
+  extractRawColumns,
+  assembleVisitsFromGrouping,
   type TableBlock,
 } from "../soaGridParser.ts";
 // Golden fixture: the real Schedule-of-Assessments table blocks Reducto returned
@@ -245,5 +247,113 @@ describe("parseSoaGrid — guards on degenerate input", () => {
   it("ignores non-table content", () => {
     const r = parseSoaGrid([{ content: "no tables here" }]);
     expect(r.visits).toHaveLength(0);
+  });
+});
+
+// =============================================================================
+// HYBRID production path: extractRawColumns (deterministic, complete, verbatim)
+// + assembleVisitsFromGrouping (driven by the LLM grouping — mocked here so CI is
+// deterministic and runs no live LLM). Golden fixture = the same PledOx SoA.
+// =============================================================================
+describe("extractRawColumns — golden (PP06489), vocabulary-free", () => {
+  const { columns, guards } = extractRawColumns(TABLES);
+
+  it("reads every visit column (flat, per page) with full self-consistency", () => {
+    expect(guards.soaTablesFound).toBe(9);
+    expect(guards.selfConsistency).toBe(1); // every detected mark is emitted
+    expect(guards.notes).toEqual([]);
+    expect(columns).toHaveLength(64); // flat columns (a visit recurs across continuation tables; incl. sparse named-visit rescues)
+    expect(columns[0].idx).toBe(0); // idx is the left-to-right page sequence
+  });
+
+  it("captures each column's procedures verbatim (Screening, page 53)", () => {
+    const scr = columns.find((c) => /^screening/i.test(c.header))!;
+    expect(scr.procedures.map((p) => p.label)).toEqual([
+      "Informed Consent",
+      "CT/MRI Scan and Disease Assessment",
+      "CEA",
+      "Medical History and Prior Medication",
+      "Physical Examination (per standard of care)",
+      "Vital Signs (all Visits) and Weight (only for Treatment Visits)",
+      "ECOG Performance Status",
+      "Pregnancy Test",
+    ]);
+  });
+
+  it("emits no header/scheduling text or footnote superscripts as procedures", () => {
+    for (const c of columns) {
+      for (const p of c.procedures) {
+        expect(p.label).not.toMatch(/[ª²³¹º⁰-⁹]/);
+        expect(p.label).not.toMatch(/^(visit|day|cycle|week|month|assessment)\b|window/i);
+      }
+    }
+  });
+});
+
+describe("assembleVisitsFromGrouping — golden (PP06489)", () => {
+  const { columns } = extractRawColumns(TABLES);
+  // Simulate the LLM grouping deterministically: group flat columns by canonical
+  // visit name (the real LLM does richer collapse/dedup; this proves assembly).
+  const byName = new Map<string, number[]>();
+  for (const c of columns) {
+    const name = parseVisitHeader(c.header).visit_name;
+    if (!byName.has(name)) byName.set(name, []);
+    byName.get(name)!.push(c.idx);
+  }
+  const grouping = { visits: [...byName.entries()].map(([name, source_idx]) => ({ name, source_idx })) };
+  const { schedule, citations } = assembleVisitsFromGrouping(columns, grouping);
+
+  it("unions a grouped visit's procedures across its source columns (Screening = 14, deduped)", () => {
+    const screening = schedule.find((s) => s.visit_name === "Screening")!;
+    expect(screening.procedures).toContain("Hematology"); // from a later page-53 block, not the first column
+    expect(screening.procedures.length).toBe(14);
+    expect(new Set(screening.procedures).size).toBe(screening.procedures.length); // deduped
+  });
+
+  it("rescues the sparse 'Randomization' visit (1 mark/column) that mark-density alone drops", () => {
+    const rnd = schedule.find((s) => s.visit_name === "Randomization");
+    expect(rnd, "Randomization visit missing").toBeTruthy();
+    expect(rnd!.procedures).toContain("Randomization");
+  });
+
+  it("produces the distinct PledOx visits in protocol-column order", () => {
+    const names = schedule.map((s) => s.visit_name);
+    for (const expected of [
+      "Screening", "Randomization", "Treatment Visit 1", "Treatment Visit 12", "EOT Visit", "EOS Visit",
+      "Assessment Visit Month 3", "Assessment Visit Month 9",
+    ]) {
+      expect(names, `missing ${expected}`).toContain(expected);
+    }
+    // column_order is a strict ascending sequence; EOT sorts after TV12 (study_day=14 would mis-place it)
+    expect(schedule.map((s) => s.column_order)).toEqual([...schedule.map((s) => s.column_order)].sort((a, b) => a - b));
+    expect(names.indexOf("Treatment Visit 12")).toBeLessThan(names.indexOf("EOT Visit"));
+  });
+
+  it("emits a high-confidence SoA-page citation per assembled visit", () => {
+    expect(citations).toHaveLength(schedule.length);
+    expect(citations.every((c) => c.confidence === "high" && c.section === "Schedule of Assessments")).toBe(true);
+  });
+
+  it("identity grouping = one visit per raw column (the grid_ungrouped fallback)", () => {
+    const idGrouping = { visits: columns.map((c) => ({ name: c.header, source_idx: [c.idx] })) };
+    const { schedule: s } = assembleVisitsFromGrouping(columns, idGrouping);
+    expect(s).toHaveLength(columns.length);
+    expect(s.map((v) => v.column_order)).toEqual([...columns.keys()]);
+  });
+
+  it("ignores unknown source_idx — the LLM cannot invent a column", () => {
+    const { schedule: s } = assembleVisitsFromGrouping(columns, { visits: [{ name: "Bogus", source_idx: [9999] }] });
+    expect(s).toHaveLength(0);
+  });
+
+  it("preserves conditional (X) marks and keeps marked procedures null (for the safety-critical heuristic)", () => {
+    const idGrouping = { visits: columns.map((c) => ({ name: c.header, source_idx: [c.idx] })) };
+    const ps = assembleVisitsFromGrouping(columns, idGrouping).schedule.flatMap((s) => s.procedures_structured);
+    const conditional = ps.filter((p) => p.classification === "conditional");
+    expect(conditional.length).toBeGreaterThan(0); // PledOx has conditional "(X)" procedures
+    expect(conditional.every((p) => /MRI of CNS/i.test(p.label))).toBe(true);
+    // marked procedures stay classification=null so buildPersistPayloadForVisit's assignClassification
+    // can still derive required / safety_critical / primary_endpoint from the label (never hardcoded)
+    expect(ps.every((p) => p.classification === "conditional" || p.classification === null)).toBe(true);
   });
 });

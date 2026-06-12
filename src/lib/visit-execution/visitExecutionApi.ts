@@ -114,7 +114,8 @@ export async function fetchVisitCoverage(
       detected_at: typeof d.detected_at === 'string' ? d.detected_at : '',
       resolution: typeof d.resolution === 'string' ? d.resolution : 'pending',
       extraction_method:
-        method === 'grid' || method === 'grid_low_confidence' || method === 'llm_fallback'
+        method === 'grid_grouped' || method === 'grid_ungrouped' || method === 'grid' ||
+          method === 'grid_low_confidence' || method === 'llm_fallback'
           ? method
           : null,
       expected_from_signal: typeof d.expected_from_signal === 'number' ? d.expected_from_signal : null,
