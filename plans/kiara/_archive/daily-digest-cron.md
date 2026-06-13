@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: daily-digest-cron
-status: active
+status: merged
+merged: 2026-06-13
 started: 2026-06-13
-target_pr:
+target_pr: #343
 ---
 
 # Daily digest cron — morning roll-up email
