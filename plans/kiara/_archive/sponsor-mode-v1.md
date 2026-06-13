@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: sponsor-mode-v1
-status: active
+status: merged
+merged: 2026-06-13
 started: 2026-06-13
-target_pr:
+target_pr: #339
 ---
 
 # Sponsor mode v1 — portfolio view
