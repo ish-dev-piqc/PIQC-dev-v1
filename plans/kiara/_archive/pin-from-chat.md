@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: pin-from-chat
-status: active
+status: merged
+merged: 2026-06-13
 started: 2026-06-13
-target_pr:
+target_pr: #345
 ---
 
 # Pin-from-chat — pin/unpin attachments inline in the chat surface
