@@ -328,6 +328,7 @@ export default function ChatTab() {
     byMessageId: attachmentsByMessageId,
     addLocal: addAttachmentLocal,
     removeLocal: removeAttachmentLocal,
+    replaceLocal: replaceAttachmentLocal,
   } = useChannelAttachments({ kind: channelKind, channelId: channelRefId });
 
   // Files queued in the composer, waiting to be uploaded when the user sends.
@@ -1591,6 +1592,7 @@ export default function ChatTab() {
                           a.uploaded_by_user_id === currentUserId || isOrgAdmin
                         }
                         onDeleted={removeAttachmentLocal}
+                        onPinChanged={replaceAttachmentLocal}
                       />
                     )}
                     {!m.deleted_at && editingMessageId !== m.id && (

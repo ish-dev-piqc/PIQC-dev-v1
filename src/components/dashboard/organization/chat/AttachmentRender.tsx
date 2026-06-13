@@ -1,9 +1,19 @@
 import { useEffect, useState } from 'react';
-import { Download, File as FileIcon, Loader2, Trash2, X, ImageIcon } from 'lucide-react';
+import {
+  Download,
+  File as FileIcon,
+  ImageIcon,
+  Loader2,
+  Pin,
+  PinOff,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
 import {
   deleteChatAttachment,
   getAttachmentSignedUrl,
+  setChatAttachmentPinned,
 } from '../../../../lib/orgs/orgsApi';
 import type { ChatAttachment } from '../../../../types/orgs';
 
@@ -26,6 +36,11 @@ interface AttachmentRenderProps {
   attachments: ChatAttachment[];
   canDelete: (attachment: ChatAttachment) => boolean;
   onDeleted?: (id: string) => void;
+  /** Fires after a successful pin/unpin RPC — parent should swap the
+   *  attachment in its channel-wide list so other render paths (e.g.
+   *  Documents tab's pinned board) reflect the change without a full
+   *  refetch. */
+  onPinChanged?: (attachment: ChatAttachment) => void;
 }
 
 function isImageAttachment(a: ChatAttachment): boolean {
@@ -42,6 +57,7 @@ export default function AttachmentRender({
   attachments,
   canDelete,
   onDeleted,
+  onPinChanged,
 }: AttachmentRenderProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
@@ -64,6 +80,7 @@ export default function AttachmentRender({
               canDelete={canDelete(a)}
               onOpen={(url) => setLightbox({ url, alt: a.original_filename })}
               onDeleted={onDeleted}
+              onPinChanged={onPinChanged}
             />
           ))}
         </div>
@@ -77,6 +94,7 @@ export default function AttachmentRender({
               isLight={isLight}
               canDelete={canDelete(a)}
               onDeleted={onDeleted}
+              onPinChanged={onPinChanged}
             />
           ))}
         </div>
@@ -94,16 +112,20 @@ function ImageAttachment({
   canDelete,
   onOpen,
   onDeleted,
+  onPinChanged,
 }: {
   attachment: ChatAttachment;
   isLight: boolean;
   canDelete: boolean;
   onOpen: (url: string) => void;
   onDeleted?: (id: string) => void;
+  onPinChanged?: (a: ChatAttachment) => void;
 }) {
   const [thumbUrl, setThumbUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [pinning, setPinning] = useState(false);
+  const isPinned = attachment.pinned_at !== null;
 
   useEffect(() => {
     let cancelled = false;
@@ -124,6 +146,15 @@ function ImageAttachment({
     const res = await deleteChatAttachment(attachment);
     setDeleting(false);
     if (res.ok) onDeleted?.(attachment.id);
+  }
+
+  async function handlePinToggle(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (pinning) return;
+    setPinning(true);
+    const res = await setChatAttachmentPinned(attachment.id, !isPinned);
+    setPinning(false);
+    if (res.ok) onPinChanged?.(res.data);
   }
 
   return (
@@ -152,6 +183,27 @@ function ImageAttachment({
           </div>
         )}
       </button>
+      {/* Pin/unpin — top-left corner. Pinned attachments keep the icon
+          visible at full opacity; unpinned ones reveal it on hover. */}
+      <button
+        type="button"
+        onClick={handlePinToggle}
+        disabled={pinning}
+        className={`absolute top-1 left-1 p-1 rounded-full shadow border ${
+          isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/10'
+        } ${isPinned ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+        style={{ color: isPinned ? '#BA7517' : undefined }}
+        aria-label={isPinned ? 'Unpin attachment' : 'Pin attachment'}
+        title={isPinned ? 'Unpin' : 'Pin to board'}
+      >
+        {pinning ? (
+          <Loader2 size={11} className="animate-spin" />
+        ) : isPinned ? (
+          <PinOff size={11} />
+        ) : (
+          <Pin size={11} />
+        )}
+      </button>
       {canDelete && (
         <button
           type="button"
@@ -174,14 +226,26 @@ function FileAttachment({
   isLight,
   canDelete,
   onDeleted,
+  onPinChanged,
 }: {
   attachment: ChatAttachment;
   isLight: boolean;
   canDelete: boolean;
   onDeleted?: (id: string) => void;
+  onPinChanged?: (a: ChatAttachment) => void;
 }) {
   const [downloading, setDownloading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [pinning, setPinning] = useState(false);
+  const isPinned = attachment.pinned_at !== null;
+
+  async function handlePinToggle() {
+    if (pinning) return;
+    setPinning(true);
+    const res = await setChatAttachmentPinned(attachment.id, !isPinned);
+    setPinning(false);
+    if (res.ok) onPinChanged?.(res.data);
+  }
 
   async function handleDownload() {
     setDownloading(true);
@@ -228,6 +292,29 @@ function FileAttachment({
         title="Download"
       >
         {downloading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+      </button>
+      <button
+        type="button"
+        onClick={handlePinToggle}
+        disabled={pinning}
+        className={`p-1 rounded ${
+          isPinned
+            ? ''
+            : isLight
+              ? 'text-[#334155]/70 hover:bg-[#0F172A]/[0.05] hover:text-[#0F172A]'
+              : 'text-[#CBD5E1]/70 hover:bg-white/[0.05] hover:text-white'
+        }`}
+        style={isPinned ? { color: '#BA7517' } : undefined}
+        aria-label={isPinned ? 'Unpin attachment' : 'Pin attachment'}
+        title={isPinned ? 'Unpin' : 'Pin to board'}
+      >
+        {pinning ? (
+          <Loader2 size={12} className="animate-spin" />
+        ) : isPinned ? (
+          <PinOff size={12} />
+        ) : (
+          <Pin size={12} />
+        )}
       </button>
       {canDelete && (
         <button
