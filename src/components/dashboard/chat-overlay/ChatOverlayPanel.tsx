@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AtSign, Loader2, MessageCircle, Send, X } from 'lucide-react';
+import { AtSign, CheckCheck, Loader2, MessageCircle, Send, X } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useAuth } from '../../../context/AuthContext';
 import { useOrg } from '../../../context/OrgContext';
@@ -11,6 +11,7 @@ import {
   listOrgMembersWithProfile,
   listOrgMessages,
   listProtocolMessages,
+  markAllChatMentionsRead,
   postOrgMessage,
   postProtocolMessage,
   type MentionInboxRow,
@@ -121,6 +122,69 @@ export default function ChatOverlayPanel({
   useDirty('Chat overlay composer', composer.trim().length > 0);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [markingAllRead, setMarkingAllRead] = useState(false);
+
+  // --- Drag-to-dismiss (mobile bottom-sheet only) ---------------------
+  // Track current finger delta; on release, decide between dismiss and
+  // snap-back based on distance + velocity. Desktop bypasses this entirely.
+  const [dragOffsetY, setDragOffsetY] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const dragStartYRef = useRef(0);
+  const dragStartTimeRef = useRef(0);
+
+  const handleDragTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    if (!t) return;
+    dragStartYRef.current = t.clientY;
+    dragStartTimeRef.current = Date.now();
+    setDragging(true);
+  };
+  const handleDragTouchMove = (e: React.TouchEvent) => {
+    if (!dragging) return;
+    const t = e.touches[0];
+    if (!t) return;
+    const delta = t.clientY - dragStartYRef.current;
+    // Clamp to non-negative — dragging up shouldn't shift the sheet
+    // (it'd reveal the underlying page through the gap).
+    setDragOffsetY(Math.max(0, delta));
+  };
+  const handleDragTouchEnd = () => {
+    if (!dragging) return;
+    const distance = dragOffsetY;
+    const elapsed = Math.max(1, Date.now() - dragStartTimeRef.current);
+    const velocity = distance / elapsed; // px/ms
+    const dismissThreshold = window.innerHeight * 0.3;
+    const shouldDismiss = distance >= dismissThreshold || velocity > 0.6;
+    setDragging(false);
+    if (shouldDismiss) {
+      // Slide off-screen, then unmount.
+      setDragOffsetY(window.innerHeight);
+      window.setTimeout(onClose, 180);
+    } else {
+      setDragOffsetY(0);
+    }
+  };
+
+  // Backdrop opacity follows the drag — 1.0 at rest, 0.4 at full dismiss
+  // distance. CSS-only fade keeps the math simple.
+  const backdropOpacity = (() => {
+    const max = window.innerHeight * 0.5;
+    const t = Math.min(1, dragOffsetY / max);
+    return 1 - t * 0.6;
+  })();
+
+  const handleMarkAllRead = async () => {
+    if (markingAllRead) return;
+    setMarkingAllRead(true);
+    const res = await markAllChatMentionsRead();
+    setMarkingAllRead(false);
+    if (!res.ok) {
+      // Surface via send-error slot so we don't add a dedicated banner.
+      setSendError(res.error);
+      return;
+    }
+    setMentions([]);
+  };
 
   // Persist channel changes (except mentions — that one's always a
   // jump-to filter, not a parking spot).
@@ -292,6 +356,7 @@ export default function ChatOverlayPanel({
         className="fixed inset-0 z-40 bg-black/20"
         onClick={onClose}
         aria-hidden="true"
+        style={{ opacity: backdropOpacity }}
       />
       <div
         // Mobile (<md): bottom sheet — slides up from bottom, full width,
@@ -300,13 +365,23 @@ export default function ChatOverlayPanel({
         className={`fixed z-50 flex flex-col ${bg} shadow-xl
           left-0 right-0 bottom-0 top-auto h-[85vh] max-h-[85vh] rounded-t-2xl border-t ${border}
           md:left-auto md:right-0 md:top-0 md:bottom-0 md:h-auto md:max-h-none md:w-full md:max-w-sm md:rounded-none md:border-t-0 md:border-l`}
+        style={{
+          transform: `translateY(${dragOffsetY}px)`,
+          transition: dragging ? 'none' : 'transform 200ms ease',
+        }}
         role="dialog"
         aria-label="Chat"
       >
-        {/* Drag handle — only visible on mobile bottom-sheet. Purely visual
-            for now; touch-drag-to-dismiss can land in a polish follow-up. */}
+        {/* Drag handle — touch-drag-to-dismiss zone on mobile. The handler
+            sits on the wrapper around both the visual handle and the
+            header bar (below) so users can grab either. The message list
+            stays scrollable since its handlers are isolated. */}
         <div
-          className="md:hidden flex justify-center pt-1.5 pb-1"
+          className="md:hidden flex justify-center pt-1.5 pb-1 touch-none"
+          onTouchStart={handleDragTouchStart}
+          onTouchMove={handleDragTouchMove}
+          onTouchEnd={handleDragTouchEnd}
+          onTouchCancel={handleDragTouchEnd}
           aria-hidden="true"
         >
           <span
@@ -315,8 +390,15 @@ export default function ChatOverlayPanel({
             }`}
           />
         </div>
-        {/* Header */}
-        <div className={`flex-shrink-0 flex items-center justify-between px-3 py-2.5 border-b ${border}`}>
+        {/* Header — also a drag surface on mobile (the message list below
+            handles its own touch scrolling so it isn't affected). */}
+        <div
+          className={`flex-shrink-0 flex items-center justify-between px-3 py-2.5 border-b ${border}`}
+          onTouchStart={handleDragTouchStart}
+          onTouchMove={handleDragTouchMove}
+          onTouchEnd={handleDragTouchEnd}
+          onTouchCancel={handleDragTouchEnd}
+        >
           <div className="flex items-center gap-2 min-w-0">
             <MessageCircle size={14} className={isLight ? 'text-[#993C1D]' : 'text-[#F0997B]'} />
             <p className={`${headingColor} text-sm font-semibold truncate`}>{channelLabel}</p>
@@ -382,7 +464,30 @@ export default function ChatOverlayPanel({
                 No mentions yet. When someone @-mentions you, they'll show up here.
               </p>
             ) : (
-              mentions.map((row) => {
+              <>
+                <div className="flex items-center justify-between -mt-1 mb-1">
+                  <span className={`${subColor} text-[11px]`}>
+                    {mentions.length} unread
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleMarkAllRead}
+                    disabled={markingAllRead}
+                    className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md ${
+                      isLight
+                        ? 'text-[#0C447C] hover:bg-[#0C447C]/[0.06]'
+                        : 'text-[#85B7EB] hover:bg-white/[0.05]'
+                    } disabled:opacity-50`}
+                  >
+                    {markingAllRead ? (
+                      <Loader2 size={11} className="animate-spin" />
+                    ) : (
+                      <CheckCheck size={11} />
+                    )}
+                    Mark all read
+                  </button>
+                </div>
+                {mentions.map((row) => {
                 const author = row.mentioned_by_user_id
                   ? nameByUserId.get(row.mentioned_by_user_id) ?? 'Someone'
                   : 'Someone';
@@ -418,7 +523,8 @@ export default function ChatOverlayPanel({
                     </p>
                   </button>
                 );
-              })
+              })}
+              </>
             )
           ) : messages.length === 0 ? (
             <p className={`${subColor} text-xs italic text-center py-4`}>

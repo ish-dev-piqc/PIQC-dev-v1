@@ -496,6 +496,15 @@ export async function markChatMentionsRead(
   return { ok: true, data: undefined };
 }
 
+/** Cross-channel sweep — flips read_at on every unread mention for the
+ *  caller. Used by the chat overlay's Mentions filter, which spans every
+ *  channel the user can see. */
+export async function markAllChatMentionsRead(): Promise<Result<void>> {
+  const { error } = await supabase.rpc('mark_all_chat_mentions_read');
+  if (error) return fail('markAllChatMentionsRead', error);
+  return { ok: true, data: undefined };
+}
+
 /** Hydrated mention rows for the inbox: each carries the message body
  *  preview + channel kind/id so the inbox can render without a per-row
  *  follow-up fetch. RLS on chat_mentions limits visibility to the caller. */
