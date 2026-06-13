@@ -19,6 +19,7 @@ import VisitDetailDrawer from './VisitDetailDrawer';
 import { buildVisitIcsBlob } from '../../../lib/site/calendarExport';
 import { CalendarPlus } from 'lucide-react';
 import VisitConfidenceChip from './VisitConfidenceChip';
+import AuditSignalsBanner from './AuditSignalsBanner';
 import { getProtocolColorsById } from '../../../lib/site/protocolColors';
 import type { SiteVisit, VisitStatus } from '../../../lib/site/types';
 
@@ -208,6 +209,7 @@ export default function VisitsTab() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-5 overflow-y-auto h-full">
+      <AuditSignalsBanner protocolId={activeProtocol.id} />
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>

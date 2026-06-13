@@ -21,6 +21,7 @@ import { buildReportWorkbook } from '../../../lib/site/reportsExport';
 import { buildVisitIcsBlob } from '../../../lib/site/calendarExport';
 import type { SiteVisit } from '../../../lib/site/types';
 import VisitDetailDrawer from './VisitDetailDrawer';
+import AuditSignalsBanner from './AuditSignalsBanner';
 
 // =============================================================================
 // ReportsTab — Site Mode summary metrics, protocol compliance, deviation log.
@@ -279,6 +280,7 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
   return (
     <div className={`${pageBg} h-full overflow-y-auto`}>
       <div className="p-6 max-w-5xl mx-auto space-y-6">
+        {activeProtocol && <AuditSignalsBanner protocolId={activeProtocol.id} />}
 
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">

@@ -17,6 +17,7 @@ import HeatIndicator from '../../heatmap/HeatIndicator';
 import { scoreParticipant } from '../../../lib/heatmap';
 import ParticipantProfileDrawer from './ParticipantProfileDrawer';
 import ParticipantFormDrawer from './ParticipantFormDrawer';
+import AuditSignalsBanner from './AuditSignalsBanner';
 
 // =============================================================================
 // ParticipantsTab — Site Mode list of participants on the active protocol.
@@ -135,6 +136,7 @@ export default function ParticipantsTab() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-5 overflow-y-auto h-full">
+      <AuditSignalsBanner protocolId={activeProtocol.id} />
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
