@@ -33,6 +33,12 @@ export interface UseChannelAttachmentsResult {
   loading: boolean;
   addLocal: (attachment: ChatAttachment) => void;
   removeLocal: (id: string) => void;
+  /** Swap an attachment in place by id — used to apply pin/unpin updates
+   *  without waiting for the channel to remount. The realtime sub
+   *  watches INSERT + DELETE only, so column flips like pinned_at don't
+   *  reach other users until they re-enter the channel; that's a polish
+   *  follow-up (add an UPDATE listener). */
+  replaceLocal: (attachment: ChatAttachment) => void;
 }
 
 export function useChannelAttachments({
@@ -115,5 +121,7 @@ export function useChannelAttachments({
     addLocal: (a) =>
       setAttachments((prev) => (prev.some((x) => x.id === a.id) ? prev : [...prev, a])),
     removeLocal: (id) => setAttachments((prev) => prev.filter((x) => x.id !== id)),
+    replaceLocal: (a) =>
+      setAttachments((prev) => prev.map((x) => (x.id === a.id ? a : x))),
   };
 }
