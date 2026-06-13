@@ -10,9 +10,11 @@ import {
   MoreVertical,
   Pin,
   PinOff,
+  Search,
   Trash2,
   Upload,
 } from 'lucide-react';
+import DocumentPreviewPane from './DocumentPreviewPane';
 import { useTheme } from '../../../context/ThemeContext';
 import { useAuth } from '../../../context/AuthContext';
 import { useOrg } from '../../../context/OrgContext';
@@ -226,9 +228,49 @@ export default function HubDocumentsTab() {
     return rows;
   }, [reductoDocs, uploads, chatAttachments]);
 
+  // --- Search + sort (v2) ----------------------------------------------
+  // Search is a substring filter on filename, debounced via a separate
+  // committed value so we don't re-memoize every keystroke. Sort applies
+  // after search so the visible list is always consistent with what the
+  // user is looking at.
+  type SortMode = 'newest' | 'name' | 'largest';
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortMode, setSortMode] = useState<SortMode>('newest');
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setSearchQuery(searchInput), 150);
+    return () => window.clearTimeout(t);
+  }, [searchInput]);
+
+  const visibleRows = useMemo<UnifiedRow[]>(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const filtered = q
+      ? allRows.filter((r) => r.name.toLowerCase().includes(q))
+      : allRows;
+    const sorted = [...filtered];
+    switch (sortMode) {
+      case 'name':
+        sorted.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+        break;
+      case 'largest':
+        sorted.sort((a, b) => {
+          const av = a.size_bytes ?? -1;
+          const bv = b.size_bytes ?? -1;
+          return bv - av;
+        });
+        break;
+      case 'newest':
+      default:
+        sorted.sort((a, b) => b.created_at.localeCompare(a.created_at));
+        break;
+    }
+    return sorted;
+  }, [allRows, searchQuery, sortMode]);
+
   const pinnedRows = useMemo(
-    () => allRows.filter((r) => r.pinned_at !== null),
-    [allRows],
+    () => visibleRows.filter((r) => r.pinned_at !== null),
+    [visibleRows],
   );
 
   // --- Upload flow ------------------------------------------------------
@@ -264,6 +306,75 @@ export default function HubDocumentsTab() {
       return;
     }
     setUploads((prev) => [res.data, ...prev]);
+  };
+
+  // --- Drag-drop upload (v2) ------------------------------------------
+  // Counter-based detection: dragenter fires once per child, so a naive
+  // boolean flips on/off rapidly when the cursor moves over inner elements.
+  // We track depth and only hide the overlay when depth returns to 0.
+  const [dragDepth, setDragDepth] = useState(0);
+  const dropActive = dragDepth > 0;
+
+  const isFileDrag = (e: React.DragEvent) =>
+    e.dataTransfer?.types?.includes('Files') ?? false;
+
+  const uploadDroppedFile = async (file: File) => {
+    setUploading(true);
+    setError(null);
+    const target =
+      scope === 'org'
+        ? { orgId: activeOrg?.id ?? '' }
+        : activeProtocol
+          ? { protocolId: activeProtocol.id }
+          : null;
+    if (!target) {
+      setError('Pick a protocol or switch to Org-level scope before uploading.');
+      setUploading(false);
+      return;
+    }
+    const res = await uploadProtocolDocument({ file, ...target });
+    setUploading(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    setUploads((prev) => [res.data, ...prev]);
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    setDragDepth((d) => d + 1);
+  };
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    setDragDepth((d) => Math.max(0, d - 1));
+  };
+  const handleDrop = async (e: React.DragEvent) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    setDragDepth(0);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    await uploadDroppedFile(file);
+  };
+
+  // --- Preview pane (v2) ----------------------------------------------
+  const [previewRow, setPreviewRow] = useState<UnifiedRow | null>(null);
+  const openPreview = (row: UnifiedRow) => {
+    // Reducto docs are managed by SOTR and route there; preview pane
+    // is for uploads + chat attachments only.
+    if (row.source === 'reducto') {
+      handleDownload(row);
+      return;
+    }
+    setPreviewRow(row);
   };
 
   // --- Row actions -----------------------------------------------------
@@ -319,8 +430,44 @@ export default function HubDocumentsTab() {
     ? 'bg-[#0F172A]/[0.05] text-[#0F172A] border-[#E2E8F0] font-medium'
     : 'bg-white/[0.06] text-white border-white/20 font-medium';
 
+  const scopeLabel =
+    scope === 'org' ? 'Org-level' : activeProtocol?.code ?? 'this protocol';
+
   return (
-    <div className="space-y-4">
+    <div
+      className="space-y-4 relative"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Drop overlay — full-tab dashed border + caption when a file
+          drag is in progress. Pointer-events:none so the underlying
+          handlers still receive the drop event. */}
+      {dropActive && (
+        <div
+          className={`pointer-events-none absolute inset-0 z-30 rounded-lg border-2 border-dashed flex items-center justify-center ${
+            isLight
+              ? 'border-[#534AB7] bg-[#EEEDFE]/80'
+              : 'border-[#7F77DD] bg-[#1E293B]/80'
+          }`}
+        >
+          <div className="text-center px-4">
+            <Upload
+              size={28}
+              className="mx-auto mb-2"
+              style={{ color: isLight ? '#534AB7' : '#7F77DD' }}
+            />
+            <p className="text-fg-heading text-sm font-semibold">
+              Drop to upload to {scopeLabel}
+            </p>
+            <p className={`${subColor} text-xs mt-0.5`}>
+              Single file at a time
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         <select
@@ -413,7 +560,7 @@ export default function HubDocumentsTab() {
                 <button
                   key={`pin-${row.key}`}
                   type="button"
-                  onClick={() => handleDownload(row)}
+                  onClick={() => openPreview(row)}
                   className={`text-left rounded-md p-2.5 border ${borderClass} ${cardBg} hover:shadow-sm relative`}
                 >
                   <Pin
@@ -440,24 +587,64 @@ export default function HubDocumentsTab() {
         </section>
       )}
 
+      {/* Search + sort row */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className={`relative flex-1 min-w-[180px] max-w-md`}>
+          <Search
+            size={13}
+            className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${labelColor}`}
+          />
+          <input
+            type="search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search documents…"
+            className={`w-full text-xs rounded-md border pl-7 pr-2 py-1.5 ${inputBg} focus:outline-none focus:ring-2 focus:ring-brand-600/30`}
+          />
+        </div>
+        <select
+          value={sortMode}
+          onChange={(e) => setSortMode(e.target.value as SortMode)}
+          aria-label="Sort documents"
+          className={`text-xs rounded-md border px-2 py-1.5 ${inputBg} focus:outline-none focus:ring-2 focus:ring-brand-600/30`}
+        >
+          <option value="newest">Newest</option>
+          <option value="name">Name</option>
+          <option value="largest">Largest</option>
+        </select>
+      </div>
+
       {/* All-docs list */}
       <section>
         <div className={`flex items-center justify-between mb-2 text-[11px] uppercase tracking-wider font-semibold ${labelColor}`}>
-          <span>All documents · {allRows.length}</span>
-          <span className="normal-case tracking-normal text-[11px] font-normal">sort by date</span>
+          <span>
+            All documents · {visibleRows.length}
+            {searchQuery && allRows.length !== visibleRows.length
+              ? ` (of ${allRows.length})`
+              : ''}
+          </span>
+          <span className="normal-case tracking-normal text-[11px] font-normal">
+            sorted by {sortMode === 'newest' ? 'date' : sortMode}
+          </span>
         </div>
-        {loading && allRows.length === 0 ? (
+        {loading && visibleRows.length === 0 ? (
           <p className={`${subColor} text-xs italic px-3 py-6 text-center`}>Loading…</p>
-        ) : allRows.length === 0 ? (
+        ) : visibleRows.length === 0 ? (
           <div className={`rounded-md border ${borderClass} px-4 py-8 text-center`}>
-            <p className="text-fg-body text-sm">No documents in this scope yet.</p>
-            <p className={`${subColor} text-xs mt-1`}>
-              Upload one, or share a file in chat — it'll surface here.
+            <p className="text-fg-body text-sm">
+              {searchQuery
+                ? `No documents match "${searchQuery}".`
+                : 'No documents in this scope yet.'}
             </p>
+            {!searchQuery && (
+              <p className={`${subColor} text-xs mt-1`}>
+                Upload one, or share a file in chat — it'll surface here.
+              </p>
+            )}
           </div>
         ) : (
           <div className={`rounded-md border ${borderClass} divide-y ${borderClass}`}>
-            {allRows.map((row) => {
+            {visibleRows.map((row) => {
               const fam = FAMILY_STYLES[row.family];
               const Icon = fam.Icon;
               const pill = SOURCE_PILLS[row.source];
@@ -480,6 +667,7 @@ export default function HubDocumentsTab() {
                   labelColor={labelColor}
                   subColor={subColor}
                   isLight={isLight}
+                  onOpen={() => openPreview(row)}
                   onDownload={() => handleDownload(row)}
                   onTogglePin={() => handleTogglePin(row)}
                   onDelete={() => handleDelete(row)}
@@ -489,6 +677,9 @@ export default function HubDocumentsTab() {
           </div>
         )}
       </section>
+
+      {/* Preview pane */}
+      <DocumentPreviewPane row={previewRow} onClose={() => setPreviewRow(null)} />
     </div>
   );
 }
@@ -510,6 +701,7 @@ interface DocRowProps {
   labelColor: string;
   subColor: string;
   isLight: boolean;
+  onOpen: () => void;
   onDownload: () => void;
   onTogglePin: () => void;
   onDelete: () => void;
@@ -528,6 +720,7 @@ function DocRow({
   labelColor,
   subColor,
   isLight,
+  onOpen,
   onDownload,
   onTogglePin,
   onDelete,
@@ -536,27 +729,38 @@ function DocRow({
 
   return (
     <div className="flex items-center gap-3 px-3 py-2.5 relative">
-      <div
-        className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
-        style={{ backgroundColor: family.bg, color: family.fg }}
+      {/* Clickable region — icon + name + date opens the preview pane.
+          Action menu sits outside this button so clicking it doesn't
+          also open the preview. */}
+      <button
+        type="button"
+        onClick={onOpen}
+        className={`flex items-center gap-3 flex-1 min-w-0 text-left rounded ${
+          isLight ? 'hover:bg-[#0F172A]/[0.03]' : 'hover:bg-white/[0.03]'
+        } -mx-1 px-1 py-1`}
       >
-        <IconComp size={16} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          {row.pinned_at !== null && (
-            <Pin size={11} style={{ color: '#BA7517' }} aria-label="Pinned" />
-          )}
-          <span className="text-fg-heading text-sm font-medium truncate">{row.name}</span>
-          {isReducto && (
-            <Lock size={11} className={subColor} aria-label="Read-only" />
-          )}
+        <div
+          className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
+          style={{ backgroundColor: family.bg, color: family.fg }}
+        >
+          <IconComp size={16} />
         </div>
-        <p className={`${subColor} text-[11px] mt-0.5`}>
-          {new Date(row.created_at).toLocaleDateString()}
-          {row.size_bytes !== null && ` · ${formatBytes(row.size_bytes)}`}
-        </p>
-      </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            {row.pinned_at !== null && (
+              <Pin size={11} style={{ color: '#BA7517' }} aria-label="Pinned" />
+            )}
+            <span className="text-fg-heading text-sm font-medium truncate">{row.name}</span>
+            {isReducto && (
+              <Lock size={11} className={subColor} aria-label="Read-only" />
+            )}
+          </div>
+          <p className={`${subColor} text-[11px] mt-0.5`}>
+            {new Date(row.created_at).toLocaleDateString()}
+            {row.size_bytes !== null && ` · ${formatBytes(row.size_bytes)}`}
+          </p>
+        </div>
+      </button>
       <span
         className="text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0"
         style={{ backgroundColor: pill.bg, color: pill.fg }}
