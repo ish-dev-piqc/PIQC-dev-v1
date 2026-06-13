@@ -22,6 +22,8 @@ import { buildVisitIcsBlob } from '../../../lib/site/calendarExport';
 import type { SiteVisit } from '../../../lib/site/types';
 import VisitDetailDrawer from './VisitDetailDrawer';
 import AuditSignalsBanner from './AuditSignalsBanner';
+import ProtocolDetailDrawer from './ProtocolDetailDrawer';
+import { Info } from 'lucide-react';
 
 // =============================================================================
 // ReportsTab — Site Mode summary metrics, protocol compliance, deviation log.
@@ -37,6 +39,7 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
   const today = useMemo(() => new Date(), []);
   const todayStr = useMemo(() => today.toISOString().slice(0, 10), [today]);
   const [selectedVisit, setSelectedVisit] = useState<SiteVisit | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const headingColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
@@ -285,8 +288,19 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
+            <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold flex items-center gap-1`}>
               {activeProtocol ? activeProtocol.code : 'All protocols'}
+              {activeProtocol && (
+                <button
+                  type="button"
+                  onClick={() => setDetailOpen(true)}
+                  className="opacity-60 hover:opacity-100"
+                  aria-label="Protocol details"
+                  title="Protocol details"
+                >
+                  <Info size={11} />
+                </button>
+              )}
             </p>
             <h2 className={`${headingColor} text-xl font-semibold mt-0.5`}>Reports</h2>
             <p className={`${subColor} text-sm mt-1`}>
@@ -566,6 +580,13 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
           onNavigateToVisits={onNavigateToVisits}
         />
       )}
+      <ProtocolDetailDrawer
+        protocolId={detailOpen && activeProtocol ? activeProtocol.id : null}
+        protocolCode={activeProtocol?.code ?? null}
+        protocolTitle={activeProtocol?.name ?? null}
+        protocolSponsor={activeProtocol?.sponsor ?? null}
+        onClose={() => setDetailOpen(false)}
+      />
     </div>
   );
 }

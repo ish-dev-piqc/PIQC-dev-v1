@@ -29,7 +29,8 @@ import { getProtocolColorsById } from '../../../lib/site/protocolColors';
 import { fetchVisitTemplates, materializeVisits } from '../../../lib/site/siteApi';
 import AnchorDateModal from './AnchorDateModal';
 import type { SiteVisit, SiteTeamMember, VisitStatus } from '../../../lib/site/types';
-import { ShieldAlert } from 'lucide-react';
+import { Info, ShieldAlert } from 'lucide-react';
+import ProtocolDetailDrawer from './ProtocolDetailDrawer';
 import {
   formatYmd,
   parseYmd,
@@ -216,6 +217,7 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
   const [templateCount, setTemplateCount] = useState(0);
   const [showAnchorModal, setShowAnchorModal] = useState(false);
   const [reprojecting, setReprojecting] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   useEffect(() => {
     if (!activeProtocol) {
@@ -392,7 +394,20 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
             </h2>
             <p className={`${subColor} text-sm`}>
               {formatFullDate(today)}
-              {!isHome && <span className={mutedColor}> · Viewing {activeProtocol.code}</span>}
+              {!isHome && (
+                <span className={`${mutedColor} inline-flex items-center gap-1`}>
+                  {' '}· Viewing {activeProtocol.code}
+                  <button
+                    type="button"
+                    onClick={() => setDetailOpen(true)}
+                    className="opacity-60 hover:opacity-100"
+                    aria-label="Protocol details"
+                    title="Protocol details"
+                  >
+                    <Info size={11} />
+                  </button>
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -658,6 +673,13 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
           onClose={() => setShowAnchorModal(false)}
         />
       )}
+      <ProtocolDetailDrawer
+        protocolId={detailOpen && activeProtocol ? activeProtocol.id : null}
+        protocolCode={activeProtocol?.code ?? null}
+        protocolTitle={activeProtocol?.name ?? null}
+        protocolSponsor={activeProtocol?.sponsor ?? null}
+        onClose={() => setDetailOpen(false)}
+      />
     </div>
   );
 }
