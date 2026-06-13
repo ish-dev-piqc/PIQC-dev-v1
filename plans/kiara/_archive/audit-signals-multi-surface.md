@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: audit-signals-multi-surface
-status: active
+status: merged
+merged: 2026-06-13
 started: 2026-06-13
-target_pr:
+target_pr: #347
 ---
 
 # Audit signals — surface beyond TodayTab
