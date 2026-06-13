@@ -20,6 +20,8 @@ import { buildVisitIcsBlob } from '../../../lib/site/calendarExport';
 import { CalendarPlus } from 'lucide-react';
 import VisitConfidenceChip from './VisitConfidenceChip';
 import AuditSignalsBanner from './AuditSignalsBanner';
+import ProtocolDetailDrawer from './ProtocolDetailDrawer';
+import { Info } from 'lucide-react';
 import { getProtocolColorsById } from '../../../lib/site/protocolColors';
 import type { SiteVisit, VisitStatus } from '../../../lib/site/types';
 
@@ -204,6 +206,8 @@ export default function VisitsTab() {
     return Array.from(map.entries());
   }, [visible, groupMode]);
 
+  const [detailOpen, setDetailOpen] = useState(false);
+
   // Defer the no-protocol guard until after all hooks are declared.
   if (!activeProtocol) return null;
 
@@ -213,8 +217,17 @@ export default function VisitsTab() {
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
+          <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold flex items-center gap-1`}>
             {activeProtocol.code}
+            <button
+              type="button"
+              onClick={() => setDetailOpen(true)}
+              className="opacity-60 hover:opacity-100"
+              aria-label="Protocol details"
+              title="Protocol details"
+            >
+              <Info size={11} />
+            </button>
           </p>
           <h2 className={`${headingColor} text-xl font-semibold mt-1`}>Visits</h2>
           <p className={`${subColor} text-sm mt-1`}>
@@ -476,6 +489,13 @@ export default function VisitsTab() {
           }}
         />
       )}
+      <ProtocolDetailDrawer
+        protocolId={detailOpen ? activeProtocol.id : null}
+        protocolCode={activeProtocol.code}
+        protocolTitle={activeProtocol.name}
+        protocolSponsor={activeProtocol.sponsor}
+        onClose={() => setDetailOpen(false)}
+      />
     </div>
   );
 }

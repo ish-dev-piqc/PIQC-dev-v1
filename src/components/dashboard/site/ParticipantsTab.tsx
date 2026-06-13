@@ -18,6 +18,8 @@ import { scoreParticipant } from '../../../lib/heatmap';
 import ParticipantProfileDrawer from './ParticipantProfileDrawer';
 import ParticipantFormDrawer from './ParticipantFormDrawer';
 import AuditSignalsBanner from './AuditSignalsBanner';
+import ProtocolDetailDrawer from './ProtocolDetailDrawer';
+import { Info } from 'lucide-react';
 
 // =============================================================================
 // ParticipantsTab — Site Mode list of participants on the active protocol.
@@ -113,6 +115,8 @@ export default function ParticipantsTab() {
     return c;
   }, [scoped]);
 
+  const [detailOpen, setDetailOpen] = useState(false);
+
   // Defer the no-protocol guard until after hooks are declared.
   if (!activeProtocol) return null;
 
@@ -140,8 +144,17 @@ export default function ParticipantsTab() {
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
+          <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold flex items-center gap-1`}>
             {activeProtocol.code}
+            <button
+              type="button"
+              onClick={() => setDetailOpen(true)}
+              className="opacity-60 hover:opacity-100"
+              aria-label="Protocol details"
+              title="Protocol details"
+            >
+              <Info size={11} />
+            </button>
           </p>
           <h2 className={`${headingColor} text-xl font-semibold mt-1`}>Participants</h2>
           <p className={`${subColor} text-sm mt-1`}>
@@ -304,6 +317,13 @@ export default function ParticipantsTab() {
           onClose={() => setFormMode(null)}
         />
       )}
+      <ProtocolDetailDrawer
+        protocolId={detailOpen ? activeProtocol.id : null}
+        protocolCode={activeProtocol.code}
+        protocolTitle={activeProtocol.name}
+        protocolSponsor={activeProtocol.sponsor}
+        onClose={() => setDetailOpen(false)}
+      />
     </div>
   );
 }
