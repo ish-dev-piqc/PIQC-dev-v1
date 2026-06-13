@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: rail-narrow-breakpoint
-status: active
+status: merged
+merged: 2026-06-13
 started: 2026-06-13
-target_pr:
+target_pr: #341
 ---
 
 # LeftRail breakpoint — show from sm: (640px) instead of md: (768px)
