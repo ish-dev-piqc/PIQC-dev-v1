@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: documents-tab-v2
-status: active
+status: merged
+merged: 2026-06-13
 started: 2026-06-13
-target_pr:
+target_pr: #335
 ---
 
 # Documents tab v2 — drag-drop, search, preview, sort
