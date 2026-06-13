@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: chat-overlay-polish
-status: active
+status: merged
+merged: 2026-06-13
 started: 2026-06-13
-target_pr:
+target_pr: #337
 ---
 
 # Chat overlay polish — drag-to-dismiss + mark-all-mentions-read
