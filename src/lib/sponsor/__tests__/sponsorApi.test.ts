@@ -3,11 +3,11 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 // Mock the supabase client BEFORE importing the module under test so the
 // import sees the stub. Avoid the live client entirely in unit tests.
 const rpcMock = vi.fn();
-vi.mock('../supabase', () => ({
+vi.mock('../../supabase', () => ({
   supabase: { rpc: (...args: unknown[]) => rpcMock(...args) },
 }));
 
-import { listMySponsorPortfolio } from './sponsorApi';
+import { listMySponsorPortfolio } from '../sponsorApi';
 
 describe('sponsorApi.listMySponsorPortfolio', () => {
   beforeEach(() => {

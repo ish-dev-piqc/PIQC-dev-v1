@@ -3,7 +3,7 @@ import {
   adaptSponsorPortfolio,
   adaptSponsorPortfolioRow,
   type SponsorPortfolioRow,
-} from './sponsorAdapter';
+} from '../sponsorAdapter';
 
 describe('sponsorAdapter', () => {
   const baseRow: SponsorPortfolioRow = {
