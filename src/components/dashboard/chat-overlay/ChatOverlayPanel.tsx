@@ -4,6 +4,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useAuth } from '../../../context/AuthContext';
 import { useOrg } from '../../../context/OrgContext';
 import { useChatNavigation } from '../../../context/ChatNavigationContext';
+import { useDirty } from '../../../context/DirtyStateContext';
 import {
   listMyChatProtocols,
   listMyMentionsWithContext,
@@ -113,6 +114,11 @@ export default function ChatOverlayPanel({
   const [loading, setLoading] = useState(false);
   const [mentions, setMentions] = useState<MentionInboxRow[]>([]);
   const [composer, setComposer] = useState('');
+
+  // Confirm-leave guard — fires when the user tries to switch modes
+  // while the overlay composer has unsaved text. Overlay-toggle itself
+  // remains unguarded since closing the panel preserves draft text.
+  useDirty('Chat overlay composer', composer.trim().length > 0);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
 

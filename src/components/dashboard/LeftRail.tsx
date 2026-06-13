@@ -33,7 +33,12 @@ import type { DashboardTab } from './Dashboard';
 
 interface LeftRailProps {
   dashboardTab: DashboardTab;
+  /** Tab-change call routed through App's guardedNavigate (PR 1b). The
+   *  caller decides whether to confirm-leave on dirty state. */
   onDashboardTabChange: (tab: DashboardTab) => void;
+  /** Mode-change call routed through App's guardedNavigate (PR 1b).
+   *  Optional — falls back to local `setMode` when absent (older callers). */
+  onModeChange?: (mode: DashboardMode) => void;
   /** Toggle the chat overlay open/closed. Wired in PR 4. Optional so
    *  earlier callers don't have to provide it; the icon goes inert when
    *  absent. */
@@ -111,12 +116,14 @@ function isOnHubChatTab(dashboardTab: DashboardTab): boolean {
 export default function LeftRail({
   dashboardTab,
   onDashboardTabChange,
+  onModeChange,
   onChatToggle,
   chatOverlayOpen = false,
 }: LeftRailProps) {
   const { theme } = useTheme();
   const { profile } = useAuth();
-  const { mode, setMode } = useMode();
+  const { mode, setMode: setModeDirect } = useMode();
+  const setMode: (m: DashboardMode) => void = onModeChange ?? setModeDirect;
   const { count: unreadMentionCount } = useUnreadMentionsDisplay();
   const isLight = theme === 'light';
   const active = activeKey(dashboardTab, mode);
