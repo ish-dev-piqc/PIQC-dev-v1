@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: sponsor-mode-v2
-status: active
+status: merged
+merged: 2026-06-13
 started: 2026-06-13
-target_pr:
+target_pr: #349
 ---
 
 # Sponsor mode v2 — protocol drill-in drawer
