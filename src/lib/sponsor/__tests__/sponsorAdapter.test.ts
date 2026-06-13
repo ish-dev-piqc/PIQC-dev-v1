@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   adaptSponsorPortfolio,
   adaptSponsorPortfolioRow,
+  adaptSponsorProtocolDetail,
   type SponsorPortfolioRow,
 } from '../sponsorAdapter';
 
@@ -58,6 +59,58 @@ describe('sponsorAdapter', () => {
       ];
       const out = adaptSponsorPortfolio(rows);
       expect(out.map((r) => r.protocolId)).toEqual(['p-1', 'p-2']);
+    });
+  });
+
+  describe('adaptSponsorProtocolDetail', () => {
+    it('coerces null payload to zeroed buckets', () => {
+      const out = adaptSponsorProtocolDetail(null);
+      expect(out.visitCounts.scheduled).toBe(0);
+      expect(out.enrollment.active).toBe(0);
+      expect(out.recentDeviations).toEqual([]);
+    });
+
+    it('preserves all five visit-count statuses', () => {
+      const out = adaptSponsorProtocolDetail({
+        visit_counts: { scheduled: 3, completed: 7, missed: 1, deviation: 2, overdue: 0 },
+      });
+      expect(out.visitCounts).toEqual({
+        scheduled: 3,
+        completed: 7,
+        missed: 1,
+        deviation: 2,
+        overdue: 0,
+      });
+    });
+
+    it('camelCases enrollment screen_failure → screenFailure', () => {
+      const out = adaptSponsorProtocolDetail({
+        enrollment: { screening: 1, screen_failure: 4, active: 12, completed: 2, withdrawn: 1 },
+      });
+      expect(out.enrollment.screenFailure).toBe(4);
+      expect(out.enrollment.active).toBe(12);
+    });
+
+    it('shapes recent_deviations into camelCase rows', () => {
+      const out = adaptSponsorProtocolDetail({
+        recent_deviations: [
+          {
+            visit_id: 'v-1',
+            date: '2026-06-10',
+            participant_code: 'P-0042',
+            visit_name: 'Day 14',
+            deviation_reason: 'missed window',
+          },
+        ],
+      });
+      expect(out.recentDeviations).toHaveLength(1);
+      expect(out.recentDeviations[0]).toEqual({
+        visitId: 'v-1',
+        date: '2026-06-10',
+        participantCode: 'P-0042',
+        visitName: 'Day 14',
+        deviationReason: 'missed window',
+      });
     });
   });
 });

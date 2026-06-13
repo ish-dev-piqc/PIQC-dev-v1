@@ -4,6 +4,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import { listMySponsorPortfolio } from '../../../lib/sponsor/sponsorApi';
 import type { SponsorPortfolioEntry } from '../../../types/sponsor';
 import SponsorComingSoonPage from '../SponsorComingSoonPage';
+import SponsorProtocolDrawer from './SponsorProtocolDrawer';
 
 // =============================================================================
 // SponsorPage — read-only portfolio view for Sponsor Mode.
@@ -24,6 +25,7 @@ export default function SponsorPage() {
 
   const [entries, setEntries] = useState<SponsorPortfolioEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<SponsorPortfolioEntry | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,9 +99,16 @@ export default function SponsorPage() {
       {/* Cards grid — 1 col mobile, 2 col lg, 3 col xl */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
         {entries.map((entry) => (
-          <PortfolioCard key={entry.protocolId} entry={entry} isLight={isLight} />
+          <PortfolioCard
+            key={entry.protocolId}
+            entry={entry}
+            isLight={isLight}
+            onOpen={() => setSelected(entry)}
+          />
         ))}
       </div>
+
+      <SponsorProtocolDrawer entry={selected} onClose={() => setSelected(null)} />
     </div>
   );
 }
@@ -111,9 +120,10 @@ export default function SponsorPage() {
 interface PortfolioCardProps {
   entry: SponsorPortfolioEntry;
   isLight: boolean;
+  onOpen: () => void;
 }
 
-function PortfolioCard({ entry, isLight }: PortfolioCardProps) {
+function PortfolioCard({ entry, isLight, onOpen }: PortfolioCardProps) {
   const border = isLight ? 'border-[#E2E8F0]' : 'border-white/10';
   const bg = isLight ? 'bg-white' : 'bg-[#0F172A]';
   const subColor = isLight ? 'text-[#334155]/70' : 'text-[#CBD5E1]/55';
@@ -173,16 +183,19 @@ function PortfolioCard({ entry, isLight }: PortfolioCardProps) {
         </div>
       </div>
 
-      {/* Action footer — stubbed in v1 */}
+      {/* Action footer */}
       <div className={`pt-3 border-t ${border} -mb-1`}>
         <button
           type="button"
-          disabled
-          title="Detailed protocol view ships in Sponsor v2."
-          className={`w-full inline-flex items-center justify-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-md border ${border} ${labelColor} cursor-not-allowed`}
+          onClick={onOpen}
+          className={`w-full inline-flex items-center justify-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-md ${
+            isLight
+              ? 'bg-[#534AB7] text-white hover:bg-[#3C3489]'
+              : 'bg-[#7F77DD] text-white hover:bg-[#534AB7]'
+          }`}
         >
           <ExternalLink size={11} />
-          View details (coming soon)
+          View details
         </button>
       </div>
     </div>
