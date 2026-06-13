@@ -38,6 +38,7 @@ import ThreadReplyChip from './chat/ThreadReplyChip';
 import ChatThreadPanel from './chat/ChatThreadPanel';
 import ChatSearchPanel from './chat/ChatSearchPanel';
 import { useChannelAttachments } from '../../../hooks/useChannelAttachments';
+import { useDirty } from '../../../context/DirtyStateContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useSiteData } from '../../../context/SiteDataContext';
 import AttachmentRender from './chat/AttachmentRender';
@@ -532,6 +533,14 @@ export default function ChatTab() {
   const [sendError, setSendError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const wasAtBottomRef = useRef(true);
+
+  // Confirm-leave guard registrations — fires when the user tries to
+  // switch modes mid-edit.
+  useDirty('Chat composer', composer.trim().length > 0);
+  useDirty(
+    'Chat message edit',
+    editingMessageId !== null && editingValue.trim().length > 0,
+  );
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // --- Mention picker --------------------------------------------------------

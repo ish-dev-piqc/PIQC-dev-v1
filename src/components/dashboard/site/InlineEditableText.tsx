@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Pencil, X } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
+import { useDirty } from '../../../context/DirtyStateContext';
 
 // =============================================================================
 // InlineEditableText — click-to-edit free-text field.
@@ -45,6 +46,16 @@ export default function InlineEditableText({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Confirm-leave guard — register only when actively editing AND the
+  // draft diverges from the saved value (typing something that would be
+  // lost on a mode switch).
+  const draftDiverges =
+    editing && draft.trim() !== (value ?? '').trim() && draft.trim().length > 0;
+  useDirty(
+    `Inline edit (${emptyLabel || 'note'})`,
+    draftDiverges,
+  );
 
   useEffect(() => {
     if (editing) textareaRef.current?.focus();

@@ -11,6 +11,8 @@ import Dashboard, { type DashboardTab, type SettingsSection } from './components
 import { ORG_TAB_STORAGE_KEY } from './components/dashboard/organization/OrganizationPage';
 import ChatOverlayPanel from './components/dashboard/chat-overlay/ChatOverlayPanel';
 import LeftRail from './components/dashboard/LeftRail';
+import ConfirmLeaveModal from './components/dashboard/ConfirmLeaveModal';
+import { DirtyStateProvider, useDirtyState } from './context/DirtyStateContext';
 import Login from './components/auth/Login';
 import ForgotPassword from './components/auth/ForgotPassword';
 import ProfileCompletion from './components/auth/ProfileCompletion';
@@ -108,6 +110,23 @@ function AppContent() {
   // filter, restores last channel) or by the Navbar bell (filter='mentions').
   const [chatOverlayOpen, setChatOverlayOpen] = useState(false);
   const [chatOverlayFilter, setChatOverlayFilter] = useState<'mentions' | undefined>(undefined);
+
+  // Confirm-leave guard state. `pendingAction` holds the navigation a user
+  // requested while a dirty surface was registered; the modal renders until
+  // they pick Stay or Discard. Wrapped in an object so the setter never
+  // ambiguates with React's "lazy initial" function-form.
+  const [pendingAction, setPendingAction] = useState<{ run: () => void } | null>(null);
+  const dirtyState = useDirtyState();
+  // Guarded-navigate wrapper used by LeftRail + the Navbar mobile handler.
+  // Read the registry live (not the React-state mirror) so we catch
+  // dirty surfaces that registered in the same render cycle.
+  const guardedNavigate = (action: () => void) => {
+    if (dirtyState.checkNow()) {
+      setPendingAction({ run: action });
+    } else {
+      action();
+    }
+  };
   const { session, loading, profile, profileLoading } = useAuth();
   const { theme } = useTheme();
   const { isRedirecting } = useCheckoutRedirect();
@@ -370,28 +389,32 @@ function AppContent() {
               setChatOverlayOpen(true);
             }}
             onMobileWorkspaceNavigate={(key) => {
-              // Mirrors LeftRail's handleClick. Hidden rail on mobile
-              // routes through this; the desktop rail handles itself.
-              switch (key) {
-                case 'workspace':
-                  setDashboardTab('organization');
-                  return;
-                case 'site':
-                  setMode('site');
-                  if (!SITE_TAB_SET.has(dashboardTab)) setDashboardTab('today');
-                  return;
-                case 'audit':
-                  setMode('audit');
-                  if (!AUDIT_TAB_SET.has(dashboardTab)) setDashboardTab('audit-overview');
-                  return;
-                case 'sponsor':
-                  setDashboardTab('sponsor');
-                  return;
-                case 'chat':
-                  setChatOverlayFilter(undefined);
-                  setChatOverlayOpen((v) => !v);
-                  return;
+              // Mirrors LeftRail's handleClick + routes through the
+              // confirm-leave guard for mode/workspace/sponsor (Chat
+              // overlay is intentionally not guarded).
+              if (key === 'chat') {
+                setChatOverlayFilter(undefined);
+                setChatOverlayOpen((v) => !v);
+                return;
               }
+              guardedNavigate(() => {
+                switch (key) {
+                  case 'workspace':
+                    setDashboardTab('organization');
+                    return;
+                  case 'site':
+                    setMode('site');
+                    if (!SITE_TAB_SET.has(dashboardTab)) setDashboardTab('today');
+                    return;
+                  case 'audit':
+                    setMode('audit');
+                    if (!AUDIT_TAB_SET.has(dashboardTab)) setDashboardTab('audit-overview');
+                    return;
+                  case 'sponsor':
+                    setDashboardTab('sponsor');
+                    return;
+                }
+              });
             }}
           />
           {inviteResult && (
@@ -405,7 +428,8 @@ function AppContent() {
           <div className="flex flex-1 min-h-0">
             <LeftRail
               dashboardTab={dashboardTab}
-              onDashboardTabChange={setDashboardTab}
+              onDashboardTabChange={(tab) => guardedNavigate(() => setDashboardTab(tab))}
+              onModeChange={(m) => guardedNavigate(() => setMode(m))}
               onChatToggle={() => {
                 setChatOverlayOpen((v) => {
                   // When opening, drop any leftover mentions filter so
@@ -433,6 +457,16 @@ function AppContent() {
               onClose={() => {
                 setChatOverlayOpen(false);
                 setChatOverlayFilter(undefined);
+              }}
+            />
+          )}
+          {pendingAction && (
+            <ConfirmLeaveModal
+              dirtyLabels={dirtyState.getLabelsNow()}
+              onStay={() => setPendingAction(null)}
+              onLeave={() => {
+                pendingAction.run();
+                setPendingAction(null);
               }}
             />
           )}
@@ -479,7 +513,9 @@ export default function App() {
                         <AuditProvider>
                           <AuditDataProvider>
                             <HeatmapProvider>
-                              <AppContent />
+                              <DirtyStateProvider>
+                                <AppContent />
+                              </DirtyStateProvider>
                             </HeatmapProvider>
                           </AuditDataProvider>
                         </AuditProvider>
