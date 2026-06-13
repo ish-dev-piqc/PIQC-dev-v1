@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { MessageSquare, LayoutDashboard, Activity, FileText, Database, UserCircle2, Users, CalendarCheck, CreditCard, Bell, Loader2, CheckCircle2, AlertCircle, ClipboardList, type LucideIcon } from 'lucide-react';
 import NotificationsSettings from './NotificationsSettings';
-import SponsorComingSoonPage from './SponsorComingSoonPage';
+import SponsorPage from './sponsor/SponsorPage';
 import DashboardChat from './DashboardChat';
 import KnowledgeBase from './KnowledgeBase';
 import TodayTab from './site/TodayTab';
@@ -796,7 +796,7 @@ export default function Dashboard({
           />
         );
       case 'sponsor':
-        return <SponsorComingSoonPage />;
+        return <SponsorPage />;
       case 'settings':
         return (
           <SettingsTab

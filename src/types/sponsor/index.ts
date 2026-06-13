@@ -13,3 +13,18 @@ export interface SponsorRelationship {
   granted_at: string;
   granted_by: string | null;
 }
+
+// =============================================================================
+// SponsorPortfolioEntry — one row per protocol the caller's sponsor-org
+// has a sponsor_relationships row for. Mirrors the row shape returned by
+// the `list_my_sponsor_portfolio` RPC.
+// =============================================================================
+export interface SponsorPortfolioEntry {
+  protocolId: string;
+  protocolCode: string | null;
+  protocolTitle: string;
+  siteOrgId: string;
+  siteOrgName: string;
+  participantCount: number;
+  lastVisitAt: string | null; // ISO date (YYYY-MM-DD) or null when no visits yet
+}
