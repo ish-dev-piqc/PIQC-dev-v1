@@ -1,4 +1,7 @@
-import type { SponsorPortfolioEntry } from '../../types/sponsor';
+import type {
+  SponsorPortfolioEntry,
+  SponsorProtocolDetail,
+} from '../../types/sponsor';
 
 // =============================================================================
 // sponsorAdapter — pure mappers between the `list_my_sponsor_portfolio` RPC
@@ -34,4 +37,65 @@ export function adaptSponsorPortfolioRow(row: SponsorPortfolioRow): SponsorPortf
 
 export function adaptSponsorPortfolio(rows: SponsorPortfolioRow[]): SponsorPortfolioEntry[] {
   return rows.map(adaptSponsorPortfolioRow);
+}
+
+// ---------------------------------------------------------------------------
+// SponsorProtocolDetail — JSONB returned by get_sponsor_protocol_detail.
+// ---------------------------------------------------------------------------
+
+interface RawSponsorProtocolDetail {
+  visit_counts?: {
+    scheduled?: number | null;
+    completed?: number | null;
+    missed?: number | null;
+    deviation?: number | null;
+    overdue?: number | null;
+  } | null;
+  enrollment?: {
+    screening?: number | null;
+    screen_failure?: number | null;
+    active?: number | null;
+    completed?: number | null;
+    withdrawn?: number | null;
+  } | null;
+  recent_deviations?: Array<{
+    visit_id: string;
+    date: string;
+    participant_code: string | null;
+    visit_name: string | null;
+    deviation_reason: string | null;
+  }> | null;
+}
+
+/** Adapt the JSONB blob from `get_sponsor_protocol_detail` into the
+ *  camelCase TS shape the drawer consumes. Tolerates partially-null
+ *  payloads — coerces every count to 0 and missing arrays to []. */
+export function adaptSponsorProtocolDetail(raw: unknown): SponsorProtocolDetail {
+  const r = (raw ?? {}) as RawSponsorProtocolDetail;
+  const vc = r.visit_counts ?? {};
+  const en = r.enrollment ?? {};
+  const devs = r.recent_deviations ?? [];
+  return {
+    visitCounts: {
+      scheduled: vc.scheduled ?? 0,
+      completed: vc.completed ?? 0,
+      missed: vc.missed ?? 0,
+      deviation: vc.deviation ?? 0,
+      overdue: vc.overdue ?? 0,
+    },
+    enrollment: {
+      screening: en.screening ?? 0,
+      screenFailure: en.screen_failure ?? 0,
+      active: en.active ?? 0,
+      completed: en.completed ?? 0,
+      withdrawn: en.withdrawn ?? 0,
+    },
+    recentDeviations: devs.map((d) => ({
+      visitId: d.visit_id,
+      date: d.date,
+      participantCode: d.participant_code,
+      visitName: d.visit_name,
+      deviationReason: d.deviation_reason,
+    })),
+  };
 }

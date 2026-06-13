@@ -1,7 +1,11 @@
 import { supabase } from '../supabase';
-import type { SponsorPortfolioEntry } from '../../types/sponsor';
+import type {
+  SponsorPortfolioEntry,
+  SponsorProtocolDetail,
+} from '../../types/sponsor';
 import {
   adaptSponsorPortfolio,
+  adaptSponsorProtocolDetail,
   type SponsorPortfolioRow,
 } from './sponsorAdapter';
 
@@ -28,4 +32,14 @@ export async function listMySponsorPortfolio(): Promise<Result<SponsorPortfolioE
   if (error) return fail('listMySponsorPortfolio', error);
   const rows = (data ?? []) as SponsorPortfolioRow[];
   return { ok: true, data: adaptSponsorPortfolio(rows) };
+}
+
+export async function getSponsorProtocolDetail(
+  protocolId: string,
+): Promise<Result<SponsorProtocolDetail>> {
+  const { data, error } = await supabase.rpc('get_sponsor_protocol_detail', {
+    p_protocol_id: protocolId,
+  });
+  if (error) return fail('getSponsorProtocolDetail', error);
+  return { ok: true, data: adaptSponsorProtocolDetail(data) };
 }

@@ -28,3 +28,39 @@ export interface SponsorPortfolioEntry {
   participantCount: number;
   lastVisitAt: string | null; // ISO date (YYYY-MM-DD) or null when no visits yet
 }
+
+// =============================================================================
+// SponsorProtocolDetail — drill-in payload from `get_sponsor_protocol_detail`.
+// Three buckets unioned into a single object so the drawer can render
+// without per-section fetches.
+// =============================================================================
+
+export interface SponsorVisitCounts {
+  scheduled: number;
+  completed: number;
+  missed: number;
+  deviation: number;
+  overdue: number;
+}
+
+export interface SponsorEnrollment {
+  screening: number;
+  screenFailure: number;
+  active: number;
+  completed: number;
+  withdrawn: number;
+}
+
+export interface SponsorRecentDeviation {
+  visitId: string;
+  date: string; // YYYY-MM-DD
+  participantCode: string | null;
+  visitName: string | null;
+  deviationReason: string | null;
+}
+
+export interface SponsorProtocolDetail {
+  visitCounts: SponsorVisitCounts;
+  enrollment: SponsorEnrollment;
+  recentDeviations: SponsorRecentDeviation[];
+}

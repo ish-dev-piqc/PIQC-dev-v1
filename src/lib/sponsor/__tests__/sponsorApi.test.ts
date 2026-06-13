@@ -7,7 +7,7 @@ vi.mock('../../supabase', () => ({
   supabase: { rpc: (...args: unknown[]) => rpcMock(...args) },
 }));
 
-import { listMySponsorPortfolio } from '../sponsorApi';
+import { getSponsorProtocolDetail, listMySponsorPortfolio } from '../sponsorApi';
 
 describe('sponsorApi.listMySponsorPortfolio', () => {
   beforeEach(() => {
@@ -63,5 +63,45 @@ describe('sponsorApi.listMySponsorPortfolio', () => {
       expect(res.error).toContain('listMySponsorPortfolio');
       expect(res.error).toContain('permission denied');
     }
+  });
+});
+
+describe('sponsorApi.getSponsorProtocolDetail', () => {
+  beforeEach(() => {
+    rpcMock.mockReset();
+  });
+
+  it('adapts the JSONB payload on success', async () => {
+    rpcMock.mockResolvedValueOnce({
+      data: {
+        visit_counts: { scheduled: 2, completed: 5, missed: 0, deviation: 1, overdue: 0 },
+        enrollment: { screening: 1, screen_failure: 0, active: 8, completed: 0, withdrawn: 0 },
+        recent_deviations: [],
+      },
+      error: null,
+    });
+    const res = await getSponsorProtocolDetail('p-1');
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data.visitCounts.completed).toBe(5);
+    expect(res.data.enrollment.active).toBe(8);
+    expect(res.data.recentDeviations).toEqual([]);
+  });
+
+  it('coerces null payload to zeroed buckets', async () => {
+    rpcMock.mockResolvedValueOnce({ data: null, error: null });
+    const res = await getSponsorProtocolDetail('p-1');
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.data.visitCounts.scheduled).toBe(0);
+  });
+
+  it('surfaces insufficient_privilege as Result.fail', async () => {
+    rpcMock.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'Not authorized to view this protocol' },
+    });
+    const res = await getSponsorProtocolDetail('p-1');
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toContain('Not authorized');
   });
 });
