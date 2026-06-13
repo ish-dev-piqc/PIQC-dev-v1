@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: today-tab-v2
-status: active
+status: merged
+merged: 2026-06-13
 started: 2026-06-04
-target_pr:
+target_pr: #333
 ---
 
 # Today tab v2 — calendar + happening-now + needs-your-attention
