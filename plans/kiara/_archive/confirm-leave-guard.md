@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: confirm-leave-guard
-status: active
+status: merged
+merged: 2026-06-13
 started: 2026-06-04
-target_pr:
+target_pr: #331
 ---
 
 # Confirm-leave guard (PR 1b — workspace-first safety net)
