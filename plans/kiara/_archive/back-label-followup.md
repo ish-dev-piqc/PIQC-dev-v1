@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: back-label-followup
-status: active
+status: merged
+merged: 2026-06-14
 started: 2026-06-13
-target_pr:
+target_pr: #365
 ---
 
 # Back-label follow-up — LeftRail nav must save previousDashboardTab
