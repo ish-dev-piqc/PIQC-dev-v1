@@ -1,9 +1,10 @@
+import { Fragment } from 'react';
 import {
   LayoutGrid,
   ClipboardList,
   ShieldCheck,
   Building2,
-  MessageCircle,
+  Hash,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -63,7 +64,7 @@ const ITEMS: ReadonlyArray<RailItem> = [
   { key: 'site', label: 'Site mode', icon: ClipboardList },
   { key: 'audit', label: 'Audit mode', icon: ShieldCheck },
   { key: 'sponsor', label: 'Sponsor mode (coming soon)', icon: Building2, soon: true },
-  { key: 'chat', label: 'Chat', icon: MessageCircle },
+  { key: 'chat', label: 'Chat', icon: Hash },
 ];
 
 /** Per-icon palette. Inline hex matches the workspace-first brainstorm
@@ -195,9 +196,8 @@ export default function LeftRail({
               dimmed ? 'opacity-35' : ''
             }`;
         return (
-          <>
+          <Fragment key={item.key}>
             <button
-              key={item.key}
               type="button"
               onClick={() => handleClick(item.key)}
               className={buttonClass}
@@ -232,25 +232,32 @@ export default function LeftRail({
                 splits into: Workspace · Modes · Tool (Chat). */}
             {(idx === 0 || idx === 3) && (
               <span
-                key={`div-${idx}`}
                 className={`block w-6 h-px ${dividerBg} my-1`}
                 aria-hidden="true"
               />
             )}
-          </>
+          </Fragment>
         );
       })}
 
       <span className="flex-1" />
 
-      <div
-        className={`flex items-center justify-center w-8 h-8 rounded-full text-[11px] font-medium ${
-          isLight ? 'bg-[#E2E8F0] text-[#334155]' : 'bg-white/10 text-[#CBD5E1]'
+      {/* Avatar — clicking routes to Settings (Account section). Keeps
+          the rail feeling fully interactive instead of having a dead
+          terminal element. */}
+      <button
+        type="button"
+        onClick={() => onDashboardTabChange('settings')}
+        className={`flex items-center justify-center w-8 h-8 rounded-full text-[11px] font-medium transition-colors ${
+          isLight
+            ? 'bg-[#E2E8F0] text-[#334155] hover:bg-[#CBD5E1]'
+            : 'bg-white/10 text-[#CBD5E1] hover:bg-white/15'
         }`}
-        aria-label="Your profile"
+        aria-label="Open settings"
+        title="Settings"
       >
         {initials}
-      </div>
+      </button>
     </aside>
   );
 }
