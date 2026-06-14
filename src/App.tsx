@@ -329,6 +329,27 @@ function AppContent() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  /** Route to a new dashboardTab and, when the destination is a
+   *  cross-mode surface that the back button restores from
+   *  ('organization' / 'settings'), remember the previous tab so the
+   *  back button can land the user where they came from.
+   *
+   *  Every nav path that targets organization/settings — LeftRail
+   *  click, Navbar mobile workspace, deep-link handlers — should go
+   *  through this so previousDashboardTab is kept fresh. Direct
+   *  `setDashboardTab` calls are fine for in-mode tab switches that
+   *  don't have a back button. */
+  const navigateToTab = (tab: DashboardTab) => {
+    if (
+      (tab === 'organization' || tab === 'settings') &&
+      dashboardTab !== 'organization' &&
+      dashboardTab !== 'settings'
+    ) {
+      setPreviousDashboardTab(dashboardTab);
+    }
+    setDashboardTab(tab);
+  };
+
   // Human-readable label for the OrganizationPage back button.
   // Mirrors the `DashboardTab` union — keep in sync if new tabs land.
   const BACK_LABELS: Record<DashboardTab, string> = {
@@ -419,7 +440,7 @@ function AppContent() {
               guardedNavigate(() => {
                 switch (key) {
                   case 'workspace':
-                    setDashboardTab('organization');
+                    navigateToTab('organization');
                     return;
                   case 'site':
                     setMode('site');
@@ -447,7 +468,7 @@ function AppContent() {
           <div className="flex flex-1 min-h-0">
             <LeftRail
               dashboardTab={dashboardTab}
-              onDashboardTabChange={(tab) => guardedNavigate(() => setDashboardTab(tab))}
+              onDashboardTabChange={(tab) => guardedNavigate(() => navigateToTab(tab))}
               onModeChange={(m) => guardedNavigate(() => setMode(m))}
               onChatToggle={() => {
                 setChatOverlayOpen((v) => {
