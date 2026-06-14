@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: chrome-icons-and-hamburger
-status: active
+status: merged
+merged: 2026-06-14
 started: 2026-06-13
-target_pr:
+target_pr: #357
 ---
 
 # Chrome polish — chat icon swap + collapsible hamburger
