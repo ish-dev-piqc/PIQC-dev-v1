@@ -172,9 +172,11 @@ export default function LeftRail({
 
   return (
     <aside
-      // Hidden below `md` — mobile users get the same mode-switching via
-      // the Navbar's mobile menu (see Navbar.tsx Workspace section).
-      className={`hidden md:flex flex-col items-center flex-shrink-0 w-14 py-3 gap-1 border-r ${railBg} ${railBorder}`}
+      // Hidden below 480px — phone-class only. Anything wider (split-
+      // screen laptops, narrow browser windows, tablets) gets the rail.
+      // Match Navbar's `min-[480px]:hidden` hamburger toggle so the two
+      // never overlap.
+      className={`hidden min-[480px]:flex flex-col items-center flex-shrink-0 w-14 py-3 gap-1 border-r ${railBg} ${railBorder}`}
       aria-label="Mode navigation"
     >
       {ITEMS.map((item, idx) => {
