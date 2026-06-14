@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: site-mode-empty-state-polish
-status: active
+status: merged
+merged: 2026-06-14
 started: 2026-06-13
-target_pr:
+target_pr: #353
 ---
 
 # Site Mode polish — empty-state CTAs
