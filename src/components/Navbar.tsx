@@ -516,7 +516,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
           </div>
 
           {isDashboard ? (
-            <nav className="hidden sm:flex items-center gap-2">
+            <nav className="hidden min-[480px]:flex items-center gap-2">
               {/* Mentions inbox bell — primary entry to the cross-channel
                   mention list. Amber dot when there are unread mentions
                   anywhere. */}
@@ -692,7 +692,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
               </div>
             </nav>
           ) : (
-            <nav className="hidden sm:flex items-center gap-1">
+            <nav className="hidden min-[480px]:flex items-center gap-1">
               {navLinks.map((link) => (
                 <a key={link.label} href={link.href} className={navLinkClass}>
                   {link.label}
@@ -733,7 +733,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
             </nav>
           )}
 
-          <div className="sm:hidden flex items-center gap-1">
+          <div className="min-[480px]:hidden flex items-center gap-1">
             <button
               ref={mobileToggleRef}
               className={`p-2 rounded-lg ${isLight ? 'text-[#334155]/70 hover:text-[#0F172A] hover:bg-[#0F172A]/[0.06]' : 'text-[#CBD5E1]/70 hover:text-white hover:bg-white/[0.06]'} transition-colors`}
@@ -747,7 +747,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
       </div>
 
       {mobileOpen && (
-        <div ref={mobileMenuRef} className={`sm:hidden ${mobileBg}`}>
+        <div ref={mobileMenuRef} className={`min-[480px]:hidden ${mobileBg}`}>
           {isDashboard ? (
             <>
               <div className={`px-3 py-2.5 border-b ${isLight ? 'border-[#E2E8F0]' : 'border-white/[0.06]'} mb-1`}>
