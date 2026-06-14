@@ -177,7 +177,14 @@ export default function LeftRail({
       // screen laptops, narrow browser windows, tablets) gets the rail.
       // Match Navbar's `min-[480px]:hidden` hamburger toggle so the two
       // never overlap.
-      className={`hidden min-[480px]:flex flex-col items-center flex-shrink-0 w-14 py-3 gap-1 border-r ${railBg} ${railBorder}`}
+      //
+      // pt-20: 64px clearance for the fixed top navbar (h-16) + 16px
+      // breathing room. Without this, the first item (Workspace) sits
+      // under the navbar and is invisible to the user. The Dashboard
+      // body uses pt-16 for the same reason; this matches with an
+      // extra 16px so the rail's first icon visually breathes below
+      // the banner.
+      className={`hidden min-[480px]:flex flex-col items-center flex-shrink-0 w-14 pt-20 pb-3 gap-1 border-r ${railBg} ${railBorder}`}
       aria-label="Mode navigation"
     >
       {ITEMS.map((item, idx) => {

@@ -77,6 +77,13 @@ Also fixes a latent React warning: `LeftRail` mapped items with
 require the long form `<Fragment key={...}>`. Switched to that. No
 visible behavior change — just removes the warning.
 
+**Plus the actual reason the Workspace icon wasn't visible:** the
+LeftRail's `py-3` padding meant its first item sat at y=12, fully
+under the fixed `h-16` navbar (which overlays the first 64px of the
+viewport via `fixed top-0 z-50`). Dashboard's body already clears
+the navbar with `pt-16`; the rail didn't. Changed `py-3` →
+`pt-20 pb-3` so the rail starts at y=80 — 16px below the navbar.
+
 ## Scope (files allowed)
 
 ### New
