@@ -1414,12 +1414,12 @@ export default function ChatTab() {
                 ? 'text-amber-700 hover:bg-amber-100'
                 : 'text-amber-300 hover:bg-amber-500/[0.1]'
             }`}
-            aria-label="View decisions for this channel"
-            title="Decisions"
+            aria-label="View draft decisions for this channel"
+            title="Draft decisions"
           >
             <ClipboardCheck size={12} />
             <span className="hidden sm:inline">
-              {decisions.length} decision{decisions.length === 1 ? '' : 's'}
+              {decisions.length} draft decision{decisions.length === 1 ? '' : 's'}
             </span>
             <span className="sm:hidden">{decisions.length}</span>
           </button>
