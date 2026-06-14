@@ -256,9 +256,21 @@ export default function ParticipantsTab() {
               : search
                 ? 'No participants match your search.'
                 : scoped.length === 0
-                  ? "No participants yet. They aren't pulled from the protocol PDF — add each one as they enroll. Click “New participant” to start."
+                  ? "No participants yet. They aren't pulled from the protocol PDF — add each one as they enroll."
                   : 'No participants in this status.'}
           </p>
+          {!loading && !search && scoped.length === 0 && (
+            <button
+              type="button"
+              onClick={() => setFormMode('create')}
+              className={`mt-4 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md text-white transition-colors ${
+                isLight ? 'bg-brand-600 hover:bg-brand-800' : 'bg-brand-300 hover:bg-brand-400'
+              }`}
+            >
+              <Plus size={13} />
+              Add first participant
+            </button>
+          )}
         </div>
       ) : (
         <div className={`${cardBg} border rounded-xl overflow-hidden`}>

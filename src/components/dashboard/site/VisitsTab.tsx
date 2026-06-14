@@ -434,6 +434,20 @@ export default function VisitsTab() {
                   ? 'No visits scheduled for this protocol yet.'
                   : 'No visits in this status.'}
           </p>
+          {!loading && !search && scoped.length === 0 && (
+            <button
+              type="button"
+              onClick={() => setScheduleFormOpen(true)}
+              className={`mt-4 inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
+                isLight
+                  ? 'bg-brand-600 text-white hover:bg-brand-800'
+                  : 'bg-brand-300 text-[#0F172A] hover:bg-brand-700'
+              }`}
+            >
+              <Plus size={13} />
+              Schedule a visit
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-4">
