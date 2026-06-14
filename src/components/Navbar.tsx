@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Menu, X, LogOut, ChevronDown, ChevronRight, User, Home, Sun, Moon, ClipboardList, Flame, UserCircle2, CreditCard, Beaker, Building2, Plus, Users, AtSign, LayoutGrid, ShieldCheck, Hash } from 'lucide-react';
+import { Menu, X, LogOut, ChevronDown, ChevronRight, User, Home, Sun, Moon, ClipboardList, Flame, UserCircle2, CreditCard, Beaker, Building2, Plus, Users, Bell, LayoutGrid, ShieldCheck, Hash } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useMode } from '../context/ModeContext';
@@ -540,7 +540,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                 }
                 title="Mentions"
               >
-                <AtSign size={15} />
+                <Bell size={15} />
                 {unreadMentionCount > 0 && (
                   <span
                     className={`absolute top-1 right-1 w-2 h-2 rounded-full ${
@@ -610,7 +610,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                             className={`ml-auto inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${isLight ? 'bg-amber-500 text-white' : 'bg-amber-400 text-[#0F172A]'}`}
                             title={`${unreadMentionCount} unread @mention${unreadMentionCount === 1 ? '' : 's'}`}
                           >
-                            @{unreadMentionDisplay}
+                            {unreadMentionDisplay}
                           </span>
                         )}
                       </button>
@@ -835,7 +835,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                     Chat
                     {unreadMentionCount > 0 && (
                       <span className={`ml-auto inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${isLight ? 'bg-[#D85A30] text-white' : 'bg-[#F0997B] text-[#4A1B0C]'}`}>
-                        @{unreadMentionDisplay}
+                        {unreadMentionDisplay}
                       </span>
                     )}
                   </button>
@@ -855,7 +855,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                     className={`ml-auto inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${isLight ? 'bg-amber-500 text-white' : 'bg-amber-400 text-[#0F172A]'}`}
                     title={`${unreadMentionCount} unread @mention${unreadMentionCount === 1 ? '' : 's'}`}
                   >
-                    @{unreadMentionDisplay}
+                    {unreadMentionDisplay}
                   </span>
                 )}
               </button>

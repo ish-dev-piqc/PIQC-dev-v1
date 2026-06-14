@@ -52,6 +52,9 @@ export type OrgTab =
 
 interface OrganizationPageProps {
   onExit?: () => void;
+  /** Label for the back button (e.g. "Today", "Participants"). Defaults
+   *  to "Dashboard" when omitted. */
+  exitLabel?: string;
   /** Routed from App.tsx so mode-tile clicks inside Today can switch to
    *  the chosen dashboard tab (e.g. Sponsor → 'sponsor'). */
   onDashboardTabChange?: (tab: DashboardTab) => void;
@@ -94,7 +97,7 @@ const BASE_TABS: { id: OrgTab; label: string; icon: typeof UsersIcon }[] = [
   { id: 'team', label: 'Team', icon: ClipboardList },
 ];
 
-export default function OrganizationPage({ onExit, onDashboardTabChange }: OrganizationPageProps) {
+export default function OrganizationPage({ onExit, exitLabel, onDashboardTabChange }: OrganizationPageProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
   const { activeOrg } = useOrg();
@@ -162,10 +165,10 @@ export default function OrganizationPage({ onExit, onDashboardTabChange }: Organ
               type="button"
               onClick={() => onExit?.()}
               className={`flex items-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border transition-all duration-150 whitespace-nowrap ${exitButtonClass}`}
-              aria-label="Back to dashboard"
+              aria-label={`Back to ${exitLabel ?? 'Dashboard'}`}
             >
               <ArrowLeft size={15} />
-              Dashboard
+              Back to {exitLabel ?? 'Dashboard'}
             </button>
             <div className={`w-px h-6 mx-1 ${isLight ? 'bg-[#E2E8F0]' : 'bg-white/10'}`} />
             {tabs.map((t) => {
@@ -189,7 +192,7 @@ export default function OrganizationPage({ onExit, onDashboardTabChange }: Organ
                       }`}
                       title={`${unreadMentionCount} unread @mention${unreadMentionCount === 1 ? '' : 's'}`}
                     >
-                      @{unreadMentionDisplay}
+                      {unreadMentionDisplay}
                     </span>
                   )}
                 </button>
