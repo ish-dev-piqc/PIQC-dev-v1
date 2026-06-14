@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: draft-decision-rename
-status: active
+status: merged
+merged: 2026-06-14
 started: 2026-06-13
-target_pr:
+target_pr: #363
 ---
 
 # Rename "Decision" → "Draft decision" in chat surface UI
