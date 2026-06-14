@@ -580,7 +580,7 @@ export default function HubTodayTab({ onChangeDashboardTab }: HubTodayTabProps) 
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-fg-label text-[10px] uppercase tracking-wider font-semibold flex items-center gap-1.5">
                 <CheckCircle2 size={11} />
-                Decisions awaiting your ack ({pendingAcks.length})
+                Draft decisions awaiting your ack ({pendingAcks.length})
               </h3>
             </div>
             {pendingAcks.length === 0 ? (

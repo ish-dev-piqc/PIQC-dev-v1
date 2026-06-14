@@ -170,7 +170,7 @@ export default function DecisionPromoteModal({
             className={`${headingColor} text-sm font-semibold inline-flex items-center gap-2`}
           >
             <ClipboardCheck size={15} className={isLight ? 'text-amber-600' : 'text-amber-400'} />
-            Promote to decision
+            Promote to draft decision
           </h3>
           <button
             type="button"
@@ -185,9 +185,10 @@ export default function DecisionPromoteModal({
         <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-y-auto px-5 py-4 gap-4">
           <div>
             <p className={`${subColor} text-xs leading-relaxed`}>
-              Captures this message as a durable, audit-trail decision. The original
-              chat message stays in place; the decision can survive the message
-              being deleted later.
+              Captures this message as a durable, audit-trail draft decision.
+              The original chat message stays in place; the draft can survive
+              the message being deleted later. "Draft" because PIQClinical
+              records what your team decided — it doesn't certify the call.
             </p>
           </div>
 
@@ -262,8 +263,9 @@ export default function DecisionPromoteModal({
               Require acknowledgment from (optional)
             </label>
             <p className={`${subColor} text-[11px] leading-relaxed mb-2`}>
-              Selected users must explicitly acknowledge the decision before
-              it shows as complete. Leave empty for informational decisions.
+              Selected users must explicitly acknowledge the draft decision
+              before it shows as complete. Leave empty for informational
+              drafts.
             </p>
             <div
               className={`max-h-40 overflow-y-auto rounded-md border ${border} divide-y ${
