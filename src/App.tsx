@@ -329,6 +329,25 @@ function AppContent() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Human-readable label for the OrganizationPage back button.
+  // Mirrors the `DashboardTab` union — keep in sync if new tabs land.
+  const BACK_LABELS: Record<DashboardTab, string> = {
+    today: 'Today',
+    overview: 'Overview',
+    visits: 'Visits',
+    participants: 'Participants',
+    reports: 'Reports',
+    'visit-execution': 'Visit execution',
+    'audit-overview': 'Audit overview',
+    chat: 'Chat',
+    knowledge: 'Knowledge base',
+    workflows: 'Workflows',
+    organization: 'Workspace',
+    sponsor: 'Sponsor mode',
+    settings: 'Settings',
+  };
+  const backLabel = BACK_LABELS[previousDashboardTab] ?? 'Dashboard';
+
   const pageBg = theme === 'light' ? 'bg-[#F8FAFC]' : 'bg-[#070d1a]';
   const textColor = theme === 'light' ? 'text-[#0F172A]' : 'text-white';
 
@@ -447,6 +466,7 @@ function AppContent() {
                 settingsSection={settingsSection}
                 onSettingsSectionChange={setSettingsSection}
                 onExitOrganization={handleExitOrganization}
+                exitLabel={backLabel}
                 onNavigateToOrgTeam={handleNavigateToOrgTeam}
               />
             </div>

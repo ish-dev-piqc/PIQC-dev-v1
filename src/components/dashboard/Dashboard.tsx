@@ -665,6 +665,10 @@ interface DashboardProps {
   settingsSection?: SettingsSection;
   onSettingsSectionChange?: (section: SettingsSection) => void;
   onExitOrganization?: () => void;
+  /** Human-readable label for the OrganizationPage back button —
+   *  computed in App.tsx from `previousDashboardTab`. Falls back to
+   *  "Dashboard" when omitted. */
+  exitLabel?: string;
   // Lands the Organization page on its Team tab — used by Today's
   // cert-warning band so admins jump straight to fixing the cert. App.tsx
   // writes 'team' to localStorage before calling this; OrganizationPage's
@@ -678,6 +682,7 @@ export default function Dashboard({
   settingsSection,
   onSettingsSectionChange,
   onExitOrganization,
+  exitLabel,
   onNavigateToOrgTeam,
 }: DashboardProps) {
   const [internalActiveTab, setInternalActiveTab] = useState<DashboardTab>('overview');
@@ -789,6 +794,7 @@ export default function Dashboard({
         return (
           <OrganizationPage
             onExit={onExitOrganization}
+            exitLabel={exitLabel}
             onDashboardTabChange={(tab) => {
               onTabChange?.(tab);
               if (!onTabChange) setInternalActiveTab(tab);
