@@ -96,13 +96,15 @@ describe('fetchVisitExecutionWorkspaces — mock on', () => {
     }
 
     // At least one visit has a non-empty completeness_signals array
-    // (Week 6 visit seeds one — exercising the new VisitCompletenessSignal shape).
-    const weekSix = result.data.find((w) => w.snapshot.visit_name === 'Week 6 visit');
-    expect(weekSix).toBeDefined();
-    if (weekSix) {
-      expect(weekSix.snapshot.completeness_signal_count).toBeGreaterThan(0);
-      expect(weekSix.snapshot.completeness_signals.length).toBeGreaterThan(0);
-      const signal = weekSix.snapshot.completeness_signals[0];
+    // (the Cycle 4 + CIPN visit seeds one — exercising the VisitCompletenessSignal shape).
+    const seeded = result.data.find(
+      (w) => w.snapshot.visit_name === 'Cycle 4 Day 1 + CIPN assessment',
+    );
+    expect(seeded).toBeDefined();
+    if (seeded) {
+      expect(seeded.snapshot.completeness_signal_count).toBeGreaterThan(0);
+      expect(seeded.snapshot.completeness_signals.length).toBeGreaterThan(0);
+      const signal = seeded.snapshot.completeness_signals[0];
       expect(signal.gap_text).toBeTruthy();
       expect(signal.detection_confidence).toMatch(/^(high|medium|low|needs_review)$/);
       // detected_at is a real ISO string, not the hard-coded 2026-05-26 placeholder.

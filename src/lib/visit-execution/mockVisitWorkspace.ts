@@ -621,17 +621,17 @@ function brighten2EndOfStudyItems(visitTplId: string): VisitExecutionItem[] {
 
 const BRIGHTEN2_PURPOSES: Record<string, string> = {
   Screening:
-    'Confirm eligibility, obtain consent, and capture the baseline data needed before the participant can be enrolled.',
-  'Day 1 baseline':
-    'Establish pre-treatment baseline, dispense the first study drug supply, and observe the first dose under direct supervision.',
-  'Week 1 visit':
-    'First post-dose safety and tolerability check. Reconcile drug accountability and dispense the next supply.',
-  'Week 2 visit':
-    'Routine safety follow-up. Lab panel, AE review, and continued drug accountability.',
-  'Week 6 visit':
-    'Mid-treatment efficacy assessment. PRO questionnaires alongside the usual safety battery.',
-  'End of study':
-    'Final assessments, drug reconciliation, and discharge. Post-study safety follow-up scheduled if AE-driven.',
+    'Confirm eligibility, obtain consent, and capture the baseline data (incl. baseline CIPN) needed before the participant can be enrolled.',
+  'Cycle 1 Day 1 (mFOLFOX6 + PledOx)':
+    'Establish pre-treatment baseline and administer the first PledOx/placebo infusion followed by mFOLFOX6 under direct supervision.',
+  'Cycle 2 Day 1':
+    'First on-treatment safety and tolerability check. Reconcile drug accountability and administer the next cycle.',
+  'Cycle 4 Day 1 + CIPN assessment':
+    'Mid-treatment neuropathy assessment (FACT/GOG-Ntx) alongside the usual safety battery and cycle administration.',
+  'Cycle 8 Day 1':
+    'Routine on-treatment cycle. Lab panel, AE review, and continued drug accountability.',
+  'Safety follow-up (30 days post last dose)':
+    'Final assessments, CIPN follow-up, and AE/SAE reconciliation. Survival/DFS status captured.',
 };
 
 
@@ -649,7 +649,7 @@ const BRIGHTEN2_PURPOSES: Record<string, string> = {
 function brighten2CompletenessSignalsFor(
   visitName: string,
 ): VisitCompletenessSignal[] {
-  if (visitName !== 'Week 6 visit') {
+  if (visitName !== 'Cycle 4 Day 1 + CIPN assessment') {
     return [];
   }
   // Relative-to-now so the fixture doesn't go stale as time passes. ~7 days
@@ -657,16 +657,16 @@ function brighten2CompletenessSignalsFor(
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   return [
     {
-      id: 'mock-signal-week6-bodyweight',
+      id: 'mock-signal-cycle4-bodyweight',
       gap_text:
-        'Body weight measurement appears required at mid-treatment efficacy visits ' +
-        'but no procedure was extracted for this visit.',
+        'Body weight measurement appears required before each mFOLFOX6 cycle (for ' +
+        'dose calculation) but no procedure was extracted for this visit.',
       source_section: '7.4.1 Vital signs',
       source_page: 32,
       detection_confidence: 'medium',
       detection_reason:
-        'Section 7.4.1 lists weight under "ongoing vital-sign assessments" but ' +
-        'this visit has no matching procedures_structured row.',
+        'Section 7.4.1 lists weight under "pre-cycle assessments" but this visit ' +
+        'has no matching procedures_structured row.',
       detected_at: sevenDaysAgo,
     },
   ];
@@ -679,8 +679,8 @@ function brighten2CompletenessSignalsFor(
  * realistically have to interpret more loosely-structured protocol prose.
  */
 function brighten2ConfidenceFor(visitName: string): VisitConfidenceState {
-  if (visitName === 'Week 6 visit') return 'medium';
-  if (visitName === 'End of study') return 'medium';
+  if (visitName === 'Cycle 4 Day 1 + CIPN assessment') return 'medium';
+  if (visitName === 'Safety follow-up (30 days post last dose)') return 'medium';
   return 'high';
 }
 
@@ -692,15 +692,15 @@ function buildBrighten2Workspaces(): VisitExecutionWorkspace[] {
     let items: VisitExecutionItem[];
     if (tpl.visit_name === 'Screening') {
       items = brighten2ScreeningItems(tpl.id);
-    } else if (tpl.visit_name === 'Day 1 baseline') {
+    } else if (tpl.visit_name === 'Cycle 1 Day 1 (mFOLFOX6 + PledOx)') {
       items = brighten2BaselineItems(tpl.id);
-    } else if (tpl.visit_name === 'Week 1 visit') {
+    } else if (tpl.visit_name === 'Cycle 2 Day 1') {
       items = brighten2WeeklyItems(tpl.id, 1);
-    } else if (tpl.visit_name === 'Week 2 visit') {
+    } else if (tpl.visit_name === 'Cycle 8 Day 1') {
       items = brighten2WeeklyItems(tpl.id, 2);
-    } else if (tpl.visit_name === 'Week 6 visit') {
+    } else if (tpl.visit_name === 'Cycle 4 Day 1 + CIPN assessment') {
       items = brighten2WeeklyItems(tpl.id, 6);
-    } else if (tpl.visit_name === 'End of study') {
+    } else if (tpl.visit_name === 'Safety follow-up (30 days post last dose)') {
       items = brighten2EndOfStudyItems(tpl.id);
     } else {
       items = [];

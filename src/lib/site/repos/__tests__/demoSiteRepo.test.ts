@@ -128,7 +128,7 @@ describe('demoSiteRepo — visits + protocols', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const codes = result.data.map((p) => p.code).sort();
-    expect(codes).toEqual(['BRIGHTEN-2', 'CARDIAC-7', 'IMMUNE-14']);
+    expect(codes).toEqual(['CLR_18_06', 'ND-L02-s0201-005', 'PP06489']);
   });
 
   it('updateVisit flips status and persists', async () => {
@@ -199,14 +199,14 @@ describe('demoSiteRepo — team + documents + templates', () => {
   });
 
   it('fetchProtocolDocuments returns the demo PDFs for that protocol only', async () => {
-    // BRIGHTEN-2's fixture set: 1 protocol PDF + 2 supplemental docs (Lab,
+    // PP06489's fixture set: 1 protocol PDF + 2 supplemental docs (Lab,
     // Pharmacy manuals) so cross-document references in the visit drawer
     // have real sibling docs to resolve.
     const result = await demoSiteRepo.fetchProtocolDocuments(BRIGHTEN);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data.length).toBeGreaterThanOrEqual(1);
-    expect(result.data.every((d) => /BRIGHTEN/i.test(d.title))).toBe(true);
+    expect(result.data.every((d) => /PP06489/i.test(d.title))).toBe(true);
   });
 
   it('fetchVisitTemplates scopes to protocol and sorts by study_day', async () => {
