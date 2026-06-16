@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: demo-protocols-swap
-status: active
+status: merged
+merged: 2026-06-16
 started: 2026-06-16
-target_pr:
+target_pr: #367
 ---
 
 # Demo Mode — swap fixture protocols to 3 real studies
