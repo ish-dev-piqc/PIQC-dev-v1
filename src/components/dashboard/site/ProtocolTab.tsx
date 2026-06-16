@@ -190,7 +190,7 @@ export default function ProtocolTab() {
               </p>
               {!templatesLoading && (
                 <p className={`${subColor} text-xs mt-1.5 leading-relaxed max-w-md mx-auto`}>
-                  Reducto didn't surface a schedule of events for this protocol. Low-confidence
+                  We didn't surface a schedule of events for this protocol. Low-confidence
                   extractions can be reviewed and corrected in the Source of Truth Reviewer.
                 </p>
               )}

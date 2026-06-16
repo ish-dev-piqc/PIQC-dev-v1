@@ -50,7 +50,7 @@ export default function ProtocolUploadModal({ onClose }: ProtocolUploadModalProp
           <div>
             <h2 className={`${headingColor} font-semibold text-base`}>Upload protocol</h2>
             <p className={`${subColor} text-xs mt-0.5`}>
-              Reducto parses the PDF and populates Site Mode automatically.
+              We parse the PDF and populate Site Mode automatically.
             </p>
           </div>
           <button
