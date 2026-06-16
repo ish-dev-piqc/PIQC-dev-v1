@@ -4,6 +4,14 @@
 // segments makes them easy to spot in logs as demo (not real) rows.
 // =============================================================================
 
+// NOTE: the object keys below are stable *internal aliases* only — they never
+// surface in the UI (the displayed study identity comes from `code`/`name` in
+// fixtures/protocols.ts). They intentionally keep their original names so the
+// many `DEMO_PROTOCOL_IDS['BRIGHTEN-2']` references across the demo + visit-
+// execution fixtures don't have to churn. Current alias → real study mapping:
+//   'BRIGHTEN-2' → PP06489            (PledOx, Ph3 colorectal CIPN) — primary
+//   'CARDIAC-7'  → CLR_18_06          (K0706, Ph2 early Parkinson's)
+//   'IMMUNE-14'  → ND-L02-s0201-005   (Ph2 idiopathic pulmonary fibrosis)
 export const DEMO_PROTOCOL_IDS = {
   'BRIGHTEN-2': '00000001-d000-4000-8000-000000000001',
   'CARDIAC-7':  '00000002-d000-4000-8000-000000000002',

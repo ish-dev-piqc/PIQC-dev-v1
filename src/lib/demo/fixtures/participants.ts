@@ -2,13 +2,14 @@ import type { SiteParticipant } from '../../site/types';
 import { DEMO_PARTICIPANT_UUIDS, DEMO_PROTOCOL_IDS } from '../ids';
 import { addDays } from '../relativeDate';
 
-// Ported from the legacy MOCK_PARTICIPANTS but with:
-//   - real UUID PKs (via DEMO_PARTICIPANT_UUIDS)
-//   - protocol_id pointing at the demo protocol UUIDs (not 'proto-001' etc)
-//   - dates expressed relative to "today" so the demo is timeless
+// 11 participants rebalanced 4 / 4 / 3 across the three demo studies so none
+// looks thin. Each study carries a status spread (ACTIVE + screening / failure
+// / withdrawn / completed) and at least one open deviation so the Reports tab
+// renders meaningful compliance, deviation, and missed-visit data. All clinical
+// detail is synthetic but themed to each study's real indication.
 export function getDemoParticipants(): SiteParticipant[] {
   return [
-    // BRIGHTEN-2
+    // PP06489 — PledOx / colorectal CIPN (key 'BRIGHTEN-2')
     {
       id: 'P-0019',
       uuid: DEMO_PARTICIPANT_UUIDS['P-0019'],
@@ -17,10 +18,10 @@ export function getDemoParticipants(): SiteParticipant[] {
       enrolled_at: addDays(-38),
       current_study_day: 38,
       next_visit_date: addDays(1),
-      next_visit_name: 'Week 3 follow-up',
+      next_visit_name: 'Cycle 4 Day 1 + CIPN assessment',
       assigned_coordinator: 'Sarah Chen',
       open_deviations: 1,
-      notes: 'Missed Week 2 visit; rescheduled. Two outreach attempts logged.',
+      notes: 'On mFOLFOX6 + PledOx. Missed a cycle-3 neuropathy assessment; rescheduled. Two outreach attempts logged.',
     },
     {
       id: 'P-0023',
@@ -30,36 +31,23 @@ export function getDemoParticipants(): SiteParticipant[] {
       enrolled_at: addDays(-8),
       current_study_day: 8,
       next_visit_date: addDays(5),
-      next_visit_name: 'Week 1 visit',
+      next_visit_name: 'Cycle 2 Day 1',
       assigned_coordinator: 'Sarah Chen',
       open_deviations: 0,
-      notes: null,
+      notes: 'Tolerating Cycle 1 well. No infusion reactions to PledOx.',
     },
     {
       id: 'P-0045',
       uuid: DEMO_PARTICIPANT_UUIDS['P-0045'],
       protocol_id: DEMO_PROTOCOL_IDS['BRIGHTEN-2'],
-      status: 'ACTIVE',
-      enrolled_at: addDays(-31),
-      current_study_day: 45,
-      next_visit_date: addDays(2),
-      next_visit_name: 'Week 6 visit',
+      status: 'COMPLETED',
+      enrolled_at: addDays(-180),
+      current_study_day: 168,
+      next_visit_date: null,
+      next_visit_name: null,
       assigned_coordinator: 'Megan Olsen',
       open_deviations: 0,
-      notes: 'Tolerating treatment well.',
-    },
-    {
-      id: 'P-0051',
-      uuid: DEMO_PARTICIPANT_UUIDS['P-0051'],
-      protocol_id: DEMO_PROTOCOL_IDS['BRIGHTEN-2'],
-      status: 'ACTIVE',
-      enrolled_at: addDays(-16),
-      current_study_day: 16,
-      next_visit_date: addDays(2),
-      next_visit_name: 'Week 2 visit (rescheduled)',
-      assigned_coordinator: 'Sarah Chen',
-      open_deviations: 1,
-      notes: 'Window-overdue Week 2 visit. Vendor lab confirmed sample handling.',
+      notes: 'Completed all 12 adjuvant cycles. Grade 1 residual neuropathy at safety follow-up.',
     },
     {
       id: 'P-0011',
@@ -72,49 +60,10 @@ export function getDemoParticipants(): SiteParticipant[] {
       next_visit_name: null,
       assigned_coordinator: 'Sarah Chen',
       open_deviations: 0,
-      notes: 'Failed inclusion criterion 4.2 — labs out of range.',
-    },
-    {
-      id: 'P-0005',
-      uuid: DEMO_PARTICIPANT_UUIDS['P-0005'],
-      protocol_id: DEMO_PROTOCOL_IDS['BRIGHTEN-2'],
-      status: 'WITHDRAWN',
-      enrolled_at: addDays(-90),
-      current_study_day: 41,
-      next_visit_date: null,
-      next_visit_name: null,
-      assigned_coordinator: 'Megan Olsen',
-      open_deviations: 0,
-      notes: 'Withdrew consent on Day 41. AE under follow-up.',
-    },
-    {
-      id: 'P-0030',
-      uuid: DEMO_PARTICIPANT_UUIDS['P-0030'],
-      protocol_id: DEMO_PROTOCOL_IDS['BRIGHTEN-2'],
-      status: 'COMPLETED',
-      enrolled_at: addDays(-120),
-      current_study_day: 84,
-      next_visit_date: null,
-      next_visit_name: null,
-      assigned_coordinator: 'Sarah Chen',
-      open_deviations: 0,
-      notes: 'Completed all scheduled visits. Final database lock pending.',
-    },
-    {
-      id: 'P-0061',
-      uuid: DEMO_PARTICIPANT_UUIDS['P-0061'],
-      protocol_id: DEMO_PROTOCOL_IDS['BRIGHTEN-2'],
-      status: 'SCREENING',
-      enrolled_at: null,
-      current_study_day: null,
-      next_visit_date: addDays(10),
-      next_visit_name: 'Screening visit',
-      assigned_coordinator: 'Sarah Chen',
-      open_deviations: 0,
-      notes: 'Referred this week. Consent appointment scheduled.',
+      notes: 'Screen failure — baseline ANC below protocol-defined threshold for mFOLFOX6.',
     },
 
-    // CARDIAC-7
+    // CLR_18_06 — K0706 / early Parkinson's (key 'CARDIAC-7')
     {
       id: 'P-0008',
       uuid: DEMO_PARTICIPANT_UUIDS['P-0008'],
@@ -123,10 +72,10 @@ export function getDemoParticipants(): SiteParticipant[] {
       enrolled_at: addDays(-2),
       current_study_day: 2,
       next_visit_date: addDays(1),
-      next_visit_name: 'Day 4 baseline',
+      next_visit_name: 'Baseline (Day 1) — MDS-UPDRS',
       assigned_coordinator: 'Lina Ali',
       open_deviations: 0,
-      notes: null,
+      notes: 'Randomized. First on study drug; no symptomatic PD medication at entry.',
     },
     {
       id: 'P-0012',
@@ -136,13 +85,39 @@ export function getDemoParticipants(): SiteParticipant[] {
       enrolled_at: addDays(-14),
       current_study_day: 14,
       next_visit_date: addDays(0),
-      next_visit_name: 'Day 14 visit',
+      next_visit_name: 'Week 8 — MDS-UPDRS assessment',
       assigned_coordinator: 'Lina Ali',
       open_deviations: 1,
-      notes: 'Visit window deviation logged. PI signed off.',
+      notes: 'Week 8 MDS-UPDRS conducted outside the visit window. PI signed off; deviation logged.',
+    },
+    {
+      id: 'P-0051',
+      uuid: DEMO_PARTICIPANT_UUIDS['P-0051'],
+      protocol_id: DEMO_PROTOCOL_IDS['CARDIAC-7'],
+      status: 'WITHDRAWN',
+      enrolled_at: addDays(-120),
+      current_study_day: 84,
+      next_visit_date: null,
+      next_visit_name: null,
+      assigned_coordinator: 'Lina Ali',
+      open_deviations: 0,
+      notes: 'Withdrew consent at Week 12 — initiated symptomatic medication outside the study.',
+    },
+    {
+      id: 'P-0030',
+      uuid: DEMO_PARTICIPANT_UUIDS['P-0030'],
+      protocol_id: DEMO_PROTOCOL_IDS['CARDIAC-7'],
+      status: 'SCREENING',
+      enrolled_at: null,
+      current_study_day: null,
+      next_visit_date: addDays(10),
+      next_visit_name: 'Screening — MDS-UPDRS',
+      assigned_coordinator: 'Lina Ali',
+      open_deviations: 0,
+      notes: 'Referred from movement-disorders clinic. Consent appointment scheduled.',
     },
 
-    // IMMUNE-14
+    // ND-L02-s0201-005 — IPF (key 'IMMUNE-14')
     {
       id: 'P-0031',
       uuid: DEMO_PARTICIPANT_UUIDS['P-0031'],
@@ -150,11 +125,37 @@ export function getDemoParticipants(): SiteParticipant[] {
       status: 'ACTIVE',
       enrolled_at: addDays(-15),
       current_study_day: 15,
-      next_visit_date: addDays(2),
-      next_visit_name: 'Post-dose follow-up',
+      next_visit_date: addDays(0),
+      next_visit_name: 'Day 15 infusion (Q2W)',
       assigned_coordinator: 'Tom Walsh',
       open_deviations: 0,
-      notes: 'Dose 1 + Dose 2 administered without AE.',
+      notes: 'First two IV infusions tolerated. Baseline FVC 68% predicted.',
+    },
+    {
+      id: 'P-0005',
+      uuid: DEMO_PARTICIPANT_UUIDS['P-0005'],
+      protocol_id: DEMO_PROTOCOL_IDS['IMMUNE-14'],
+      status: 'ACTIVE',
+      enrolled_at: addDays(-85),
+      current_study_day: 85,
+      next_visit_date: addDays(2),
+      next_visit_name: 'Day 85 — mid-study spirometry',
+      assigned_coordinator: 'Tom Walsh',
+      open_deviations: 0,
+      notes: 'On Q2W dosing. FVC stable vs baseline at last spirometry.',
+    },
+    {
+      id: 'P-0061',
+      uuid: DEMO_PARTICIPANT_UUIDS['P-0061'],
+      protocol_id: DEMO_PROTOCOL_IDS['IMMUNE-14'],
+      status: 'SCREENING',
+      enrolled_at: null,
+      current_study_day: null,
+      next_visit_date: addDays(7),
+      next_visit_name: 'Screening — spirometry + HRCT review',
+      assigned_coordinator: 'Tom Walsh',
+      open_deviations: 0,
+      notes: 'Referred this week. Awaiting central HRCT eligibility read.',
     },
   ];
 }

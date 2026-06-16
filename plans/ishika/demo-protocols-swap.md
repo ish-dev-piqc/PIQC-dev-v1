@@ -37,6 +37,8 @@ Keep the existing fixtures' **exact structure, status coverage, and per-protocol
 - src/lib/demo/fixtures/*.ts
 - src/lib/demo/ids.ts
 - src/lib/site/repos/__tests__/demoSiteRepo.test.ts
+- src/lib/visit-execution/mockVisitWorkspace.ts
+- src/lib/visit-execution/__tests__/visitExecutionApi.test.ts
 
 ## Out of scope (files forbidden)
 
@@ -44,7 +46,15 @@ Keep the existing fixtures' **exact structure, status coverage, and per-protocol
 - src/lib/site/repos/demoSiteRepo.ts
 - src/lib/site/siteApi.ts
 - src/context/DemoModeContext.tsx
-- src/lib/visit-execution/
+- src/lib/visit-execution/visitExecutionApi.ts
+- src/lib/visit-execution/visitExecutionExportApi.ts
+
+> Note: `mockVisitWorkspace.ts` builds its Sprint-1 enriched workspaces from the demo
+> visit templates this PR re-themed, and keys off `tpl.visit_name`. Renaming the
+> primary protocol's templates therefore required re-pointing those name matches
+> (and the one affected `visitExecutionApi.test.ts` assertion). Both files are
+> Ishika-owned (`/src/lib/visit-execution/`), so no extra approval. Checklist item
+> *content* was left as-is (re-pointed, not re-authored).
 
 ## Architecture layers touched
 

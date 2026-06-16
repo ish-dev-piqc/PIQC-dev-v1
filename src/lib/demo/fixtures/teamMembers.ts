@@ -2,23 +2,24 @@ import type { SiteTeamMember } from '../../site/types';
 import { DEMO_PROTOCOL_IDS } from '../ids';
 import { addDays } from '../relativeDate';
 
-// Ten team members spread across the three demo protocols, exercising every
-// role (PI, SUB_I, COORDINATOR, NURSE, PHARMACIST, MONITOR) plus an INACTIVE
-// row so the "show/hide inactive" toggle is meaningful.
+// Team rosters across the three demo studies, exercising every role (PI, SUB_I,
+// COORDINATOR, NURSE, PHARMACIST, MONITOR) plus an INACTIVE row so the
+// "show/hide inactive" toggle is meaningful. Delegated tasks are themed to each
+// study's procedures. Coordinator names match participants.assigned_coordinator.
 export function getDemoTeamMembers(): SiteTeamMember[] {
   return [
-    // BRIGHTEN-2
+    // PP06489 — PledOx / colorectal CIPN (oncology site)
     {
       id: 'demo-tm-001',
       protocol_id: DEMO_PROTOCOL_IDS['BRIGHTEN-2'],
       name: 'Dr. Priya Rao',
       role: 'PI',
       email: 'priya.rao@example.org',
-      delegated_tasks: ['Informed consent', 'Eligibility assessment', 'AE assessment'],
+      delegated_tasks: ['Informed consent', 'Eligibility assessment', 'AE assessment (CTCAE v4.03)'],
       certified_through: addDays(180),
       added_at: addDays(-120),
       status: 'ACTIVE',
-      notes: 'GCP cert valid; CV on file.',
+      notes: 'Medical oncologist. GCP cert valid; CV on file.',
     },
     {
       id: 'demo-tm-002',
@@ -26,7 +27,7 @@ export function getDemoTeamMembers(): SiteTeamMember[] {
       name: 'Sarah Chen',
       role: 'COORDINATOR',
       email: 'sarah.chen@example.org',
-      delegated_tasks: ['Informed consent', 'Source data entry', 'Query resolution', 'Vitals'],
+      delegated_tasks: ['Informed consent', 'Source data entry', 'CIPN assessment scheduling', 'Query resolution'],
       certified_through: addDays(120),
       added_at: addDays(-115),
       status: 'ACTIVE',
@@ -38,7 +39,7 @@ export function getDemoTeamMembers(): SiteTeamMember[] {
       name: 'Megan Olsen',
       role: 'COORDINATOR',
       email: 'megan.olsen@example.org',
-      delegated_tasks: ['Source data entry', 'Phlebotomy', 'PRO administration'],
+      delegated_tasks: ['Source data entry', 'Phlebotomy', 'CIPN questionnaire administration'],
       certified_through: addDays(95),
       added_at: addDays(-90),
       status: 'ACTIVE',
@@ -50,7 +51,7 @@ export function getDemoTeamMembers(): SiteTeamMember[] {
       name: 'Dr. Marcus Klein',
       role: 'SUB_I',
       email: 'marcus.klein@example.org',
-      delegated_tasks: ['Physical examination', 'AE assessment'],
+      delegated_tasks: ['Physical examination', 'AE assessment', 'Neuropathy grading'],
       certified_through: addDays(200),
       added_at: addDays(-100),
       status: 'ACTIVE',
@@ -58,6 +59,18 @@ export function getDemoTeamMembers(): SiteTeamMember[] {
     },
     {
       id: 'demo-tm-005',
+      protocol_id: DEMO_PROTOCOL_IDS['BRIGHTEN-2'],
+      name: 'Yael Stern',
+      role: 'PHARMACIST',
+      email: 'yael.stern@example.org',
+      delegated_tasks: ['PledOx/placebo preparation', 'IP accountability', 'Dose calculation review'],
+      certified_through: addDays(180),
+      added_at: addDays(-98),
+      status: 'ACTIVE',
+      notes: 'Prepares blinded PledOx/placebo per the pharmacy manual.',
+    },
+    {
+      id: 'demo-tm-006',
       protocol_id: DEMO_PROTOCOL_IDS['BRIGHTEN-2'],
       name: 'Dana Pierce',
       role: 'MONITOR',
@@ -69,21 +82,21 @@ export function getDemoTeamMembers(): SiteTeamMember[] {
       notes: 'Sponsor-side CRA. Visits monthly.',
     },
     {
-      id: 'demo-tm-006',
+      id: 'demo-tm-007',
       protocol_id: DEMO_PROTOCOL_IDS['BRIGHTEN-2'],
       name: 'Joel Park',
       role: 'NURSE',
       email: 'joel.park@example.org',
-      delegated_tasks: ['Vitals', 'Phlebotomy', 'IP administration'],
+      delegated_tasks: ['Vitals', 'Infusion administration', 'Phlebotomy'],
       certified_through: addDays(-15),
       added_at: addDays(-150),
       status: 'INACTIVE',
       notes: 'On leave; cert expired. Pending re-cert.',
     },
 
-    // CARDIAC-7
+    // CLR_18_06 — K0706 / early Parkinson's (neurology site)
     {
-      id: 'demo-tm-007',
+      id: 'demo-tm-008',
       protocol_id: DEMO_PROTOCOL_IDS['CARDIAC-7'],
       name: 'Dr. Hiroshi Tanaka',
       role: 'PI',
@@ -92,57 +105,69 @@ export function getDemoTeamMembers(): SiteTeamMember[] {
       certified_through: addDays(220),
       added_at: addDays(-80),
       status: 'ACTIVE',
-      notes: null,
+      notes: 'Movement-disorders neurologist.',
     },
     {
-      id: 'demo-tm-008',
+      id: 'demo-tm-009',
       protocol_id: DEMO_PROTOCOL_IDS['CARDIAC-7'],
       name: 'Lina Ali',
       role: 'COORDINATOR',
       email: 'lina.ali@example.org',
-      delegated_tasks: ['Informed consent', 'Source data entry', 'ECG'],
+      delegated_tasks: ['Informed consent', 'Source data entry', 'Study drug accountability'],
       certified_through: addDays(140),
       added_at: addDays(-75),
       status: 'ACTIVE',
       notes: null,
     },
     {
-      id: 'demo-tm-009',
+      id: 'demo-tm-010',
       protocol_id: DEMO_PROTOCOL_IDS['CARDIAC-7'],
-      name: 'Yael Stern',
-      role: 'PHARMACIST',
-      email: 'yael.stern@example.org',
-      delegated_tasks: ['IP accountability', 'Drug dispensation'],
-      certified_through: addDays(180),
+      name: 'Dr. Ana Lopes',
+      role: 'SUB_I',
+      email: 'ana.lopes@example.org',
+      delegated_tasks: ['MDS-UPDRS rating (certified)', 'AE assessment'],
+      certified_through: addDays(160),
       added_at: addDays(-72),
       status: 'ACTIVE',
-      notes: null,
+      notes: 'MDS-UPDRS-certified rater.',
     },
 
-    // IMMUNE-14
+    // ND-L02-s0201-005 — IPF (pulmonology site)
     {
-      id: 'demo-tm-010',
+      id: 'demo-tm-011',
       protocol_id: DEMO_PROTOCOL_IDS['IMMUNE-14'],
-      name: 'Dr. Ana Lopes',
+      name: 'Dr. Robert Hale',
       role: 'PI',
-      email: 'ana.lopes@example.org',
-      delegated_tasks: ['Informed consent', 'Eligibility assessment', 'AE assessment'],
+      email: 'robert.hale@example.org',
+      delegated_tasks: ['Informed consent', 'Eligibility assessment', 'AE/SAE assessment'],
       certified_through: addDays(160),
       added_at: addDays(-60),
       status: 'ACTIVE',
-      notes: null,
+      notes: 'Interstitial lung disease specialist.',
     },
     {
-      id: 'demo-tm-011',
+      id: 'demo-tm-012',
       protocol_id: DEMO_PROTOCOL_IDS['IMMUNE-14'],
       name: 'Tom Walsh',
       role: 'COORDINATOR',
       email: 'tom.walsh@example.org',
-      delegated_tasks: ['Source data entry', 'PRO administration', 'Phlebotomy'],
+      delegated_tasks: ['Source data entry', 'Infusion scheduling', 'Phlebotomy'],
       certified_through: addDays(110),
       added_at: addDays(-55),
       status: 'ACTIVE',
       notes: null,
+    },
+    {
+      id: 'demo-tm-013',
+      protocol_id: DEMO_PROTOCOL_IDS['IMMUNE-14'],
+      name: 'Grace Okafor',
+      role: 'NURSE',
+      email: 'grace.okafor@example.org',
+      delegated_tasks: ['Spirometry (FVC)', 'DLCO', 'Infusion administration', 'Vitals'],
+      certified_through: addDays(130),
+      added_at: addDays(-50),
+      status: 'ACTIVE',
+      notes: 'Certified pulmonary function technologist.',
     },
   ];
 }

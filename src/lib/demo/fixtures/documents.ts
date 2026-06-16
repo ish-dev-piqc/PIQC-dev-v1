@@ -2,72 +2,76 @@ import type { ProtocolDocument } from '../../site/types';
 import { DEMO_PROTOCOL_IDS } from '../ids';
 import { addDays } from '../relativeDate';
 
-// One protocol PDF per demo study. Metadata only — the file content never
-// gets fetched in demo mode (Ask responses are pre-canned in askResponses.ts).
+// One protocol PDF per demo study (plus supplemental manuals for the primary
+// study). Metadata only — the file content never gets fetched in demo mode
+// (Ask responses are pre-canned in askResponses.ts). Document ids are stable
+// so cross-document references in visitTemplates.ts resolve.
 export function getDemoDocuments(): ProtocolDocument[] {
   return [
     {
       id: 'demo-doc-001',
-      title: 'BRIGHTEN-2 — Protocol v4.0',
+      title: 'PP06489 — PledOx Protocol v5.0',
       source: 'Demo protocol PDF',
-      filename: 'brighten-2_protocol_v4.0.pdf',
+      filename: 'pp06489_pledox_protocol_v5.0.pdf',
       created_at: addDays(-30),
       status: 'ready',
       extracted_fields: {
-        protocol_number: 'BRIGHTEN-2',
-        sponsor: 'Demo Sponsor A',
-        phase: 'Phase 2',
+        protocol_number: 'PP06489',
+        sponsor: 'PledPharma AB',
+        phase: 'Phase 3',
         // Mirrors what Reducto would populate for the SOTR drawer.
         protocol_title:
-          'BRIGHTEN-2: Phase 2 study evaluating investigational therapy in major depressive disorder',
+          'A Phase 3, double-blind, placebo-controlled study of PledOx on top of modified FOLFOX6 to prevent chemotherapy-induced peripheral neuropathy (CIPN) in adjuvant treatment of Stage III / high-risk Stage II colorectal cancer',
       },
     },
-    // BRIGHTEN-2 supplemental docs — cross-document references in
-    // visit drawer cite these.
+    // PP06489 supplemental docs — cross-document references in the visit drawer
+    // cite these.
     {
       id: 'demo-doc-001-lab',
-      title: 'BRIGHTEN-2 — Central Lab Manual v1.3',
+      title: 'PP06489 — Central Lab Manual v1.3',
       source: 'Demo supplemental PDF',
-      filename: 'brighten-2_central_lab_manual_v1.3.pdf',
+      filename: 'pp06489_central_lab_manual_v1.3.pdf',
       created_at: addDays(-25),
       status: 'ready',
-      extracted_fields: { protocol_number: 'BRIGHTEN-2' },
+      extracted_fields: { protocol_number: 'PP06489' },
     },
     {
       id: 'demo-doc-001-pharm',
-      title: 'BRIGHTEN-2 — Pharmacy Manual v1.1',
+      title: 'PP06489 — Pharmacy Manual v1.1 (PledOx preparation)',
       source: 'Demo supplemental PDF',
-      filename: 'brighten-2_pharmacy_manual_v1.1.pdf',
+      filename: 'pp06489_pharmacy_manual_v1.1.pdf',
       created_at: addDays(-25),
       status: 'ready',
-      extracted_fields: { protocol_number: 'BRIGHTEN-2' },
+      extracted_fields: { protocol_number: 'PP06489' },
     },
     {
       id: 'demo-doc-002',
-      title: 'CARDIAC-7 — Protocol v2.1',
+      title: 'CLR_18_06 — K0706 Protocol Amendment 02',
       source: 'Demo protocol PDF',
-      filename: 'cardiac-7_protocol_v2.1.pdf',
+      filename: 'clr_18_06_k0706_protocol_amd02.pdf',
       created_at: addDays(-18),
       status: 'ready',
       extracted_fields: {
-        protocol_number: 'CARDIAC-7',
-        sponsor: 'Demo Sponsor B',
-        phase: 'Phase 3',
-        protocol_title: 'CARDIAC-7: Phase 3 outcomes trial in chronic heart failure',
+        protocol_number: 'CLR_18_06',
+        sponsor: 'Sun Pharma Advanced Research Company (SPARC)',
+        phase: 'Phase 2',
+        protocol_title:
+          'A Phase 2, randomized, double-blind, placebo-controlled study of K0706 in subjects with early Parkinson’s disease',
       },
     },
     {
       id: 'demo-doc-003',
-      title: 'IMMUNE-14 — Protocol v1.0',
+      title: 'ND-L02-s0201-005 — Protocol Amendment 04',
       source: 'Demo protocol PDF',
-      filename: 'immune-14_protocol_v1.0.pdf',
+      filename: 'nd-l02-s0201-005_protocol_amd04.pdf',
       created_at: addDays(-22),
       status: 'ready',
       extracted_fields: {
-        protocol_number: 'IMMUNE-14',
-        sponsor: 'Demo Sponsor C',
-        phase: 'Phase 1',
-        protocol_title: 'IMMUNE-14: Phase 1 first-in-human dose-escalation in autoimmune disease',
+        protocol_number: 'ND-L02-s0201-005',
+        sponsor: 'Nitto Denko Corporation',
+        phase: 'Phase 2',
+        protocol_title:
+          'A Phase 2, randomized, double-blind, placebo-controlled study to evaluate the safety, tolerability, biological activity, and PK of ND-L02-s0201 in subjects with idiopathic pulmonary fibrosis (IPF)',
       },
     },
   ];

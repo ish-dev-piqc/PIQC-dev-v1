@@ -2,7 +2,8 @@ import { DEMO_PROTOCOL_IDS } from '../ids';
 
 // Pre-canned responses for the Ask tab when in demo mode. Keyed by protocol
 // id; each protocol has a handful of question → answer pairs covering the
-// same prompts AskTab.tsx surfaces as suggested questions.
+// same prompts AskTab.tsx surfaces as suggested questions. Content is themed
+// to each study's real design (synthetic specifics, no PHI).
 //
 // Matching is loose: the demo repo's "ask" function looks for the first
 // response whose key is a substring of the user's question (case-insensitive).
@@ -16,78 +17,94 @@ export interface DemoAskResponse {
 }
 
 export const DEMO_ASK_RESPONSES: Record<string, DemoAskResponse[]> = {
+  // PP06489 — PledOx / colorectal CIPN
   [DEMO_PROTOCOL_IDS['BRIGHTEN-2']]: [
     {
       key: 'schedule of assessments',
       answer:
-        'BRIGHTEN-2 has six scheduled visits per participant: Screening (Day -14), Day 1 baseline, Week 1 (Day 7), Week 2 (Day 14), Week 6 (Day 42), and End of Study (Day 84). Most visit windows are ±2 days, with screening allowing up to +7 days and end-of-study up to ±7 days.',
+        'PledOx/placebo is given as a short i.v. infusion (~5 minutes) 10 minutes before each modified FOLFOX6 cycle, on a Q2W schedule for the adjuvant chemotherapy course (up to 12 cycles). Neuropathy (CIPN) is assessed at baseline and at scheduled cycles using the FACT/GOG-Ntx instrument, with a safety follow-up roughly 30 days after the last dose.',
       citations: [
-        { document_title: 'BRIGHTEN-2 — Protocol v4.0', page: 12, snippet: 'Schedule of events table 6.1' },
+        { document_title: 'PP06489 — PledOx Protocol v5.0', page: 38, snippet: 'Schedule of assessments — Table 6.1' },
       ],
     },
     {
       key: 'inclusion',
       answer:
-        'BRIGHTEN-2 enrolls adults 18-65 with a DSM-5 diagnosis of moderate-to-severe MDD (HAM-D ≥ 22) and a HAM-D score that has not responded to at least one adequate prior antidepressant trial in the current episode. Key exclusion criteria include active suicidality (C-SSRS ≥ 4), bipolar disorder, primary psychotic disorder, and concurrent ECT/TMS.',
+        'PP06489 enrolls adults with Stage III or high-risk Stage II colorectal cancer who are candidates for adjuvant mFOLFOX6, with adequate bone-marrow reserve (e.g. ANC and platelets above protocol thresholds) and organ function. Key exclusions include clinically significant pre-existing peripheral neuropathy and prior oxaliplatin exposure.',
       citations: [
-        { document_title: 'BRIGHTEN-2 — Protocol v4.0', page: 18, snippet: 'Section 4.1 Inclusion criteria' },
-        { document_title: 'BRIGHTEN-2 — Protocol v4.0', page: 19, snippet: 'Section 4.2 Exclusion criteria' },
+        { document_title: 'PP06489 — PledOx Protocol v5.0', page: 20, snippet: 'Section 4.1 Inclusion criteria' },
+        { document_title: 'PP06489 — PledOx Protocol v5.0', page: 22, snippet: 'Section 4.2 Exclusion criteria' },
       ],
     },
     {
       key: 'safety reporting',
       answer:
-        'Adverse events are graded per CTCAE v5.0 and recorded at every visit. Serious adverse events (SAEs) require reporting to the sponsor within 24 hours of investigator awareness; suspected unexpected serious adverse reactions (SUSARs) follow ICH E2A timelines (7 days for fatal/life-threatening, 15 days for others).',
+        'Adverse events are graded per NCI-CTCAE v4.03 and recorded each cycle. Serious adverse events (SAEs) are reported to the sponsor within 24 hours of investigator awareness; PledOx-attributable toxicities are tracked separately from chemotherapy-related toxicities. SUSARs follow ICH E2A timelines.',
       citations: [
-        { document_title: 'BRIGHTEN-2 — Protocol v4.0', page: 31, snippet: 'Section 7.4 Safety reporting' },
+        { document_title: 'PP06489 — PledOx Protocol v5.0', page: 55, snippet: 'Section 8 Safety reporting' },
       ],
     },
     {
       key: 'visit window',
       answer:
-        'Visit windows in BRIGHTEN-2 are ±2 days for all post-baseline assessments except Screening (0 to +7 days) and End of Study (±7 days). Visits conducted outside these windows are protocol deviations and require PI sign-off plus a logged justification.',
+        'Cycle visits follow the Q2W chemotherapy schedule with a ±2-day window; the post-treatment safety follow-up allows ±7 days. Visits outside these windows are protocol deviations requiring PI sign-off and a logged justification.',
       citations: [
-        { document_title: 'BRIGHTEN-2 — Protocol v4.0', page: 14, snippet: 'Section 6.2 Visit windows' },
+        { document_title: 'PP06489 — PledOx Protocol v5.0', page: 40, snippet: 'Section 6.2 Visit windows' },
       ],
     },
   ],
 
+  // CLR_18_06 — K0706 / early Parkinson's
   [DEMO_PROTOCOL_IDS['CARDIAC-7']]: [
     {
       key: 'schedule of assessments',
       answer:
-        'CARDIAC-7 has five scheduled visits: Screening (Day -7), Day 4 baseline, Day 7, Day 14, and Day 30 follow-up. Visit windows are ±1-2 days for early visits and ±5 days for the Day 30 follow-up. ECG and vitals are collected at every visit.',
+        'CLR_18_06 is a 40-week, randomized, double-blind, placebo-controlled study of once-daily oral K0706. Key visits are Screening (~Day -28), Baseline (Day 1, randomization), Week 8, Week 24, and the Week 40 primary-endpoint visit. MDS-UPDRS is collected at most visits; EQ-5D-5L, CGI-S, SCOPA-AUT and PK samples are collected per the schedule.',
       citations: [
-        { document_title: 'CARDIAC-7 — Protocol v2.1', page: 9, snippet: 'Table 5.1 Schedule of activities' },
+        { document_title: 'CLR_18_06 — K0706 Protocol Amendment 02', page: 11, snippet: 'Table 5.1 Schedule of activities' },
       ],
     },
     {
       key: 'inclusion',
       answer:
-        'CARDIAC-7 enrolls adults ≥ 18 with chronic heart failure (NYHA Class II-III) and LVEF ≤ 40% on stable optimal medical therapy for ≥ 4 weeks. Exclusion criteria include recent (< 90 days) acute coronary syndrome, severe renal impairment (eGFR < 30), and active malignancy.',
+        'CLR_18_06 enrolls adults with early Parkinson’s disease who do not yet require symptomatic dopaminergic therapy at entry. Exclusion criteria include atypical or secondary parkinsonism, prior use of disallowed PD medications, and clinically significant cardiac or hepatic abnormalities.',
     },
     {
       key: 'safety reporting',
       answer:
-        'Standard ICH E2A reporting: SAEs to sponsor within 24 hours, SUSARs within 7-15 days depending on severity. Cardiovascular events of interest (CVEs) have additional adjudication requirements per the independent Endpoint Adjudication Committee.',
+        'Standard ICH E2A reporting applies: SAEs to the sponsor within 24 hours, SUSARs within 7–15 days depending on severity. K0706 carries protocol-specified cardiac monitoring (including ECG/QT review) given its mechanism.',
+    },
+    {
+      key: 'visit window',
+      answer:
+        'Early visits use a ±3-day window; later milestone visits (Week 24, Week 40) allow up to ±7 days. The Week 40 MDS-UPDRS (Parts 2+3) is the primary-endpoint assessment, so out-of-window visits there are escalated and logged as deviations.',
     },
   ],
 
+  // ND-L02-s0201-005 — IPF
   [DEMO_PROTOCOL_IDS['IMMUNE-14']]: [
     {
       key: 'schedule of assessments',
       answer:
-        'IMMUNE-14 has five visits per participant in this first-in-human dose-escalation: Screening (Day -14), Dose 1 (Day 1), Dose 2 (Day 15), Post-dose follow-up (Day 17), and End of Treatment (Day 28). Each dose administration includes a 2-hour observation period.',
+        'ND-L02-s0201-005 administers ND-L02-s0201 by i.v. infusion (45 mg or 90 mg) every 2 weeks for 24 weeks (12 doses). Spirometry (FVC) and DLCO are collected at screening, mid-study, and the Day 169 primary timepoint. Day 169 also serves as the end-of-treatment visit.',
+      citations: [
+        { document_title: 'ND-L02-s0201-005 — Protocol Amendment 04', page: 13, snippet: 'Schedule of assessments — Visit 1–14' },
+      ],
     },
     {
       key: 'inclusion',
       answer:
-        'IMMUNE-14 enrolls adults 18-55 with confirmed autoimmune disease per the relevant diagnostic criteria, stable disease for ≥ 3 months, and adequate organ function. Exclusion includes active infection, prior biologic therapy within 6 months, and pregnancy or breastfeeding.',
+        'ND-L02-s0201-005 enrolls adults with a confirmed diagnosis of idiopathic pulmonary fibrosis (per ATS/ERS criteria, central HRCT read) within the protocol-defined FVC range. Exclusions include other interstitial lung diseases, recent respiratory infection, and clinically significant comorbidities.',
     },
     {
       key: 'safety reporting',
       answer:
-        'Given the first-in-human design, IMMUNE-14 has enhanced safety monitoring. Any DLT (dose-limiting toxicity) in the first 28 days triggers the SRC (Safety Review Committee) to convene within 72 hours. SAEs reported within 24 hours per ICH E2A; CRS events require immediate sponsor notification.',
+        'The primary endpoints are the incidence of AEs/SAEs and the proportion of subjects discontinuing study treatment due to AEs, so safety capture is central. Infusion-related reactions are monitored at each dosing visit; SAEs are reported to the sponsor within 24 hours per ICH E2A.',
+    },
+    {
+      key: 'visit window',
+      answer:
+        'Q2W infusion visits use a ±2-day window; spirometry milestone visits (mid-study and Day 169) allow ±5 days. The Day 169 FVC assessment anchors the key secondary efficacy analysis, so deviations there are logged with justification.',
     },
   ],
 };
