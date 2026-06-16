@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: demo-protocol-list-race
-status: active
+status: merged
+merged: 2026-06-16
 started: 2026-06-16
-target_pr:
+target_pr: #369
 ---
 
 # Fix: demo mode shows real protocols (empty calendar) — ProtocolContext fetch race
