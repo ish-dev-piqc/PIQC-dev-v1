@@ -729,16 +729,81 @@ function buildBrighten2Workspaces(): VisitExecutionWorkspace[] {
 
 
 // ---------------------------------------------------------------------------
-// Public entry point. Returns Sprint 1 mock workspaces for the active
-// protocol. For non-BRIGHTEN-2 protocols, returns an empty array — the
-// real adapter handles those (flat passthrough from procedures TEXT[]).
+// Generic builder for the other demo protocols (CLR_18_06, ND-L02-s0201-005).
+// PP06489 (the 'BRIGHTEN-2' alias) has a hand-curated workspace above; the
+// remaining demo studies derive a reasonable Visit-Prep workspace straight
+// from their re-themed visit templates so demo mode is populated for all 3
+// without hand-authoring every item. Procedure strings become execution items
+// with a keyword-based phase/classification so the snapshot badges render.
 // ---------------------------------------------------------------------------
+
+function classifyProcedure(proc: string): { phase: ExecutionPhase; classification: ItemClassification } {
+  const p = proc.toLowerCase();
+  if (/infusion|administration|dispens|dose|mfolfox6|pledox|study drug/.test(p))
+    return { phase: 'dosing', classification: 'required' };
+  if (/\bae\b|sae|adverse|safety|ctcae/.test(p))
+    return { phase: 'safety_ae_conmed', classification: 'safety_critical' };
+  if (/primary|mds-updrs parts 2|fvc \(primary\)/.test(p))
+    return { phase: 'assessment', classification: 'primary_endpoint' };
+  if (/mds-updrs|fvc|dlco|spirometry|cipn|fact\/gog|eq-5d|cgi|scopa|pk|ecg|endpoint/.test(p))
+    return { phase: 'assessment', classification: 'secondary_endpoint' };
+  if (/consent|eligibility|history|hrct review/.test(p))
+    return { phase: 'pre_visit', classification: 'required' };
+  if (/vitals|labs|cbc|chemistry|randomization/.test(p))
+    return { phase: 'check_in', classification: 'required' };
+  if (/discharge|follow-up|accountability|reconcil|survival|dfs/.test(p))
+    return { phase: 'close_out', classification: 'required' };
+  if (/optional|sub-study/.test(p))
+    return { phase: 'assessment', classification: 'if_applicable' };
+  return { phase: 'assessment', classification: 'required' };
+}
+
+function buildGenericDemoWorkspaces(protocolId: string): VisitExecutionWorkspace[] {
+  const templates = getDemoVisitTemplates().filter((t) => t.protocol_id === protocolId);
+  return templates.map((tpl) => {
+    const items = tpl.procedures.map((proc, i) => {
+      const { phase, classification } = classifyProcedure(proc);
+      return buildItem(tpl.id, i + 1, {
+        label: proc,
+        phase,
+        classification,
+        traceability: { protocol_section: 'Schedule of Assessments' },
+      });
+    });
+    const snapshot = deriveSnapshot(
+      tpl.visit_name,
+      tpl.study_day,
+      tpl.window_minus_days,
+      tpl.window_plus_days,
+      'Per-protocol visit with assessments per the Schedule of Events.',
+      items,
+    );
+    return {
+      visit_template_id: tpl.id,
+      protocol_id: tpl.protocol_id,
+      snapshot,
+      items,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Public entry point. Returns Sprint 1 mock workspaces for a demo protocol.
+// PP06489 ('BRIGHTEN-2' alias) gets the rich curated set; the other two demo
+// studies get a generic set derived from their templates. Non-demo protocols
+// return an empty array — the real RPC handles those.
+// ---------------------------------------------------------------------------
+
+const DEMO_PROTOCOL_ID_SET = new Set<string>(Object.values(DEMO_PROTOCOL_IDS));
 
 export function getMockVisitExecutionWorkspaces(
   protocolId: string,
 ): VisitExecutionWorkspace[] {
   if (protocolId === DEMO_PROTOCOL_IDS['BRIGHTEN-2']) {
     return buildBrighten2Workspaces();
+  }
+  if (DEMO_PROTOCOL_ID_SET.has(protocolId)) {
+    return buildGenericDemoWorkspaces(protocolId);
   }
   return [];
 }

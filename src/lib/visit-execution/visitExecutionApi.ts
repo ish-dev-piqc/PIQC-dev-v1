@@ -38,7 +38,13 @@ export const MOCK_TOGGLE_KEY = 'piq-visit-execution-mock-v1';
  */
 export function isMockEnabled(): boolean {
   try {
-    return typeof window !== 'undefined' && window.localStorage.getItem(MOCK_TOGGLE_KEY) === '1';
+    if (typeof window === 'undefined') return false;
+    const ls = window.localStorage;
+    // Mock serves two callers: the dev-only piq-visit-execution-mock-v1 toggle,
+    // and Demo Mode — when the demo toggle is on (server-gated bit set by
+    // DemoModeContext), Visit Prep should show fixture data like every other
+    // demo surface instead of hitting the real RPC with demo protocol ids.
+    return ls.getItem(MOCK_TOGGLE_KEY) === '1' || ls.getItem('piq-demo-active-v1') === '1';
   } catch {
     return false;
   }
