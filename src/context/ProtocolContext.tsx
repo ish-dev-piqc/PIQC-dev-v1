@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchProtocols as fetchProtocolsApi, subscribeSiteRepo } from '../lib/site/siteApi';
 import { useDemoMode } from './DemoModeContext';
@@ -60,6 +60,14 @@ export function ProtocolProvider({ children }: { children: React.ReactNode }) {
     }
   }, [activeId]);
 
+  // Guards against stale fetches clobbering fresh ones. When the demo toggle
+  // flips, the effect re-runs load() while the active repo is still the real
+  // one (the child effect fires before DemoModeProvider's setSiteRepo), then a
+  // second load() runs after the swap. The real fetch (slow Supabase) can
+  // resolve AFTER the demo fetch (fast in-memory) and overwrite the demo list.
+  // A monotonic token means only the latest load() applies its result.
+  const fetchTokenRef = useRef(0);
+
   // Load protocols via the active SiteRepo (Supabase in real mode, demo store
   // in demo mode). Re-fetch on repo swap so flipping the demo toggle swaps
   // the picker contents immediately.
@@ -67,9 +75,10 @@ export function ProtocolProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
 
     async function load() {
+      const token = ++fetchTokenRef.current;
       setIsLoading(true);
       const result = await fetchProtocolsApi();
-      if (cancelled) return;
+      if (cancelled || token !== fetchTokenRef.current) return;
       if (!result.ok) {
         console.error('[ProtocolContext] fetch error:', result.error);
       } else {
