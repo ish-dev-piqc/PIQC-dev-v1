@@ -52,6 +52,36 @@ describe('isMockEnabled', () => {
     // off the mock) depends on this exact string.
     expect(MOCK_TOGGLE_KEY).toBe('piq-visit-execution-mock-v1');
   });
+
+  it('also returns true when Demo Mode is active (piq-demo-active-v1)', () => {
+    window.localStorage.setItem('piq-demo-active-v1', '1');
+    expect(isMockEnabled()).toBe(true);
+  });
+});
+
+describe('Visit Prep populated for all 3 demo protocols in demo mode', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    window.localStorage.setItem('piq-demo-active-v1', '1'); // demo mode on, dev toggle off
+  });
+  afterEach(() => {
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it('every demo protocol returns a non-empty workspace list without calling supabase.rpc', async () => {
+    const spy = vi.spyOn(supabase, 'rpc');
+    for (const id of Object.values(DEMO_PROTOCOL_IDS)) {
+      const result = await fetchVisitExecutionWorkspaces(id);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.length, `protocol ${id}`).toBeGreaterThan(0);
+        // each workspace has items so the Visit-Prep panel isn't empty
+        expect(result.data.every((w) => w.items.length > 0)).toBe(true);
+      }
+    }
+    expect(spy).not.toHaveBeenCalled();
+  });
 });
 
 describe('fetchVisitExecutionWorkspaces — mock on', () => {
