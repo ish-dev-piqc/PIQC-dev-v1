@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: demo-visit-prep
-status: active
+status: merged
+merged: 2026-06-16
 started: 2026-06-16
-target_pr:
+target_pr: #371
 ---
 
 # Fix: Visit Prep tab empty in demo mode for all 3 protocols
