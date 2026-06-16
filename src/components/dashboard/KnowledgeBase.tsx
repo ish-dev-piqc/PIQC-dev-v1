@@ -115,7 +115,7 @@ export function UploadForm({
 
     if (!pdfFile) return;
 
-    setState({ status: 'uploading', message: 'Uploading PDF to Reducto for parsing...' });
+    setState({ status: 'uploading', message: 'Uploading PDF for parsing...' });
 
     try {
       const pdf_base64 = await fileToBase64(pdfFile);
@@ -307,7 +307,7 @@ export function UploadForm({
                 <Upload size={18} className="text-brand-300" />
               </div>
               <p className={`text-sm font-medium ${isLight ? 'text-[#334155]/80' : 'text-[#CBD5E1]/70'}`}>Drop PDF here or click to browse</p>
-              <p className={`text-xs ${isLight ? 'text-[#334155]/35' : 'text-[#CBD5E1]/25'}`}>Parsed with Reducto — tables, headers, and structure preserved</p>
+              <p className={`text-xs ${isLight ? 'text-[#334155]/35' : 'text-[#CBD5E1]/25'}`}>Parsed automatically — tables, headers, and structure preserved</p>
             </div>
           )}
         </div>

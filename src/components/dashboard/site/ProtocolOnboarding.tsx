@@ -36,7 +36,7 @@ const STEPS = [
   },
   {
     icon: Layers,
-    title: 'Reducto parses it',
+    title: 'We parse it',
     detail: 'Visits, procedures, eligibility, and the schedule of assessments are extracted with citations.',
   },
   {
@@ -186,7 +186,7 @@ export default function ProtocolOnboarding({ onTabChange }: ProtocolOnboardingPr
             <p>If the upload fails or the parse errors out, the most common causes are:</p>
             <ul className="list-disc pl-5 space-y-1">
               <li><span className={`font-medium ${headingColor}`}>Password-protected PDFs</span> — remove the password and re-upload.</li>
-              <li><span className={`font-medium ${headingColor}`}>Scanned PDFs without OCR</span> — Reducto handles OCR for most documents, but pure-image PDFs without an embedded text layer can fail or extract poorly. Re-export with OCR enabled.</li>
+              <li><span className={`font-medium ${headingColor}`}>Scanned PDFs without OCR</span> — our parser handles OCR for most documents, but pure-image PDFs without an embedded text layer can fail or extract poorly. Re-export with OCR enabled.</li>
               <li><span className={`font-medium ${headingColor}`}>Files over 50 MB</span> — split into smaller documents.</li>
               <li><span className={`font-medium ${headingColor}`}>Transient API issues</span> — wait a minute and try again.</li>
             </ul>

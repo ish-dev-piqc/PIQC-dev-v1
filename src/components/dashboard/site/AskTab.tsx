@@ -179,7 +179,7 @@ export default function AskTab({
             <p className={`${subColor} text-xs mt-2 leading-relaxed`}>
               Ask is grounded in the documents tagged to{' '}
               <span className="font-mono font-semibold">{activeProtocol.code}</span>. Upload a
-              protocol PDF in the document library — once Reducto extracts the protocol
+              protocol PDF in the document library — once we extract the protocol
               number, it will be auto-tagged here and the assistant will switch on.
             </p>
           </div>
