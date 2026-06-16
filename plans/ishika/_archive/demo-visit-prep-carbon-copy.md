@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: demo-visit-prep-carbon-copy
-status: active
+status: merged
+merged: 2026-06-16
 started: 2026-06-16
-target_pr:
+target_pr: #373
 ---
 
 # Demo Visit Prep = carbon copy of prod RPC output
