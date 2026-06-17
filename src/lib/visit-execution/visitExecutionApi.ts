@@ -16,13 +16,30 @@
 
 import { supabase } from '../supabase';
 import type { Result } from '../site/siteApi';
-import { getMockVisitExecutionWorkspaces } from './mockVisitWorkspace';
+import { DEMO_PROTOCOL_IDS } from '../demo/ids';
 import type {
   VisitCoverage,
   VisitCoverageGap,
   VisitExecutionWorkspace,
   VisitRequirementHumanEditEvent,
 } from '../../types/visit-execution';
+
+// In Demo Mode the protocol switcher shows 3 demo "alias" protocol ids, but
+// their Visit-Prep content is the REAL parsed data. That content is NEVER baked
+// into the client bundle (it would be publicly extractable). Instead we map the
+// alias id → the real protocol id and fetch at RUNTIME through the normal
+// RLS-protected RPC: an authenticated owner of the protocol gets the real
+// workspace; anyone else gets an empty (RLS-filtered) result. So no private
+// protocol content ships to the client — it's served per-request, gated by RLS.
+const DEMO_ALIAS_TO_REAL_PROTOCOL: Record<string, string> = {
+  [DEMO_PROTOCOL_IDS['BRIGHTEN-2']]: 'b04e989a-7df7-48e2-bef7-d551d685876a', // PP06489
+  [DEMO_PROTOCOL_IDS['CARDIAC-7']]: '4bf903e9-b98a-46ab-9027-135ac2cac590', // CLR_18_06
+  [DEMO_PROTOCOL_IDS['IMMUNE-14']]: 'cad4ea2e-f63e-4a71-b609-8fba1858b30a', // ND-L02-s0201-005
+};
+
+function resolveProtocolId(protocolId: string): string {
+  return DEMO_ALIAS_TO_REAL_PROTOCOL[protocolId] ?? protocolId;
+}
 
 /**
  * localStorage key that gates the Sprint 1 mock fixture. Default off.
@@ -38,13 +55,11 @@ export const MOCK_TOGGLE_KEY = 'piq-visit-execution-mock-v1';
  */
 export function isMockEnabled(): boolean {
   try {
-    if (typeof window === 'undefined') return false;
-    const ls = window.localStorage;
-    // Mock serves two callers: the dev-only piq-visit-execution-mock-v1 toggle,
-    // and Demo Mode — when the demo toggle is on (server-gated bit set by
-    // DemoModeContext), Visit Prep should show fixture data like every other
-    // demo surface instead of hitting the real RPC with demo protocol ids.
-    return ls.getItem(MOCK_TOGGLE_KEY) === '1' || ls.getItem('piq-demo-active-v1') === '1';
+    // Dev-only toggle for the synthetic coverage / edit-log fixtures below.
+    // NOTE: Demo Mode deliberately does NOT enable this — demo Visit-Prep now
+    // fetches the real workspace at runtime via the RLS-protected RPC (with an
+    // alias→real protocol-id remap), so no protocol content is bundled.
+    return typeof window !== 'undefined' && window.localStorage.getItem(MOCK_TOGGLE_KEY) === '1';
   } catch {
     return false;
   }
@@ -69,13 +84,13 @@ export function isMockEnabled(): boolean {
 export async function fetchVisitExecutionWorkspaces(
   protocolId: string,
 ): Promise<Result<VisitExecutionWorkspace[]>> {
-  if (isMockEnabled()) {
-    const mockWorkspaces = getMockVisitExecutionWorkspaces(protocolId);
-    return { ok: true, data: mockWorkspaces };
-  }
+  // Demo alias ids resolve to the real protocol id; the RPC's own RLS still
+  // gates who gets data back (owner/org only). Content is fetched per-request,
+  // never bundled.
+  const realId = resolveProtocolId(protocolId);
 
   const { data, error } = await supabase.rpc('visit_execution_get_workspace', {
-    p_protocol_id: protocolId,
+    p_protocol_id: realId,
   });
 
   if (error) {
@@ -85,9 +100,13 @@ export async function fetchVisitExecutionWorkspaces(
   // RPC contract: { workspaces: VisitExecutionWorkspace[] }. Anything else
   // is a server-side schema drift; surface as empty rather than crash.
   const payload = data as { workspaces?: unknown } | null;
-  const workspaces = Array.isArray(payload?.workspaces)
+  const raw = Array.isArray(payload?.workspaces)
     ? (payload!.workspaces as VisitExecutionWorkspace[])
     : [];
+  // Re-label to the requested (alias) id so the UI stays consistent with the
+  // demo protocol the user selected in the switcher.
+  const workspaces =
+    realId === protocolId ? raw : raw.map((w) => ({ ...w, protocol_id: protocolId }));
   return { ok: true, data: workspaces };
 }
 
@@ -104,7 +123,7 @@ export async function fetchVisitCoverage(
   if (isMockEnabled()) return { ok: true, data: null };
 
   const { data, error } = await supabase.rpc('visit_execution_get_coverage', {
-    p_protocol_id: protocolId,
+    p_protocol_id: resolveProtocolId(protocolId),
   });
   if (error) return { ok: false, error: error.message };
   if (!data || typeof data !== 'object') return { ok: true, data: null };
