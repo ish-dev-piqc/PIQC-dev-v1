@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: demo-protocol-picker-request-access
-status: active
+status: merged
+merged: 2026-06-17
 started: 2026-06-16
-target_pr:
+target_pr: #377
 ---
 
 # Fix: demo protocols show "Request access" in the navbar picker
