@@ -52,103 +52,43 @@ describe('isMockEnabled', () => {
     // off the mock) depends on this exact string.
     expect(MOCK_TOGGLE_KEY).toBe('piq-visit-execution-mock-v1');
   });
-
-  it('also returns true when Demo Mode is active (piq-demo-active-v1)', () => {
-    window.localStorage.setItem('piq-demo-active-v1', '1');
-    expect(isMockEnabled()).toBe(true);
-  });
 });
 
-describe('Visit Prep populated for all 3 demo protocols in demo mode', () => {
-  beforeEach(() => {
-    window.localStorage.clear();
-    window.localStorage.setItem('piq-demo-active-v1', '1'); // demo mode on, dev toggle off
-  });
+describe('fetchVisitExecutionWorkspaces — demo alias → real protocol remap', () => {
+  // Demo Visit-Prep content is NOT bundled. The 3 demo "alias" protocol ids
+  // resolve to the real protocol id and are fetched at runtime via the
+  // RLS-protected RPC; results are re-labeled to the alias for the UI. (RLS on
+  // the RPC is what actually gates who gets data — owner/org only.)
+  const REAL_IDS: Record<string, string> = {
+    [DEMO_PROTOCOL_IDS['BRIGHTEN-2']]: 'b04e989a-7df7-48e2-bef7-d551d685876a',
+    [DEMO_PROTOCOL_IDS['CARDIAC-7']]: '4bf903e9-b98a-46ab-9027-135ac2cac590',
+    [DEMO_PROTOCOL_IDS['IMMUNE-14']]: 'cad4ea2e-f63e-4a71-b609-8fba1858b30a',
+  };
+
   afterEach(() => {
-    window.localStorage.clear();
     vi.restoreAllMocks();
   });
 
-  it('every demo protocol returns a non-empty workspace list with items, without calling supabase.rpc', async () => {
-    const spy = vi.spyOn(supabase, 'rpc');
-    for (const id of Object.values(DEMO_PROTOCOL_IDS)) {
-      const result = await fetchVisitExecutionWorkspaces(id);
+  it('calls the RPC with the REAL protocol id and re-labels workspaces to the alias', async () => {
+    for (const [alias, realId] of Object.entries(REAL_IDS)) {
+      const spy = vi.spyOn(supabase, 'rpc').mockResolvedValue({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        data: {
+          workspaces: [
+            { visit_template_id: 'vt-1', protocol_id: realId, snapshot: { visit_name: 'V1' }, items: [] },
+          ],
+        },
+        error: null,
+      } as any);
+
+      const result = await fetchVisitExecutionWorkspaces(alias);
+      expect(spy).toHaveBeenCalledWith('visit_execution_get_workspace', { p_protocol_id: realId });
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.data.length, `protocol ${id} workspaces`).toBeGreaterThan(0);
-        // Carbon copy of real data: individual visits may have 0 requirements,
-        // but each protocol has execution items overall (Visit Prep isn't empty).
-        const totalItems = result.data.reduce((n, w) => n + w.items.length, 0);
-        expect(totalItems, `protocol ${id} items`).toBeGreaterThan(0);
+        // content fetched at runtime (never bundled) and re-labeled to the alias
+        expect(result.data[0].protocol_id).toBe(alias);
       }
-    }
-    expect(spy).not.toHaveBeenCalled();
-  });
-});
-
-describe('fetchVisitExecutionWorkspaces — mock on', () => {
-  beforeEach(() => {
-    window.localStorage.clear();
-    window.localStorage.setItem(MOCK_TOGGLE_KEY, '1');
-  });
-  afterEach(() => {
-    window.localStorage.clear();
-    vi.restoreAllMocks();
-  });
-
-  it('returns the BRIGHTEN-2 mock workspaces without calling supabase.rpc', async () => {
-    const spy = vi.spyOn(supabase, 'rpc');
-    const result = await fetchVisitExecutionWorkspaces(DEMO_PROTOCOL_IDS['BRIGHTEN-2']);
-    expect(spy).not.toHaveBeenCalled();
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.data.length).toBeGreaterThan(0);
-      expect(result.data[0].snapshot.visit_name).toBeTruthy();
-    }
-  });
-
-  it('carbon-copy fixture matches the RPC shape: confidence_state, completeness_signals, per-item fields', async () => {
-    // Demo data is a carbon copy of the real RPC output, so confidence_state
-    // may legitimately be null (the RPC returns null when a requirement has no
-    // linked extracted item) — assert null OR a valid enum value, not non-null.
-    const VALID = /^(high|medium|low|needs_review)$/;
-    const result = await fetchVisitExecutionWorkspaces(DEMO_PROTOCOL_IDS['BRIGHTEN-2']);
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    for (const ws of result.data) {
-      if (ws.snapshot.confidence_state !== null) {
-        expect(ws.snapshot.confidence_state).toMatch(VALID);
-      }
-      expect(Array.isArray(ws.snapshot.completeness_signals)).toBe(true);
-      // count rollup always equals array length
-      expect(ws.snapshot.completeness_signal_count).toBe(
-        ws.snapshot.completeness_signals.length,
-      );
-      for (const item of ws.items) {
-        if (item.confidence_state !== null) {
-          expect(item.confidence_state).toMatch(VALID);
-        }
-        // every item carries the real label/derived_text from the parser
-        expect(typeof item.label).toBe('string');
-      }
-    }
-
-    // Any completeness signal present anywhere must be well-formed.
-    const signal = result.data
-      .flatMap((w) => w.snapshot.completeness_signals)
-      .find((s) => !!s);
-    if (signal) {
-      expect(signal.gap_text).toBeTruthy();
-      expect(Date.parse(signal.detected_at)).not.toBeNaN();
-    }
-  });
-
-  it('returns an empty array for a protocol with no mock fixture', async () => {
-    const result = await fetchVisitExecutionWorkspaces('not-a-demo-protocol');
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.data).toEqual([]);
+      spy.mockRestore();
     }
   });
 });

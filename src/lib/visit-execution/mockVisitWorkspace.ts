@@ -1,22 +1,20 @@
 // =============================================================================
-// Visit Execution Workspace — demo fixture.
+// Visit Execution Workspace — mock entry point (now a no-op stub).
 //
-// Demo mode serves a CARBON COPY of the real visit_execution_get_workspace RPC
-// output for the 3 demo protocols, captured from the parsed protocols and
-// remapped to the demo alias ids. The data lives in the generated module
-// `demoVisitWorkspaces.generated.ts` (do not hand-edit it); this module is the
-// stable public entry point the API layer calls.
+// The static demo workspace fixture was REMOVED: it was a carbon copy of real
+// parsed protocol content, which must not ship in the client bundle (anything
+// bundled is publicly extractable). Demo Visit-Prep now fetches the real
+// workspace at RUNTIME via the RLS-protected RPC, with an alias→real protocol-id
+// remap — see visitExecutionApi.fetchVisitExecutionWorkspaces.
 //
-// Gated by the piq-visit-execution-mock-v1 toggle OR Demo Mode (see
-// visitExecutionApi.isMockEnabled). Non-demo protocols → empty array (the real
-// RPC handles those).
+// This stub remains only so the dev-only worksheet-export mock path still
+// compiles; it intentionally returns nothing.
 // =============================================================================
 
 import type { VisitExecutionWorkspace } from '../../types/visit-execution';
-import { DEMO_VISIT_WORKSPACES } from './demoVisitWorkspaces.generated';
 
 export function getMockVisitExecutionWorkspaces(
-  protocolId: string,
+  _protocolId: string,
 ): VisitExecutionWorkspace[] {
-  return DEMO_VISIT_WORKSPACES[protocolId] ?? [];
+  return [];
 }
