@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: demo-visit-prep-runtime-rls
-status: active
+status: merged
+merged: 2026-06-17
 started: 2026-06-16
-target_pr:
+target_pr: #375
 ---
 
 # Demo Visit Prep: fetch real content at runtime (RLS), don't bundle it
