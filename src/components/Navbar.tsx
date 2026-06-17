@@ -170,13 +170,18 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
             // member OR site admin of any org — coarse v1 rule that breaks
             // for multi-org admin/member splits) and ones they can only see
             // metadata for (eligible for a "Request access" affordance).
+            // In demo mode the list IS the demo fixture set — the user "owns"
+            // all of them and real org-membership data doesn't apply. Treat them
+            // all as theirs so demo never shows a "Request access" affordance.
             const isAnyOrgAdmin = myOrgs.some((o) => o.my_role === 'admin');
-            const mine = isAnyOrgAdmin
-              ? protocols
-              : protocols.filter((p) => myProtocolIds.has(p.id));
-            const available = isAnyOrgAdmin
-              ? []
-              : protocols.filter((p) => !myProtocolIds.has(p.id));
+            const mine =
+              demoActive || isAnyOrgAdmin
+                ? protocols
+                : protocols.filter((p) => myProtocolIds.has(p.id));
+            const available =
+              demoActive || isAnyOrgAdmin
+                ? []
+                : protocols.filter((p) => !myProtocolIds.has(p.id));
 
             return (
               <>
