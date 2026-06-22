@@ -131,6 +131,62 @@ export function expandAggregateVisitRow(
   return { expanded };
 }
 
+/**
+ * #3b (column-header form) — expand an aggregate SoA *column header* into
+ * individual visits. Complements expandAggregateVisitRow (which needs the
+ * "Visits N (Weeks M)" name form). Two outcomes, mirroring the codebase bar
+ * "never guess a day; a wrong day is worse than a flagged gap":
+ *   A. unit-led with a STATED period — "Weeks 2,4,6,8" / "Days 1,8,15" /
+ *      "Week 2-5" → expand to Week N (study_day = N×7) / Day N (study_day = N).
+ *      The day is stated by the unit, so this meets the existing safe bar.
+ *   B. label-led range/list with NO stated day — "Dosing 3-6" / "Visit 7-12" /
+ *      "Dosing 10, 12" → looks like several visits but the day isn't stated, so
+ *      FLAG for review rather than fabricate days.
+ * Returns null when the header isn't a clean aggregate. Refuses intra-visit
+ * timing segments ("2-4 h post-dose") so they aren't mistaken for visit sets.
+ */
+export function expandAggregateColumnHeader(
+  header: string,
+): { expanded: ExpandedVisit[] } | { flag: ScheduleGap } | null {
+  const h = (header ?? "").trim();
+  if (!h) return null;
+  // intra-visit timing segments / post-dose windows are NOT visit aggregates
+  if (/\b(pre|post)[ -]?dose|\bhours?\b|\bhrs?\b|\bmin(?:ute)?s?\b/i.test(h)) return null;
+  // must contain a comma/and list (≥2 numbers) or an explicit N-M range
+  const hasList = /\d+\s*(?:,|&|\band\b)\s*\d+/i.test(h);
+  const hasRange = /\b\d+\s*[-–]\s*\d+\b/.test(h);
+  if (!hasList && !hasRange) return null;
+
+  // A. unit-led with a stated period → real days
+  const unit = h.match(/^(weeks?|days?|months?)\s+([\d,&\s–-]+(?:\band\b[\d,&\s–-]*)*)$/i);
+  if (unit) {
+    const nums = parseIntList(unit[2]);
+    if (nums.length >= 2) {
+      const u = unit[1].toLowerCase();
+      const mult = u.startsWith("week") ? 7 : u.startsWith("month") ? 30 : 1;
+      const cap = u.startsWith("week") ? "Week" : u.startsWith("month") ? "Month" : "Day";
+      return { expanded: nums.map((n) => ({ visit_name: `${cap} ${n}`, study_day: n * mult })) };
+    }
+  }
+
+  // B. label-led range/list with no stated day mapping → flag, don't guess.
+  // Optional leading words (word-terminated so they never eat into the schedule
+  // word), then a visit-type word, then the number set: "Dosing 3-6",
+  // "Treatment Visit 7-12", "Dosing 10, 12".
+  if (/^(?:[a-z][a-z .\/-]*?\s+)?(?:visit|dosing|treatment|infusion|cycle)s?\s*#?\s*[\d,&\s–-]+$/i.test(h)) {
+    return {
+      flag: {
+        gap_text: `"${h}" looks like one SoA column standing in for several visits, but no week/day mapping is stated — split it into individual visits and confirm each day.`,
+        source_section: null,
+        source_page: null,
+        detection_confidence: "needs_review",
+        detection_reason: "aggregate_column_unexpanded",
+      },
+    };
+  }
+  return null;
+}
+
 export interface CoverageGap {
   label: string;
   reason: string;

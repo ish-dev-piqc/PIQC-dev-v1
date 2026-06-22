@@ -224,6 +224,20 @@ Deno.test("assignClassification matches primary/secondary endpoints", () => {
 Deno.test("assignClassification matches safety-critical", () => {
   assertEquals(assignClassification("SAE assessment"), "safety_critical");
   assertEquals(assignClassification("Safety-critical post-dose vitals"), "safety_critical");
+  // broadened, high-precision safety terms (standard safety-monitoring procedures)
+  assertEquals(assignClassification("Adverse event review"), "safety_critical");
+  assertEquals(assignClassification("AE/SAE review"), "safety_critical");
+  assertEquals(assignClassification("Dose-limiting toxicity assessment"), "safety_critical");
+  assertEquals(assignClassification("DLT evaluation"), "safety_critical");
+  assertEquals(assignClassification("Concomitant medication review"), "safety_critical");
+  assertEquals(assignClassification("Conmed review"), "safety_critical");
+});
+
+Deno.test("assignClassification stays 'required' for ordinary procedures (no false positives)", () => {
+  for (const l of ["Vital signs", "ECG", "Physical examination", "PK sample collection",
+    "Tumor imaging", "Hematology", "Urinalysis", "Weight", "Faeces sample", "ECOG performance status"]) {
+    assertEquals(assignClassification(l), "required");
+  }
 });
 
 Deno.test("assignClassification matches conditional", () => {

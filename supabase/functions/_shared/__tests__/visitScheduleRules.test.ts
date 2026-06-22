@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   detectImplausibleDay,
+  expandAggregateColumnHeader,
   expandAggregateVisitRow,
   reconcileVisitSequence,
 } from '../visitScheduleRules.ts';
@@ -62,6 +63,44 @@ describe('expandAggregateVisitRow (#3b)', () => {
   it('returns null for a single (non-aggregate) visit', () => {
     expect(expandAggregateVisitRow('Treatment Visit 1')).toBeNull();
     expect(expandAggregateVisitRow('Screening')).toBeNull();
+  });
+});
+
+describe('expandAggregateColumnHeader (#3b column-header form)', () => {
+  it('expands a unit-led week list/range with stated days (×7)', () => {
+    const r = expandAggregateColumnHeader('Weeks 2, 4, 6, 8');
+    expect(r && 'expanded' in r && r.expanded).toEqual([
+      { visit_name: 'Week 2', study_day: 14 },
+      { visit_name: 'Week 4', study_day: 28 },
+      { visit_name: 'Week 6', study_day: 42 },
+      { visit_name: 'Week 8', study_day: 56 },
+    ]);
+    const rng = expandAggregateColumnHeader('Week 2-5');
+    expect(rng && 'expanded' in rng && rng.expanded.map((v) => v.study_day)).toEqual([14, 21, 28, 35]);
+  });
+
+  it('expands a unit-led day list (×1)', () => {
+    const r = expandAggregateColumnHeader('Days 1, 8, 15');
+    expect(r && 'expanded' in r && r.expanded).toEqual([
+      { visit_name: 'Day 1', study_day: 1 },
+      { visit_name: 'Day 8', study_day: 8 },
+      { visit_name: 'Day 15', study_day: 15 },
+    ]);
+  });
+
+  it('FLAGS a label-led range/list with no stated day (never guesses the day)', () => {
+    const range = expandAggregateColumnHeader('Dosing 3-6');
+    expect(range && 'flag' in range && range.flag.detection_reason).toBe('aggregate_column_unexpanded');
+    const list = expandAggregateColumnHeader('Dosing 10, 12');
+    expect(list && 'flag' in list && list.flag.detection_reason).toBe('aggregate_column_unexpanded');
+  });
+
+  it('refuses intra-visit timing ranges and non-aggregates (no false expansion)', () => {
+    expect(expandAggregateColumnHeader('2-4 h post-dose')).toBeNull();   // timing segment
+    expect(expandAggregateColumnHeader('30 min post-dose')).toBeNull();
+    expect(expandAggregateColumnHeader('Week 4')).toBeNull();            // single value
+    expect(expandAggregateColumnHeader('Screening')).toBeNull();
+    expect(expandAggregateColumnHeader('Day 1')).toBeNull();
   });
 });
 

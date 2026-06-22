@@ -736,6 +736,7 @@ export function assembleVisitsFromGrouping(
   const byIdx = new Map(columns.map((c) => [c.idx, c]));
   const schedule: ScheduleOfEventsItem[] = [];
   const citations: SoaCitation[] = [];
+  const isApproxDay = new Map<ScheduleOfEventsItem, boolean>();
 
   for (const v of grouping?.visits ?? []) {
     const srcCols = (v.source_idx ?? [])
@@ -763,7 +764,7 @@ export function assembleVisitsFromGrouping(
     // so a visit is never dropped (see deriveStudyDay for the full ladder).
     const day = deriveStudyDay(name, srcCols[0].header, columnOrder);
 
-    schedule.push({
+    const item: ScheduleOfEventsItem = {
       visit_name: name,
       study_day: day.study_day,
       window_minus_days: day.window_minus_days,
@@ -786,7 +787,9 @@ export function assembleVisitsFromGrouping(
       visit_purpose: "",
       schedule_variant: "",
       cross_references: [],
-    });
+    };
+    schedule.push(item);
+    isApproxDay.set(item, day.approximate);
     citations.push({
       text: `${name} — ${procs.slice(0, 4).map((p) => p.label).join(", ")}`,
       pages,
@@ -796,6 +799,31 @@ export function assembleVisitsFromGrouping(
   }
 
   schedule.sort((a, b) => a.column_order - b.column_order);
+
+  // Monotonic approximate-day pass. A dateless visit (no parseable day — e.g.
+  // "EOFU", "LTFU", "ED") got a column-index fallback from deriveStudyDay, but
+  // Visit Prep sorts by study_day, so a raw column index can interleave it among
+  // real treatment visits. Walk in column order and re-anchor each approximate
+  // day to (last real day seen) + a running offset, so dateless visits sort
+  // immediately AFTER the preceding real visit and keep their sequence. Visits
+  // with a real day are untouched (regression-safe for date-bearing protocols).
+  let lastRealDay: number | null = null;
+  let approxOffset = 0;
+  for (const item of schedule) {
+    if (isApproxDay.get(item)) {
+      if (lastRealDay !== null) {
+        approxOffset += 1;
+        item.study_day = lastRealDay + approxOffset;
+      }
+      // else: no real day seen yet — keep the column-index fallback
+    } else {
+      if (typeof item.study_day === "number") {
+        lastRealDay = lastRealDay === null ? item.study_day : Math.max(lastRealDay, item.study_day);
+      }
+      approxOffset = 0;
+    }
+  }
+
   return { schedule, citations };
 }
 

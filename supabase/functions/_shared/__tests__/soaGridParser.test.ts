@@ -370,6 +370,32 @@ describe("assembleVisitsFromGrouping — golden (PP06489)", () => {
   });
 });
 
+describe("assembleVisitsFromGrouping — monotonic approximate day (Visit Prep sorts by study_day)", () => {
+  const col = (idx: number, header: string): import("../soaGridParser.ts").RawColumn => ({
+    idx, header, page: 1, section: "SoA",
+    procedures: [{ label: `P${idx}`, note: null, mark: "marked" }],
+    markCount: 1,
+  });
+
+  it("anchors a dateless tail visit to (last real day)+1 so it sorts AFTER real visits, not at its column index", () => {
+    // "Follow-up" has no parseable day → deriveStudyDay falls back to column index
+    // (2). The monotonic pass must lift it above the last real day (20) → 21, so a
+    // study_day-sorted UI keeps it last instead of placing it at day 2.
+    const columns = [col(0, "Day 10"), col(1, "Day 20"), col(2, "Follow-up")];
+    const grouping = { visits: columns.map((c) => ({ name: c.header, source_idx: [c.idx] })) };
+    const { schedule } = assembleVisitsFromGrouping(columns, grouping);
+    expect(schedule.map((s) => s.visit_name)).toEqual(["Day 10", "Day 20", "Follow-up"]);
+    expect(schedule.map((s) => s.study_day)).toEqual([10, 20, 21]);
+  });
+
+  it("increments consecutive dateless visits and keeps real-dated visits untouched", () => {
+    const columns = [col(0, "Day 5"), col(1, "EOFU"), col(2, "LTFU")];
+    const grouping = { visits: columns.map((c) => ({ name: c.header, source_idx: [c.idx] })) };
+    const { schedule } = assembleVisitsFromGrouping(columns, grouping);
+    expect(schedule.map((s) => s.study_day)).toEqual([5, 6, 7]); // 5 real, then 6,7 appended
+  });
+});
+
 describe("deriveStudyDay — every visit gets a non-null day so the NOT-NULL persist never drops it", () => {
   it("prefers the explicit Day/Week keyword (cleaned name over terse header)", () => {
     expect(deriveStudyDay("Day 1", "D1 0", 5).study_day).toBe(1);

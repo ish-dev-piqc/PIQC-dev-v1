@@ -30,6 +30,7 @@ import type { RawColumn, VisitGrouping } from "./soaGridParser.ts";
 import { deriveVisitCountSignal } from "./soaColumnCount.ts";
 import {
   detectImplausibleDay,
+  expandAggregateColumnHeader,
   expandAggregateVisitRow,
   reconcileVisitSequence,
 } from "./visitScheduleRules.ts";
@@ -1137,10 +1138,16 @@ export type ItemClassificationValue =
   | "secondary_endpoint"
   | "safety_critical";
 
+// Label-pattern classifier. Conservative + high-precision by design: a label only
+// earns a non-`required` class when it unambiguously matches. safety_critical
+// covers the standard participant-safety-monitoring procedures (AE/SAE, DLT,
+// concomitant meds) — these recur at most visits and are genuinely safety items,
+// not false positives. Endpoint detection stays narrow (SoA labels rarely name
+// "primary endpoint"; richer endpoint binding needs the deferred body-text pass).
 const CLASSIFICATION_PATTERNS: Array<{ cls: ItemClassificationValue; rx: RegExp }> = [
   { cls: "primary_endpoint",   rx: /\bprimary (endpoint|outcome)\b/i },
   { cls: "secondary_endpoint", rx: /\bsecondary (endpoint|outcome)\b/i },
-  { cls: "safety_critical",    rx: /\b(safety-?critical|sae|serious adverse|imp safety)\b/i },
+  { cls: "safety_critical",    rx: /\b(safety-?critical|serious adverse|adverse events?|s?aes?|imp safety|dose[ -]?limiting toxicit\w*|dlt|concomitant medications?|con-?meds?)\b/i },
   { cls: "conditional",        rx: /\bif (subject|participant|female|pregnant)\b/i },
   { cls: "if_applicable",      rx: /\bif applicable\b/i },
 ];
@@ -1237,7 +1244,12 @@ const SOA_GROUPING_SYSTEM =
   "from a clinical protocol's Schedule-of-Assessments tables. Each = {idx, header (verbatim), page, section, procs}.\n" +
   "Your ONLY job: GROUP/SELECT these columns into the final clinical VISIT list for a Visit Prep view. " +
   "Do NOT add visits or procedures — only organise the columns you are given.\n" +
-  "- DROP columns that are not real study visits (table-of-contents / list-of-tables / synopsis restatement / lab-volume table).\n" +
+  "A VISIT is a participant-execution event: a participant-facing encounter or scheduled/triggered execution " +
+  "point (on-site, phone, remote, lab-only, or imaging-only) anchored to a day/week/cycle/milestone/window/" +
+  "trigger. Do NOT rely on the literal word \"visit\" — a column is a visit if it represents such an event.\n" +
+  "- DROP columns that are not real participant study visits: table-of-contents / list-of-tables / synopsis " +
+  "restatement / lab-volume tables, AND non-participant operational items (site initiation, monitoring visit, " +
+  "IRB or regulatory submission, sponsor reporting, staff training).\n" +
   "- The same visit may appear in more than one table (e.g. a terse synopsis code \"D1C1 W0\" AND the full schedule \"Treatment Visit 1, Cycle 1, Week 0\"). These are ONE visit — keep ONLY the source_idx of the column with the MOST DESCRIPTIVE header (e.g. \"Treatment Visit 1…\") and DROP the terse synopsis duplicate; never list the same visit twice.\n" +
   "- COLLAPSE intra-day timepoints into one visit: several columns of the same day split by hours-post-dose " +
   "(e.g. \"D1 0\", \"D1 0.5\", \"D1 2\") become ONE \"Day 1\" visit.\n" +
@@ -2441,8 +2453,12 @@ export async function processIngestCompletion(
         const aggregateFlags: ScheduleGap[] = [];
         const expandedSchedule: LocalScheduleEntry[] = [];
         for (const s of schedule as LocalScheduleEntry[]) {
-          const exp = s && typeof s.visit_name === "string"
-            ? expandAggregateVisitRow(s.visit_name)
+          // Name form ("Treatment Visits 2,3,4,5,6 (Weeks 2,4,6,8,10)") first,
+          // then the SoA column-header form ("Weeks 2,4,6,8" → expand; "Dosing
+          // 3-6" → flag, no stated day to expand on).
+          const name = s && typeof s.visit_name === "string" ? s.visit_name : null;
+          const exp = name
+            ? (expandAggregateVisitRow(name) ?? expandAggregateColumnHeader(name))
             : null;
           if (exp && "expanded" in exp) {
             for (const e of exp.expanded) {
