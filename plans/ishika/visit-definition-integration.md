@@ -1,7 +1,7 @@
 ---
 owner: ish-dev-piqc
 feature: Visit-definition integration — codify ProtocolVisitEvent + close accuracy gaps
-status: active
+status: in-review
 started: 2026-06-22
 target_pr:
 approved_by: "@rv61"   # supabase/functions/_shared/* is Roger's area
