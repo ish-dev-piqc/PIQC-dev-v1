@@ -6,6 +6,7 @@ import type {
 } from '../../../types/visit-execution';
 import TimingBanner from './TimingBanner';
 import VisitConfidenceBadge from './VisitConfidenceBadge';
+import CohortBadge from './CohortBadge';
 
 // =============================================================================
 // VisitSnapshotCard — above-the-fold summary for the selected visit.
@@ -191,6 +192,18 @@ export default function VisitSnapshotCard({
                 {chip.count > 1 ? `${chip.count} ` : ''}{chip.label}
               </span>
             </span>
+          ))}
+        </div>
+      )}
+
+      {/* Slice 2: cohort applicability — only when this visit is cohort-scoped. */}
+      {snapshot.applies_to && snapshot.applies_to.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5" aria-label="Applies to cohorts">
+          <span className="text-fg-label text-[10px] uppercase tracking-wider font-semibold">
+            Applies to
+          </span>
+          {snapshot.applies_to.map((c) => (
+            <CohortBadge key={c} label={c} />
           ))}
         </div>
       )}

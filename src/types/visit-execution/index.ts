@@ -417,6 +417,14 @@ export interface VisitSnapshot {
    */
   confidence_state: VisitConfidenceState | null;
   /**
+   * Study cohort(s)/arm(s) this visit applies to (e.g. ['SAD','MAD'], ['S4']),
+   * derived at ingest from the source SoA tables. `null` = applies to all
+   * participants — a shared/unscoped visit, OR a single-schedule protocol. The
+   * cohort filter renders only when some visit in the protocol is non-null; a
+   * null visit shows under every cohort (same "unscoped → all" rule as roles).
+   */
+  applies_to: string[] | null;
+  /**
    * Count rollup of pending completeness signals — saves consumers from
    * filtering the array for chip badges and navigator counters. Same
    * count-then-array pattern as `conditional_item_count`.

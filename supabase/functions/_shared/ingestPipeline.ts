@@ -2504,6 +2504,15 @@ export async function processIngestCompletion(
             column_order: typeof (s as { column_order?: unknown }).column_order === "number"
               ? Math.trunc((s as { column_order: number }).column_order)
               : null,
+            // Study cohort(s) this visit applies to (assembleVisitsFromGrouping;
+            // null for single-schedule protocols → applies to all). Written here
+            // alongside column_order so it survives the quality-dedup + upsert.
+            applies_to: (() => {
+              const a = (s as { applies_to?: unknown }).applies_to;
+              if (!Array.isArray(a)) return null;
+              const labels = (a as unknown[]).filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+              return labels.length ? labels : null;
+            })(),
             cross_references: sanitizeCrossRefs(s.cross_references),
             source_document_id: docId,
           }));

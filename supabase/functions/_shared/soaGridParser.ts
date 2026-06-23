@@ -603,6 +603,14 @@ export interface ScheduleOfEventsItem {
   visit_purpose: string;
   schedule_variant: string;
   cross_references: unknown[];
+  /**
+   * Study cohort(s)/arm(s) this visit applies to, derived from the source SoA
+   * tables' section headings (+ any "[X only]" header marker). `null` = applies
+   * to all participants (a shared/unscoped visit, or a non-cohort protocol).
+   * A non-null list is only ever produced for a cohort-structured protocol;
+   * single-schedule protocols get `null` everywhere (no behavior change).
+   */
+  applies_to: string[] | null;
 }
 
 /** Normalized citation shape matching ingestPipeline's normalizeReductoCitation output. */
@@ -652,6 +660,7 @@ export function gridToScheduleOfEvents(
       visit_purpose: "", // downstream generateVisitPurpose enriches
       schedule_variant: "",
       cross_references: [],
+      applies_to: null, // legacy grid path is single-schedule; cohorts come via assembleVisitsFromGrouping
     });
     citations.push({
       text: `${v.visit_name} — ${v.procedures.slice(0, 4).map((p) => p.label).join(", ")}`,
@@ -729,6 +738,40 @@ export function deriveStudyDay(
   return { study_day: columnOrder, window_minus_days: wMinus, window_plus_days: wPlus, approximate: true };
 }
 
+// --- cohort applicability --------------------------------------------------
+// A branched study (FIH SAD/MAD, dose-escalation, expansion, food-effect, etc.)
+// expresses cohorts as DISTINCT SoA tables — and each RawColumn already records
+// its source table's `section` heading. So a visit's cohort applicability is
+// derivable deterministically from which tables fed it. cohortLabelFromSection
+// turns a heading into a short cohort label, or null for a generic SoA heading
+// (which keeps single-schedule protocols cohort-free → no behavior change).
+
+/** Short cohort label for a SoA table's section heading, or null if generic. */
+export function cohortLabelFromSection(section: string | null | undefined): string | null {
+  const s = clean(section || "").toLowerCase();
+  if (!s) return null;
+  if (/\bmultiple ascending dose\b|\bmad\b/.test(s)) return "MAD";
+  if (/\bsingle ascending dose\b|\bsad\b/.test(s)) return "SAD";
+  if (/\bcerebrospinal fluid\b|\bcsf\b/.test(s)) return "CSF";
+  let m: RegExpMatchArray | null;
+  if ((m = s.match(/\bpart\s+([a-z0-9]+)\b/))) return `Part ${m[1].toUpperCase()}`;
+  if ((m = s.match(/\bcohort\s+([a-z0-9]+)\b/))) return `Cohort ${m[1].toUpperCase()}`;
+  if (/\bfood[- ]?effect\b|\bfasted\b|\bfed\b/.test(s)) return "Food-effect";
+  if (/\bexpansion\b/.test(s)) return "Expansion";
+  if (/\bdose[ -]?escalat\w*\b|\bdose[ -]level\b/.test(s)) return "Dose-escalation";
+  return null; // generic "Schedule of Assessments" / "Table N" → not a cohort
+}
+
+/** A cohort name carried by an explicit "[X only]" / "(X only)" header marker. */
+export function cohortOnlyRestriction(text: string | null | undefined): string | null {
+  const t = clean(text || "");
+  if (!t) return null;
+  let m = t.match(/[\[(]\s*([A-Za-z0-9][A-Za-z0-9 ]{0,18}?)\s+only\s*[\])]/i);
+  if (m) return m[1].trim().replace(/\s+/g, " ");
+  m = t.match(/\b(S\d{1,2}|Cohort\s+[A-Za-z0-9]+|Part\s+[A-Za-z0-9]+)\s+only\b/i);
+  return m ? m[1].trim().replace(/\s+/g, " ") : null;
+}
+
 export function assembleVisitsFromGrouping(
   columns: readonly RawColumn[],
   grouping: VisitGrouping,
@@ -737,6 +780,8 @@ export function assembleVisitsFromGrouping(
   const schedule: ScheduleOfEventsItem[] = [];
   const citations: SoaCitation[] = [];
   const isApproxDay = new Map<ScheduleOfEventsItem, boolean>();
+  const cohortLabels = new Map<ScheduleOfEventsItem, string[]>();
+  let anyCohortOnly = false;
 
   for (const v of grouping?.visits ?? []) {
     const srcCols = (v.source_idx ?? [])
@@ -764,6 +809,16 @@ export function assembleVisitsFromGrouping(
     // so a visit is never dropped (see deriveStudyDay for the full ladder).
     const day = deriveStudyDay(name, srcCols[0].header, columnOrder);
 
+    // cohort applicability: an explicit "[X only]" header marker is exclusive
+    // (overrides), otherwise the visit applies to the cohort(s) of its source
+    // tables. Empty (no cohort signal) = shared/unscoped. The protocol-level
+    // gate below decides whether any of this is kept (null for non-cohort).
+    const onlyR = cohortOnlyRestriction(name) ?? cohortOnlyRestriction(srcCols[0].header);
+    if (onlyR) anyCohortOnly = true;
+    const labels = onlyR
+      ? [onlyR]
+      : [...new Set(srcCols.map((c) => cohortLabelFromSection(c.section)).filter((x): x is string => !!x))];
+
     const item: ScheduleOfEventsItem = {
       visit_name: name,
       study_day: day.study_day,
@@ -787,9 +842,11 @@ export function assembleVisitsFromGrouping(
       visit_purpose: "",
       schedule_variant: "",
       cross_references: [],
+      applies_to: null, // set in the cohort-gate pass below
     };
     schedule.push(item);
     isApproxDay.set(item, day.approximate);
+    cohortLabels.set(item, labels);
     citations.push({
       text: `${name} — ${procs.slice(0, 4).map((p) => p.label).join(", ")}`,
       pages,
@@ -822,6 +879,20 @@ export function assembleVisitsFromGrouping(
       }
       approxOffset = 0;
     }
+  }
+
+  // Cohort-applicability gate. Only tag visits when the protocol is genuinely
+  // cohort-structured (≥2 distinct cohort labels emerged, or an explicit
+  // "[X only]" marker) — otherwise EVERY visit stays applies_to=null so
+  // single-schedule protocols are unchanged and no cohort UI appears. Within a
+  // cohort protocol, a visit with no cohort signal stays null (shared/unscoped,
+  // shows under every cohort filter — same convention as the role filter).
+  const allCohorts = new Set<string>();
+  for (const ls of cohortLabels.values()) for (const l of ls) allCohorts.add(l);
+  const cohortStructured = allCohorts.size >= 2 || anyCohortOnly;
+  for (const item of schedule) {
+    const ls = cohortLabels.get(item) ?? [];
+    item.applies_to = cohortStructured && ls.length ? [...new Set(ls)].sort() : null;
   }
 
   return { schedule, citations };

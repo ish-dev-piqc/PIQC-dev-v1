@@ -130,6 +130,9 @@ export function adaptVisitTemplate(template: ProtocolVisitTemplate): VisitExecut
     // report and no detected gaps — those come from the v2 RPC once
     // Sprint 3.5b ingest populates the new tables.
     confidence_state: null,
+    // Thin path has no cohort data — null = applies to all (no cohort UI). The
+    // v3+ RPC path returns applies_to directly from the template column.
+    applies_to: null,
     completeness_signal_count: 0,
     completeness_signals: [],
   };
