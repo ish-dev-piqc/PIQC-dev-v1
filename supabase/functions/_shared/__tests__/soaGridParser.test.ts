@@ -438,6 +438,22 @@ describe("cohort applicability", () => {
     const d4 = schedule.find((s) => /Day 4/.test(s.visit_name))!;
     expect(d4.applies_to).toEqual(["S4"]); // "only" is exclusive → overrides the MAD section label
   });
+
+  it("does NOT section-tag shared visits when only ONE cohort table surfaced (parse-robust)", () => {
+    // A thin parse where only the MAD table is labeled: tagging Screening/Day 1
+    // as 'MAD' would be misleading (they apply to all cohorts). Section tags need
+    // ≥2 distinct cohort tables; the lone [S4 Only] marker is still honored.
+    const cols = [
+      col(0, "Screening", "Multiple Ascending Dose"),
+      col(1, "Day 1", "Multiple Ascending Dose"),
+      col(2, "Day 4 [S4 Only]", "Multiple Ascending Dose"),
+    ];
+    const { schedule } = assembleVisitsFromGrouping(cols, idGroup(cols));
+    const by = Object.fromEntries(schedule.map((s) => [s.visit_name, s.applies_to]));
+    expect(by["Screening"]).toBeNull();             // shared, not mislabeled MAD
+    expect(by["Day 1"]).toBeNull();
+    expect(schedule.find((s) => /Day 4/.test(s.visit_name))!.applies_to).toEqual(["S4"]); // marker honored
+  });
 });
 
 describe("assembleVisitsFromGrouping — monotonic approximate day (Visit Prep sorts by study_day)", () => {

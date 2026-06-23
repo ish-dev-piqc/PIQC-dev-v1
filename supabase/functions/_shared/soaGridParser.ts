@@ -780,8 +780,8 @@ export function assembleVisitsFromGrouping(
   const schedule: ScheduleOfEventsItem[] = [];
   const citations: SoaCitation[] = [];
   const isApproxDay = new Map<ScheduleOfEventsItem, boolean>();
-  const cohortLabels = new Map<ScheduleOfEventsItem, string[]>();
-  let anyCohortOnly = false;
+  const cohortSectionLabels = new Map<ScheduleOfEventsItem, string[]>();
+  const cohortOnlyByItem = new Map<ScheduleOfEventsItem, string | null>();
 
   for (const v of grouping?.visits ?? []) {
     const srcCols = (v.source_idx ?? [])
@@ -814,10 +814,9 @@ export function assembleVisitsFromGrouping(
     // tables. Empty (no cohort signal) = shared/unscoped. The protocol-level
     // gate below decides whether any of this is kept (null for non-cohort).
     const onlyR = cohortOnlyRestriction(name) ?? cohortOnlyRestriction(srcCols[0].header);
-    if (onlyR) anyCohortOnly = true;
-    const labels = onlyR
-      ? [onlyR]
-      : [...new Set(srcCols.map((c) => cohortLabelFromSection(c.section)).filter((x): x is string => !!x))];
+    const sectionLs = [...new Set(
+      srcCols.map((c) => cohortLabelFromSection(c.section)).filter((x): x is string => !!x),
+    )];
 
     const item: ScheduleOfEventsItem = {
       visit_name: name,
@@ -846,7 +845,8 @@ export function assembleVisitsFromGrouping(
     };
     schedule.push(item);
     isApproxDay.set(item, day.approximate);
-    cohortLabels.set(item, labels);
+    cohortSectionLabels.set(item, sectionLs);
+    cohortOnlyByItem.set(item, onlyR);
     citations.push({
       text: `${name} — ${procs.slice(0, 4).map((p) => p.label).join(", ")}`,
       pages,
@@ -881,18 +881,22 @@ export function assembleVisitsFromGrouping(
     }
   }
 
-  // Cohort-applicability gate. Only tag visits when the protocol is genuinely
-  // cohort-structured (≥2 distinct cohort labels emerged, or an explicit
-  // "[X only]" marker) — otherwise EVERY visit stays applies_to=null so
-  // single-schedule protocols are unchanged and no cohort UI appears. Within a
-  // cohort protocol, a visit with no cohort signal stays null (shared/unscoped,
-  // shows under every cohort filter — same convention as the role filter).
-  const allCohorts = new Set<string>();
-  for (const ls of cohortLabels.values()) for (const l of ls) allCohorts.add(l);
-  const cohortStructured = allCohorts.size >= 2 || anyCohortOnly;
+  // Cohort-applicability gate. SECTION-derived tags are applied ONLY when the
+  // SoA genuinely separates ≥2 cohorts into distinct tables — otherwise a single
+  // surfaced cohort table (e.g. only "MAD") would mislabel shared visits
+  // (Screening, etc.) as cohort-specific. An explicit "[X only]" header marker is
+  // ALWAYS honored (an exclusive per-visit restriction, parse-robust). Everything
+  // else stays null = applies to all (shared/unscoped, shows under every cohort
+  // filter — same convention as the role filter). Single-schedule protocols →
+  // all null, no cohort UI, no regression.
+  const sectionCohorts = new Set<string>();
+  for (const ls of cohortSectionLabels.values()) for (const l of ls) sectionCohorts.add(l);
+  const sectionGate = sectionCohorts.size >= 2;
   for (const item of schedule) {
-    const ls = cohortLabels.get(item) ?? [];
-    item.applies_to = cohortStructured && ls.length ? [...new Set(ls)].sort() : null;
+    const only = cohortOnlyByItem.get(item);
+    if (only) { item.applies_to = [only]; continue; }
+    const ls = cohortSectionLabels.get(item) ?? [];
+    item.applies_to = sectionGate && ls.length ? [...new Set(ls)].sort() : null;
   }
 
   return { schedule, citations };
