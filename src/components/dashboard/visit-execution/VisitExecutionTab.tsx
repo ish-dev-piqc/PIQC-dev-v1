@@ -134,6 +134,9 @@ export default function VisitExecutionTab() {
   // shouldn't silently carry the filter into a visit where it might
   // produce an empty checklist by surprise.
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
+  // Slice 2: cohort lens over the VISIT LIST (vs roleFilter, which narrows the
+  // checklist within a visit). 'all' or a cohort label (SAD/MAD/CSF/…).
+  const [cohortFilter, setCohortFilter] = useState<string>('all');
 
   // Sprint 4b: RequirementTextDrawer state. Sprint 4c extends to three modes.
   // textDrawerSubject is the generic display payload (title + initial draft
@@ -280,6 +283,31 @@ export default function VisitExecutionTab() {
     () => workspaces.find((w) => w.visit_template_id === selectedId) ?? null,
     [workspaces, selectedId],
   );
+
+  // Slice 2: cohorts present in this protocol = union of every visit's
+  // applies_to. Empty for single-schedule protocols → no cohort filter shown.
+  const cohorts = useMemo(() => {
+    const s = new Set<string>();
+    for (const w of workspaces) for (const c of w.snapshot.applies_to ?? []) s.add(c);
+    return [...s].sort();
+  }, [workspaces]);
+
+  // Visit list under the active cohort lens. A null applies_to (shared/unscoped)
+  // shows under every cohort — same convention as the role filter's "unscoped".
+  const visibleWorkspaces = useMemo(
+    () =>
+      cohortFilter === 'all'
+        ? workspaces
+        : workspaces.filter(
+            (w) => w.snapshot.applies_to == null || w.snapshot.applies_to.includes(cohortFilter),
+          ),
+    [workspaces, cohortFilter],
+  );
+
+  // Reset the cohort lens when the protocol changes (cohorts differ per protocol).
+  useEffect(() => {
+    setCohortFilter('all');
+  }, [activeProtocol?.id]);
 
   // Clear any lingering mutation error when the user changes visits — the
   // error refers to a specific item; banner is contextless once the user
@@ -948,10 +976,13 @@ export default function VisitExecutionTab() {
     body = (
     <div className="flex-1 flex overflow-hidden">
       <VisitNavigator
-        workspaces={workspaces}
+        workspaces={visibleWorkspaces}
         selectedVisitTemplateId={selectedId}
         onSelect={setSelectedId}
         reviewStatusByItemId={reviewStatus}
+        cohorts={cohorts}
+        cohortFilter={cohortFilter}
+        onCohortFilter={setCohortFilter}
       />
 
       <div className="flex-1 overflow-y-auto">

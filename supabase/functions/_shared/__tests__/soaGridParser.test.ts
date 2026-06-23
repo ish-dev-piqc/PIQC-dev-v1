@@ -9,6 +9,7 @@ import {
   extractRawColumns,
   assembleVisitsFromGrouping,
   deriveStudyDay,
+  cohortOnlyRestriction,
   type TableBlock,
 } from "../soaGridParser.ts";
 // Golden fixture: the real Schedule-of-Assessments table blocks Reducto returned
@@ -367,6 +368,76 @@ describe("assembleVisitsFromGrouping — golden (PP06489)", () => {
       ],
     });
     expect(s.map((v) => v.study_day)).toEqual([1, 7, 28]); // none null → none dropped at persist
+  });
+});
+
+describe("cohort applicability", () => {
+  const col = (idx: number, header: string, section: string): import("../soaGridParser.ts").RawColumn => ({
+    idx, header, page: 1, section,
+    procedures: [{ label: `P${idx}`, note: null, mark: "marked" }],
+    markCount: 1,
+  });
+  const idGroup = (cols: import("../soaGridParser.ts").RawColumn[]) => ({
+    visits: cols.map((c) => ({ name: c.header, source_idx: [c.idx] })),
+  });
+
+  it("cohortOnlyRestriction extracts an explicit [X only] / (X only) marker", () => {
+    expect(cohortOnlyRestriction("D3/ET* (D4 [S4 Only])")).toBe("S4");
+    expect(cohortOnlyRestriction("Biopsy (Cohort B only)")).toBe("Cohort B");
+    expect(cohortOnlyRestriction("Day 1")).toBeNull();
+  });
+
+  it("tags ONLY visits with an explicit [X only] marker; everything else is null (applies to all)", () => {
+    // Reliable-markers-only: the parse-unstable section-table signal is NOT used.
+    // Only the exclusive "[S4 Only]" visit is cohort-scoped; the rest stay null
+    // (shared) regardless of which SoA table they came from — so no shared visit
+    // is ever wrongly hidden by the cohort filter.
+    const cols = [
+      col(0, "Screening", "Multiple Ascending Dose"),
+      col(1, "Day 1", "Single Ascending Dose Cohorts"),
+      col(2, "Day 3/ET* (D4 [S4 Only])", "Multiple Ascending Dose"),
+    ];
+    const { schedule } = assembleVisitsFromGrouping(cols, idGroup(cols));
+    const by = Object.fromEntries(schedule.map((s) => [s.visit_name, s.applies_to]));
+    expect(by["Screening"]).toBeNull();
+    expect(by["Day 1"]).toBeNull();
+    expect(schedule.find((s) => /S4 Only/.test(s.visit_name))!.applies_to).toEqual(["S4"]);
+  });
+
+  it("does NOT tag a single-schedule protocol — every visit applies_to=null (no regression)", () => {
+    const cols = [
+      col(0, "Screening", "Table 1: Schedule of Assessments"),
+      col(1, "Day 1", "Table 1: Schedule of Assessments"),
+      col(2, "Day 8", "Table 1: Schedule of Assessments"),
+    ];
+    const { schedule } = assembleVisitsFromGrouping(cols, idGroup(cols));
+    expect(schedule.every((s) => s.applies_to === null)).toBe(true);
+  });
+});
+
+describe("assembleVisitsFromGrouping — monotonic approximate day (Visit Prep sorts by study_day)", () => {
+  const col = (idx: number, header: string): import("../soaGridParser.ts").RawColumn => ({
+    idx, header, page: 1, section: "SoA",
+    procedures: [{ label: `P${idx}`, note: null, mark: "marked" }],
+    markCount: 1,
+  });
+
+  it("anchors a dateless tail visit to (last real day)+1 so it sorts AFTER real visits, not at its column index", () => {
+    // "Follow-up" has no parseable day → deriveStudyDay falls back to column index
+    // (2). The monotonic pass must lift it above the last real day (20) → 21, so a
+    // study_day-sorted UI keeps it last instead of placing it at day 2.
+    const columns = [col(0, "Day 10"), col(1, "Day 20"), col(2, "Follow-up")];
+    const grouping = { visits: columns.map((c) => ({ name: c.header, source_idx: [c.idx] })) };
+    const { schedule } = assembleVisitsFromGrouping(columns, grouping);
+    expect(schedule.map((s) => s.visit_name)).toEqual(["Day 10", "Day 20", "Follow-up"]);
+    expect(schedule.map((s) => s.study_day)).toEqual([10, 20, 21]);
+  });
+
+  it("increments consecutive dateless visits and keeps real-dated visits untouched", () => {
+    const columns = [col(0, "Day 5"), col(1, "EOFU"), col(2, "LTFU")];
+    const grouping = { visits: columns.map((c) => ({ name: c.header, source_idx: [c.idx] })) };
+    const { schedule } = assembleVisitsFromGrouping(columns, grouping);
+    expect(schedule.map((s) => s.study_day)).toEqual([5, 6, 7]); // 5 real, then 6,7 appended
   });
 });
 

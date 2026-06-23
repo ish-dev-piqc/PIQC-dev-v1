@@ -8,6 +8,7 @@ import type {
 } from '../../../types/visit-execution';
 import { deriveVisitConfidence } from '../../../lib/visit-execution/deriveVisitConfidence';
 import VisitConfidenceBadge from './VisitConfidenceBadge';
+import CohortFilterBar from './CohortFilterBar';
 
 // =============================================================================
 // VisitNavigator — left rail of the workspace. Lists every visit in the
@@ -37,6 +38,10 @@ interface Props {
   selectedVisitTemplateId: string | null;
   onSelect: (visitTemplateId: string) => void;
   reviewStatusByItemId: Map<string, ExecutionReviewStatus>;
+  /** Slice 2: cohort labels present in the protocol (empty = single-schedule). */
+  cohorts?: string[];
+  cohortFilter?: string;
+  onCohortFilter?: (next: string) => void;
 }
 
 export default function VisitNavigator({
@@ -44,6 +49,9 @@ export default function VisitNavigator({
   selectedVisitTemplateId,
   onSelect,
   reviewStatusByItemId,
+  cohorts = [],
+  cohortFilter = 'all',
+  onCohortFilter,
 }: Props) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
@@ -75,8 +83,15 @@ export default function VisitNavigator({
           Visit
         </p>
         <p className="text-fg-heading text-sm font-semibold mt-1">
-          {workspaces.length} visit{workspaces.length === 1 ? '' : 's'} in protocol
+          {workspaces.length} visit{workspaces.length === 1 ? '' : 's'}
+          {cohortFilter !== 'all' ? ` · ${cohortFilter}` : ' in protocol'}
         </p>
+        {/* Slice 2: cohort lens — only for genuinely cohort-structured protocols. */}
+        {cohorts.length >= 2 && onCohortFilter && (
+          <div className="mt-3">
+            <CohortFilterBar cohorts={cohorts} value={cohortFilter} onSelect={onCohortFilter} />
+          </div>
+        )}
       </div>
 
       <ol className="py-2">

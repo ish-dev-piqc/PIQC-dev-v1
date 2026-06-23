@@ -603,6 +603,14 @@ export interface ScheduleOfEventsItem {
   visit_purpose: string;
   schedule_variant: string;
   cross_references: unknown[];
+  /**
+   * Study cohort(s)/arm(s) this visit applies to, derived from the source SoA
+   * tables' section headings (+ any "[X only]" header marker). `null` = applies
+   * to all participants (a shared/unscoped visit, or a non-cohort protocol).
+   * A non-null list is only ever produced for a cohort-structured protocol;
+   * single-schedule protocols get `null` everywhere (no behavior change).
+   */
+  applies_to: string[] | null;
 }
 
 /** Normalized citation shape matching ingestPipeline's normalizeReductoCitation output. */
@@ -652,6 +660,7 @@ export function gridToScheduleOfEvents(
       visit_purpose: "", // downstream generateVisitPurpose enriches
       schedule_variant: "",
       cross_references: [],
+      applies_to: null, // legacy grid path is single-schedule; cohorts come via assembleVisitsFromGrouping
     });
     citations.push({
       text: `${v.visit_name} — ${v.procedures.slice(0, 4).map((p) => p.label).join(", ")}`,
@@ -729,6 +738,25 @@ export function deriveStudyDay(
   return { study_day: columnOrder, window_minus_days: wMinus, window_plus_days: wPlus, approximate: true };
 }
 
+// --- cohort applicability --------------------------------------------------
+// A visit's cohort applicability is set ONLY from an explicit, exclusive
+// "[X only]" header marker (e.g. "D3/ET* (D4 [S4 Only])" → ["S4"]) — a stable,
+// parse-robust signal. Deriving applicability from which SoA TABLE a column came
+// from was tried and dropped: Reducto's table segmentation is non-deterministic,
+// so it mislabeled shared visits (a wrongly-hidden visit is a clinical risk).
+// Accurate cohort separation (SAD vs MAD schedules) waits for the body-text
+// cohort-definition slice. Everything without a marker → null (applies to all).
+
+/** A cohort name carried by an explicit "[X only]" / "(X only)" header marker. */
+export function cohortOnlyRestriction(text: string | null | undefined): string | null {
+  const t = clean(text || "");
+  if (!t) return null;
+  let m = t.match(/[\[(]\s*([A-Za-z0-9][A-Za-z0-9 ]{0,18}?)\s+only\s*[\])]/i);
+  if (m) return m[1].trim().replace(/\s+/g, " ");
+  m = t.match(/\b(S\d{1,2}|Cohort\s+[A-Za-z0-9]+|Part\s+[A-Za-z0-9]+)\s+only\b/i);
+  return m ? m[1].trim().replace(/\s+/g, " ") : null;
+}
+
 export function assembleVisitsFromGrouping(
   columns: readonly RawColumn[],
   grouping: VisitGrouping,
@@ -736,6 +764,7 @@ export function assembleVisitsFromGrouping(
   const byIdx = new Map(columns.map((c) => [c.idx, c]));
   const schedule: ScheduleOfEventsItem[] = [];
   const citations: SoaCitation[] = [];
+  const isApproxDay = new Map<ScheduleOfEventsItem, boolean>();
 
   for (const v of grouping?.visits ?? []) {
     const srcCols = (v.source_idx ?? [])
@@ -763,7 +792,11 @@ export function assembleVisitsFromGrouping(
     // so a visit is never dropped (see deriveStudyDay for the full ladder).
     const day = deriveStudyDay(name, srcCols[0].header, columnOrder);
 
-    schedule.push({
+    // cohort applicability: an explicit, exclusive "[X only]" header marker only
+    // (stable + parse-robust). No marker → null = applies to all participants.
+    const onlyR = cohortOnlyRestriction(name) ?? cohortOnlyRestriction(srcCols[0].header);
+
+    const item: ScheduleOfEventsItem = {
       visit_name: name,
       study_day: day.study_day,
       window_minus_days: day.window_minus_days,
@@ -786,7 +819,10 @@ export function assembleVisitsFromGrouping(
       visit_purpose: "",
       schedule_variant: "",
       cross_references: [],
-    });
+      applies_to: onlyR ? [onlyR] : null,
+    };
+    schedule.push(item);
+    isApproxDay.set(item, day.approximate);
     citations.push({
       text: `${name} — ${procs.slice(0, 4).map((p) => p.label).join(", ")}`,
       pages,
@@ -796,6 +832,31 @@ export function assembleVisitsFromGrouping(
   }
 
   schedule.sort((a, b) => a.column_order - b.column_order);
+
+  // Monotonic approximate-day pass. A dateless visit (no parseable day — e.g.
+  // "EOFU", "LTFU", "ED") got a column-index fallback from deriveStudyDay, but
+  // Visit Prep sorts by study_day, so a raw column index can interleave it among
+  // real treatment visits. Walk in column order and re-anchor each approximate
+  // day to (last real day seen) + a running offset, so dateless visits sort
+  // immediately AFTER the preceding real visit and keep their sequence. Visits
+  // with a real day are untouched (regression-safe for date-bearing protocols).
+  let lastRealDay: number | null = null;
+  let approxOffset = 0;
+  for (const item of schedule) {
+    if (isApproxDay.get(item)) {
+      if (lastRealDay !== null) {
+        approxOffset += 1;
+        item.study_day = lastRealDay + approxOffset;
+      }
+      // else: no real day seen yet — keep the column-index fallback
+    } else {
+      if (typeof item.study_day === "number") {
+        lastRealDay = lastRealDay === null ? item.study_day : Math.max(lastRealDay, item.study_day);
+      }
+      approxOffset = 0;
+    }
+  }
+
   return { schedule, citations };
 }
 
