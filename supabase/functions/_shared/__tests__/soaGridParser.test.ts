@@ -9,7 +9,6 @@ import {
   extractRawColumns,
   assembleVisitsFromGrouping,
   deriveStudyDay,
-  cohortLabelFromSection,
   cohortOnlyRestriction,
   type TableBlock,
 } from "../soaGridParser.ts";
@@ -382,24 +381,27 @@ describe("cohort applicability", () => {
     visits: cols.map((c) => ({ name: c.header, source_idx: [c.idx] })),
   });
 
-  it("cohortLabelFromSection maps cohort headings → short labels, generic SoA → null", () => {
-    expect(cohortLabelFromSection("Table 2: Multiple Ascending Dose")).toBe("MAD");
-    expect(cohortLabelFromSection("Single Ascending Dose Cohorts S1, S2, S3")).toBe("SAD");
-    expect(cohortLabelFromSection("Cerebrospinal Fluid Collection")).toBe("CSF");
-    expect(cohortLabelFromSection("Part 1 dosing")).toBe("Part 1");
-    expect(cohortLabelFromSection("Cohort B expansion")).toBe("Cohort B"); // named cohort beats generic "expansion"
-    expect(cohortLabelFromSection("Expansion phase")).toBe("Expansion");
-    expect(cohortLabelFromSection("Food-effect sub-study")).toBe("Food-effect");
-    // generic → null (keeps single-schedule protocols cohort-free)
-    expect(cohortLabelFromSection("Schedule of Assessments")).toBeNull();
-    expect(cohortLabelFromSection("Table 1: Schedule of Assessments")).toBeNull();
-    expect(cohortLabelFromSection("")).toBeNull();
-  });
-
   it("cohortOnlyRestriction extracts an explicit [X only] / (X only) marker", () => {
     expect(cohortOnlyRestriction("D3/ET* (D4 [S4 Only])")).toBe("S4");
     expect(cohortOnlyRestriction("Biopsy (Cohort B only)")).toBe("Cohort B");
     expect(cohortOnlyRestriction("Day 1")).toBeNull();
+  });
+
+  it("tags ONLY visits with an explicit [X only] marker; everything else is null (applies to all)", () => {
+    // Reliable-markers-only: the parse-unstable section-table signal is NOT used.
+    // Only the exclusive "[S4 Only]" visit is cohort-scoped; the rest stay null
+    // (shared) regardless of which SoA table they came from — so no shared visit
+    // is ever wrongly hidden by the cohort filter.
+    const cols = [
+      col(0, "Screening", "Multiple Ascending Dose"),
+      col(1, "Day 1", "Single Ascending Dose Cohorts"),
+      col(2, "Day 3/ET* (D4 [S4 Only])", "Multiple Ascending Dose"),
+    ];
+    const { schedule } = assembleVisitsFromGrouping(cols, idGroup(cols));
+    const by = Object.fromEntries(schedule.map((s) => [s.visit_name, s.applies_to]));
+    expect(by["Screening"]).toBeNull();
+    expect(by["Day 1"]).toBeNull();
+    expect(schedule.find((s) => /S4 Only/.test(s.visit_name))!.applies_to).toEqual(["S4"]);
   });
 
   it("does NOT tag a single-schedule protocol — every visit applies_to=null (no regression)", () => {
@@ -410,49 +412,6 @@ describe("cohort applicability", () => {
     ];
     const { schedule } = assembleVisitsFromGrouping(cols, idGroup(cols));
     expect(schedule.every((s) => s.applies_to === null)).toBe(true);
-  });
-
-  it("tags visits by their source cohort table when ≥2 cohorts exist (shared vs cohort-specific)", () => {
-    const cols = [
-      col(0, "Day 1", "Single Ascending Dose Cohorts"),  // SAD
-      col(1, "Day 1", "Multiple Ascending Dose"),         // MAD  → merges with SAD Day 1
-      col(2, "Day 5", "Multiple Ascending Dose"),         // MAD only
-    ];
-    // group: merge the two "Day 1" columns into one visit; Day 5 separate
-    const grouping = { visits: [
-      { name: "Day 1", source_idx: [0, 1] },
-      { name: "Day 5", source_idx: [2] },
-    ]};
-    const { schedule } = assembleVisitsFromGrouping(cols, grouping);
-    const byName = Object.fromEntries(schedule.map((s) => [s.visit_name, s.applies_to]));
-    expect(byName["Day 1"]).toEqual(["MAD", "SAD"]); // shared across both cohorts
-    expect(byName["Day 5"]).toEqual(["MAD"]);          // MAD-only
-  });
-
-  it("an explicit [S4 Only] header restricts that visit to the named cohort", () => {
-    const cols = [
-      col(0, "Day 3", "Multiple Ascending Dose"),
-      col(1, "Day 4 [S4 Only]", "Multiple Ascending Dose"),
-    ];
-    const { schedule } = assembleVisitsFromGrouping(cols, idGroup(cols));
-    const d4 = schedule.find((s) => /Day 4/.test(s.visit_name))!;
-    expect(d4.applies_to).toEqual(["S4"]); // "only" is exclusive → overrides the MAD section label
-  });
-
-  it("does NOT section-tag shared visits when only ONE cohort table surfaced (parse-robust)", () => {
-    // A thin parse where only the MAD table is labeled: tagging Screening/Day 1
-    // as 'MAD' would be misleading (they apply to all cohorts). Section tags need
-    // ≥2 distinct cohort tables; the lone [S4 Only] marker is still honored.
-    const cols = [
-      col(0, "Screening", "Multiple Ascending Dose"),
-      col(1, "Day 1", "Multiple Ascending Dose"),
-      col(2, "Day 4 [S4 Only]", "Multiple Ascending Dose"),
-    ];
-    const { schedule } = assembleVisitsFromGrouping(cols, idGroup(cols));
-    const by = Object.fromEntries(schedule.map((s) => [s.visit_name, s.applies_to]));
-    expect(by["Screening"]).toBeNull();             // shared, not mislabeled MAD
-    expect(by["Day 1"]).toBeNull();
-    expect(schedule.find((s) => /Day 4/.test(s.visit_name))!.applies_to).toEqual(["S4"]); // marker honored
   });
 });
 

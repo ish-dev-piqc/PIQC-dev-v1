@@ -739,28 +739,13 @@ export function deriveStudyDay(
 }
 
 // --- cohort applicability --------------------------------------------------
-// A branched study (FIH SAD/MAD, dose-escalation, expansion, food-effect, etc.)
-// expresses cohorts as DISTINCT SoA tables — and each RawColumn already records
-// its source table's `section` heading. So a visit's cohort applicability is
-// derivable deterministically from which tables fed it. cohortLabelFromSection
-// turns a heading into a short cohort label, or null for a generic SoA heading
-// (which keeps single-schedule protocols cohort-free → no behavior change).
-
-/** Short cohort label for a SoA table's section heading, or null if generic. */
-export function cohortLabelFromSection(section: string | null | undefined): string | null {
-  const s = clean(section || "").toLowerCase();
-  if (!s) return null;
-  if (/\bmultiple ascending dose\b|\bmad\b/.test(s)) return "MAD";
-  if (/\bsingle ascending dose\b|\bsad\b/.test(s)) return "SAD";
-  if (/\bcerebrospinal fluid\b|\bcsf\b/.test(s)) return "CSF";
-  let m: RegExpMatchArray | null;
-  if ((m = s.match(/\bpart\s+([a-z0-9]+)\b/))) return `Part ${m[1].toUpperCase()}`;
-  if ((m = s.match(/\bcohort\s+([a-z0-9]+)\b/))) return `Cohort ${m[1].toUpperCase()}`;
-  if (/\bfood[- ]?effect\b|\bfasted\b|\bfed\b/.test(s)) return "Food-effect";
-  if (/\bexpansion\b/.test(s)) return "Expansion";
-  if (/\bdose[ -]?escalat\w*\b|\bdose[ -]level\b/.test(s)) return "Dose-escalation";
-  return null; // generic "Schedule of Assessments" / "Table N" → not a cohort
-}
+// A visit's cohort applicability is set ONLY from an explicit, exclusive
+// "[X only]" header marker (e.g. "D3/ET* (D4 [S4 Only])" → ["S4"]) — a stable,
+// parse-robust signal. Deriving applicability from which SoA TABLE a column came
+// from was tried and dropped: Reducto's table segmentation is non-deterministic,
+// so it mislabeled shared visits (a wrongly-hidden visit is a clinical risk).
+// Accurate cohort separation (SAD vs MAD schedules) waits for the body-text
+// cohort-definition slice. Everything without a marker → null (applies to all).
 
 /** A cohort name carried by an explicit "[X only]" / "(X only)" header marker. */
 export function cohortOnlyRestriction(text: string | null | undefined): string | null {
@@ -780,8 +765,6 @@ export function assembleVisitsFromGrouping(
   const schedule: ScheduleOfEventsItem[] = [];
   const citations: SoaCitation[] = [];
   const isApproxDay = new Map<ScheduleOfEventsItem, boolean>();
-  const cohortSectionLabels = new Map<ScheduleOfEventsItem, string[]>();
-  const cohortOnlyByItem = new Map<ScheduleOfEventsItem, string | null>();
 
   for (const v of grouping?.visits ?? []) {
     const srcCols = (v.source_idx ?? [])
@@ -809,14 +792,9 @@ export function assembleVisitsFromGrouping(
     // so a visit is never dropped (see deriveStudyDay for the full ladder).
     const day = deriveStudyDay(name, srcCols[0].header, columnOrder);
 
-    // cohort applicability: an explicit "[X only]" header marker is exclusive
-    // (overrides), otherwise the visit applies to the cohort(s) of its source
-    // tables. Empty (no cohort signal) = shared/unscoped. The protocol-level
-    // gate below decides whether any of this is kept (null for non-cohort).
+    // cohort applicability: an explicit, exclusive "[X only]" header marker only
+    // (stable + parse-robust). No marker → null = applies to all participants.
     const onlyR = cohortOnlyRestriction(name) ?? cohortOnlyRestriction(srcCols[0].header);
-    const sectionLs = [...new Set(
-      srcCols.map((c) => cohortLabelFromSection(c.section)).filter((x): x is string => !!x),
-    )];
 
     const item: ScheduleOfEventsItem = {
       visit_name: name,
@@ -841,12 +819,10 @@ export function assembleVisitsFromGrouping(
       visit_purpose: "",
       schedule_variant: "",
       cross_references: [],
-      applies_to: null, // set in the cohort-gate pass below
+      applies_to: onlyR ? [onlyR] : null,
     };
     schedule.push(item);
     isApproxDay.set(item, day.approximate);
-    cohortSectionLabels.set(item, sectionLs);
-    cohortOnlyByItem.set(item, onlyR);
     citations.push({
       text: `${name} — ${procs.slice(0, 4).map((p) => p.label).join(", ")}`,
       pages,
@@ -879,24 +855,6 @@ export function assembleVisitsFromGrouping(
       }
       approxOffset = 0;
     }
-  }
-
-  // Cohort-applicability gate. SECTION-derived tags are applied ONLY when the
-  // SoA genuinely separates ≥2 cohorts into distinct tables — otherwise a single
-  // surfaced cohort table (e.g. only "MAD") would mislabel shared visits
-  // (Screening, etc.) as cohort-specific. An explicit "[X only]" header marker is
-  // ALWAYS honored (an exclusive per-visit restriction, parse-robust). Everything
-  // else stays null = applies to all (shared/unscoped, shows under every cohort
-  // filter — same convention as the role filter). Single-schedule protocols →
-  // all null, no cohort UI, no regression.
-  const sectionCohorts = new Set<string>();
-  for (const ls of cohortSectionLabels.values()) for (const l of ls) sectionCohorts.add(l);
-  const sectionGate = sectionCohorts.size >= 2;
-  for (const item of schedule) {
-    const only = cohortOnlyByItem.get(item);
-    if (only) { item.applies_to = [only]; continue; }
-    const ls = cohortSectionLabels.get(item) ?? [];
-    item.applies_to = sectionGate && ls.length ? [...new Set(ls)].sort() : null;
   }
 
   return { schedule, citations };

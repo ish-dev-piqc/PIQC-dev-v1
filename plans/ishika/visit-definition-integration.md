@@ -22,7 +22,7 @@ Full design + frozen regression baseline: `~/.claude/plans/ok-so-now-lets-wiggly
 - `plans/ishika/visit-definition-integration.md`
 
 ### Slice 2 — cohort applicability (same branch)
-- `supabase/functions/_shared/soaGridParser.ts` — `cohortLabelFromSection`, `cohortOnlyRestriction`, `applies_to` derivation in `assembleVisitsFromGrouping`, `ScheduleOfEventsItem.applies_to`.
+- `supabase/functions/_shared/soaGridParser.ts` — `cohortOnlyRestriction` + `applies_to` in `assembleVisitsFromGrouping` (**reliable-markers-only**: explicit `[X only]` → `[X]`, else null). Section-table-derived MAD/SAD/CSF tagging was prototyped then dropped — Reducto's table segmentation is non-deterministic, so it mislabeled shared visits (a wrongly-hidden visit is a clinical risk). Accurate cohort separation is deferred to the body-text cohort-definition slice. `ScheduleOfEventsItem.applies_to`.
 - `supabase/functions/_shared/ingestPipeline.ts` — write `applies_to` on the `protocol_visit_templates` upsert (alongside `column_order`).
 - `supabase/migrations/20260705000000_visit_template_cohort_applicability.sql` (NEW) — `ADD COLUMN applies_to TEXT[]` + `CREATE OR REPLACE visit_execution_get_workspace` (v7, returns `applies_to`). Persist RPC untouched.
 - `src/types/visit-execution/index.ts` — `VisitSnapshot.applies_to`.
