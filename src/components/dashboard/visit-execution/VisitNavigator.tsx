@@ -9,6 +9,7 @@ import type {
 import { deriveVisitConfidence } from '../../../lib/visit-execution/deriveVisitConfidence';
 import VisitConfidenceBadge from './VisitConfidenceBadge';
 import CohortFilterBar from './CohortFilterBar';
+import CohortBadge from './CohortBadge';
 
 // =============================================================================
 // VisitNavigator — left rail of the workspace. Lists every visit in the
@@ -150,6 +151,15 @@ export default function VisitNavigator({
                       <span className="truncate">{ws.snapshot.visit_name}</span>
                     </p>
                     <p className="text-fg-muted text-[11px] mt-0.5">{dayLabel}</p>
+                    {/* Slice 2: cohort-restricted visits are badged inline so they're
+                        visible on a rail sweep (not only on the selected snapshot card). */}
+                    {ws.snapshot.applies_to && ws.snapshot.applies_to.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {ws.snapshot.applies_to.map((c) => (
+                          <CohortBadge key={c} label={c} />
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Counter pinned right. Verb-aligned label ("to review"
