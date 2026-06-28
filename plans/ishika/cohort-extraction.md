@@ -23,6 +23,7 @@ it**. Generalized + evidence-driven: two guarantees — (a) all cohorts appear o
 ## Scope (files allowed)
 
 - supabase/functions/_shared/soaGridParser.ts
+- supabase/functions/_shared/cohortExtraction.ts   (NEW — pure study_cohorts parse + RAG↔schedule reconcile; vitest-importable, since ingestPipeline can't be)
 - supabase/functions/_shared/ingestPipeline.ts
 - supabase/migrations/20260706000000_protocol_cohorts.sql   (NEW)
 - src/types/visit-execution/index.ts

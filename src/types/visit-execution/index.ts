@@ -494,6 +494,29 @@ export interface VisitCoverage {
 
 
 // ---------------------------------------------------------------------------
+// Slice 3 — authoritative per-protocol cohort list. Mirrors the
+// `protocol_cohorts` table (migration 20260706000000). Extracted from the
+// protocol body at ingest (the same prose the Ask/RAG tab reads); fetched
+// directly under RLS (fetchProtocolCohorts). Drives the Visit-Prep cohort
+// selector (so EVERY cohort shows, not just SoA "[X only]" markers) + the
+// per-cohort dose panel. Empty = non-cohort protocol → no cohort UI. The
+// per-VISIT cohort scope stays on VisitSnapshot.applies_to.
+// ---------------------------------------------------------------------------
+export interface ProtocolCohort {
+  /** Canonical cohort label (matches VisitSnapshot.applies_to entries), e.g. 'S1', 'MAD'. */
+  label: string;
+  /** Per-cohort dose / regimen prose, or null if not stated. */
+  dose_regimen: string | null;
+  /** Free-text cohort description (population / purpose), or null. */
+  description: string | null;
+  /** Display order = the protocol's own cohort order (0-based). */
+  ordinal: number;
+  /** Evidence: PDF page the cohort was read from, or null. */
+  source_page: number | null;
+}
+
+
+// ---------------------------------------------------------------------------
 // Default-expansion logic — pure function used by ExecutionChecklist to
 // pick which phases auto-expand on visit selection. Keeps the first-screen
 // "collapse cognitive load" promise: 7 phases collapsed by default, 1-2

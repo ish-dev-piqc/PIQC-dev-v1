@@ -3,7 +3,7 @@ import { Loader2, FlaskConical, X, AlertTriangle, Plus, Database } from 'lucide-
 import { useAuth } from '../../../context/AuthContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useTheme } from '../../../context/ThemeContext';
-import { fetchVisitExecutionWorkspaces, fetchVisitCoverage, isMockEnabled } from '../../../lib/visit-execution/visitExecutionApi';
+import { fetchVisitExecutionWorkspaces, fetchVisitCoverage, fetchProtocolCohorts, isMockEnabled } from '../../../lib/visit-execution/visitExecutionApi';
 // Cross-mode import allowed: sourceEvidenceApi is on the piqc-discipline
 // ALLOWED_CROSS_MODE allowlist (same helper the old Protocol tab badge used).
 import { countWorksheetItemsForStudy } from '../../../lib/sotr/sourceEvidenceApi';
@@ -22,6 +22,7 @@ import {
 } from '../../../lib/visit-execution/visitExecutionMutationsApi';
 import type {
   ExecutionReviewStatus,
+  ProtocolCohort,
   RoleFilter,
   VisitCompletenessSignal,
   VisitExecutionItem,
@@ -42,6 +43,7 @@ import RequirementTextDrawer, {
 import CompletenessSignalsPanel from './CompletenessSignalsPanel';
 import EditLogDrawer from './EditLogDrawer';
 import RoleFilterBar from './RoleFilterBar';
+import CohortDetailPanel from './CohortDetailPanel';
 
 // =============================================================================
 // VisitExecutionTab — root component for the new primary Site Mode surface.
@@ -107,6 +109,10 @@ export default function VisitExecutionTab() {
 
   const [workspaces, setWorkspaces] = useState<VisitExecutionWorkspace[]>([]);
   const [coverage, setCoverage] = useState<VisitCoverage | null>(null);
+  // Slice 3: authoritative per-protocol cohort list (label + dose + evidence),
+  // extracted from the protocol body. Drives the cohort selector (so EVERY
+  // cohort shows, not just SoA "[X only]" markers) + the per-cohort dose panel.
+  const [protocolCohorts, setProtocolCohorts] = useState<ProtocolCohort[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -233,6 +239,7 @@ export default function VisitExecutionTab() {
     if (!activeProtocol) {
       setWorkspaces([]);
       setCoverage(null);
+      setProtocolCohorts([]);
       setSelectedId(null);
       return;
     }
@@ -242,6 +249,11 @@ export default function VisitExecutionTab() {
     // Completeness coverage (#4) — best-effort, independent of the workspace load.
     fetchVisitCoverage(activeProtocol.id).then((cr) => {
       if (!cancelled) setCoverage(cr.ok ? cr.data : null);
+    });
+    // Slice 3: authoritative cohort list — best-effort, independent of the
+    // workspace load. Empty / error → no cohort UI (no behavior change).
+    fetchProtocolCohorts(activeProtocol.id).then((cr) => {
+      if (!cancelled) setProtocolCohorts(cr.ok ? cr.data : []);
     });
     fetchVisitExecutionWorkspaces(activeProtocol.id).then((r) => {
       if (cancelled) return;
@@ -284,13 +296,35 @@ export default function VisitExecutionTab() {
     [workspaces, selectedId],
   );
 
-  // Slice 2: cohorts present in this protocol = union of every visit's
-  // applies_to. Empty for single-schedule protocols → no cohort filter shown.
+  // Slice 3: cohort selector list = the AUTHORITATIVE protocol_cohorts (so every
+  // cohort shows — even ones whose visits are all shared/null), in the protocol's
+  // own order, UNIONed with any visit applies_to tag not already in that list
+  // (defensive: a "[X only]" marker cohort the body extraction happened to miss
+  // still shows). Empty → no cohort filter (single-schedule; no behavior change).
   const cohorts = useMemo(() => {
-    const s = new Set<string>();
-    for (const w of workspaces) for (const c of w.snapshot.applies_to ?? []) s.add(c);
-    return [...s].sort();
-  }, [workspaces]);
+    const ordered = protocolCohorts.map((c) => c.label);
+    const seen = new Set(ordered.map((l) => l.toLowerCase()));
+    for (const w of workspaces) {
+      for (const c of w.snapshot.applies_to ?? []) {
+        if (!seen.has(c.toLowerCase())) {
+          seen.add(c.toLowerCase());
+          ordered.push(c);
+        }
+      }
+    }
+    return ordered;
+  }, [protocolCohorts, workspaces]);
+
+  // Slice 3: the selected cohort's detail (dose / description) for the panel.
+  // null when "all", or when the active label is a marker-only cohort with no
+  // protocol_cohorts row (defensive — the panel simply doesn't render).
+  const selectedCohort = useMemo(
+    () =>
+      cohortFilter === 'all'
+        ? null
+        : protocolCohorts.find((c) => c.label === cohortFilter) ?? null,
+    [cohortFilter, protocolCohorts],
+  );
 
   // Visit list under the active cohort lens. A null applies_to (shared/unscoped)
   // shows under every cohort — same convention as the role filter's "unscoped".
@@ -988,6 +1022,9 @@ export default function VisitExecutionTab() {
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-4xl mx-auto px-5 sm:px-8 py-6 space-y-5">
           <CoverageBanner coverage={coverage} />
+          {/* Slice 3: per-cohort dose/description when a specific cohort is
+              selected. The shared visit schedule renders below unchanged. */}
+          {selectedCohort && <CohortDetailPanel cohort={selectedCohort} />}
           {selectedWorkspace ? (
             <>
               <VisitSnapshotCard

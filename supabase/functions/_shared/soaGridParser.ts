@@ -739,13 +739,98 @@ export function deriveStudyDay(
 }
 
 // --- cohort applicability --------------------------------------------------
-// A visit's cohort applicability is set ONLY from an explicit, exclusive
-// "[X only]" header marker (e.g. "D3/ET* (D4 [S4 Only])" → ["S4"]) — a stable,
-// parse-robust signal. Deriving applicability from which SoA TABLE a column came
-// from was tried and dropped: Reducto's table segmentation is non-deterministic,
-// so it mislabeled shared visits (a wrongly-hidden visit is a clinical risk).
-// Accurate cohort separation (SAD vs MAD schedules) waits for the body-text
-// cohort-definition slice. Everything without a marker → null (applies to all).
+// A visit's cohort applicability is evidence-driven and generalized across
+// protocol shapes — NOT hard-coded to any one study:
+//   • When an AUTHORITATIVE cohort list is known (extracted from the protocol
+//     body — see ingestPipeline's cohort pass), a visit's cohort set is derived
+//     from the section heading(s) of the SoA table(s) its column(s) came from.
+//     A heading that enumerates cohorts ("…SAD Cohorts S1, S2 … S6", "MAD
+//     Cohorts", "CSF") binds the visit to exactly those cohorts. A heading that
+//     names NONE — or names ALL of them — → null = the shared backbone (applies
+//     to every cohort; the full list lives in protocol_cohorts). A strict SUBSET
+//     → cohort-specific (a divergent schedule). An exclusive "[X only]" /
+//     "Cohorts 3–6 only" marker narrows further and wins. Guarantee: a visit is
+//     never bound to a cohort the evidence (heading/marker) doesn't name — no
+//     cross-cohort requirement leakage.
+//   • When NO cohort list is known (single-schedule protocol, or any caller that
+//     doesn't pass one), applicability falls back to the explicit "[X only]"
+//     header marker ONLY — exactly the prior, parse-robust behavior; everything
+//     else → null. (Deriving cohorts from Reducto's non-deterministic table
+//     SEGMENTATION alone was tried and dropped — it mislabeled shared visits.
+//     The authoritative list + heading ENUMERATION is the stable signal that
+//     replaces it.)
+
+const GENERIC_RANGE_PREFIXES = new Set(
+  ["", "cohort", "cohorts", "part", "parts", "arm", "arms", "group", "groups"],
+);
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Decompose a cohort label into {prefix, number} for numeric-range resolution:
+ * "S3"→{s,3}, "Cohort 4"→{cohort,4}, "MAD"→{mad,null}. */
+function cohortLabelParts(label: string): { prefix: string; num: number | null } {
+  const t = clean(label).toLowerCase();
+  const m = t.match(/^([a-z ]*?)\s*0*(\d{1,3})$/);
+  if (m) return { prefix: m[1].replace(/\s+/g, ""), num: parseInt(m[2], 10) };
+  return { prefix: t.replace(/\s+/g, ""), num: null };
+}
+
+/** Numeric ranges in a heading/marker: "S1–S6", "1-6", "3 to 6", "S4 … S6". The
+ * first operand's leading letters are the range prefix (or a generic descriptor
+ * like "Cohorts"); the second operand's prefix is ignored. */
+function numericRanges(text: string): Array<{ prefix: string; lo: number; hi: number }> {
+  const out: Array<{ prefix: string; lo: number; hi: number }> = [];
+  const re = /([A-Za-z]{0,8}?)\s*0*(\d{1,3})\s*(?:[-–—]|\.{2,}|…|\bto\b)\s*[A-Za-z]{0,8}?\s*0*(\d{1,3})/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const lo = parseInt(m[2], 10);
+    const hi = parseInt(m[3], 10);
+    if (hi >= lo && hi - lo <= 50) out.push({ prefix: m[1].toLowerCase(), lo, hi });
+  }
+  return out;
+}
+
+/**
+ * The cohorts (drawn from the authoritative `cohortList`) that a SoA table's
+ * section heading enumerates — by literal label token AND by numeric range
+ * expansion. "…Cohorts S1, S2, S3, S4 … S6" → S1..S6; "MAD Cohorts" → MAD;
+ * a generic heading with no cohort token → []. Only ever returns labels present
+ * in `cohortList`, so it can never invent a cohort. Pure, vitest-importable.
+ */
+export function cohortsFromTableHeading(
+  section: string | null | undefined,
+  cohortList: readonly string[],
+): string[] {
+  const text = clean(section || "");
+  if (!text || cohortList.length === 0) return [];
+  const matched = new Set<string>();
+  // (1) literal label tokens (bounded so "S1" ∌ "S12", "MAD" ∌ "NOMADIC").
+  for (const label of cohortList) {
+    const lbl = clean(label);
+    if (!lbl) continue;
+    if (new RegExp(`(?<![A-Za-z0-9])${escapeRegExp(lbl)}(?![A-Za-z0-9])`, "i").test(text)) {
+      matched.add(label);
+    }
+  }
+  // (2) numeric ranges expand against the list ("S4 … S6" → S4,S5,S6).
+  const ranges = numericRanges(text);
+  if (ranges.length > 0) {
+    for (const label of cohortList) {
+      if (matched.has(label)) continue;
+      const { prefix, num } = cohortLabelParts(label);
+      if (num == null) continue;
+      for (const r of ranges) {
+        if (num >= r.lo && num <= r.hi && (GENERIC_RANGE_PREFIXES.has(r.prefix) || r.prefix === prefix)) {
+          matched.add(label);
+          break;
+        }
+      }
+    }
+  }
+  return cohortList.filter((c) => matched.has(c)); // preserve authoritative order
+}
 
 /** A cohort name carried by an explicit "[X only]" / "(X only)" header marker. */
 export function cohortOnlyRestriction(text: string | null | undefined): string | null {
@@ -757,9 +842,72 @@ export function cohortOnlyRestriction(text: string | null | undefined): string |
   return m ? m[1].trim().replace(/\s+/g, " ") : null;
 }
 
+/**
+ * An exclusive cohort-scoping marker resolved to a cohort SET, using the
+ * authoritative `cohortList` to expand ranges: "[S4 Only]" → ["S4"];
+ * "Cohorts 3–6 only" → ["S3","S4","S5","S6"]. null when there is no exclusive
+ * marker. The range branch fires only on an explicit "… only" + numeric range
+ * (and only when it resolves to a strict subset), so a plain shared heading
+ * never narrows.
+ */
+export function markerCohortScope(
+  text: string | null | undefined,
+  cohortList: readonly string[],
+): string[] | null {
+  const t = clean(text || "");
+  if (!t) return null;
+  if (
+    cohortList.length > 0 &&
+    /\bonly\b/i.test(t) &&
+    /\d\s*(?:[-–—]|\.{2,}|…|\bto\b)\s*[A-Za-z]*\s*\d/.test(t)
+  ) {
+    const scope = cohortsFromTableHeading(t, cohortList);
+    if (scope.length > 0 && scope.length < cohortList.length) return scope;
+  }
+  const single = cohortOnlyRestriction(t);
+  return single ? [single] : null;
+}
+
+/**
+ * Evidence-driven cohort applicability for one assembled visit (see the cohort
+ * applicability note above for the full rule). null = shared (applies to all
+ * participants/cohorts); a non-null list = cohort-specific (divergent schedule).
+ */
+function deriveAppliesTo(
+  name: string,
+  srcCols: readonly RawColumn[],
+  cohortList: readonly string[],
+): string[] | null {
+  // No authoritative list → markers-only (the prior, parse-robust behavior).
+  if (cohortList.length === 0) {
+    const onlyR = cohortOnlyRestriction(name) ?? cohortOnlyRestriction(srcCols[0]?.header);
+    return onlyR ? [onlyR] : null;
+  }
+  // Exclusive "[X only]" / range marker narrows to specific cohort(s) — wins.
+  const marker =
+    markerCohortScope(name, cohortList) ?? markerCohortScope(srcCols[0]?.header, cohortList);
+  if (marker && marker.length > 0) return marker;
+  // Otherwise: union of the cohorts the source table heading(s) enumerate.
+  const heading = new Set<string>();
+  for (const col of srcCols) {
+    for (const c of cohortsFromTableHeading(col.section, cohortList)) heading.add(c);
+  }
+  // Names none, or names ALL → shared backbone (null). A strict subset →
+  // cohort-specific; never bound to a cohort the heading doesn't name.
+  if (heading.size === 0 || heading.size >= cohortList.length) return null;
+  return cohortList.filter((c) => heading.has(c));
+}
+
 export function assembleVisitsFromGrouping(
   columns: readonly RawColumn[],
   grouping: VisitGrouping,
+  /**
+   * Authoritative cohort labels for this protocol (from the body-text cohort
+   * pass). When non-empty, each visit's `applies_to` is derived from its source
+   * table heading(s) ∪ "[X only]" markers (see deriveAppliesTo). Empty/omitted →
+   * markers-only (unchanged Slice-2 behavior; single-schedule protocols).
+   */
+  cohortList: readonly string[] = [],
 ): { schedule: ScheduleOfEventsItem[]; citations: SoaCitation[] } {
   const byIdx = new Map(columns.map((c) => [c.idx, c]));
   const schedule: ScheduleOfEventsItem[] = [];
@@ -792,9 +940,10 @@ export function assembleVisitsFromGrouping(
     // so a visit is never dropped (see deriveStudyDay for the full ladder).
     const day = deriveStudyDay(name, srcCols[0].header, columnOrder);
 
-    // cohort applicability: an explicit, exclusive "[X only]" header marker only
-    // (stable + parse-robust). No marker → null = applies to all participants.
-    const onlyR = cohortOnlyRestriction(name) ?? cohortOnlyRestriction(srcCols[0].header);
+    // cohort applicability — evidence-driven (table-heading enumeration ∪ "[X
+    // only]" markers) when an authoritative cohort list is supplied; markers-only
+    // (unchanged) otherwise. Additive metadata: never changes which visits exist.
+    const applies_to = deriveAppliesTo(name, srcCols, cohortList);
 
     const item: ScheduleOfEventsItem = {
       visit_name: name,
@@ -819,7 +968,7 @@ export function assembleVisitsFromGrouping(
       visit_purpose: "",
       schedule_variant: "",
       cross_references: [],
-      applies_to: onlyR ? [onlyR] : null,
+      applies_to,
     };
     schedule.push(item);
     isApproxDay.set(item, day.approximate);

@@ -26,6 +26,12 @@ import { mapReductoExtractToSotr } from "./sourceEvidenceAdapter.ts";
 import { dedupeVisitTemplateRowsByQuality, pickTemplateForVisit, staleTemplateIds, visitMatchKey } from "./visitTemplateDedup.ts";
 import { canonicalVisitName, normalizeVisitName } from "./visitNameNormalize.ts";
 import { assembleVisitsFromGrouping, enrichScheduleFromLlm, extractRawColumns } from "./soaGridParser.ts";
+import {
+  parseStatedCohortCount,
+  parseStudyCohorts,
+  reconcileCohorts,
+  type ExtractedCohort,
+} from "./cohortExtraction.ts";
 import type { RawColumn, VisitGrouping } from "./soaGridParser.ts";
 import { deriveVisitCountSignal } from "./soaColumnCount.ts";
 import {
@@ -634,6 +640,37 @@ const CLINICAL_EXTRACT_SCHEMA = {
         required: ["visit_name", "study_day"],
       },
     },
+    study_cohorts: {
+      type: "array",
+      description:
+        "Every distinct study cohort / arm / dose group this protocol defines (e.g. SAD " +
+        "cohorts S1–S6, a MAD cohort, a CSF sub-study; or treatment arms A/B). One entry per " +
+        "cohort, in the order the protocol introduces them. Read from the synopsis / " +
+        "cohort-definition / dose-escalation sections — do NOT infer cohorts from the " +
+        "Schedule-of-Assessments table alone, and do NOT invent cohorts not defined in the text. " +
+        "Empty array if the study is single-arm / single-schedule.",
+      items: {
+        type: "object",
+        properties: {
+          label: {
+            type: "string",
+            description:
+              "Short canonical cohort label exactly as the protocol scopes it (e.g. 'S1', 'MAD', " +
+              "'Cohort B', 'Arm 1') — prefer the protocol's own short identifier, since it is used to " +
+              "match the cohort against the Schedule-of-Assessments table headings.",
+          },
+          dose_regimen: {
+            type: ["string", "null"],
+            description: "Dose / regimen for THIS cohort (e.g. '50 mg IV q2w', 'placebo'). Null if not stated.",
+          },
+          description: {
+            type: ["string", "null"],
+            description: "1-sentence description of the cohort (population / purpose). Null if not stated.",
+          },
+        },
+        required: ["label"],
+      },
+    },
   },
   required: ["protocol_title"],
 };
@@ -665,7 +702,11 @@ export async function extractClinicalFields(
             "responsible when the protocol states or clearly implies one (e.g. 'Coordinator', " +
             "'Nurse', 'Phlebotomist', 'Pharmacist', 'Investigator', 'Lab'). Use null only when " +
             "no role is stated or implied — do not guess. Accurate role_hint drives the " +
-            "role-filtered execution views downstream.",
+            "role-filtered execution views downstream.\n\n" +
+            "When extracting study_cohorts, read the synopsis / cohort-definition / dose-escalation " +
+            "sections and list EVERY distinct cohort/arm/dose-group with its label and per-cohort " +
+            "dose. Do not infer cohorts from the Schedule-of-Assessments table alone, and never " +
+            "invent a cohort not defined in the protocol text.",
         },
         settings: {
           citations: { enabled: true, numerical_confidence: false },
@@ -2119,6 +2160,17 @@ export async function processIngestCompletion(
     }
 
     // ---------------------------------------------------------------------
+    // 1a. Authoritative cohort list — the protocol's body-text cohort
+    // definitions (the same prose the Ask/RAG tab reads). `study_cohorts` rides
+    // the Reducto Extract pass; we parse it (+ citations) into the
+    // protocol_cohorts rows AND derive the cohort label list that drives
+    // per-visit cohort-scope binding in assembleVisitsFromGrouping below. Empty
+    // for single-schedule protocols → no cohort UI (no behavior change).
+    // ---------------------------------------------------------------------
+    const studyCohorts: ExtractedCohort[] = extractedFields ? parseStudyCohorts(extractedFields) : [];
+    const cohortList = studyCohorts.map((c) => c.label);
+
+    // ---------------------------------------------------------------------
     // 1b. Deterministic SoA grid extraction (workstream A).
     // Read the SoA HTML grid Reducto already returns and OVERRIDE the LLM's
     // schedule_of_events with the verbatim per-visit checklists — unless the
@@ -2151,7 +2203,10 @@ export async function processIngestCompletion(
         // metadata the grid can't see (role_hint / conditions / timing / source_fields)
         // by label-match — the visit×procedure structure stays deterministic.
         const llmSchedule = extractedFields.schedule_of_events;
-        const { schedule, citations } = assembleVisitsFromGrouping(columns, grouping);
+        // cohortList (from study_cohorts) drives per-visit cohort-scope binding:
+        // each visit's applies_to is derived from its source table heading(s) ∪
+        // "[X only]" markers. Empty list → markers-only (unchanged).
+        const { schedule, citations } = assembleVisitsFromGrouping(columns, grouping, cohortList);
         const enrichedCount = enrichScheduleFromLlm(schedule, llmSchedule);
         extractedFields.schedule_of_events = schedule;
         const citMap = (extractedFields._reducto_citations && typeof extractedFields._reducto_citations === "object")
@@ -2183,6 +2238,38 @@ export async function processIngestCompletion(
         document_id: docId,
         error: err instanceof Error ? err.message : String(err),
       });
+    }
+
+    // ---------------------------------------------------------------------
+    // 1c. Cohort reconciliation (RAG↔structured consistency guarantee). Compare
+    // the extracted cohort list to the schedule's cohort coverage (per-visit
+    // applies_to; a shared-backbone visit covers EVERY cohort) + any prose-stated
+    // count. Divergence is FLAGGED on documents.extracted_fields (+ logged),
+    // never hidden — so the guarantee is "all cohorts appear OR the gap surfaces".
+    // ---------------------------------------------------------------------
+    if (studyCohorts.length > 0 && extractedFields) {
+      const sched = Array.isArray(extractedFields.schedule_of_events)
+        ? (extractedFields.schedule_of_events as Array<{ applies_to?: unknown }>)
+        : [];
+      const hasSharedBackbone = sched.length === 0 || sched.some((s) => s?.applies_to == null);
+      const scheduleCohorts = [
+        ...new Set(
+          sched.flatMap((s) =>
+            Array.isArray(s?.applies_to)
+              ? (s!.applies_to as unknown[]).filter((x): x is string => typeof x === "string")
+              : [],
+          ),
+        ),
+      ];
+      const cohortProse = parseResult.chunks
+        .filter((c) => /cohort|arm|dose/i.test(c.content))
+        .map((c) => c.content)
+        .join("\n")
+        .slice(0, 20000);
+      const statedCount = parseStatedCohortCount(cohortProse);
+      const reconciliation = reconcileCohorts(studyCohorts, scheduleCohorts, hasSharedBackbone, statedCount);
+      extractedFields._cohort_reconciliation = reconciliation;
+      console.log("[ingest] cohort_reconciliation", { document_id: docId, ...reconciliation });
     }
 
     // ---------------------------------------------------------------------
@@ -2406,6 +2493,39 @@ export async function processIngestCompletion(
       }
 
       result.protocolId = resolvedProtocolId;
+
+      // ---------------------------------------------------------------------
+      // 5a. Persist the authoritative cohort list. Idempotent re-ingest:
+      // replace this protocol's set, but ONLY when we extracted some — a
+      // zero-cohort re-ingest never wipes an existing list (mirrors the template
+      // prune's "never wipe on empty"). Service role → RLS bypassed.
+      // ---------------------------------------------------------------------
+      if (resolvedProtocolId && studyCohorts.length > 0) {
+        const { error: cohDelErr } = await supabase
+          .from("protocol_cohorts")
+          .delete()
+          .eq("protocol_id", resolvedProtocolId);
+        if (cohDelErr) console.error("[ingest] protocol_cohorts_clear_failed", { error: cohDelErr.message });
+
+        const cohortRows = studyCohorts.map((c, i) => ({
+          protocol_id: resolvedProtocolId,
+          label: c.label,
+          dose_regimen: c.dose_regimen,
+          description: c.description,
+          ordinal: i,
+          source_page: c.source_page,
+          source_quote: c.source_quote,
+        }));
+        const { error: cohInsErr } = await supabase.from("protocol_cohorts").insert(cohortRows);
+        if (cohInsErr) {
+          console.error("[ingest] protocol_cohorts_insert_failed", { error: cohInsErr.message });
+        } else {
+          console.log("[ingest] protocol_cohorts_persisted", {
+            protocol_id: resolvedProtocolId,
+            count: cohortRows.length,
+          });
+        }
+      }
 
       const schedule = Array.isArray(extractedFields?.schedule_of_events)
         ? extractedFields!.schedule_of_events
