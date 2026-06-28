@@ -1,7 +1,7 @@
 ---
 owner: ish-dev-piqc
 feature: cohort-extraction
-status: active
+status: in-review
 started: 2026-06-28
 target_pr:
 ---
