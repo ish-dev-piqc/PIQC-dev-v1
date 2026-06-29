@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: cohort-extraction
-status: in-review
+status: merged
+merged: 2026-06-29
 started: 2026-06-28
-target_pr: 383
+target_pr: #383
 ---
 
 # Visit Prep — cohort extraction + RAG↔Visit-Prep consistency (Slice 3)
