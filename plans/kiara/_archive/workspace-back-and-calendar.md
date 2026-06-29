@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: workspace-back-and-calendar
-status: active
+status: merged
+merged: 2026-06-29
 started: 2026-06-13
-target_pr:
+target_pr: #385
 ---
 
 # Workspace polish — fix back label + clickable calendar days
