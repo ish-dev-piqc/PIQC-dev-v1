@@ -165,10 +165,10 @@ export default function OrganizationPage({ onExit, exitLabel, onDashboardTabChan
               type="button"
               onClick={() => onExit?.()}
               className={`flex items-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border transition-all duration-150 whitespace-nowrap ${exitButtonClass}`}
-              aria-label={`Back to ${exitLabel ?? 'Dashboard'}`}
+              aria-label={exitLabel ? `Back to ${exitLabel}` : 'Back'}
             >
               <ArrowLeft size={15} />
-              Back to {exitLabel ?? 'Dashboard'}
+              {exitLabel ? `Back to ${exitLabel}` : 'Back'}
             </button>
             <div className={`w-px h-6 mx-1 ${isLight ? 'bg-[#E2E8F0]' : 'bg-white/10'}`} />
             {tabs.map((t) => {

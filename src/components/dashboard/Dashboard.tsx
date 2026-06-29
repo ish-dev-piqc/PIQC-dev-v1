@@ -827,6 +827,7 @@ export default function Dashboard({
       <div className={`h-screen ${pageBg} pt-16 flex flex-col overflow-hidden`}>
         <OrganizationPage
           onExit={onExitOrganization}
+          exitLabel={exitLabel}
           onDashboardTabChange={(tab) => {
             onTabChange?.(tab);
             if (!onTabChange) setInternalActiveTab(tab);

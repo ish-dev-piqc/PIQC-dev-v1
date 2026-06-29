@@ -100,7 +100,11 @@ function AppContent() {
   );
   // Tab the user was on before opening Organization — restored on back-arrow exit.
   // Defaults to 'today' so first-time exits land somewhere sensible.
-  const [previousDashboardTab, setPreviousDashboardTab] = useState<DashboardTab>('today');
+  // null = "no previous tab to restore" — first paint, direct deep-link,
+  // or user opened the workspace as their first action. In that state the
+  // back button reads just "Back" and exits to 'today' as a safe default.
+  // Once any guarded nav saves the prior tab, this becomes that tab.
+  const [previousDashboardTab, setPreviousDashboardTab] = useState<DashboardTab | null>(null);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('account');
   const [scrollTarget, setScrollTarget] = useState<string | null>(null);
   // Result of the accept-invite handler — surfaced as a banner on the
@@ -325,7 +329,7 @@ function AppContent() {
   };
 
   const handleExitOrganization = () => {
-    setDashboardTab(previousDashboardTab);
+    setDashboardTab(previousDashboardTab ?? 'today');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -367,7 +371,11 @@ function AppContent() {
     sponsor: 'Sponsor mode',
     settings: 'Settings',
   };
-  const backLabel = BACK_LABELS[previousDashboardTab] ?? 'Dashboard';
+  // `undefined` (not "Dashboard") when there's no remembered prior tab —
+  // OrganizationPage renders just "Back" instead of "Back to Dashboard".
+  const backLabel: string | undefined = previousDashboardTab
+    ? BACK_LABELS[previousDashboardTab]
+    : undefined;
 
   const pageBg = theme === 'light' ? 'bg-[#F8FAFC]' : 'bg-[#070d1a]';
   const textColor = theme === 'light' ? 'text-[#0F172A]' : 'text-white';
