@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   MOCK_TOGGLE_KEY,
   fetchHumanEditLog,
+  fetchProtocolCohorts,
   fetchVisitExecutionWorkspaces,
   isMockEnabled,
 } from '../visitExecutionApi';
@@ -315,5 +316,78 @@ describe('fetchHumanEditLog — mock off RPC dispatch', () => {
     const r = await fetchHumanEditLog('req-1');
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.data).toEqual([]);
+  });
+});
+
+
+// =============================================================================
+// fetchProtocolCohorts — Slice 3. Reads protocol_cohorts directly under RLS:
+// supabase.from('protocol_cohorts').select(...).eq(protocol_id).order(ordinal).
+// Demo alias ids resolve to the real protocol id (same as the workspace RPC).
+// =============================================================================
+describe('fetchProtocolCohorts — Slice 3 (direct RLS read of protocol_cohorts)', () => {
+  beforeEach(() => window.localStorage.clear());
+  afterEach(() => {
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  // Mock the from().select().eq().order() chain; order() resolves the query.
+  function mockCohortQuery(resolved: { data: unknown; error: unknown }) {
+    const order = vi.fn().mockResolvedValue(resolved);
+    const eq = vi.fn().mockReturnValue({ order });
+    const select = vi.fn().mockReturnValue({ eq });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const from = vi.spyOn(supabase, 'from').mockReturnValue({ select } as any);
+    return { from, select, eq, order };
+  }
+
+  it('reads protocol_cohorts under RLS and maps rows to ProtocolCohort (order preserved)', async () => {
+    mockCohortQuery({
+      data: [
+        { label: 'S1', dose_regimen: '10 mg', description: 'low', ordinal: 0, source_page: 12 },
+        { label: 'S2', dose_regimen: null, description: null, ordinal: 1, source_page: null },
+      ],
+      error: null,
+    });
+    const r = await fetchProtocolCohorts('proto-z');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data).toHaveLength(2);
+      expect(r.data[0]).toEqual({ label: 'S1', dose_regimen: '10 mg', description: 'low', ordinal: 0, source_page: 12 });
+      expect(r.data[1].dose_regimen).toBeNull();
+    }
+  });
+
+  it('resolves a demo alias id to the real protocol id in the query', async () => {
+    const { eq } = mockCohortQuery({ data: [], error: null });
+    await fetchProtocolCohorts(DEMO_PROTOCOL_IDS['BRIGHTEN-2']);
+    expect(eq).toHaveBeenCalledWith('protocol_id', 'b04e989a-7df7-48e2-bef7-d551d685876a');
+  });
+
+  it('drops rows without a usable label (schema-drift safety)', async () => {
+    mockCohortQuery({
+      data: [{ label: 'S1', ordinal: 0 }, { label: '', ordinal: 1 }, { ordinal: 2 }],
+      error: null,
+    });
+    const r = await fetchProtocolCohorts('proto-z');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data.map((c) => c.label)).toEqual(['S1']);
+  });
+
+  it('surfaces a query error as ok:false (no throw)', async () => {
+    mockCohortQuery({ data: null, error: { message: 'rls denied' } });
+    const r = await fetchProtocolCohorts('proto-z');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('rls denied');
+  });
+
+  it('returns [] in mock mode without touching supabase', async () => {
+    window.localStorage.setItem(MOCK_TOGGLE_KEY, '1');
+    const spy = vi.spyOn(supabase, 'from');
+    const r = await fetchProtocolCohorts('proto-z');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data).toEqual([]);
+    expect(spy).not.toHaveBeenCalled();
   });
 });

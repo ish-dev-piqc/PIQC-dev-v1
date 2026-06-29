@@ -18,6 +18,7 @@ import { supabase } from '../supabase';
 import type { Result } from '../site/siteApi';
 import { DEMO_PROTOCOL_IDS } from '../demo/ids';
 import type {
+  ProtocolCohort,
   VisitCoverage,
   VisitCoverageGap,
   VisitExecutionWorkspace,
@@ -146,6 +147,53 @@ export async function fetchVisitCoverage(
       expected_from_signal: typeof d.expected_from_signal === 'number' ? d.expected_from_signal : null,
     },
   };
+}
+
+
+/**
+ * Fetch the authoritative cohort list for a protocol (Slice 3), ordered by the
+ * protocol's own cohort order. Read directly from `protocol_cohorts` under RLS —
+ * owner/org members get the rows, anyone else gets an empty (RLS-filtered)
+ * result. Demo alias ids resolve to the real protocol id, same as
+ * fetchVisitExecutionWorkspaces.
+ *
+ * Empty list → the protocol has no extracted cohorts (single-schedule) → the UI
+ * shows no cohort selector (no behavior change).
+ *
+ * Error surface:
+ *   - query error (network, RLS, schema drift) → { ok: false, error }
+ *   - no rows → { ok: true, data: [] }
+ */
+export async function fetchProtocolCohorts(
+  protocolId: string,
+): Promise<Result<ProtocolCohort[]>> {
+  if (isMockEnabled()) return { ok: true, data: [] };
+
+  const { data, error } = await supabase
+    .from('protocol_cohorts')
+    .select('label, dose_regimen, description, ordinal, source_page')
+    .eq('protocol_id', resolveProtocolId(protocolId))
+    .order('ordinal', { ascending: true });
+
+  if (error) return { ok: false, error: error.message };
+  if (!Array.isArray(data)) return { ok: true, data: [] };
+
+  // Per-row narrowing — drop anything without a usable label rather than crash
+  // the selector on a schema drift. Order preserved (RPC sorts by ordinal).
+  const cohorts: ProtocolCohort[] = [];
+  for (const raw of data as unknown[]) {
+    if (!raw || typeof raw !== 'object') continue;
+    const r = raw as Partial<ProtocolCohort>;
+    if (typeof r.label !== 'string' || !r.label.trim()) continue;
+    cohorts.push({
+      label: r.label,
+      dose_regimen: typeof r.dose_regimen === 'string' ? r.dose_regimen : null,
+      description: typeof r.description === 'string' ? r.description : null,
+      ordinal: typeof r.ordinal === 'number' ? r.ordinal : 0,
+      source_page: typeof r.source_page === 'number' ? r.source_page : null,
+    });
+  }
+  return { ok: true, data: cohorts };
 }
 
 

@@ -10,6 +10,8 @@ import {
   assembleVisitsFromGrouping,
   deriveStudyDay,
   cohortOnlyRestriction,
+  cohortsFromTableHeading,
+  markerCohortScope,
   type TableBlock,
 } from "../soaGridParser.ts";
 // Golden fixture: the real Schedule-of-Assessments table blocks Reducto returned
@@ -495,5 +497,125 @@ describe("assembleVisitsFromGrouping — safety-critical preservation (PP06489)"
     // marked procedures stay classification=null so buildPersistPayloadForVisit's assignClassification
     // can still derive required / safety_critical / primary_endpoint from the label (never hardcoded)
     expect(ps.every((p) => p.classification === "conditional" || p.classification === null)).toBe(true);
+  });
+});
+
+// =============================================================================
+// Slice 3 — generalized, evidence-driven cohort scope. cohortsFromTableHeading +
+// markerCohortScope resolve a visit's cohort set from the SoA table HEADING (the
+// stable signal) ∪ "[X only]" markers, against the AUTHORITATIVE cohort list.
+// Exercised on a SHARED-schedule fixture (BLKR201-like: S1–S6 share one table)
+// AND a DIVERGENT fixture (per-cohort tables). Two guarantees:
+//   (a) a heading that names ALL/NONE → shared (null) so every cohort sees it;
+//   (b) NO leakage — a per-cohort visit is never bound to a cohort its
+//       heading/marker doesn't name (and never to a label outside the list).
+// =============================================================================
+describe("cohortsFromTableHeading — heading → authoritative cohort subset", () => {
+  const S6 = ["S1", "S2", "S3", "S4", "S5", "S6"];
+
+  it("expands an enumerated + ellipsis heading to every listed cohort", () => {
+    expect(cohortsFromTableHeading("Schedule of Activities — SAD Cohorts S1, S2, S3, S4 … S6", S6))
+      .toEqual(["S1", "S2", "S3", "S4", "S5", "S6"]);
+  });
+
+  it("matches a labeled sub-schedule heading (MAD / CSF) by literal token", () => {
+    const list = ["SAD", "MAD", "CSF"];
+    expect(cohortsFromTableHeading("MAD Cohorts — Multiple Ascending Dose", list)).toEqual(["MAD"]);
+    expect(cohortsFromTableHeading("CSF Sub-study Schedule", list)).toEqual(["CSF"]);
+  });
+
+  it("expands a numeric range with a generic descriptor (Cohorts 3–6 → S3..S6; 1 to 6 → all)", () => {
+    expect(cohortsFromTableHeading("Assessments — Cohorts 3–6", S6)).toEqual(["S3", "S4", "S5", "S6"]);
+    expect(cohortsFromTableHeading("Cohorts 1 to 6", S6)).toEqual(S6);
+  });
+
+  it("returns [] for a generic heading with no cohort token (never invents)", () => {
+    expect(cohortsFromTableHeading("Schedule of Activities", S6)).toEqual([]);
+    expect(cohortsFromTableHeading("Table 1", S6)).toEqual([]);
+    expect(cohortsFromTableHeading("", S6)).toEqual([]);
+  });
+
+  it("never returns a label outside the list, and respects token boundaries", () => {
+    expect(cohortsFromTableHeading("Cohort S12 only", S6)).toEqual([]); // S12 ∉ list; not "S1"
+    expect(cohortsFromTableHeading("Nomadic exploratory arm", ["MAD"])).toEqual([]); // 'MAD' ∌ NOMADIC
+  });
+});
+
+describe("markerCohortScope — exclusive marker → cohort set (range-aware)", () => {
+  const S6 = ["S1", "S2", "S3", "S4", "S5", "S6"];
+  it("resolves a single exclusive marker", () => {
+    expect(markerCohortScope("D3/ET* (D4 [S4 Only])", S6)).toEqual(["S4"]);
+  });
+  it("expands a range-only marker against the list", () => {
+    expect(markerCohortScope("Biopsy — Cohorts 3–6 only", S6)).toEqual(["S3", "S4", "S5", "S6"]);
+  });
+  it("is null when there is no exclusive marker", () => {
+    expect(markerCohortScope("Day 1", S6)).toBeNull();
+    expect(markerCohortScope("Schedule of Activities S1, S2 … S6", S6)).toBeNull(); // shared, not "only"
+  });
+});
+
+describe("assembleVisitsFromGrouping — cohort binding with an authoritative list", () => {
+  const col = (idx: number, header: string, section: string): import("../soaGridParser.ts").RawColumn => ({
+    idx, header, page: 1, section,
+    procedures: [{ label: `P${idx}`, note: null, mark: "marked" }],
+    markCount: 1,
+  });
+  const idGroup = (cols: import("../soaGridParser.ts").RawColumn[]) => ({
+    visits: cols.map((c) => ({ name: c.header, source_idx: [c.idx] })),
+  });
+
+  it("SHARED fixture (BLKR201-like): one table lists all 6 → every visit shared (null); the [S4 Only] visit → ['S4']", () => {
+    const S6 = ["S1", "S2", "S3", "S4", "S5", "S6"];
+    const HEADING = "Schedule of Activities — SAD Cohorts S1, S2, S3, S4 … S6";
+    const cols = [
+      col(0, "Screening", HEADING),
+      col(1, "Day 1", HEADING),
+      col(2, "D3/ET* (D4 [S4 Only])", HEADING),
+    ];
+    const { schedule } = assembleVisitsFromGrouping(cols, idGroup(cols), S6);
+    const by = Object.fromEntries(schedule.map((s) => [s.visit_name, s.applies_to]));
+    // heading names all 6 → shared → every cohort sees these (full list lives in protocol_cohorts)
+    expect(by["Screening"]).toBeNull();
+    expect(by["Day 1"]).toBeNull();
+    // the exclusive marker narrows just this visit
+    expect(schedule.find((s) => /S4 Only/.test(s.visit_name))!.applies_to).toEqual(["S4"]);
+    // no-invention: every non-null tag is a real cohort from the list
+    for (const s of schedule) for (const c of s.applies_to ?? []) expect(S6).toContain(c);
+  });
+
+  it("DIVERGENT fixture: per-cohort tables bind each visit to its cohort(s); NO leakage across cohorts", () => {
+    const C6 = ["C1", "C2", "C3", "C4", "C5", "C6"];
+    const cols = [
+      col(0, "Screening", "Schedule of Activities (All Cohorts)"), // generic → shared
+      col(1, "Intensive PK", "Cohort C1 — Intensive PK Schedule"), // → C1 only
+      col(2, "Intensive PK", "Cohort C2 — Intensive PK Schedule"), // → C2 only
+      col(3, "DLT Review", "Safety Reviews — Cohorts 3–6 only"),   // → C3..C6
+    ];
+    const { schedule } = assembleVisitsFromGrouping(cols, idGroup(cols), C6);
+    const c1Visit = schedule.find((s) => s.column_order === 1)!;
+    const c2Visit = schedule.find((s) => s.column_order === 2)!;
+    const dlt = schedule.find((s) => s.visit_name === "DLT Review")!;
+    expect(schedule.find((s) => s.visit_name === "Screening")!.applies_to).toBeNull(); // shared backbone
+    expect(c1Visit.applies_to).toEqual(["C1"]);
+    expect(c2Visit.applies_to).toEqual(["C2"]);
+    // THE no-leakage guarantee: the C1 visit is NOT shown under C2 (and vice versa)
+    expect(c1Visit.applies_to).not.toContain("C2");
+    expect(c2Visit.applies_to).not.toContain("C1");
+    expect(dlt.applies_to).toEqual(["C3", "C4", "C5", "C6"]);
+    expect(dlt.applies_to).not.toContain("C1"); // the range excludes C1/C2 — no leakage
+  });
+
+  it("BACK-COMPAT: without a cohort list, section headings are IGNORED — markers-only (unchanged)", () => {
+    const cols = [
+      col(0, "Screening", "SAD Cohorts S1, S2 … S6"), // heading enumerates cohorts...
+      col(1, "Day 1", "MAD Cohorts"),
+      col(2, "D3 (D4 [S4 Only])", "SAD Cohorts S1 … S6"),
+    ];
+    const { schedule } = assembleVisitsFromGrouping(cols, idGroup(cols)); // no cohortList arg
+    const by = Object.fromEntries(schedule.map((s) => [s.visit_name, s.applies_to]));
+    expect(by["Screening"]).toBeNull(); // ...but ignored without an authoritative list
+    expect(by["Day 1"]).toBeNull();
+    expect(schedule.find((s) => /S4 Only/.test(s.visit_name))!.applies_to).toEqual(["S4"]); // marker still works
   });
 });
