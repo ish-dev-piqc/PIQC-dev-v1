@@ -135,13 +135,38 @@ export default function HubTodayTab({ onChangeDashboardTab }: HubTodayTabProps) 
     });
   }, [visits]);
 
-  // Today's visits — used in the list section, sorted by time.
-  const todaysVisits = useMemo(() => {
+  // Selected calendar day (ymd). Defaults to today so the visits list
+  // below the calendar opens on today's events; clicking any other day
+  // in the mini calendar repoints the list to that day.
+  const [selectedDay, setSelectedDay] = useState<string>(today);
+
+  // Visits for the currently selected calendar day, sorted by time.
+  const selectedDayVisits = useMemo(() => {
     return visits
-      .filter((v) => v.date === today)
+      .filter((v) => v.date === selectedDay)
       .slice()
       .sort((a, b) => (a.time ?? '').localeCompare(b.time ?? ''));
+  }, [visits, selectedDay]);
+
+  // Today's visits — separate from selectedDay so the "Happening now"
+  // calculation stays anchored on today regardless of which calendar
+  // day the user is browsing.
+  const todaysVisits = useMemo(() => {
+    return visits.filter((v) => v.date === today);
   }, [visits, today]);
+
+  // Header label for the day-list section. "Today's visits" when on
+  // today; a friendly weekday + date format when on a different day.
+  const selectedDayLabel = useMemo(() => {
+    if (selectedDay === today) return "Today's visits";
+    const [yy, mm, dd] = selectedDay.split('-').map(Number);
+    const dt = new Date(yy, (mm ?? 1) - 1, dd ?? 1);
+    return `${dt.toLocaleDateString(undefined, {
+      weekday: 'long',
+      month: 'short',
+      day: 'numeric',
+    })} visits`;
+  }, [selectedDay, today]);
 
   // Pending decision acks.
   const [pendingAcks, setPendingAcks] = useState<PendingAckRow[]>([]);
@@ -383,19 +408,34 @@ export default function HubTodayTab({ onChangeDashboardTab }: HubTodayTabProps) 
             {weekDays.map((d) => {
               const key = ymd(d);
               const isToday = key === today;
+              const isSelected = key === selectedDay;
               const dayVisits = visitsByDate.get(key) ?? [];
               const hasDeviation = dayVisits.some((v) => v.status === 'deviation');
               const hasCompleted = dayVisits.some((v) => v.status === 'completed');
               const hasScheduled = dayVisits.some((v) => v.status === 'scheduled');
               return (
-                <div
+                <button
                   key={key}
+                  type="button"
+                  onClick={() => setSelectedDay(key)}
+                  aria-pressed={isSelected}
+                  aria-label={`${d.toLocaleDateString(undefined, {
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric',
+                  })}${dayVisits.length > 0 ? ` — ${dayVisits.length} visit${dayVisits.length === 1 ? '' : 's'}` : ''}`}
                   className={`aspect-square rounded-md flex flex-col items-center justify-center text-[11px] ${
                     isToday
                       ? 'text-white font-semibold'
                       : isLight
                         ? 'hover:bg-[#0F172A]/[0.04]'
                         : 'hover:bg-white/[0.04]'
+                  } ${
+                    isSelected && !isToday
+                      ? isLight
+                        ? 'ring-2 ring-[#378ADD]/40'
+                        : 'ring-2 ring-[#378ADD]/60'
+                      : ''
                   }`}
                   style={isToday ? { backgroundColor: '#378ADD' } : undefined}
                 >
@@ -420,7 +460,7 @@ export default function HubTodayTab({ onChangeDashboardTab }: HubTodayTabProps) 
                       />
                     )}
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -513,29 +553,36 @@ export default function HubTodayTab({ onChangeDashboardTab }: HubTodayTabProps) 
             </section>
           )}
 
-          {/* Today's visits */}
+          {/* Selected day's visits — follows the calendar selection;
+              defaults to today. */}
           <section>
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-fg-label text-[10px] uppercase tracking-wider font-semibold flex items-center gap-1.5">
                 <Calendar size={11} />
-                Today's visits ({todaysVisits.length})
+                {selectedDayLabel} ({selectedDayVisits.length})
               </h3>
-              <span className="text-fg-sub text-[11px]">
-                {new Date().toLocaleDateString(undefined, {
-                  weekday: 'long',
-                  month: 'short',
-                  day: 'numeric',
-                })}
-              </span>
+              {selectedDay !== today && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedDay(today)}
+                  className="text-fg-sub hover:text-fg-heading text-[11px] underline"
+                >
+                  Back to today
+                </button>
+              )}
             </div>
-            {todaysVisits.length === 0 ? (
+            {selectedDayVisits.length === 0 ? (
               <div className={`rounded-md border ${tileBorderBase} px-4 py-6 text-center`}>
-                <p className="text-fg-body text-sm">Nothing scheduled today.</p>
+                <p className="text-fg-body text-sm">
+                  {selectedDay === today
+                    ? 'Nothing scheduled today.'
+                    : 'Nothing scheduled this day.'}
+                </p>
                 <p className="text-fg-sub text-xs mt-1">Visits across all your protocols.</p>
               </div>
             ) : (
               <div className={`rounded-md border ${tileBorderBase} divide-y ${tileBorderBase}`}>
-                {todaysVisits.map((v) => (
+                {selectedDayVisits.map((v) => (
                   <div key={v.id} className="flex items-center gap-3 px-3 py-2.5">
                     <div className="w-16 flex-shrink-0">
                       <p className="text-fg-heading text-xs font-semibold">{v.time ?? 'All day'}</p>
