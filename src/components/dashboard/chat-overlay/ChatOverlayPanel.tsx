@@ -44,6 +44,11 @@ import type {
 
 const CHANNEL_STORAGE_KEY = 'piq-chat-overlay-channel-v1';
 
+// Matches the `<@<uuid>>` wire token the composer inserts when a user
+// is @-mentioned. Same shape as ChatTab.tsx uses.
+const MENTION_TOKEN_REGEX =
+  /<@([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})>/g;
+
 type ChannelKey = 'mentions' | 'org' | `protocol:${string}`;
 
 interface ChatOverlayPanelProps {
@@ -78,6 +83,52 @@ function persistChannel(key: ChannelKey) {
   } catch {
     /* ignore */
   }
+}
+
+/**
+ * Render a chat message body, swapping each `<@uuid>` mention token for a
+ * styled chip. Lighter than ChatTab's full renderer — no reference chips,
+ * no edit/decision controls. Self-mentions get an amber highlight.
+ */
+function renderOverlayMessageBody(
+  body: string,
+  nameByUserId: Map<string, string>,
+  currentUserId: string | null,
+  isSelfMessage: boolean,
+  isLight: boolean,
+): React.ReactNode[] {
+  MENTION_TOKEN_REGEX.lastIndex = 0;
+  const nodes: React.ReactNode[] = [];
+  let cursor = 0;
+  let key = 0;
+  let match: RegExpExecArray | null;
+  while ((match = MENTION_TOKEN_REGEX.exec(body)) !== null) {
+    if (match.index > cursor) nodes.push(body.slice(cursor, match.index));
+    const userId = match[1];
+    const isSelfMention = userId === currentUserId;
+    const name = nameByUserId.get(userId);
+    const chipClass = isSelfMention
+      ? isLight
+        ? 'bg-amber-200 text-amber-900'
+        : 'bg-amber-500/30 text-amber-200'
+      : isSelfMessage
+        ? 'bg-white/20 text-inherit'
+        : isLight
+          ? 'bg-brand-600/15 text-brand-600'
+          : 'bg-brand-300/15 text-brand-300';
+    nodes.push(
+      <span
+        key={`m-${key++}`}
+        className={`inline-block rounded px-1 font-medium ${chipClass}`}
+        title={name ?? 'Unknown user'}
+      >
+        @{name ?? 'unknown'}
+      </span>,
+    );
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < body.length) nodes.push(body.slice(cursor));
+  return nodes;
 }
 
 function relativeShort(iso: string): string {
@@ -560,7 +611,13 @@ export default function ChatOverlayPanel({
                         (this message was deleted)
                       </span>
                     ) : (
-                      m.body
+                      renderOverlayMessageBody(
+                        m.body,
+                        nameByUserId,
+                        currentUserId,
+                        isSelf,
+                        isLight,
+                      )
                     )}
                   </div>
                   <p className={`${mutedColor} text-[10px] mt-0.5 ${isSelf ? 'mr-1' : 'ml-1'}`}>
