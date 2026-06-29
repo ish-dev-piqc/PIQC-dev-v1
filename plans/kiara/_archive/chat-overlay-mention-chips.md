@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: chat-overlay-mention-chips
-status: active
+status: merged
+merged: 2026-06-29
 started: 2026-06-13
-target_pr:
+target_pr: #387
 ---
 
 # Chat overlay — render @-mention chips
