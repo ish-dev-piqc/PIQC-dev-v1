@@ -19,6 +19,7 @@ import type { Result } from '../site/siteApi';
 import { DEMO_PROTOCOL_IDS } from '../demo/ids';
 import type {
   ProtocolCohort,
+  SoaFootnote,
   VisitCoverage,
   VisitCoverageGap,
   VisitExecutionWorkspace,
@@ -194,6 +195,48 @@ export async function fetchProtocolCohorts(
     });
   }
   return { ok: true, data: cohorts };
+}
+
+
+/**
+ * Fetch the SoA footnote text for a protocol — backs the display-only
+ * "Footnotes" button. Calls the `get_protocol_soa_footnotes` RPC (SECURITY
+ * DEFINER + protocol-access gate), which returns the raw footnote chunks
+ * ({ page, section, content }) — no structuring, no linkage. Demo alias ids
+ * resolve to the real protocol id (same as fetchVisitExecutionWorkspaces).
+ *
+ * Error surface:
+ *   - RPC error → { ok: false, error }
+ *   - no footnotes, or access-denied (gated empty) → { ok: true, data: [] }
+ */
+export async function fetchSoaFootnotes(
+  protocolId: string,
+): Promise<Result<SoaFootnote[]>> {
+  if (isMockEnabled()) return { ok: true, data: [] };
+
+  const { data, error } = await supabase.rpc('get_protocol_soa_footnotes', {
+    p_protocol_id: resolveProtocolId(protocolId),
+  });
+
+  if (error) return { ok: false, error: error.message };
+
+  // RPC contract: { footnotes: SoaFootnote[] }. Anything else → empty.
+  const payload = data as { footnotes?: unknown } | null;
+  if (!payload || !Array.isArray(payload.footnotes)) return { ok: true, data: [] };
+
+  // Per-row narrowing — drop malformed rows rather than crash the drawer.
+  const footnotes: SoaFootnote[] = [];
+  for (const raw of payload.footnotes as unknown[]) {
+    if (!raw || typeof raw !== 'object') continue;
+    const r = raw as Partial<SoaFootnote>;
+    if (typeof r.content !== 'string' || !r.content.trim()) continue;
+    footnotes.push({
+      page: typeof r.page === 'number' ? r.page : null,
+      section: typeof r.section === 'string' ? r.section : '',
+      content: r.content,
+    });
+  }
+  return { ok: true, data: footnotes };
 }
 
 

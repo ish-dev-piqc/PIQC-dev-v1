@@ -517,6 +517,21 @@ export interface ProtocolCohort {
 
 
 // ---------------------------------------------------------------------------
+// Footnotes button (display-only). Returned by the get_protocol_soa_footnotes
+// RPC — raw SoA footnote chunks (the "a./b./c." legends), shown as-is in the
+// FootnotesDrawer. NOT structured or linked to procedures (that's deferred).
+// ---------------------------------------------------------------------------
+export interface SoaFootnote {
+  /** PDF page the footnote chunk starts on, or null. */
+  page: number | null;
+  /** SoA section heading the footnote sits under (e.g. "Table 1: …"). */
+  section: string;
+  /** Verbatim footnote-legend text from the chunk. */
+  content: string;
+}
+
+
+// ---------------------------------------------------------------------------
 // Default-expansion logic — pure function used by ExecutionChecklist to
 // pick which phases auto-expand on visit selection. Keeps the first-screen
 // "collapse cognitive load" promise: 7 phases collapsed by default, 1-2
