@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, FlaskConical, X, AlertTriangle, Plus, Database } from 'lucide-react';
+import { Loader2, FlaskConical, X, AlertTriangle, Plus, Database, BookMarked } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useTheme } from '../../../context/ThemeContext';
@@ -44,6 +44,7 @@ import CompletenessSignalsPanel from './CompletenessSignalsPanel';
 import EditLogDrawer from './EditLogDrawer';
 import RoleFilterBar from './RoleFilterBar';
 import CohortDetailPanel from './CohortDetailPanel';
+import FootnotesDrawer from './FootnotesDrawer';
 
 // =============================================================================
 // VisitExecutionTab — root component for the new primary Site Mode surface.
@@ -169,6 +170,7 @@ export default function VisitExecutionTab() {
   // protocol change and whenever the drawer closes (parsed items may have been
   // reviewed inside it).
   const [protocolOpen, setProtocolOpen] = useState(false);
+  const [footnotesOpen, setFootnotesOpen] = useState(false);
   const [awaitingReview, setAwaitingReview] = useState(0);
 
   const refreshAwaitingReview = useCallback(async () => {
@@ -1197,10 +1199,22 @@ export default function VisitExecutionTab() {
       {/* Header bar — the Protocol panel trigger (replaces the former Protocol
           tab). Available in every state so re-ingest/upload is always reachable. */}
       <div
-        className={`flex-shrink-0 flex items-center justify-end px-4 py-2 border-b ${
+        className={`flex-shrink-0 flex items-center justify-end gap-2 px-4 py-2 border-b ${
           isLight ? 'border-[#E2E8F0]' : 'border-white/5'
         }`}
       >
+        <button
+          type="button"
+          onClick={() => setFootnotesOpen(true)}
+          data-testid="vew-open-footnotes"
+          className={`inline-flex items-center gap-1.5 text-xs font-medium rounded-md px-3 py-1.5 border ${
+            isLight
+              ? 'border-[#E2E8F0] text-fg-body hover:bg-[#F2F2F2]'
+              : 'border-white/10 text-fg-body hover:bg-white/[0.04]'
+          }`}
+        >
+          <BookMarked size={13} aria-hidden /> Footnotes
+        </button>
         <button
           type="button"
           onClick={() => setProtocolOpen(true)}
@@ -1232,6 +1246,12 @@ export default function VisitExecutionTab() {
           setProtocolOpen(false);
           void refreshAwaitingReview();
         }}
+      />
+
+      <FootnotesDrawer
+        protocolId={activeProtocol.id}
+        isOpen={footnotesOpen}
+        onClose={() => setFootnotesOpen(false)}
       />
     </div>
   );
