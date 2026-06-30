@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: footnotes-button
-status: in-review
+status: merged
+merged: 2026-06-30
 started: 2026-06-29
-target_pr: 389
+target_pr: #389
 ---
 
 # Visit Prep — Footnotes button (display-only SoA footnotes)
