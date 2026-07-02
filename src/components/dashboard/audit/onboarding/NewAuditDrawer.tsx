@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, Building2, FileText, Upload, ChevronDown, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { X, Building2, FileText, Upload, ChevronDown, CheckCircle2, AlertTriangle, Stethoscope } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useAudit } from '../../../../context/AuditContext';
 import { useOverlay } from '../../../../hooks/useOverlay';
@@ -13,7 +13,7 @@ import {
   type VendorRow,
   type AuditorProtocolRow,
 } from '../../../../lib/audit/auditCreationApi';
-import { AUDIT_TYPE_LABELS } from '../../../../lib/audit/labels';
+import { AUDIT_TYPE_LABELS, AUDIT_WORKFLOW_TYPE_LABELS } from '../../../../lib/audit/labels';
 import type { AuditType, ClinicalTrialPhase } from '../../../../types/audit';
 
 // =============================================================================
@@ -274,6 +274,70 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
         </div>
 
         <div className="px-5 py-5 space-y-6">
+          {/* ----- Audit workflow -----
+              VENDOR_AUDIT is the only live workflow, so the vendor card renders
+              statically selected (no state — nothing to choose yet) and nothing
+              is passed to createAudit: audits.workflow_type defaults server-side
+              (docs/audit/two-workflow-architecture.md). When the investigator
+              workflow ships, this becomes a real radio pair with state that
+              feeds the create RPC. */}
+          <Field label="Audit workflow" labelColor={labelColor}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Audit workflow">
+              <div
+                role="radio"
+                aria-checked="true"
+                className={`text-left rounded-md border px-3 py-2.5 ${
+                  isLight
+                    ? 'bg-brand-600/10 border-brand-600'
+                    : 'bg-brand-600/15 border-brand-300'
+                }`}
+              >
+                <span className={`flex items-center gap-1.5 text-xs font-semibold ${
+                  isLight ? 'text-brand-600' : 'text-brand-300'
+                }`}>
+                  <Building2 size={12} />
+                  {AUDIT_WORKFLOW_TYPE_LABELS.VENDOR_AUDIT}
+                </span>
+                <span className={`block text-[11px] mt-0.5 ${subColor}`}>
+                  Audit a vendor — CRO, lab, ePRO, IRT — against a protocol.
+                </span>
+              </div>
+              {/* Investigator site audits initiate from this same workspace once
+                  that workflow ships. Disabled, not hidden — the choice is part
+                  of the product's shape, not a hidden roadmap item. */}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={false}
+                disabled
+                aria-disabled="true"
+                title="Investigator site audits are coming soon"
+                className={`text-left rounded-md border px-3 py-2.5 cursor-not-allowed ${
+                  isLight
+                    ? 'bg-[#F8FAFC] border-[#E2E8F0]'
+                    : 'bg-white/[0.02] border-white/10'
+                }`}
+              >
+                <span className={`flex items-center gap-1.5 text-xs font-semibold ${
+                  isLight ? 'text-[#334155]/45' : 'text-[#CBD5E1]/40'
+                }`}>
+                  <Stethoscope size={12} />
+                  {AUDIT_WORKFLOW_TYPE_LABELS.INVESTIGATOR_SITE_AUDIT}
+                  <span className={`ml-auto inline-flex items-center text-[9px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded border ${
+                    isLight
+                      ? 'bg-white border-[#E2E8F0] text-[#334155]/50'
+                      : 'bg-white/[0.04] border-white/10 text-[#CBD5E1]/45'
+                  }`}>
+                    Coming soon
+                  </span>
+                </span>
+                <span className={`block text-[11px] mt-0.5 ${isLight ? 'text-[#334155]/40' : 'text-[#CBD5E1]/35'}`}>
+                  Audit an investigator site — protocol compliance, ICF, source data.
+                </span>
+              </button>
+            </div>
+          </Field>
+
           {/* ----- Audit name ----- */}
           <Field label="Audit name" required labelColor={labelColor}>
             <input

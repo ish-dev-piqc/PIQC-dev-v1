@@ -9,6 +9,7 @@ import type {
   AuditStage,
   AuditStatus,
   AuditType,
+  AuditWorkflowType,
   CompliancePosture,
   DerivedCriticality,
   EndpointTier,
@@ -58,6 +59,11 @@ export const AUDIT_TYPE_LABELS: Record<AuditType, string> = {
   REMOTE: 'Remote',
   ONSITE: 'Onsite',
   HYBRID: 'Hybrid',
+};
+
+export const AUDIT_WORKFLOW_TYPE_LABELS: Record<AuditWorkflowType, string> = {
+  VENDOR_AUDIT: 'Vendor audit',
+  INVESTIGATOR_SITE_AUDIT: 'Investigator site audit',
 };
 
 export const RESPONSE_STATUS_LABELS: Record<ResponseStatus, string> = {
