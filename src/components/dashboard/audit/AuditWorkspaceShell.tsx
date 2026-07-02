@@ -3,12 +3,13 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useAudit } from '../../../context/AuditContext';
 import type { AuditStage } from '../../../types/audit';
 import { STAGE_LABELS, AUDIT_TYPE_LABELS, AUDIT_STATUS_LABELS } from '../../../lib/audit/labels';
-import { ChevronDown, Sparkles, FileSearch, Plus } from 'lucide-react';
+import { ChevronDown, Sparkles, FileSearch, Plus, GitBranch } from 'lucide-react';
 import StageNav from './StageNav';
 import AuditRequiredGate from './AuditRequiredGate';
 import RiskSummaryPanel from './RiskSummaryPanel';
 import SourceTruthListDrawer from '../../sotr/SourceTruthListDrawer';
 import NewAuditDrawer from './onboarding/NewAuditDrawer';
+import TraceabilityDrawer from './TraceabilityDrawer';
 import AuditChatPanel from './AuditChatPanel';
 import PiqcDock from './PiqcDock';
 import type { AuditChatMessage } from '../../../lib/audit/chatApi';
@@ -67,6 +68,9 @@ export default function AuditWorkspaceShell() {
   // Cross-stage Protocol-source slide-over (SOTR). Available on every stage
   // because source verification can be needed during any audit decision.
   const [protocolSourceOpen, setProtocolSourceOpen] = useState(false);
+  // Traceability slide-over — the audit's seed→tree lineage. Cross-stage for
+  // the same reason: provenance questions arise during any audit decision.
+  const [traceabilityOpen, setTraceabilityOpen] = useState(false);
   // New-audit drawer — reachable from the header on any stage so returning
   // auditors can start a new audit without leaving the workspace.
   const [newAuditOpen, setNewAuditOpen] = useState(false);
@@ -134,6 +138,7 @@ export default function AuditWorkspaceShell() {
   // mid-switch re-render doesn't drop work.
   useEffect(() => {
     setProtocolSourceOpen(false);
+    setTraceabilityOpen(false);
     setChatOpen(false);
     setChatThreads((prev) => {
       if (!activeAudit) return {};
@@ -223,7 +228,9 @@ export default function AuditWorkspaceShell() {
                 </span>
               </p>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0 self-start">
+            {/* flex-wrap: four labeled buttons overflow below md — wrapping
+                beats clipping and keeps every label legible. */}
+            <div className="flex items-center gap-2 flex-wrap justify-end flex-shrink-0 self-start">
               {/* Mobile-only stage picker — replaces the StageNav rail below md: */}
               <MobileStagePicker
                 stages={stages}
@@ -283,6 +290,23 @@ export default function AuditWorkspaceShell() {
               >
                 <FileSearch size={12} />
                 Protocol source
+              </button>
+              {/* Traceability — the audit's seed→tree lineage. Read-only
+                  provenance surface; peer of Protocol source (both answer
+                  "where did this come from?" — source text vs record lineage). */}
+              <button
+                type="button"
+                onClick={() => setTraceabilityOpen(true)}
+                title="Trace every record in this audit back to its seed"
+                data-testid="audit-traceability-button"
+                className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors ${
+                  isLight
+                    ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+                    : 'bg-[#0F172A] border-white/[0.08] text-[#CBD5E1] hover:bg-white/[0.04]'
+                }`}
+              >
+                <GitBranch size={12} />
+                Traceability
               </button>
               {/* PIQC is summoned from the PiqcDock (bottom-right). The old
                   header "Ask" button was deliberately removed in the rename +
@@ -357,6 +381,15 @@ export default function AuditWorkspaceShell() {
             // during this drawer session.
             setReviewCountToken((n) => n + 1);
           }}
+        />
+      )}
+
+      {/* Traceability drawer — per-audit seed→tree lineage. Mounted only while
+          open, same as the other slide-overs. */}
+      {traceabilityOpen && (
+        <TraceabilityDrawer
+          audit={activeAudit}
+          onClose={() => setTraceabilityOpen(false)}
         />
       )}
 
