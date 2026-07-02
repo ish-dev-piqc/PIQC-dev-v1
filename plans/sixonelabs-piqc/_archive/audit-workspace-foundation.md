@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: audit-workspace-foundation
-status: in-review
+status: merged
+merged: 2026-07-02
 started: 2026-07-02
-target_pr:
+target_pr: #391
 ---
 
 # Audit Workspace Foundation — two-workflow seam + workload hub
