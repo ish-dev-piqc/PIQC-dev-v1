@@ -276,10 +276,18 @@ export default function AuditRequiredGate() {
           )}
 
           <div className="space-y-3">
-            {/* Workflow segmentation — one workspace, two workflows. The
-                Investigator chip stays clickable at 0 so the second workflow
-                is legible; its empty state is honest about "coming soon". */}
-            <div className="flex items-center gap-2 flex-wrap" role="group" aria-label="Filter audits by workflow">
+            {/* "All audits" heading owns the segment chips + table below, so the
+                chips' scope is unambiguous (they filter the worklist, NOT the
+                attention queue above) and this band reads as a peer to
+                "Needs your attention". */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
+                All audits
+              </p>
+              {/* Workflow segmentation — one workspace, two workflows. The
+                  Investigator chip stays clickable at 0 so the second workflow
+                  is legible; its empty state is honest about "coming soon". */}
+              <div className="flex items-center gap-2 flex-wrap" role="group" aria-label="Filter audits by workflow">
               <button
                 type="button"
                 aria-pressed={workflowFilter === 'ALL'}
@@ -304,6 +312,7 @@ export default function AuditRequiredGate() {
               >
                 {AUDIT_WORKFLOW_TYPE_LABELS.INVESTIGATOR_SITE_AUDIT}s ({investigatorCount})
               </button>
+              </div>
             </div>
 
             {filteredAudits.length === 0 ? (
