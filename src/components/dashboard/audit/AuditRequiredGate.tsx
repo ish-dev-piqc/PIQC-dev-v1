@@ -1,28 +1,52 @@
 import { useEffect, useState } from 'react';
-import { ClipboardList, ChevronRight, Calendar, Building2, Plus } from 'lucide-react';
+import { ClipboardList, ChevronRight, Calendar, Building2, Plus, CheckCircle2, Clock } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useAudit, type AuditWithContext } from '../../../context/AuditContext';
 import {
   STAGE_LABELS,
   AUDIT_STATUS_LABELS,
   AUDIT_TYPE_LABELS,
+  AUDIT_WORKFLOW_TYPE_LABELS,
 } from '../../../lib/audit/labels';
-import { AUDIT_STAGES } from '../../../types/audit';
-import type { AuditStatus } from '../../../types/audit';
+import { stagesForWorkflow } from '../../../lib/audit/workflowStages';
+import type { AuditStatus, AuditWorkflowType } from '../../../types/audit';
 import NewAuditDrawer from './onboarding/NewAuditDrawer';
 
 // =============================================================================
-// AuditRequiredGate — audit worklist shown when no audit is selected.
-// Clicking a row sets it as the active audit and the workspace opens.
+// AuditRequiredGate — the Audit Workspace hub, shown when no audit is selected.
+//
+// Workload cockpit, not a passive list: leads with "Needs your attention"
+// (in-review + overdue audits — what's waiting on the auditor NOW), then the
+// full worklist segmentable by workflow (Vendor / Investigator site). Clicking
+// a row sets it as the active audit and the workspace opens.
+//
+// Everything here derives from data already in AuditContext — no new fetches.
 // =============================================================================
 
 function stageIndex(audit: AuditWithContext): number {
-  return AUDIT_STAGES.indexOf(audit.current_stage) + 1;
+  return stagesForWorkflow(audit.workflow_type).indexOf(audit.current_stage) + 1;
+}
+
+// Local (not UTC) yyyy-mm-dd, so "overdue" flips at the auditor's midnight.
+function todayLocalIso(): string {
+  return new Date().toLocaleDateString('en-CA');
+}
+
+// Overdue = scheduled in the past and still open. REVIEW is excluded — those
+// audits already surface in the attention queue under their own reason.
+function isOverdue(audit: AuditWithContext): boolean {
+  if (!audit.scheduled_date) return false;
+  if (audit.status === 'CLOSED' || audit.status === 'REVIEW') return false;
+  return audit.scheduled_date < todayLocalIso();
 }
 
 function formatDate(iso: string | null): string | null {
   if (!iso) return null;
-  return new Date(iso).toLocaleDateString('en-US', {
+  // Anchor date-only strings to LOCAL midnight. A bare yyyy-mm-dd parses as UTC
+  // midnight per ECMA-262, which renders the previous calendar day in any
+  // UTC-negative zone — the auditor would see a scheduled date they never
+  // entered (worst in the Overdue badge, where the date is the whole message).
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -34,6 +58,10 @@ export default function AuditRequiredGate() {
   const { audits, loading, setActiveAudit } = useAudit();
   const isLight = theme === 'light';
   const [newAuditOpen, setNewAuditOpen] = useState(false);
+  // Worklist segmentation — one workspace, filterable by workflow. 'ALL' is the
+  // default; the Investigator chip is clickable even at count 0 so the second
+  // workflow is legible (its empty state says "coming soon" honestly).
+  const [workflowFilter, setWorkflowFilter] = useState<'ALL' | AuditWorkflowType>('ALL');
   // After the drawer fires onCreated, the AuditContext's refresh may not have
   // settled into this component's `audits` snapshot yet. Park the id and let
   // the effect below activate the audit as soon as it appears in the list.
@@ -58,9 +86,35 @@ export default function AuditRequiredGate() {
   const tableHeaderBg = isLight ? 'bg-[#F8FAFC] border-[#F2F2F2]' : 'bg-white/[0.02] border-white/[0.04]';
 
   const total = audits.length;
+  // Header chips carry ONLY the counts no other hub surface reports: in-progress
+  // and closed. "Total" lives in the "All (N)" segment chip; "in review" audits
+  // are individually surfaced in the attention queue. One fact, one surface.
   const inProgress = audits.filter((a) => a.status === 'IN_PROGRESS').length;
-  const inReview = audits.filter((a) => a.status === 'REVIEW').length;
   const closed = audits.filter((a) => a.status === 'CLOSED').length;
+
+  // "Needs your attention" — what's waiting on the auditor right now. In-review
+  // first (a decision is pending), then overdue (the schedule slipped).
+  const attentionReview = audits.filter((a) => a.status === 'REVIEW');
+  const attentionOverdue = audits.filter(isOverdue);
+  const attentionCount = attentionReview.length + attentionOverdue.length;
+
+  const vendorCount = audits.filter((a) => a.workflow_type === 'VENDOR_AUDIT').length;
+  const investigatorCount = audits.filter(
+    (a) => a.workflow_type === 'INVESTIGATOR_SITE_AUDIT',
+  ).length;
+  const filteredAudits =
+    workflowFilter === 'ALL'
+      ? audits
+      : audits.filter((a) => a.workflow_type === workflowFilter);
+
+  const segmentChip = (active: boolean): string =>
+    active
+      ? isLight
+        ? 'bg-brand-600/10 border-brand-600/40 text-brand-600'
+        : 'bg-brand-600/15 border-brand-300/40 text-brand-300'
+      : isLight
+        ? 'bg-white border-[#E2E8F0] text-[#334155]/65 hover:border-[#CBD5E1]'
+        : 'bg-[#0F172A] border-white/10 text-[#CBD5E1]/55 hover:border-white/20';
 
   const statusTone = (status: AuditStatus): string => {
     switch (status) {
@@ -109,17 +163,9 @@ export default function AuditRequiredGate() {
           {/* Stat chips */}
           {total > 0 && (
             <div className="flex items-center gap-2 flex-wrap text-xs">
-              <span className={`px-2.5 py-1 rounded-lg border font-medium ${isLight ? 'bg-white border-[#E2E8F0] text-[#334155]/70' : 'bg-[#0F172A] border-white/10 text-[#CBD5E1]/60'}`}>
-                {total} total
-              </span>
               {inProgress > 0 && (
                 <span className={`px-2.5 py-1 rounded-lg border font-medium ${isLight ? 'bg-brand-600/10 border-brand-600/25 text-brand-600' : 'bg-brand-300/15 border-brand-300/30 text-brand-300'}`}>
                   {inProgress} in progress
-                </span>
-              )}
-              {inReview > 0 && (
-                <span className={`px-2.5 py-1 rounded-lg border font-medium ${isLight ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-amber-500/15 border-amber-500/30 text-amber-300'}`}>
-                  {inReview} in review
                 </span>
               )}
               {closed > 0 && (
@@ -168,6 +214,121 @@ export default function AuditRequiredGate() {
           </button>
         </div>
       ) : (
+        <>
+          {/* Needs your attention — leads the hub. What's waiting on the
+              auditor NOW: audits pending review, then overdue ones. */}
+          {attentionCount === 0 ? (
+            <div className={`${cardBg} border rounded-xl px-4 py-3 flex items-center gap-2`}>
+              <CheckCircle2
+                size={15}
+                className={isLight ? 'text-emerald-600' : 'text-emerald-400'}
+              />
+              <span className={`${subColor} text-sm`}>
+                You're all caught up — nothing needs your attention right now.
+              </span>
+            </div>
+          ) : (
+            <section aria-label="Needs your attention">
+              <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold mb-2`}>
+                Needs your attention ({attentionCount})
+              </p>
+              <div className={`${cardBg} border rounded-xl overflow-hidden`}>
+                <div className={`divide-y ${divider}`}>
+                  {[...attentionReview, ...attentionOverdue].map((audit) => {
+                    const overdue = audit.status !== 'REVIEW';
+                    return (
+                      <button
+                        key={audit.id}
+                        type="button"
+                        onClick={() => setActiveAudit(audit)}
+                        className={`w-full text-left flex items-center gap-3 px-4 py-3 ${rowHover} transition-colors`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className={`${headingColor} text-sm font-semibold truncate`}>
+                            {audit.audit_name}
+                          </p>
+                          <p className={`${subColor} text-xs mt-0.5 truncate`}>
+                            {audit.vendor_name} · Stage {stageIndex(audit)} —{' '}
+                            {STAGE_LABELS[audit.current_stage]}
+                          </p>
+                        </div>
+                        {overdue ? (
+                          <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border flex-shrink-0 ${
+                            isLight
+                              ? 'bg-rose-50 border-rose-200 text-rose-700'
+                              : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+                          }`}>
+                            <Clock size={10} />
+                            Overdue{audit.scheduled_date ? ` · ${formatDate(audit.scheduled_date)}` : ''}
+                          </span>
+                        ) : (
+                          <span className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded border flex-shrink-0 ${statusTone('REVIEW')}`}>
+                            {AUDIT_STATUS_LABELS.REVIEW}
+                          </span>
+                        )}
+                        <ChevronRight size={15} className={`${mutedColor} flex-shrink-0`} />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
+          )}
+
+          <div className="space-y-3">
+            {/* "All audits" heading owns the segment chips + table below, so the
+                chips' scope is unambiguous (they filter the worklist, NOT the
+                attention queue above) and this band reads as a peer to
+                "Needs your attention". */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
+                All audits
+              </p>
+              {/* Workflow segmentation — one workspace, two workflows. The
+                  Investigator chip stays clickable at 0 so the second workflow
+                  is legible; its empty state is honest about "coming soon". */}
+              <div className="flex items-center gap-2 flex-wrap" role="group" aria-label="Filter audits by workflow">
+              <button
+                type="button"
+                aria-pressed={workflowFilter === 'ALL'}
+                onClick={() => setWorkflowFilter('ALL')}
+                className={`text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors ${segmentChip(workflowFilter === 'ALL')}`}
+              >
+                All ({total})
+              </button>
+              <button
+                type="button"
+                aria-pressed={workflowFilter === 'VENDOR_AUDIT'}
+                onClick={() => setWorkflowFilter('VENDOR_AUDIT')}
+                className={`text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors ${segmentChip(workflowFilter === 'VENDOR_AUDIT')}`}
+              >
+                {AUDIT_WORKFLOW_TYPE_LABELS.VENDOR_AUDIT}s ({vendorCount})
+              </button>
+              <button
+                type="button"
+                aria-pressed={workflowFilter === 'INVESTIGATOR_SITE_AUDIT'}
+                onClick={() => setWorkflowFilter('INVESTIGATOR_SITE_AUDIT')}
+                className={`text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors ${segmentChip(workflowFilter === 'INVESTIGATOR_SITE_AUDIT')}`}
+              >
+                {AUDIT_WORKFLOW_TYPE_LABELS.INVESTIGATOR_SITE_AUDIT}s ({investigatorCount})
+              </button>
+              </div>
+            </div>
+
+            {filteredAudits.length === 0 ? (
+              <div className={`${cardBg} border rounded-xl px-6 py-8 text-center border-dashed`}>
+                <h3 className={`${headingColor} font-semibold text-sm mb-1`}>
+                  No {workflowFilter === 'INVESTIGATOR_SITE_AUDIT'
+                    ? AUDIT_WORKFLOW_TYPE_LABELS.INVESTIGATOR_SITE_AUDIT.toLowerCase()
+                    : AUDIT_WORKFLOW_TYPE_LABELS.VENDOR_AUDIT.toLowerCase()}s yet
+                </h3>
+                <p className={`${subColor} text-sm max-w-sm mx-auto`}>
+                  {workflowFilter === 'INVESTIGATOR_SITE_AUDIT'
+                    ? 'This workflow is coming soon — you’ll initiate and manage investigator site audits from this same workspace.'
+                    : 'Start one with the button above.'}
+                </p>
+              </div>
+            ) : (
         <div className={`${cardBg} border rounded-xl overflow-hidden`}>
           {/* Table header */}
           <div className={`grid grid-cols-[1fr,auto] sm:grid-cols-[2fr,1fr,1fr,auto] gap-3 px-4 py-2.5 border-b ${tableHeaderBg}`}>
@@ -179,7 +340,7 @@ export default function AuditRequiredGate() {
 
           {/* Rows */}
           <div className={`divide-y ${divider}`}>
-            {audits.map((audit) => {
+            {filteredAudits.map((audit) => {
               const date = formatDate(audit.scheduled_date);
               const stage = stageIndex(audit);
               return (
@@ -245,6 +406,9 @@ export default function AuditRequiredGate() {
             })}
           </div>
         </div>
+            )}
+          </div>
+        </>
       )}
 
       {/* New-audit drawer — on creation, the AuditContext is refreshed by the
