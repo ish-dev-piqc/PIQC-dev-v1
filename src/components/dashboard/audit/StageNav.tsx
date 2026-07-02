@@ -1,6 +1,6 @@
 import { Check, Lock } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
-import { AUDIT_STAGES, type AuditStage } from '../../../types/audit';
+import { type AuditStage } from '../../../types/audit';
 import { STAGE_LABELS } from '../../../lib/audit/labels';
 import { scoreStage } from '../../../lib/heatmap';
 import HeatIndicator from '../../heatmap/HeatIndicator';
@@ -20,16 +20,17 @@ import HeatIndicator from '../../heatmap/HeatIndicator';
 // =============================================================================
 
 interface StageNavProps {
+  stages: readonly AuditStage[]; // ordered stage set for this audit's workflow
   currentStage: AuditStage;     // the audit's actual workflow position
   viewedStage: AuditStage;      // the stage currently being viewed
   onSelectStage: (stage: AuditStage) => void;
 }
 
-export default function StageNav({ currentStage, viewedStage, onSelectStage }: StageNavProps) {
+export default function StageNav({ stages, currentStage, viewedStage, onSelectStage }: StageNavProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
 
-  const currentIdx = AUDIT_STAGES.indexOf(currentStage);
+  const currentIdx = stages.indexOf(currentStage);
 
   const navBg = isLight ? 'bg-[#F8FAFC] border-[#E2E8F0]' : 'bg-[#020617] border-white/5';
   const headerColor = 'text-fg-label';
@@ -45,12 +46,12 @@ export default function StageNav({ currentStage, viewedStage, onSelectStage }: S
           Audit stage
         </p>
         <p className={`${headingColor} text-sm font-semibold mt-1`}>
-          {currentIdx + 1} of {AUDIT_STAGES.length} — {STAGE_LABELS[currentStage]}
+          {currentIdx + 1} of {stages.length} — {STAGE_LABELS[currentStage]}
         </p>
       </div>
 
       <ol className="py-2">
-        {AUDIT_STAGES.map((stage, idx) => {
+        {stages.map((stage, idx) => {
           const isViewed = stage === viewedStage;
           const isCurrent = stage === currentStage;
           const isDone = idx < currentIdx;

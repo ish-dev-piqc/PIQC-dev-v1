@@ -17,6 +17,7 @@ import type {
   AuditStage,
   AuditStatus,
   AuditType,
+  AuditWorkflowType,
   ClinicalTrialPhase,
   CompliancePosture,
   DeliverableApprovalStatus,
@@ -167,6 +168,7 @@ export interface Audit {
   protocol_version_id: string;
   audit_name: string;
   audit_type: AuditType;
+  workflow_type: AuditWorkflowType; // which workflow (vendor vs investigator site)
   status: AuditStatus;
   current_stage: AuditStage;
   lead_auditor_id: string;          // auth.users.id

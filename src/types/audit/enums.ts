@@ -29,6 +29,19 @@ export type VersionChangeType = 'ADDED' | 'MODIFIED' | 'UNCHANGED';
 
 export type AuditType = 'REMOTE' | 'ONSITE' | 'HYBRID';
 
+// D-011: Which audit workflow an Audit follows. Audit Mode is a two-workflow
+// Audit Workspace: VENDOR_AUDIT is the only live workflow today;
+// INVESTIGATOR_SITE_AUDIT is the seam for the deferred investigator/site audit
+// initiative (its stage set is defined there). 1:1 with the Postgres
+// `audit_workflow_type` enum (20260705000000_audit_mode_workflow_type.sql).
+export type AuditWorkflowType = 'VENDOR_AUDIT' | 'INVESTIGATOR_SITE_AUDIT';
+
+// Ordered array — hub segmentation + workflow chooser rendering.
+export const AUDIT_WORKFLOW_TYPES: readonly AuditWorkflowType[] = [
+  'VENDOR_AUDIT',
+  'INVESTIGATOR_SITE_AUDIT',
+] as const;
+
 export type AuditStatus = 'DRAFT' | 'IN_PROGRESS' | 'REVIEW' | 'CLOSED';
 
 // D-010: Authoritative workflow position for an Audit.

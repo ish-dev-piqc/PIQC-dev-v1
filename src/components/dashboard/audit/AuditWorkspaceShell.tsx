@@ -14,7 +14,7 @@ import PiqcDock from './PiqcDock';
 import type { AuditChatMessage } from '../../../lib/audit/chatApi';
 import { fetchReportDraft, upsertReportDraft } from '../../../lib/audit/reportApi';
 import { usePiqcSignals } from '../../../hooks/usePiqcSignals';
-import { AUDIT_STAGES } from '../../../types/audit';
+import { stagesForWorkflow } from '../../../lib/audit/workflowStages';
 import IntakeWorkspace from './stages/IntakeWorkspace';
 import VendorEnrichmentWorkspace from './stages/VendorEnrichmentWorkspace';
 import QuestionnaireReviewWorkspace from './stages/QuestionnaireReviewWorkspace';
@@ -174,6 +174,10 @@ export default function AuditWorkspaceShell() {
     );
   }
 
+  // Stage set is a function of the audit's workflow, not a global constant.
+  // VENDOR_AUDIT resolves to the canonical 8 stages (behavior-preserving).
+  const stages = stagesForWorkflow(activeAudit.workflow_type);
+
   const headerBg = isLight
     ? 'bg-white border-[#E2E8F0]'
     : 'bg-[#0F172A] border-white/5';
@@ -187,6 +191,7 @@ export default function AuditWorkspaceShell() {
   return (
     <div className="flex-1 flex" style={{ minHeight: 0 }}>
       <StageNav
+        stages={stages}
         currentStage={activeAudit.current_stage}
         viewedStage={viewedStage}
         onSelectStage={setViewedStage}
@@ -221,6 +226,7 @@ export default function AuditWorkspaceShell() {
             <div className="flex items-center gap-2 flex-shrink-0 self-start">
               {/* Mobile-only stage picker — replaces the StageNav rail below md: */}
               <MobileStagePicker
+                stages={stages}
                 currentStage={activeAudit.current_stage}
                 viewedStage={viewedStage}
                 onSelectStage={setViewedStage}
@@ -498,6 +504,7 @@ export default function AuditWorkspaceShell() {
 // MobileStagePicker — replaces the StageNav rail below md:.
 // ============================================================================
 interface MobileStagePickerProps {
+  stages: readonly AuditStage[];
   currentStage: AuditStage;
   viewedStage: AuditStage;
   onSelectStage: (s: AuditStage) => void;
@@ -505,12 +512,13 @@ interface MobileStagePickerProps {
 }
 
 function MobileStagePicker({
+  stages,
   currentStage,
   viewedStage,
   onSelectStage,
   isLight,
 }: MobileStagePickerProps) {
-  const currentIdx = AUDIT_STAGES.indexOf(currentStage);
+  const currentIdx = stages.indexOf(currentStage);
 
   return (
     <div className="md:hidden flex-shrink-0 self-start relative">
@@ -524,7 +532,7 @@ function MobileStagePicker({
             : 'bg-[#0F172A] border-white/[0.08] text-[#CBD5E1] hover:bg-white/[0.04]'
         }`}
       >
-        {AUDIT_STAGES.map((s, idx) => {
+        {stages.map((s, idx) => {
           // Mirror StageNav locking: anything > current+1 is unreachable.
           const locked = idx > currentIdx + 1;
           return (

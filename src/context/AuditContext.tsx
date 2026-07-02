@@ -5,6 +5,7 @@ import type {
   AuditStage,
   AuditStatus,
   AuditType,
+  AuditWorkflowType,
   ClinicalTrialPhase,
 } from '../types/audit';
 
@@ -22,6 +23,7 @@ export interface AuditWithContext {
   id: string;
   audit_name: string;
   audit_type: AuditType;
+  workflow_type: AuditWorkflowType;
   status: AuditStatus;
   current_stage: AuditStage;
   scheduled_date: string | null;
@@ -79,6 +81,11 @@ function flatten(row: AuditRow): AuditWithContext {
     id: row.id,
     audit_name: row.audit_name,
     audit_type: row.audit_type,
+    // Defaulted, not SELECTed: the audits.workflow_type column (migration
+    // 20260705000000) is decoupled from this deploy — every audit today is a
+    // vendor audit, so VENDOR_AUDIT is correct. When the investigator workflow
+    // ships, add `workflow_type` to the audits select above and read it here.
+    workflow_type: 'VENDOR_AUDIT',
     status: row.status,
     current_stage: row.current_stage,
     scheduled_date: row.scheduled_date,
