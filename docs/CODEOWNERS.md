@@ -44,6 +44,15 @@
 /src/components/dashboard/audit/  @karl-dev-piqc
 /src/types/audit/                 @karl-dev-piqc
 
+# Protocol Deliverable Engine — Fable
+# Shared, non-mode "parse once, generate many" layer + its Sponsor mount.
+# Handle is a placeholder until Fable's GitHub account exists — update
+# together with plans/fable/monitoring-prep-checklist.md when confirmed.
+/src/lib/deliverables/                             @fable-dev-piqc
+/src/types/deliverables/                           @fable-dev-piqc
+/src/components/deliverables/                      @fable-dev-piqc
+/src/components/dashboard/sponsor/deliverables/    @fable-dev-piqc
+
 # Backend / ingest — Roger
 /supabase/                        @rv61
 /src/lib/supabase.ts              @rv61
