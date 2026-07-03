@@ -1,9 +1,10 @@
 ---
 owner: fable-dev-piqc
 feature: monitoring-prep-checklist
-status: in-review
+status: merged
+merged: 2026-07-03
 started: 2026-07-03
-target_pr:
+target_pr: #402
 ---
 
 # Protocol Deliverable Engine + Monitoring Preparation Checklist (Phase 1)
