@@ -667,6 +667,16 @@ const CLINICAL_EXTRACT_SCHEMA = {
             type: ["string", "null"],
             description: "1-sentence description of the cohort (population / purpose). Null if not stated.",
           },
+          soa_aliases: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "The way(s) THIS cohort is named in the Schedule-of-Assessments table headings/column " +
+              "labels when that differs from `label` — e.g. label 'CSF' but the SoA heading reads " +
+              "'Cerebrospinal Fluid Cohort'; label 'S4' but a period column reads 'S4 Period 1'. " +
+              "Used to match the cohort against the SoA table. Empty array if the SoA names it exactly " +
+              "as `label`. Only list forms that actually appear in the document — never invent one.",
+          },
         },
         required: ["label"],
       },
@@ -706,7 +716,10 @@ export async function extractClinicalFields(
             "When extracting study_cohorts, read the synopsis / cohort-definition / dose-escalation " +
             "sections and list EVERY distinct cohort/arm/dose-group with its label and per-cohort " +
             "dose. Do not infer cohorts from the Schedule-of-Assessments table alone, and never " +
-            "invent a cohort not defined in the protocol text.",
+            "invent a cohort not defined in the protocol text. For each cohort, set soa_aliases to " +
+            "any alternate name the Schedule-of-Assessments table uses for it (a full name, a " +
+            "period/segment split like 'S4 Period 1', an abbreviation) so it can be matched to its " +
+            "schedule columns; leave it [] when the SoA names the cohort exactly as its label.",
         },
         settings: {
           citations: { enabled: true, numerical_confidence: false },
@@ -2169,6 +2182,10 @@ export async function processIngestCompletion(
     // ---------------------------------------------------------------------
     const studyCohorts: ExtractedCohort[] = extractedFields ? parseStudyCohorts(extractedFields) : [];
     const cohortList = studyCohorts.map((c) => c.label);
+    // label → SoA aliases, so a heading naming a cohort by a synonym ("CSF" as
+    // "Cerebrospinal Fluid Cohort") still binds it in assembleVisitsFromGrouping.
+    const cohortAliasMap: Record<string, string[]> = {};
+    for (const c of studyCohorts) if (c.soa_aliases.length) cohortAliasMap[c.label] = c.soa_aliases;
 
     // ---------------------------------------------------------------------
     // 1b. Deterministic SoA grid extraction (workstream A).
@@ -2206,7 +2223,7 @@ export async function processIngestCompletion(
         // cohortList (from study_cohorts) drives per-visit cohort-scope binding:
         // each visit's applies_to is derived from its source table heading(s) ∪
         // "[X only]" markers. Empty list → markers-only (unchanged).
-        const { schedule, citations } = assembleVisitsFromGrouping(columns, grouping, cohortList);
+        const { schedule, citations } = assembleVisitsFromGrouping(columns, grouping, cohortList, cohortAliasMap);
         const enrichedCount = enrichScheduleFromLlm(schedule, llmSchedule);
         extractedFields.schedule_of_events = schedule;
         const citMap = (extractedFields._reducto_citations && typeof extractedFields._reducto_citations === "object")

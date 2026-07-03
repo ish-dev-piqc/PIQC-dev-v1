@@ -793,33 +793,74 @@ function numericRanges(text: string): Array<{ prefix: string; lo: number; hi: nu
 }
 
 /**
+ * Per-cohort SoA aliases: canonical label → the way(s) the cohort appears in SoA
+ * table headings/markers when that differs from the label ('CSF' →
+ * ['Cerebrospinal Fluid Cohort']). Empty/omitted → label-only matching (the
+ * prior behavior). An alias only ever resolves to a cohort already in the list.
+ */
+export type CohortAliasMap = Readonly<Record<string, readonly string[]>>;
+
+/**
+ * The coarse leading cohort token of a granular label: 'S4 Period 1' → 'S4',
+ * 'Cohort 3 Expansion' → 'Cohort 3'. null for a single-token label (nothing
+ * coarser to expand from; the literal match already covers it). Lets a SoA
+ * heading naming only the parent ('S4') bind every granular label under it.
+ */
+export function leadingCohortToken(label: string): string | null {
+  const words = clean(label).split(/\s+/).filter(Boolean);
+  if (words.length <= 1) return null;
+  // "Cohort 3 Expansion" → "Cohort 3" (bare word + number); else the first word.
+  if (/^[A-Za-z]+$/.test(words[0]) && /^\d+$/.test(words[1])) return `${words[0]} ${words[1]}`;
+  return words[0];
+}
+
+/**
  * The cohorts (drawn from the authoritative `cohortList`) that a SoA table's
- * section heading enumerates — by literal label token AND by numeric range
- * expansion. "…Cohorts S1, S2, S3, S4 … S6" → S1..S6; "MAD Cohorts" → MAD;
- * a generic heading with no cohort token → []. Only ever returns labels present
- * in `cohortList`, so it can never invent a cohort. Pure, vitest-importable.
+ * section heading enumerates — by literal label token, stated SoA alias, numeric
+ * range expansion, AND parent→period prefix expansion (a heading naming a coarse
+ * parent token like "S4" binds every granular label under it, "S4 Period 1/2").
+ * "…Cohorts S1, S2, S3, S4 … S6" → S1..S6; "MAD Cohorts" → MAD; a generic
+ * heading with no cohort token → []. Only ever returns labels present in
+ * `cohortList`, so it can never invent a cohort. Pure, vitest-importable.
  */
 export function cohortsFromTableHeading(
   section: string | null | undefined,
   cohortList: readonly string[],
+  aliasMap: CohortAliasMap = {},
 ): string[] {
   const text = clean(section || "");
   if (!text || cohortList.length === 0) return [];
   const matched = new Set<string>();
-  // (1) literal label tokens (bounded so "S1" ∌ "S12", "MAD" ∌ "NOMADIC").
+  // Bounded token test so "S1" ∌ "S12", "MAD" ∌ "NOMADIC".
+  const nameMatches = (needle: string): boolean => {
+    const n = clean(needle);
+    return !!n && new RegExp(`(?<![A-Za-z0-9])${escapeRegExp(n)}(?![A-Za-z0-9])`, "i").test(text);
+  };
+  // (1) literal label OR a stated SoA alias.
   for (const label of cohortList) {
-    const lbl = clean(label);
-    if (!lbl) continue;
-    if (new RegExp(`(?<![A-Za-z0-9])${escapeRegExp(lbl)}(?![A-Za-z0-9])`, "i").test(text)) {
+    if (nameMatches(label) || (aliasMap[label] ?? []).some((a) => nameMatches(a))) {
       matched.add(label);
     }
   }
-  // (2) numeric ranges expand against the list ("S4 … S6" → S4,S5,S6).
+  // (1b) parent→period prefix expansion — but NOT when the heading is already
+  //      granular for that family. If a sibling sharing the same lead token was
+  //      named literally/by alias (e.g. heading "S4 Period 2"), the parent token
+  //      is "used up" → don't over-bind the other period.
+  const matchedLeads = new Set(
+    [...matched].map((l) => leadingCohortToken(l)).filter((t): t is string => !!t),
+  );
+  for (const label of cohortList) {
+    if (matched.has(label)) continue;
+    const lead = leadingCohortToken(label);
+    if (lead && !matchedLeads.has(lead) && nameMatches(lead)) matched.add(label);
+  }
+  // (2) numeric ranges expand against the list ("S4 … S6" → S4,S5,S6), resolving
+  //     a granular label ("S4 Period 1") through its leading token ("S4").
   const ranges = numericRanges(text);
   if (ranges.length > 0) {
     for (const label of cohortList) {
       if (matched.has(label)) continue;
-      const { prefix, num } = cohortLabelParts(label);
+      const { prefix, num } = cohortLabelParts(leadingCohortToken(label) ?? label);
       if (num == null) continue;
       for (const r of ranges) {
         if (num >= r.lo && num <= r.hi && (GENERIC_RANGE_PREFIXES.has(r.prefix) || r.prefix === prefix)) {
@@ -853,6 +894,7 @@ export function cohortOnlyRestriction(text: string | null | undefined): string |
 export function markerCohortScope(
   text: string | null | undefined,
   cohortList: readonly string[],
+  aliasMap: CohortAliasMap = {},
 ): string[] | null {
   const t = clean(text || "");
   if (!t) return null;
@@ -861,11 +903,21 @@ export function markerCohortScope(
     /\bonly\b/i.test(t) &&
     /\d\s*(?:[-–—]|\.{2,}|…|\bto\b)\s*[A-Za-z]*\s*\d/.test(t)
   ) {
-    const scope = cohortsFromTableHeading(t, cohortList);
+    const scope = cohortsFromTableHeading(t, cohortList, aliasMap);
     if (scope.length > 0 && scope.length < cohortList.length) return scope;
   }
   const single = cohortOnlyRestriction(t);
-  return single ? [single] : null;
+  if (!single) return null;
+  // Resolve the raw restriction token ("[S4 only]" → "S4") against the
+  // authoritative list, so a list finer-grained than the marker ("S4 Period
+  // 1/2") — or an alias — binds correctly instead of emitting the orphan
+  // ["S4"]. No list / no resolution → the raw token (parse-robust; the
+  // reconcile flags any orphan).
+  if (cohortList.length > 0) {
+    const resolved = cohortsFromTableHeading(single, cohortList, aliasMap);
+    if (resolved.length > 0) return resolved;
+  }
+  return [single];
 }
 
 /**
@@ -877,6 +929,7 @@ function deriveAppliesTo(
   name: string,
   srcCols: readonly RawColumn[],
   cohortList: readonly string[],
+  aliasMap: CohortAliasMap = {},
 ): string[] | null {
   // No authoritative list → markers-only (the prior, parse-robust behavior).
   if (cohortList.length === 0) {
@@ -885,12 +938,12 @@ function deriveAppliesTo(
   }
   // Exclusive "[X only]" / range marker narrows to specific cohort(s) — wins.
   const marker =
-    markerCohortScope(name, cohortList) ?? markerCohortScope(srcCols[0]?.header, cohortList);
+    markerCohortScope(name, cohortList, aliasMap) ?? markerCohortScope(srcCols[0]?.header, cohortList, aliasMap);
   if (marker && marker.length > 0) return marker;
   // Otherwise: union of the cohorts the source table heading(s) enumerate.
   const heading = new Set<string>();
   for (const col of srcCols) {
-    for (const c of cohortsFromTableHeading(col.section, cohortList)) heading.add(c);
+    for (const c of cohortsFromTableHeading(col.section, cohortList, aliasMap)) heading.add(c);
   }
   // Names none, or names ALL → shared backbone (null). A strict subset →
   // cohort-specific; never bound to a cohort the heading doesn't name.
@@ -908,6 +961,9 @@ export function assembleVisitsFromGrouping(
    * markers-only (unchanged Slice-2 behavior; single-schedule protocols).
    */
   cohortList: readonly string[] = [],
+  /** Per-cohort SoA aliases (label → the way it appears in the SoA), so a
+   * heading naming a cohort by a synonym still binds. Omitted → label-only. */
+  aliasMap: CohortAliasMap = {},
 ): { schedule: ScheduleOfEventsItem[]; citations: SoaCitation[] } {
   const byIdx = new Map(columns.map((c) => [c.idx, c]));
   const schedule: ScheduleOfEventsItem[] = [];
@@ -941,9 +997,10 @@ export function assembleVisitsFromGrouping(
     const day = deriveStudyDay(name, srcCols[0].header, columnOrder);
 
     // cohort applicability — evidence-driven (table-heading enumeration ∪ "[X
-    // only]" markers) when an authoritative cohort list is supplied; markers-only
-    // (unchanged) otherwise. Additive metadata: never changes which visits exist.
-    const applies_to = deriveAppliesTo(name, srcCols, cohortList);
+    // only]" markers, alias- and parent→period-aware) when an authoritative
+    // cohort list is supplied; markers-only (unchanged) otherwise. Additive
+    // metadata: never changes which visits exist.
+    const applies_to = deriveAppliesTo(name, srcCols, cohortList, aliasMap);
 
     const item: ScheduleOfEventsItem = {
       visit_name: name,
