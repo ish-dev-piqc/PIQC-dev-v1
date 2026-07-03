@@ -1,0 +1,346 @@
+// =============================================================================
+// types/deliverables — Protocol Deliverable Engine (shared, non-mode).
+//
+// The engine turns already-extracted protocol facts (SOTR's
+// protocol_extracted_items + protocol_source_evidence) into structured,
+// evidence-linked, reviewable draft artifacts. "Parse once, generate many":
+// role lenses (Sponsor intelligence, CRA focus, SIV packages) are configs
+// over this one layer — never a second extraction pipeline.
+//
+// DB mirrors: supabase/migrations/*_protocol_deliverables_schema.sql.
+// Design + decisions: plans/fable/monitoring-prep-checklist.md.
+//
+// Isolation note: this file is self-contained on purpose. It does NOT import
+// from src/types/sotr — clients read server-denormalized packets, so the
+// tiny enums SOTR shares (confidence) are re-declared here rather than
+// coupling the namespaces.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// Enums (mirror Postgres enums exactly)
+// -----------------------------------------------------------------------------
+
+/** Mirror of deliverable_artifact_type. One value in Phase 1; future kinds
+ *  (siv_package, risk_overview, ...) extend the enum — never fork tables. */
+export type DeliverableArtifactType = 'monitoring_prep_checklist';
+
+/**
+ * Mirror of deliverable_content_origin — the 3-way taxonomy. Never blurred:
+ * - protocol_fact: selected verbatim/near-verbatim from an extracted item;
+ *   MUST carry evidence linkage + confidence.
+ * - derived_operational_framing: deterministic template prose organizing
+ *   facts (section intros, coverage-gap notices, window prose, site
+ *   questions); carries NO confidence and no false provenance.
+ * - human_editorial: user-authored; never overwritten by regeneration.
+ */
+export type DeliverableContentOrigin =
+  | 'protocol_fact'
+  | 'derived_operational_framing'
+  | 'human_editorial';
+
+/**
+ * Mirror of deliverable_review_state. Draft-only vocabulary — there is no
+ * "approved" state anywhere in the engine (PIQC is not a system of record).
+ * - draft: as generated, untouched.
+ * - needs_review: flagged by a human.
+ * - reviewed: human sign-off that the draft item is ready (NOT approval).
+ * - edited: text modified (version bumped; current_text set).
+ * - rejected: removed from render/export but preserved in DB so
+ *   regeneration does not resurrect it. (Parser-origin blocks are rejected,
+ *   not deleted; hard delete is reserved for human_added blocks.)
+ * - human_added: created by a human (content_origin = human_editorial).
+ */
+export type DeliverableReviewState =
+  | 'draft'
+  | 'needs_review'
+  | 'reviewed'
+  | 'edited'
+  | 'rejected'
+  | 'human_added';
+
+/** Block roles inside an artifact. */
+export type DeliverableBlockType =
+  | 'checklist_item'
+  | 'section_intro'
+  | 'site_question';
+
+/** Re-declaration of SOTR's confidence_state values (see isolation note). */
+export type DeliverableConfidenceState =
+  | 'high'
+  | 'medium'
+  | 'low'
+  | 'needs_review';
+
+/** Audit-trail actions recorded in deliverable_block_edits. */
+export type DeliverableEditAction =
+  | 'mark_reviewed'
+  | 'unmark_reviewed'
+  | 'edit_text'
+  | 'add_note'
+  | 'flag'
+  | 'reject_block'
+  | 'add_block'
+  | 'delete_block';
+
+/** Review actions accepted by deliverable_set_block_review. */
+export type DeliverableReviewAction =
+  | 'mark_reviewed'
+  | 'unmark_reviewed'
+  | 'flag'
+  | 'add_note'
+  | 'reject_block';
+
+// -----------------------------------------------------------------------------
+// Monitoring Preparation Checklist — section vocabulary
+// -----------------------------------------------------------------------------
+
+export type MonitoringChecklistSectionKey =
+  | 'eligibility_verification'
+  | 'exclusion_prohibited_med_review'
+  | 'visit_window_verification'
+  | 'endpoint_critical_checks'
+  | 'arm_cohort_randomization_deps'
+  | 'safety_specimen_imaging_vendor_checks'
+  | 'source_doc_focus'
+  | 'amendment_sensitive'
+  | 'site_questions';
+
+/** Stable render + export order for checklist sections. */
+export const MONITORING_SECTION_ORDER: readonly MonitoringChecklistSectionKey[] = [
+  'eligibility_verification',
+  'exclusion_prohibited_med_review',
+  'visit_window_verification',
+  'endpoint_critical_checks',
+  'arm_cohort_randomization_deps',
+  'safety_specimen_imaging_vendor_checks',
+  'source_doc_focus',
+  'amendment_sensitive',
+  'site_questions',
+];
+
+export const MONITORING_SECTION_LABELS: Record<MonitoringChecklistSectionKey, string> = {
+  eligibility_verification: 'Eligibility Verification Focus',
+  exclusion_prohibited_med_review: 'Exclusion & Prohibited Medication Review',
+  visit_window_verification: 'Visit Window Verification',
+  endpoint_critical_checks: 'Endpoint-Critical Procedure Checks',
+  arm_cohort_randomization_deps: 'Arm / Cohort / Randomization Dependencies',
+  safety_specimen_imaging_vendor_checks: 'Safety, Specimen, Imaging & Vendor Checks',
+  source_doc_focus: 'Source Documentation Focus Areas',
+  amendment_sensitive: 'Amendment-Sensitive Requirements',
+  site_questions: 'Site Questions to Consider',
+};
+
+// -----------------------------------------------------------------------------
+// UI label maps
+// -----------------------------------------------------------------------------
+
+export const CONTENT_ORIGIN_LABELS: Record<DeliverableContentOrigin, string> = {
+  protocol_fact: 'Protocol fact',
+  derived_operational_framing: 'PIQC framing',
+  human_editorial: 'Human note',
+};
+
+export const REVIEW_STATE_LABELS: Record<DeliverableReviewState, string> = {
+  draft: 'Draft',
+  needs_review: 'Needs review',
+  reviewed: 'Reviewed',
+  edited: 'Edited',
+  rejected: 'Removed',
+  human_added: 'Added by reviewer',
+};
+
+export const CONFIDENCE_LABELS: Record<DeliverableConfidenceState, string> = {
+  high: 'High confidence',
+  medium: 'Medium confidence',
+  low: 'Low confidence',
+  needs_review: 'Needs review',
+};
+
+// -----------------------------------------------------------------------------
+// DB row mirrors
+// -----------------------------------------------------------------------------
+
+/** Mirror of protocol_deliverables. One row per (protocol, artifact_type). */
+export interface DeliverableRecord {
+  id: string;
+  protocol_id: string;
+  artifact_type: DeliverableArtifactType;
+  title: string;
+  /** Protocol version label stamped at generate time (nullable — parser may
+   *  not have extracted one). */
+  protocol_version: string | null;
+  generated_by: string | null;
+  generated_at: string;
+  regenerated_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Mirror of protocol_deliverable_blocks. */
+export interface DeliverableBlockRecord {
+  id: string;
+  deliverable_id: string;
+  section_key: string;
+  block_type: DeliverableBlockType;
+  content_origin: DeliverableContentOrigin;
+  /** Parser/framing text, frozen at generate time. NULL for human_added. */
+  derived_text: string | null;
+  /** Human edit overlay. Display text = COALESCE(current_text, derived_text). */
+  current_text: string | null;
+  /** FK to protocol_extracted_items — protocol_fact blocks only. */
+  extracted_item_id: string | null;
+  /** FK to protocol_source_evidence (primary evidence) — facts only. */
+  source_evidence_id: string | null;
+  /** Denormalized at generate time (SECURITY DEFINER) so INVOKER read RPCs
+   *  never need to join owner-gated SOTR tables. SENSITIVE — never log. */
+  source_quote: string | null;
+  source_page_number: number | null;
+  source_section: string | null;
+  /** NULL for framing / human blocks — framing never claims confidence. */
+  confidence_state: DeliverableConfidenceState | null;
+  review_state: DeliverableReviewState;
+  review_note: string | null;
+  protocol_version: string | null;
+  sort_order: number;
+  /** Starts at 1; bumped by edit_text. */
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Mirror of deliverable_block_edits (append-only audit trail). */
+export interface DeliverableBlockEditRecord {
+  id: string;
+  block_id: string;
+  reviewer_id: string;
+  action: DeliverableEditAction;
+  previous_text: string | null;
+  new_text: string | null;
+  /** SENSITIVE — never log. */
+  reviewer_note: string | null;
+  block_version: number;
+  protocol_version: string | null;
+  created_at: string;
+}
+
+// -----------------------------------------------------------------------------
+// Packet shapes — what deliverable_get_packet returns (self-contained JSON;
+// the client never touches SOTR tables or types).
+// -----------------------------------------------------------------------------
+
+export interface DeliverablePacketBlock {
+  id: string;
+  section_key: string;
+  block_type: DeliverableBlockType;
+  content_origin: DeliverableContentOrigin;
+  /** COALESCE(current_text, derived_text) — resolved server-side. */
+  display_text: string;
+  derived_text: string | null;
+  current_text: string | null;
+  source_evidence_id: string | null;
+  /** SENSITIVE — never log. */
+  source_quote: string | null;
+  source_page_number: number | null;
+  source_section: string | null;
+  confidence_state: DeliverableConfidenceState | null;
+  review_state: DeliverableReviewState;
+  review_note: string | null;
+  version: number;
+  sort_order: number;
+}
+
+export interface DeliverablePacket {
+  deliverable_id: string;
+  protocol_id: string;
+  artifact_type: DeliverableArtifactType;
+  title: string;
+  protocol_version: string | null;
+  generated_at: string;
+  regenerated_at: string | null;
+  /** Rejected blocks are EXCLUDED server-side — they exist only in the DB
+   *  (and the edit log) so regeneration will not resurrect them. */
+  blocks: DeliverablePacketBlock[];
+}
+
+/**
+ * Export packet (deliverable_export_packet): trimmed + server-stamped.
+ * Deliberately sponsor-name-free — the RPC never selects protocols.sponsor.
+ */
+export interface DeliverableExportPacket {
+  deliverable_id: string;
+  protocol_code: string | null;
+  protocol_title: string;
+  artifact_type: DeliverableArtifactType;
+  title: string;
+  protocol_version: string | null;
+  /** Server-stamped at export-fetch time; used for the filename date. */
+  generated_at: string;
+  blocks: DeliverablePacketBlock[];
+}
+
+// -----------------------------------------------------------------------------
+// Mutation results (returned by the review/edit RPC wrappers)
+// -----------------------------------------------------------------------------
+
+export interface DeliverableBlockMutationResult {
+  block_id: string;
+  review_state: DeliverableReviewState;
+  version: number;
+  edit_id: string;
+}
+
+export interface DeliverableGenerateResult {
+  deliverable_id: string;
+  blocks_created: number;
+  blocks_preserved: number;
+}
+
+// -----------------------------------------------------------------------------
+// Shared Result<T> for the deliverables API layers
+// (canonical shape — see src/lib/site/siteApi.ts)
+// -----------------------------------------------------------------------------
+
+export type DeliverablesResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: string };
+
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
+
+/** Display text for a block row: human edit wins over the frozen derived text. */
+export function displayTextForBlock(
+  block: Pick<DeliverableBlockRecord, 'current_text' | 'derived_text'>,
+): string {
+  return block.current_text ?? block.derived_text ?? '';
+}
+
+/** Group packet blocks by section, preserving MONITORING_SECTION_ORDER and
+ *  hiding empty sections (mirrors the VEW phase-grouping discipline). */
+export function groupBlocksBySection(
+  blocks: DeliverablePacketBlock[],
+): Array<{ sectionKey: MonitoringChecklistSectionKey; blocks: DeliverablePacketBlock[] }> {
+  const bySection = new Map<string, DeliverablePacketBlock[]>();
+  for (const block of blocks) {
+    const list = bySection.get(block.section_key);
+    if (list) {
+      list.push(block);
+    } else {
+      bySection.set(block.section_key, [block]);
+    }
+  }
+  const grouped: Array<{
+    sectionKey: MonitoringChecklistSectionKey;
+    blocks: DeliverablePacketBlock[];
+  }> = [];
+  for (const sectionKey of MONITORING_SECTION_ORDER) {
+    const sectionBlocks = bySection.get(sectionKey);
+    if (sectionBlocks && sectionBlocks.length > 0) {
+      grouped.push({
+        sectionKey,
+        blocks: [...sectionBlocks].sort((a, b) => a.sort_order - b.sort_order),
+      });
+    }
+  }
+  return grouped;
+}
