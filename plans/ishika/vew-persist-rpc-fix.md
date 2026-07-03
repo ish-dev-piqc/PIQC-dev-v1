@@ -3,7 +3,7 @@ owner: ish-dev-piqc
 feature: vew-persist-rpc-fix
 status: in-review
 started: 2026-06-30
-target_pr:
+target_pr: 399
 ---
 
 # Visit Prep — persist RPC no longer zeroes the whole batch (P0)
