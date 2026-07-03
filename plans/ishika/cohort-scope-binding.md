@@ -3,7 +3,7 @@ owner: ish-dev-piqc
 feature: cohort-scope-binding
 status: in-review
 started: 2026-07-03
-target_pr:
+target_pr: 400
 ---
 
 # Visit Prep — cohort-scope binding accuracy (Slice 3.1)
