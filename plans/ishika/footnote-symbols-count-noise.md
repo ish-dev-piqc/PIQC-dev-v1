@@ -1,7 +1,7 @@
 ---
 owner: ish-dev-piqc
 feature: footnote-symbols-count-noise
-status: active
+status: in-review
 started: 2026-07-03
 target_pr:
 ---

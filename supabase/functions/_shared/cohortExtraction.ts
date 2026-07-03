@@ -100,13 +100,15 @@ const NUMBER_WORDS: Record<string, number> = {
  * Deterministic corroboration: a prose-stated cohort/arm count
  * ("six dose cohorts", "6 ascending-dose cohorts", "three treatment arms").
  * null when no count is clearly stated. Conservative — the number must sit
- * within a few words of "cohorts"/"arms"/"dose groups", so a stray figure
- * elsewhere isn't read as a count.
+ * within ONE descriptive word of "cohorts"/"arms"/"dose groups" AND not be a
+ * sectioning ordinal ("Part 1", "Table 2", "Phase 3"). The old {0,3}-word
+ * window + no preceding guard read stray figures ("…Part 1 … cohorts") as a
+ * count, flagging a bogus reconcile mismatch on correct multi-arm designs.
  */
 export function parseStatedCohortCount(text: string | null | undefined): number | null {
   if (!text) return null;
   const re =
-    /\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b(?:\s+[a-z-]+){0,3}?\s+(?:dose\s+|treatment\s+)?(?:cohorts|arms|dose\s+groups)\b/i;
+    /(?<!\b(?:part|parts|table|figure|section|phase|day|week|visit|cycle|arm|arms|group|groups|cohort|cohorts)\s+)\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b(?:\s+[a-z-]+)?\s+(?:dose\s+|treatment\s+)?(?:cohorts|arms|dose\s+groups)\b/i;
   const m = text.match(re);
   if (!m) return null;
   const tok = m[1].toLowerCase();
