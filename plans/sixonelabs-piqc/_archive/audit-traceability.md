@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: audit-traceability
-status: in-review
+status: merged
+merged: 2026-07-03
 started: 2026-07-02
-target_pr:
+target_pr: #395
 ---
 
 # Audit traceability — per-audit seed→tree lineage drawer
