@@ -27,7 +27,14 @@ export interface AuditWithContext {
   status: AuditStatus;
   current_stage: AuditStage;
   scheduled_date: string | null;
-  vendor_name: string;
+  vendor_name: string;         // '' for investigator site audits
+  // auditee = the party under audit: the vendor (VENDOR_AUDIT) or the site
+  // (INVESTIGATOR_SITE_AUDIT). Display surfaces (shell header, hub) use this so
+  // they're workflow-agnostic. Site-only fields are null for vendor audits.
+  auditee_name: string;
+  site_number: string | null;
+  principal_investigator: string | null;
+  site_country: string | null;
   protocol_code: string;       // study number / short label
   protocol_title: string;
   clinical_trial_phase: ClinicalTrialPhase;
@@ -66,30 +73,42 @@ interface AuditRow {
   id: string;
   audit_name: string;
   audit_type: AuditType;
+  workflow_type: AuditWorkflowType;
   status: AuditStatus;
   current_stage: AuditStage;
   scheduled_date: string | null;
   protocol_id: string;
   protocol_version_id: string;
+  // Left-joined auditee — vendors for VENDOR_AUDIT, sites for INVESTIGATOR_SITE_AUDIT.
+  // Exactly one is populated per row (audits_auditee_matches_workflow CHECK).
   vendors: { name: string } | null;
+  sites: {
+    name: string;
+    site_number: string | null;
+    principal_investigator: string | null;
+    country: string;
+  } | null;
   protocols: { study_number: string | null; title: string } | null;
   protocol_versions: { clinical_trial_phase: ClinicalTrialPhase } | null;
 }
 
 function flatten(row: AuditRow): AuditWithContext {
+  const isSiteAudit = row.workflow_type === 'INVESTIGATOR_SITE_AUDIT';
+  const vendorName = row.vendors?.name ?? '';
+  const siteName = row.sites?.name ?? '';
   return {
     id: row.id,
     audit_name: row.audit_name,
     audit_type: row.audit_type,
-    // Defaulted, not SELECTed: the audits.workflow_type column (migration
-    // 20260705000000) is decoupled from this deploy — every audit today is a
-    // vendor audit, so VENDOR_AUDIT is correct. When the investigator workflow
-    // ships, add `workflow_type` to the audits select above and read it here.
-    workflow_type: 'VENDOR_AUDIT',
+    workflow_type: row.workflow_type,
     status: row.status,
     current_stage: row.current_stage,
     scheduled_date: row.scheduled_date,
-    vendor_name: row.vendors?.name ?? '',
+    vendor_name: vendorName,
+    auditee_name: isSiteAudit ? siteName : vendorName,
+    site_number: row.sites?.site_number ?? null,
+    principal_investigator: row.sites?.principal_investigator ?? null,
+    site_country: row.sites?.country ?? null,
     protocol_code: row.protocols?.study_number ?? '',
     protocol_title: row.protocols?.title ?? '',
     clinical_trial_phase: row.protocol_versions?.clinical_trial_phase ?? 'NOT_APPLICABLE',
@@ -117,9 +136,10 @@ export function AuditProvider({ children }: { children: React.ReactNode }) {
     const { data, error: queryError } = await supabase
       .from('audits')
       .select(`
-        id, audit_name, audit_type, status, current_stage, scheduled_date,
+        id, audit_name, audit_type, workflow_type, status, current_stage, scheduled_date,
         protocol_id, protocol_version_id,
-        vendors!inner ( name ),
+        vendors ( name ),
+        sites ( name, site_number, principal_investigator, country ),
         protocols!inner ( study_number, title ),
         protocol_versions!inner ( clinical_trial_phase )
       `)

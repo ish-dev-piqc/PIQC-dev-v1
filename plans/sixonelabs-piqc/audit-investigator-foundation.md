@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: audit-investigator-foundation
-status: active
+status: in-review
 started: 2026-07-03
 target_pr:
 ---
@@ -33,6 +33,27 @@ foundation for the risk-engine / scope / prep / execution / report phases that f
 - src/components/dashboard/audit/onboarding/NewAuditDrawer.tsx
 - src/components/dashboard/audit/stages/investigator/*.tsx
 - src/context/AuditContext.tsx
+- src/components/Navbar.tsx
+  (mechanical compile fix + one-line auditee rendering: it duplicated an exhaustive
+  `Record<AuditStage, string>` stage-label map that breaks when the union gains ISA stages —
+  swapped to the shared `STAGE_LABELS` import; audit-switcher row now renders `auditee_name`
+  so site audits don't show a blank vendor slot)
+- src/lib/heatmap.ts
+  (mechanical compile fix: `scoreStage` is an exhaustive switch over `AuditStage`; the widened
+  union makes the end reachable → TS2366. ISA stages return 'none' — the heat heuristic is
+  vendor-stage-derived)
+- src/lib/audit/__tests__/lineageAdapter.test.ts
+- src/lib/audit/__tests__/lineageApi.test.ts
+  (mechanical compile fix: `AuditWithContext` fixtures gain the 4 new required auditee fields)
+- src/lib/audit/lineageAdapter.ts
+  (one-line: seed node title `vendor_name || 'Auditee'` → `auditee_name || 'Auditee'` —
+  behavior-identical for vendor audits)
+- src/components/dashboard/audit/RiskSummaryPanel.tsx
+  (dedupe only: delete its local clinical-trial-phase label map, import the shared
+  `CLINICAL_TRIAL_PHASE_LABELS` added in this diff)
+- supabase/functions/audit-mode-chat/index.ts
+  (allow-list extension: `VALID_VIEWED_STAGES` gains the 7 ISA_* values so PIQC chat doesn't 400
+  on investigator audits; needs an edge-function redeploy alongside the migrations)
 - docs/audit/two-workflow-architecture.md
 - plans/sixonelabs-piqc/audit-investigator-foundation.md
 
@@ -63,6 +84,18 @@ explicitly rejected.
 - @karl-dev-piqc — audit lane: `src/types/audit/*`, `src/lib/audit/*`, `src/components/dashboard/audit/*`
 - @rv61 — backend: `supabase/migrations/*`
 - @ish-dev-piqc + @ki-dev-piqc — shared infra: `src/context/AuditContext.tsx` (2 reviewers required)
+
+## Deferred (documented, not built)
+
+- **`listSites`/`listVendors` failure vs "no records yet" are indistinguishable in the drawer**
+  (both render an empty dropdown). Pre-existing pattern shared with the vendor path —
+  distinguishing them means moving `auditCreationApi` reads to `Result<T>`, a joint refactor that
+  belongs in its own cleanup, not this foundation PR. Create/save failures DO surface visible
+  signals (added this PR).
+- **ISA stages carry no heat in `scoreStage`** (explicit `'none'` cases) — the friction heuristic is
+  vendor-history-derived; ISA gets its own signal base once the pipeline has usage.
+- **PIQC write-back + vendor risk-summary rail are vendor-gated**, not re-targeted — the ISA report
+  and ISA risk surfaces land with `ISA_REPORT` / `ISA_RISK_ASSESSMENT` phases.
 
 ## Verification
 

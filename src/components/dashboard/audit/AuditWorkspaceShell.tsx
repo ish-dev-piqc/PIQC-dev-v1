@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useAudit } from '../../../context/AuditContext';
-import type { AuditStage } from '../../../types/audit';
+import type { AuditStage, AuditWorkflowType } from '../../../types/audit';
 import { STAGE_LABELS, AUDIT_TYPE_LABELS, AUDIT_STATUS_LABELS } from '../../../lib/audit/labels';
 import { ChevronDown, Sparkles, FileSearch, Plus, GitBranch, AlertOctagon } from 'lucide-react';
 import StageNav from './StageNav';
@@ -25,18 +25,31 @@ import PreAuditDraftingWorkspace from './stages/PreAuditDraftingWorkspace';
 import AuditConductWorkspace from './stages/AuditConductWorkspace';
 import ReportDraftingWorkspace from './stages/ReportDraftingWorkspace';
 import FinalReviewExportWorkspace from './stages/FinalReviewExportWorkspace';
+import SiteIntakeWorkspace from './stages/investigator/SiteIntakeWorkspace';
+import IsaStagePlaceholder from './stages/investigator/IsaStagePlaceholder';
 
-// Dispatch table — viewedStage → component. Phase B replaces each entry's
-// internals as that stage gets ported. The shell itself stays unchanged.
-const STAGE_COMPONENTS: Record<AuditStage, React.ComponentType> = {
-  INTAKE: IntakeWorkspace,
-  VENDOR_ENRICHMENT: VendorEnrichmentWorkspace,
-  QUESTIONNAIRE_REVIEW: QuestionnaireReviewWorkspace,
-  SCOPE_AND_RISK_REVIEW: ScopeReviewWorkspace,
-  PRE_AUDIT_DRAFTING: PreAuditDraftingWorkspace,
-  AUDIT_CONDUCT: AuditConductWorkspace,
-  REPORT_DRAFTING: ReportDraftingWorkspace,
-  FINAL_REVIEW_EXPORT: FinalReviewExportWorkspace,
+// Dispatch table — (workflow_type, viewedStage) → component. Keying by workflow
+// keeps vendor and investigator stage sets isolated: an ISA_* stage never
+// resolves to a vendor component and vice versa. Investigator stages without a
+// real workspace yet fall through to IsaStagePlaceholder (see the render below).
+const STAGE_COMPONENTS: Record<
+  AuditWorkflowType,
+  Partial<Record<AuditStage, React.ComponentType>>
+> = {
+  VENDOR_AUDIT: {
+    INTAKE: IntakeWorkspace,
+    VENDOR_ENRICHMENT: VendorEnrichmentWorkspace,
+    QUESTIONNAIRE_REVIEW: QuestionnaireReviewWorkspace,
+    SCOPE_AND_RISK_REVIEW: ScopeReviewWorkspace,
+    PRE_AUDIT_DRAFTING: PreAuditDraftingWorkspace,
+    AUDIT_CONDUCT: AuditConductWorkspace,
+    REPORT_DRAFTING: ReportDraftingWorkspace,
+    FINAL_REVIEW_EXPORT: FinalReviewExportWorkspace,
+  },
+  INVESTIGATOR_SITE_AUDIT: {
+    ISA_SITE_INTAKE: SiteIntakeWorkspace,
+    // ISA_RISK_ASSESSMENT … ISA_EXPORT ship in later phases → placeholder.
+  },
 };
 
 // =============================================================================
@@ -227,7 +240,7 @@ export default function AuditWorkspaceShell() {
                 {activeAudit.audit_name}
               </h2>
               <p className={`${subColor} text-xs mt-0.5 truncate`}>
-                {activeAudit.vendor_name} · {activeAudit.protocol_code}
+                {activeAudit.auditee_name} · {activeAudit.protocol_code}
                 <span className="hidden sm:inline">
                   {' '}· {AUDIT_TYPE_LABELS[activeAudit.audit_type]} ·{' '}
                   {AUDIT_STATUS_LABELS[activeAudit.status]}
@@ -339,19 +352,22 @@ export default function AuditWorkspaceShell() {
                   skin pass: two summon paths = cognitive load violation, and
                   the dock is the more honest representation of PIQC's
                   on-shoulder presence. See PiqcDock for rationale. */}
-              {/* Risk summary button — visible below xl where the right rail is hidden */}
-              <button
-                type="button"
-                onClick={() => setSummaryDrawerOpen(true)}
-                className={`xl:hidden inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors ${
-                  isLight
-                    ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
-                    : 'bg-[#0F172A] border-white/[0.08] text-[#CBD5E1] hover:bg-white/[0.04]'
-                }`}
-              >
-                <Sparkles size={12} />
-                Risk summary
-              </button>
+              {/* Risk summary button — visible below xl where the right rail is
+                  hidden. Vendor-workflow-only, like the rail it opens. */}
+              {activeAudit.workflow_type === 'VENDOR_AUDIT' && (
+                <button
+                  type="button"
+                  onClick={() => setSummaryDrawerOpen(true)}
+                  className={`xl:hidden inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors ${
+                    isLight
+                      ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+                      : 'bg-[#0F172A] border-white/[0.08] text-[#CBD5E1] hover:bg-white/[0.04]'
+                  }`}
+                >
+                  <Sparkles size={12} />
+                  Risk summary
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -378,16 +394,27 @@ export default function AuditWorkspaceShell() {
                 />
               );
             }
-            const Workspace = STAGE_COMPONENTS[viewedStage];
+            const Workspace = STAGE_COMPONENTS[activeAudit.workflow_type]?.[viewedStage];
+            // Investigator stages without a real workspace yet render a
+            // walkable placeholder rather than a blank pane.
+            if (!Workspace) {
+              return <IsaStagePlaceholder stage={viewedStage} />;
+            }
             return <Workspace />;
           })()}
         </div>
       </main>
 
-      <RiskSummaryPanel auditId={activeAudit.id} />
+      {/* Vendor risk summary rail — vendor-workflow-only: its copy ("why this
+          vendor matters") and its generate action write vendor_risk_summary
+          rows, which must never attach to an investigator site audit. The ISA
+          risk surface lands with the ISA_RISK_ASSESSMENT phase. */}
+      {activeAudit.workflow_type === 'VENDOR_AUDIT' && (
+        <RiskSummaryPanel auditId={activeAudit.id} />
+      )}
 
       {/* Mobile/tablet drawer variant — opens via the "Risk summary" header button */}
-      {summaryDrawerOpen && (
+      {summaryDrawerOpen && activeAudit.workflow_type === 'VENDOR_AUDIT' && (
         <RiskSummaryPanel
           auditId={activeAudit.id}
           variant="drawer"
@@ -470,7 +497,12 @@ export default function AuditWorkspaceShell() {
             setChatOpen(false);
             if (kind === 'sotr_awaiting_review') {
               setProtocolSourceOpen(true);
-            } else if (kind === 'questionnaire_flagged') {
+            } else if (
+              kind === 'questionnaire_flagged' &&
+              activeAudit.workflow_type === 'VENDOR_AUDIT'
+            ) {
+              // QUESTIONNAIRE_REVIEW is a vendor stage — never navigate an
+              // investigator audit into a stage its pipeline doesn't contain.
               setViewedStage('QUESTIONNAIRE_REVIEW');
             }
           }}
@@ -496,7 +528,11 @@ export default function AuditWorkspaceShell() {
              mount; the auditor sees PIQC's text in the textarea,
              reviews + edits + saves (flipping source to 'auditor_edited'
              per PR #72's contract on any text change). */
-          onAssistantWriteback={async (kind, text) => {
+          /* Write-back lands on Stage 7 (REPORT_DRAFTING) — a vendor stage.
+             For investigator audits the prop is omitted, which hides the
+             write-back affordance in the panel entirely; the ISA report
+             gets its own write-back target when ISA_REPORT ships. */
+          onAssistantWriteback={activeAudit.workflow_type !== 'VENDOR_AUDIT' ? undefined : async (kind, text) => {
             // Refetch is best-effort — null is a legitimate state when the
             // audit hasn't entered Stage 7 yet (no report_draft_objects row
             // exists). In that case we go through the RPC's INSERT path with

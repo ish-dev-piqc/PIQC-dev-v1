@@ -145,7 +145,7 @@ export function buildLineageGraph(input: LineageInput): LineageGraph {
   nodes.push({
     id: seedId,
     entityType: 'AUDITEE',
-    title: audit.vendor_name || 'Auditee',
+    title: audit.auditee_name || 'Auditee',
     status: seedLabel(audit.workflow_type),
     statusTone: 'neutral',
     parentId: null,

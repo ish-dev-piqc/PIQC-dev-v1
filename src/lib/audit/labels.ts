@@ -11,6 +11,7 @@ import type {
   AuditType,
   AuditWorkflowType,
   CapaStatus,
+  ClinicalTrialPhase,
   CompliancePosture,
   DerivedCriticality,
   EndpointTier,
@@ -34,6 +35,14 @@ export const STAGE_LABELS: Record<AuditStage, string> = {
   AUDIT_CONDUCT: 'Audit conduct',
   REPORT_DRAFTING: 'Report drafting',
   FINAL_REVIEW_EXPORT: 'Final review & export',
+  // Investigator Site Audit pipeline
+  ISA_SITE_INTAKE: 'Site intake',
+  ISA_RISK_ASSESSMENT: 'Risk assessment',
+  ISA_SCOPE_BUILDER: 'Scope builder',
+  ISA_PREP: 'Audit prep',
+  ISA_CONDUCT: 'Audit conduct',
+  ISA_REPORT: 'Report drafting',
+  ISA_EXPORT: 'Review & export',
 };
 
 // Brief description shown under each stage in the StageNav and elsewhere.
@@ -47,6 +56,14 @@ export const STAGE_DESCRIPTIONS: Record<AuditStage, string> = {
   AUDIT_CONDUCT: 'Capture observations during the audit.',
   REPORT_DRAFTING: 'Compose the final audit report.',
   FINAL_REVIEW_EXPORT: 'Approve and export deliverables.',
+  // Investigator Site Audit pipeline (workspaces land phase by phase).
+  ISA_SITE_INTAKE: 'Confirm the site, PI, and protocol under audit.',
+  ISA_RISK_ASSESSMENT: 'Assess protocol and site risk to drive scope.',
+  ISA_SCOPE_BUILDER: 'Generate the risk-based audit scope and checklist.',
+  ISA_PREP: 'Request documents and plan the subject sample.',
+  ISA_CONDUCT: 'Execute the checklist and capture evidence.',
+  ISA_REPORT: 'Compose the investigator site audit report.',
+  ISA_EXPORT: 'Review and export the report.',
 };
 
 export const AUDIT_STATUS_LABELS: Record<AuditStatus, string> = {
@@ -65,6 +82,16 @@ export const AUDIT_TYPE_LABELS: Record<AuditType, string> = {
 export const AUDIT_WORKFLOW_TYPE_LABELS: Record<AuditWorkflowType, string> = {
   VENDOR_AUDIT: 'Vendor audit',
   INVESTIGATOR_SITE_AUDIT: 'Investigator site audit',
+};
+
+export const CLINICAL_TRIAL_PHASE_LABELS: Record<ClinicalTrialPhase, string> = {
+  PHASE_1: 'Phase 1',
+  PHASE_1_2: 'Phase 1/2',
+  PHASE_2: 'Phase 2',
+  PHASE_2_3: 'Phase 2/3',
+  PHASE_3: 'Phase 3',
+  PHASE_4: 'Phase 4',
+  NOT_APPLICABLE: 'Not applicable',
 };
 
 // Deliberately "Accepted", never "Approved" — the strongest in-app CAPA state
