@@ -1,7 +1,7 @@
 ---
 owner: fable-dev-piqc
 feature: monitoring-prep-checklist
-status: active
+status: in-review
 started: 2026-07-03
 target_pr:
 ---
@@ -45,7 +45,9 @@ Three tables + enums, mirroring proven SOTR/VEW shapes:
   `source_evidence_id` → protocol_source_evidence, `source_quote`
   (denormalized verbatim), `confidence_state` (reuse existing enum; NULL
   for framing/human), `review_state` (enum `draft` | `needs_review` |
-  `reviewed` | `edited` | `human_added`), review_note, protocol_version,
+  `reviewed` | `edited` | `rejected` | `human_added` — `rejected` =
+  removed from render/export but preserved so regeneration can't
+  resurrect it), review_note, protocol_version,
   sort_order, version.
 - `deliverable_block_edits` (= audit trail, mirrors
   `visit_requirement_human_edits`): action, previous/new text, reviewer,
@@ -160,9 +162,9 @@ None.
 
 ## Verification
 
-- [ ] `npm run typecheck`, `npm run build`, `npm test` clean (incl. new
+- [x] `npm run typecheck`, `npm run build`, `npm test` clean (incl. new
   `src/lib/deliverables/__tests__/*`).
-- [ ] Unit: selection rules (section grouping, content_origin tagging,
+- [x] Unit: selection rules (section grouping, content_origin tagging,
   evidence passthrough, prohibited-med gap block); adapter partial-null
   tolerance; `buildDeliverablePdf` (DRAFT watermark, disclaimer,
   traceability appendix, sponsor-name-free) mirroring
@@ -175,7 +177,7 @@ None.
   watermark, disclaimer, sponsor-name-free filename).
 - [ ] RLS: non-member denied on `deliverable_generate` / `_get_packet`;
   owner/org-member succeeds.
-- [ ] `piqc-review` clean.
+- [x] `piqc-review` clean.
 
 ## Decisions encoded (don't re-litigate without reading these)
 
