@@ -35,6 +35,8 @@ const EMPTY: LineageInput = {
   riskSummary: null,
   preAudit: { confirmation_letter: null, agenda: null, checklist: null },
   entries: [],
+  issues: [],
+  capas: [],
   report: null,
 };
 
@@ -220,5 +222,80 @@ describe('buildLineageGraph', () => {
     const g = buildLineageGraph(fullInput());
     const untracked = g.nodes.filter((n) => n.entityType !== 'AUDITEE' && !n.trackedObjectType);
     expect(untracked).toEqual([]);
+  });
+});
+
+// =============================================================================
+// Issues & CAPA layer (Phase 3) — triage lineage off Stage 6.
+// =============================================================================
+describe('buildLineageGraph — issues & CAPA', () => {
+  const ISSUE = {
+    id: 'i1',
+    audit_id: 'a1',
+    workspace_entry_id: 'e1',
+    title: 'Incomplete CSV evidence',
+    description: '',
+    severity: 'MAJOR' as const,
+    regulatory_reportable: true,
+    sponsor_reportable: false,
+    created_by: 'u1',
+    created_at: '2026-07-02T00:00:00Z',
+    updated_at: '2026-07-02T00:00:00Z',
+  };
+  const CAPA = {
+    id: 'c1',
+    issue_id: 'i1',
+    audit_id: 'a1',
+    root_cause_text: 'draft',
+    corrective_action_text: 'draft',
+    preventive_action_text: 'draft',
+    status: 'DRAFT' as const,
+    piqc_prefilled: true,
+    accepted_at: null,
+    accepted_by: null,
+    exported_at: null,
+    created_by: 'u1',
+    created_at: '2026-07-02T00:00:00Z',
+    updated_at: '2026-07-02T00:00:00Z',
+  };
+
+  it('issue nests under its finding; CAPA nests under the issue; provenance edge to the finding', () => {
+    const input = { ...fullInput(), issues: [ISSUE], capas: [CAPA] };
+    const g = buildLineageGraph(input);
+    const entry = g.nodes.find((n) => n.entityType === 'WORKSPACE_ENTRY');
+    const issue = g.nodes.find((n) => n.entityType === 'ISSUE');
+    const capa = g.nodes.find((n) => n.entityType === 'CAPA');
+    expect(issue?.parentId).toBe(entry?.id);
+    expect(capa?.parentId).toBe(issue?.id);
+    expect(issue?.origin).toContain('regulatory-reportable');
+    // PIQC-prefilled CAPA carries a provenance edge back to the source finding.
+    expect(
+      g.edges.some(
+        (e) => e.fromId === capa?.id && e.toId === entry?.id && e.kind === 'provenance',
+      ),
+    ).toBe(true);
+    // Both are history-tracked.
+    expect(issue?.trackedObjectType).toBe('ISSUE_OBJECT');
+    expect(capa?.trackedObjectType).toBe('CAPA_OBJECT');
+  });
+
+  it('issue falls back to the audit parent when its source finding is gone (no orphans)', () => {
+    const input = { ...fullInput(), entries: [], issues: [ISSUE], capas: [CAPA] };
+    const g = buildLineageGraph(input);
+    const auditNode = g.nodes.find((n) => n.entityType === 'AUDIT');
+    const issue = g.nodes.find((n) => n.entityType === 'ISSUE');
+    expect(issue?.parentId).toBe(auditNode?.id);
+    // The prefill provenance edge to the deleted finding is dropped, not dangled.
+    const ids = new Set(g.nodes.map((n) => n.id));
+    for (const e of g.edges) {
+      expect(ids.has(e.fromId)).toBe(true);
+      expect(ids.has(e.toId)).toBe(true);
+    }
+  });
+
+  it('a CAPA whose issue is missing is skipped entirely', () => {
+    const input = { ...fullInput(), issues: [], capas: [CAPA] };
+    const g = buildLineageGraph(input);
+    expect(g.nodes.find((n) => n.entityType === 'CAPA')).toBeUndefined();
   });
 });

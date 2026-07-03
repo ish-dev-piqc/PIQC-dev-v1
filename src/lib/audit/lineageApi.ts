@@ -20,6 +20,7 @@ import { fetchQuestionnaireBundle } from './questionnaireApi';
 import { fetchRiskSummary } from './riskSummaryApi';
 import { fetchPreAuditDeliverables } from './preAuditApi';
 import { fetchWorkspaceEntries } from './workspaceEntriesApi';
+import { fetchIssuesWithCapas } from './capaApi';
 import { fetchReportDraft } from './reportApi';
 import { buildLineageGraph, type LineageGraph } from './lineageAdapter';
 
@@ -29,18 +30,29 @@ export type LineageResult =
 
 export async function fetchAuditLineage(audit: AuditWithContext): Promise<LineageResult> {
   try {
-    const [risks, service, mappings, trust, questionnaire, riskSummary, preAudit, entries, report] =
-      await Promise.all([
-        fetchProtocolRisksForAudit(audit.id),
-        fetchVendorService(audit.id),
-        fetchServiceMappingsByAudit(audit.id),
-        fetchTrustAssessment(audit.id),
-        fetchQuestionnaireBundle(audit.id),
-        fetchRiskSummary(audit.id),
-        fetchPreAuditDeliverables(audit.id),
-        fetchWorkspaceEntries(audit.id),
-        fetchReportDraft(audit.id),
-      ]);
+    const [
+      risks,
+      service,
+      mappings,
+      trust,
+      questionnaire,
+      riskSummary,
+      preAudit,
+      entries,
+      issuesWithCapas,
+      report,
+    ] = await Promise.all([
+      fetchProtocolRisksForAudit(audit.id),
+      fetchVendorService(audit.id),
+      fetchServiceMappingsByAudit(audit.id),
+      fetchTrustAssessment(audit.id),
+      fetchQuestionnaireBundle(audit.id),
+      fetchRiskSummary(audit.id),
+      fetchPreAuditDeliverables(audit.id),
+      fetchWorkspaceEntries(audit.id),
+      fetchIssuesWithCapas(audit.id),
+      fetchReportDraft(audit.id),
+    ]);
 
     return {
       ok: true,
@@ -54,6 +66,8 @@ export async function fetchAuditLineage(audit: AuditWithContext): Promise<Lineag
         riskSummary,
         preAudit,
         entries,
+        issues: issuesWithCapas.issues,
+        capas: Object.values(issuesWithCapas.capasByIssue),
         report,
       }),
     };

@@ -16,13 +16,20 @@
 // Pure module — no supabase, no React. Fetch composition lives in lineageApi.
 // =============================================================================
 
-import type { AuditWorkflowType, TrackedObjectType } from '../../types/audit';
+import type {
+  AuditWorkflowType,
+  CapaObject,
+  IssueObject,
+  TrackedObjectType,
+} from '../../types/audit';
 import type { AuditWithContext } from '../../context/AuditContext';
 import {
   AUDIT_STATUS_LABELS,
+  CAPA_STATUS_LABELS,
   DERIVED_CRITICALITY_LABELS,
   ENDPOINT_TIER_LABELS,
   PROVISIONAL_CLASSIFICATION_LABELS,
+  PROVISIONAL_IMPACT_LABELS,
   QUESTIONNAIRE_INSTANCE_STATUS_LABELS,
   SERVICE_TYPE_OPTIONS,
   TRUST_POSTURE_LABELS,
@@ -56,6 +63,8 @@ export type LineageEntityType =
   | 'AGENDA'
   | 'CHECKLIST'
   | 'WORKSPACE_ENTRY'
+  | 'ISSUE'
+  | 'CAPA'
   | 'REPORT';
 
 export interface LineageNode {
@@ -104,6 +113,8 @@ export interface LineageInput {
   riskSummary: MockRiskSummary | null;
   preAudit: MockPreAuditBundle;
   entries: MockWorkspaceEntry[];
+  issues: IssueObject[];
+  capas: CapaObject[];
   report: MockReportDraft | null;
 }
 
@@ -375,6 +386,77 @@ export function buildLineageGraph(input: LineageInput): LineageGraph {
         toId: questionnaireNodeId,
         kind: 'reference',
         label: 'cites response',
+      });
+    }
+  }
+
+  // --- Issues & CAPA (triage layer off Stage 6) ---------------------------------------
+  const entryIds = new Set(input.entries.map((e) => e.id));
+  const issueNodeIds = new Map<string, string>(); // issue.id → node id
+  for (const issue of input.issues) {
+    const issueId = nid('ISSUE', issue.id);
+    issueNodeIds.set(issue.id, issueId);
+    // Parent = the finding it was triaged from; falls back to the audit when
+    // the issue was raised directly (or its source entry was deleted) so the
+    // no-orphans invariant holds unconditionally.
+    const hasEntryParent = Boolean(
+      issue.workspace_entry_id && entryIds.has(issue.workspace_entry_id),
+    );
+    const flags = [
+      issue.regulatory_reportable ? 'regulatory-reportable' : null,
+      issue.sponsor_reportable ? 'sponsor-reportable' : null,
+    ].filter(Boolean);
+    nodes.push({
+      id: issueId,
+      entityType: 'ISSUE',
+      title: issue.title,
+      status: PROVISIONAL_IMPACT_LABELS[issue.severity],
+      statusTone:
+        issue.severity === 'CRITICAL' || issue.severity === 'MAJOR' ? 'attention' : 'neutral',
+      parentId: hasEntryParent
+        ? nid('WORKSPACE_ENTRY', issue.workspace_entry_id as string)
+        : auditNodeId,
+      // Stage tag only when the issue actually descends from a Stage 6
+      // finding — a directly-raised issue's badge shouldn't contradict its
+      // own origin line.
+      stage: hasEntryParent ? 6 : null,
+      origin:
+        (hasEntryParent
+          ? 'Triaged from a Stage 6 finding.'
+          : 'Raised directly during the audit.') +
+        (flags.length ? ` Flagged ${flags.join(' and ')}.` : ''),
+      trackedObjectType: 'ISSUE_OBJECT',
+      objectId: issue.id,
+    });
+  }
+
+  for (const capa of input.capas) {
+    const parentIssueNodeId = issueNodeIds.get(capa.issue_id);
+    if (!parentIssueNodeId) continue; // orphan CAPA (issue not in scope) — skip, never dangle
+    const capaId = nid('CAPA', capa.id);
+    const exported = Boolean(capa.exported_at);
+    nodes.push({
+      id: capaId,
+      entityType: 'CAPA',
+      title: 'CAPA',
+      status: exported ? 'Exported' : CAPA_STATUS_LABELS[capa.status],
+      statusTone: exported || capa.status === 'ACCEPTED' ? 'approved' : 'neutral',
+      parentId: parentIssueNodeId,
+      stage: null,
+      origin: capa.piqc_prefilled
+        ? 'PIQC drafted the skeleton from the finding; auditor reviews, accepts, exports. Finalized in the QMS.'
+        : 'Drafted by the auditor; accepted in-app means ready to export. Finalized in the QMS.',
+      trackedObjectType: 'CAPA_OBJECT',
+      objectId: capa.id,
+    });
+    // Provenance: the PIQC-drafted claim, as a link back to the source finding.
+    const issue = input.issues.find((i) => i.id === capa.issue_id);
+    if (capa.piqc_prefilled && issue?.workspace_entry_id) {
+      edges.push({
+        fromId: capaId,
+        toId: nid('WORKSPACE_ENTRY', issue.workspace_entry_id),
+        kind: 'provenance',
+        label: 'prefilled from',
       });
     }
   }
