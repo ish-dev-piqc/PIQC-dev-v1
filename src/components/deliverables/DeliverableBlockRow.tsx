@@ -105,7 +105,9 @@ export function DeliverableBlockRow({
   ];
   // Hard delete is reserved for reviewer-added blocks; parser-origin blocks
   // are rejected (preserved) instead so regeneration can't resurrect them.
-  if (block.review_state === 'human_added') {
+  // Gate on content_origin (immutable) — review_state mutates as soon as the
+  // block is reviewed or edited, and deletability must survive that.
+  if (block.content_origin === 'human_editorial') {
     menuItems.push({ label: 'Delete item', danger: true, onSelect: () => onDelete(block) });
   }
 

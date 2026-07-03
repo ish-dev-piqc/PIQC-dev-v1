@@ -37,7 +37,12 @@ export default function ProtocolIntelligenceTab() {
   // removed), the fallback chain quietly returns to activeProtocol.
   const [overrideProtocolId, setOverrideProtocolId] = useState<string | null>(null);
 
-  if (subscriptionLoading || protocolsLoading) {
+  // Full-screen spinner ONLY while there is nothing to show yet. Protocol
+  // realtime events re-run ProtocolContext's load() (isLoading flips true)
+  // — swapping to a spinner then would unmount the panel and any open
+  // drawer, destroying in-progress reviewer text. With data on screen,
+  // background reloads render through.
+  if (subscriptionLoading || (protocolsLoading && protocols.length === 0)) {
     return (
       <div className="flex items-center justify-center min-h-[30vh]">
         <Loader2

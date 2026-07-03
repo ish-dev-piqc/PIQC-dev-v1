@@ -75,12 +75,12 @@ const COPY: Record<DeliverableTextDrawerMode, ModeCopy> = {
   note: {
     headerLabel: 'Add review note',
     description:
-      'Attach a note to this item. Notes show with the item and in the edit log; they do not change the item text.',
+      'Attach a note to this item. Notes show with the item and in the edit log; they do not change the item text. Saving an empty note clears it.',
     icon: MessageSquare,
     textareaLabel: 'Review note',
     placeholder: 'e.g. Confirm with the CRA before the visit…',
     saveLabel: 'Save note',
-    emptyHint: "Note can't be empty.",
+    emptyHint: 'Saving an empty note clears it from the item.',
   },
   add: {
     headerLabel: 'Add item',
@@ -115,9 +115,19 @@ export function DeliverableTextDrawer({ open, onClose, mode, subject, onSave }: 
     savingRef.current = saving;
   }, [saving]);
 
-  // Seed the textarea on open.
+  // Seed the textarea ONLY on the closed→open transition. The parent may
+  // legitimately re-render while the drawer is open (realtime protocol
+  // events, auth token refresh) and hand down a new `subject` identity with
+  // identical values — re-seeding then would wipe whatever the reviewer has
+  // typed (and setSaving(false) would unlock the close guard mid-save).
+  const seededRef = useRef(false);
   useEffect(() => {
-    if (!isOpen || !subject) return;
+    if (!isOpen || !subject) {
+      seededRef.current = false;
+      return;
+    }
+    if (seededRef.current) return;
+    seededRef.current = true;
     setDraft(subject.initialText);
     setNoteDraft('');
     setInlineError(null);
@@ -141,7 +151,9 @@ export function DeliverableTextDrawer({ open, onClose, mode, subject, onSave }: 
   const copy = COPY[mode];
   const Icon = copy.icon;
   const trimmed = draft.trim();
-  const canSave = trimmed.length > 0 && !saving;
+  // Note mode allows an empty save — the RPC treats an empty note as
+  // "clear it" (there is no other way to remove a stale note).
+  const canSave = !saving && (mode === 'note' || trimmed.length > 0);
   const showDriftBlock =
     mode === 'edit' &&
     subject.driftFromText !== null &&

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Check,
@@ -193,7 +193,11 @@ export default function MonitoringChecklistPanel({ protocolId }: Props) {
     return result;
   };
 
-  const textDrawerSubject: DeliverableTextDrawerSubject | null = (() => {
+  // Memoized on the drawer target so the subject keeps a stable identity
+  // across unrelated panel re-renders (realtime protocol events, token
+  // refresh) — the drawer's seeding effect must not see a "new" subject
+  // while the reviewer is typing.
+  const textDrawerSubject: DeliverableTextDrawerSubject | null = useMemo(() => {
     if (!textDrawerTarget) return null;
     if (textDrawerTarget.mode === 'add') {
       return {
@@ -216,7 +220,7 @@ export default function MonitoringChecklistPanel({ protocolId }: Props) {
       initialText: textDrawerTarget.block.display_text,
       driftFromText: textDrawerTarget.block.derived_text,
     };
-  })();
+  }, [textDrawerTarget]);
 
   const cardChrome = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
 

@@ -15,7 +15,7 @@
 --   deliverable_set_block_review  — INVOKER. Review actions (locking + audit).
 --   deliverable_edit_block_text   — INVOKER. Text edit (version bump + audit).
 --   deliverable_add_block         — INVOKER. Human editorial block.
---   deliverable_delete_block      — INVOKER. Hard delete, human_added only.
+--   deliverable_delete_block      — INVOKER. Hard delete, human_editorial only.
 --   deliverable_export_packet     — INVOKER. Server-stamped export packet,
 --                                   sponsor-name-free.
 --
@@ -274,21 +274,34 @@ BEGIN
 
   -- -------------------------------------------------------------------------
   -- Load the fact pool: every extracted item for the protocol, joined to its
-  -- primary evidence (is_primary_source), denormalized once. Input order for
-  -- the ruleset = extraction insert order (created_at, id) — deterministic.
+  -- primary evidence (is_primary_source), denormalized once.
+  --
+  -- Input order for the ruleset = protocol order: field_path prefix, then the
+  -- numeric array index inside it ("key_inclusion_criteria[10]" sorts after
+  -- "[2]"). created_at is useless here — one ingest transaction stamps every
+  -- row with the same NOW(), which would leave the order to random UUIDs.
+  --
+  -- SOTR review is honored at the source: an item the reviewer edited
+  -- contributes its current_text ("current_text wins" — same contract as
+  -- sotr_get_draft_confidence_packet), and an item rejected_from_draft never
+  -- enters the pool at all. Visit prose is built from the JSONB object, so
+  -- current_text overrides apply to string-valued facts only.
   -- -------------------------------------------------------------------------
   INSERT INTO _deliv_items (
     ord, item_id, field_type, field_path, extracted_value, confidence_state,
     value_text, evidence_id, quoted_text, page_number, section_title
   )
   SELECT
-    ROW_NUMBER() OVER (ORDER BY ei.created_at, ei.id),
+    ROW_NUMBER() OVER (ORDER BY
+      split_part(ei.field_path, '[', 1),
+      COALESCE(NULLIF(regexp_replace(ei.field_path, '[^0-9]', '', 'g'), '')::int, 0),
+      ei.id),
     ei.id,
     ei.field_type,
     ei.field_path,
     ei.extracted_value,
     ei.confidence_state,
-    _deliv_json_string(ei.extracted_value),
+    COALESCE(NULLIF(btrim(ei.current_text), ''), _deliv_json_string(ei.extracted_value)),
     ev.id,
     ev.quoted_text,
     ev.page_number,
@@ -304,14 +317,16 @@ BEGIN
        ORDER BY l.created_at, l.id
        LIMIT 1
     ) ev ON TRUE
-   WHERE d.protocol_id = p_protocol_id;
+   WHERE d.protocol_id = p_protocol_id
+     AND ei.review_status IS DISTINCT FROM 'rejected_from_draft';
 
   -- Protocol version label (nullable — parser may not have extracted one).
-  SELECT CASE
-           WHEN jsonb_typeof(extracted_value) = 'string'
-             THEN NULLIF(btrim(extracted_value #>> '{}'), '')
-           ELSE extracted_value::text
-         END
+  -- value_text already prefers the SOTR reviewer's current_text correction.
+  SELECT COALESCE(
+           NULLIF(btrim(value_text), ''),
+           CASE WHEN jsonb_typeof(extracted_value) <> 'string'
+                THEN extracted_value::text END
+         )
     INTO v_protocol_version
     FROM _deliv_items
    WHERE field_type = 'metadata'
@@ -716,11 +731,19 @@ BEGIN
   -- MATCH + APPLY — "human edit wins".
   -- =========================================================================
 
-  -- Fingerprint every new spec, then rank duplicates (Section 6 can emit
-  -- several blocks off one visit item) so both sides pair 1:1 in order.
+  -- Fingerprint every new spec, then rank duplicates so both sides pair 1:1.
+  -- derived_text is PART of the fingerprint (not just a fallback): a match
+  -- means "same section, same kind, same source item, same content". Changed
+  -- content therefore never silently inherits a human's review_state — the
+  -- old block falls out as unmatched (kept + flagged if touched, deleted if
+  -- pristine) and the new text arrives as a fresh draft. It also means a
+  -- rejected block only ever consumes the match for content identical to
+  -- what was rejected, and Section-6 siblings from one visit item can never
+  -- re-pair onto each other's procedures when the list reorders.
   UPDATE _deliv_new_specs
      SET fingerprint = section_key || '|' || block_type || '|'
-                       || COALESCE(extracted_item_id::text, derived_text);
+                       || COALESCE(extracted_item_id::text, '') || '|'
+                       || COALESCE(derived_text, '');
 
   UPDATE _deliv_new_specs s
      SET match_rank = r.rn
@@ -739,10 +762,12 @@ BEGIN
     FROM (
       SELECT b.id,
              b.section_key || '|' || b.block_type || '|'
-               || COALESCE(b.extracted_item_id::text, b.derived_text) AS fingerprint,
+               || COALESCE(b.extracted_item_id::text, '') || '|'
+               || COALESCE(b.derived_text, '') AS fingerprint,
              ROW_NUMBER() OVER (
                PARTITION BY b.section_key || '|' || b.block_type || '|'
-                 || COALESCE(b.extracted_item_id::text, b.derived_text)
+                 || COALESCE(b.extracted_item_id::text, '') || '|'
+                 || COALESCE(b.derived_text, '')
                ORDER BY b.sort_order, b.created_at, b.id
              ) AS rn
         FROM protocol_deliverable_blocks b
@@ -752,7 +777,9 @@ BEGIN
    WHERE e.fingerprint = s.fingerprint
      AND e.rn = s.match_rank;
 
-  -- Matched (and not rejected): refresh the parser-owned fields only.
+  -- Matched (and not rejected): refresh the parser-owned fields. A match
+  -- implies identical derived_text (it's in the fingerprint), so this only
+  -- ever moves evidence/confidence/sort — never visible content.
   -- current_text, review_state, review_note, version are intentionally
   -- untouched — the human's work survives regeneration.
   UPDATE protocol_deliverable_blocks b
@@ -924,7 +951,14 @@ BEGIN
 
   v_new_state := CASE p_action
     WHEN 'mark_reviewed'   THEN 'reviewed'::deliverable_review_state
-    WHEN 'unmark_reviewed' THEN 'draft'
+    -- unmark restores the state the facts imply, not a flat 'draft':
+    -- reviewer-authored blocks stay human_added, text-overlaid blocks stay
+    -- edited (their badge and export column must keep saying so).
+    WHEN 'unmark_reviewed' THEN CASE
+      WHEN v_block.content_origin = 'human_editorial' THEN 'human_added'::deliverable_review_state
+      WHEN v_block.current_text IS NOT NULL           THEN 'edited'
+      ELSE 'draft'
+    END
     WHEN 'flag'            THEN 'needs_review'
     WHEN 'add_note'        THEN v_block.review_state  -- state unchanged
     WHEN 'reject_block'    THEN 'rejected'
@@ -956,7 +990,8 @@ $$;
 
 COMMENT ON FUNCTION deliverable_set_block_review IS
   'Review actions on a deliverable block: mark_reviewed → reviewed, '
-  'unmark_reviewed → draft, flag → needs_review, add_note → state unchanged + '
+  'unmark_reviewed → human_added/edited/draft (whichever the block''s origin '
+  'and text overlay imply), flag → needs_review, add_note → state unchanged + '
   'review_note set, reject_block → rejected (hidden from packet/export but '
   'remembered so regeneration never resurrects it). Every call appends a '
   'deliverable_block_edits row. SECURITY INVOKER — RLS is the access gate.';
@@ -1131,7 +1166,7 @@ COMMENT ON FUNCTION deliverable_add_block IS
 
 
 -- ---------------------------------------------------------------------------
--- 6. deliverable_delete_block — hard delete, human_added only.
+-- 6. deliverable_delete_block — hard delete, human_editorial only.
 -- ---------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION deliverable_delete_block(
@@ -1162,8 +1197,11 @@ BEGIN
 
   -- Parser-derived blocks are never hard-deleted: their absence must be
   -- remembered so regeneration cannot resurrect them. Reject those instead.
-  IF v_block.review_state <> 'human_added' THEN
-    RAISE EXCEPTION 'Only human-added blocks can be deleted. Use '
+  -- The gate keys on content_origin — IMMUTABLE, unlike review_state, which
+  -- review/edit actions overwrite (a reviewer-added block stays deletable
+  -- after it has been reviewed or its text edited).
+  IF v_block.content_origin <> 'human_editorial' THEN
+    RAISE EXCEPTION 'Only reviewer-added blocks can be deleted. Use '
       'deliverable_set_block_review with reject_block for parser-derived blocks.'
       USING ERRCODE = '22023';
   END IF;
@@ -1176,8 +1214,9 @@ END;
 $$;
 
 COMMENT ON FUNCTION deliverable_delete_block IS
-  'Hard-deletes a block, allowed ONLY for review_state human_added (its audit '
-  'rows cascade). Parser-derived blocks must be rejected instead so the '
+  'Hard-deletes a block, allowed ONLY for content_origin human_editorial (its '
+  'audit rows cascade; the origin is immutable so deletability survives review '
+  'and edit actions). Parser-derived blocks must be rejected instead so the '
   'rejection is remembered across regeneration. SECURITY INVOKER.';
 
 
