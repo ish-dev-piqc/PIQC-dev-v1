@@ -3,10 +3,10 @@ import { createPortal } from 'react-dom';
 import {
   AlertOctagon,
   AlertTriangle,
+  BadgeCheck,
   Info,
   MessageSquare,
   MoreHorizontal,
-  Quote,
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import {
@@ -66,6 +66,9 @@ export function DeliverableBlockRow({
   const [menuOpen, setMenuOpen] = useState(false);
   const menuBtnRef = useRef<HTMLButtonElement>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
+  // "Remove from draft" is hidden from the packet once it lands, so there is
+  // no in-UI undo — it earns a two-step confirm inside the menu.
+  const [confirmingReject, setConfirmingReject] = useState(false);
 
   const isReviewed = block.review_state === 'reviewed';
   const hasSource = block.source_evidence_id !== null || block.source_quote !== null;
@@ -74,6 +77,8 @@ export function DeliverableBlockRow({
     label: string;
     title?: string;
     danger: boolean;
+    /** Keep the menu open after selecting (used by the confirm step). */
+    keepOpen?: boolean;
     onSelect: () => void;
   }
 
@@ -81,13 +86,22 @@ export function DeliverableBlockRow({
     { label: 'Edit text', danger: false, onSelect: () => onEdit(block) },
     { label: 'Add note', danger: false, onSelect: () => onAddNote(block) },
     { label: 'Flag for review', danger: false, onSelect: () => onFlag(block) },
-    {
-      label: 'Remove from draft',
-      title:
-        'Removes this item from the draft and every export. It is preserved in the record, and regeneration will not re-add it.',
-      danger: false,
-      onSelect: () => onReject(block),
-    },
+    confirmingReject
+      ? {
+          label: 'Confirm removal',
+          title:
+            'The item is hidden from the draft and every export, preserved in the record, and never re-added by regeneration.',
+          danger: true,
+          onSelect: () => onReject(block),
+        }
+      : {
+          label: 'Remove from draft',
+          title:
+            'Removes this item from the draft and every export. It is preserved in the record, and regeneration will not re-add it. Click twice to confirm.',
+          danger: false,
+          keepOpen: true,
+          onSelect: () => setConfirmingReject(true),
+        },
   ];
   // Hard delete is reserved for reviewer-added blocks; parser-origin blocks
   // are rejected (preserved) instead so regeneration can't resurrect them.
@@ -95,7 +109,13 @@ export function DeliverableBlockRow({
     menuItems.push({ label: 'Delete item', danger: true, onSelect: () => onDelete(block) });
   }
 
+  const closeMenu = () => {
+    setMenuOpen(false);
+    setConfirmingReject(false);
+  };
+
   const toggleMenu = () => {
+    setConfirmingReject(false);
     setMenuOpen((prev) => {
       const next = !prev;
       if (next && menuBtnRef.current) {
@@ -221,26 +241,37 @@ export function DeliverableBlockRow({
                     type="button"
                     aria-hidden
                     tabIndex={-1}
-                    onClick={() => setMenuOpen(false)}
+                    onClick={closeMenu}
                     className="fixed inset-0 z-[60] cursor-default"
                   />
                   <div
                     role="menu"
                     data-testid="deliverable-row-menu"
                     style={{ position: 'fixed', top: menuPos.top, right: menuPos.right }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        e.stopPropagation();
+                        closeMenu();
+                        menuBtnRef.current?.focus();
+                      }
+                    }}
                     className={`w-48 z-[61] rounded-md border shadow-lg overflow-hidden ${
                       isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/10'
                     }`}
                   >
-                    {menuItems.map((item) => (
+                    {menuItems.map((item, index) => (
                       <button
                         key={item.label}
                         type="button"
                         role="menuitem"
                         title={item.title}
+                        // Focus lands in the menu on open so keyboard users
+                        // aren't dumped at the end of the document by the
+                        // portal (Escape returns focus to the trigger).
+                        autoFocus={index === 0}
                         onClick={() => {
                           item.onSelect();
-                          setMenuOpen(false);
+                          if (!item.keepOpen) closeMenu();
                         }}
                         className={`w-full text-left text-xs px-3 py-2 ${
                           item.danger
@@ -313,7 +344,7 @@ function ConfidenceChip({
   const Icon = (() => {
     switch (confidence) {
       case 'high':
-        return Quote;
+        return BadgeCheck;
       case 'medium':
         return Info;
       case 'low':

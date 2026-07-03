@@ -102,7 +102,7 @@ function makePacket(overrides: Partial<DeliverableExportPacket> = {}): Deliverab
     protocol_code: 'ONC-4021',
     protocol_title: 'Phase 3 Compound X Study',
     artifact_type: 'monitoring_prep_checklist',
-    title: 'Monitoring Preparation Checklist — DRAFT',
+    title: 'Monitoring Preparation Checklist',
     protocol_version: 'v2.0',
     generated_at: '2026-07-03T10:15:00.000Z',
     blocks: [
@@ -322,7 +322,7 @@ describe('buildDeliverablePdf — document shell', () => {
 describe('buildDeliverablePdf — title block', () => {
   it('renders the deliverable title', () => {
     const text = docText(buildDeliverablePdf(makePacket()));
-    expect(text).toContain('Monitoring Preparation Checklist — DRAFT');
+    expect(text).toContain('Monitoring Preparation Checklist');
   });
 
   it('renders protocol title + protocol code on one line', () => {

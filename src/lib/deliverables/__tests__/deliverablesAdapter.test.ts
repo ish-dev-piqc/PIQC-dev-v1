@@ -55,7 +55,7 @@ const basePacket = {
   deliverable_id: 'del-1',
   protocol_id: 'prot-1',
   artifact_type: 'monitoring_prep_checklist',
-  title: 'Monitoring Preparation Checklist — DRAFT',
+  title: 'Monitoring Preparation Checklist',
   protocol_version: 'v2.0',
   generated_at: '2026-07-03T10:00:00+00:00',
   regenerated_at: null,
@@ -70,7 +70,7 @@ describe('adaptDeliverablePacket — round trip', () => {
     expect(out.deliverable_id).toBe('del-1');
     expect(out.protocol_id).toBe('prot-1');
     expect(out.artifact_type).toBe('monitoring_prep_checklist');
-    expect(out.title).toBe('Monitoring Preparation Checklist — DRAFT');
+    expect(out.title).toBe('Monitoring Preparation Checklist');
     expect(out.protocol_version).toBe('v2.0');
     expect(out.generated_at).toBe('2026-07-03T10:00:00+00:00');
     expect(out.regenerated_at).toBeNull();

@@ -332,7 +332,7 @@ BEGIN
 
   IF FOUND THEN
     UPDATE protocol_deliverables
-       SET title            = 'Monitoring Preparation Checklist — DRAFT',
+       SET title            = 'Monitoring Preparation Checklist',
            protocol_version = v_protocol_version,
            generated_by     = v_user,
            regenerated_at   = NOW()
@@ -343,7 +343,7 @@ BEGIN
     )
     VALUES (
       p_protocol_id, p_artifact_type,
-      'Monitoring Preparation Checklist — DRAFT',
+      'Monitoring Preparation Checklist',
       v_protocol_version, v_user
     )
     ON CONFLICT (protocol_id, artifact_type) DO UPDATE

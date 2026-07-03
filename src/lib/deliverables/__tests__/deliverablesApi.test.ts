@@ -19,7 +19,7 @@ const packetPayload = {
   deliverable_id: 'del-1',
   protocol_id: 'prot-1',
   artifact_type: 'monitoring_prep_checklist',
-  title: 'Monitoring Preparation Checklist — DRAFT',
+  title: 'Monitoring Preparation Checklist',
   protocol_version: 'v2.0',
   generated_at: '2026-07-03T12:00:00Z',
   regenerated_at: null,
