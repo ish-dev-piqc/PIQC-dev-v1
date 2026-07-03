@@ -21,6 +21,7 @@ vi.mock('../questionnaireApi', () => ({ fetchQuestionnaireBundle: vi.fn() }));
 vi.mock('../riskSummaryApi', () => ({ fetchRiskSummary: vi.fn() }));
 vi.mock('../preAuditApi', () => ({ fetchPreAuditDeliverables: vi.fn() }));
 vi.mock('../workspaceEntriesApi', () => ({ fetchWorkspaceEntries: vi.fn() }));
+vi.mock('../capaApi', () => ({ fetchIssuesWithCapas: vi.fn() }));
 vi.mock('../reportApi', () => ({ fetchReportDraft: vi.fn() }));
 
 import { fetchAuditLineage } from '../lineageApi';
@@ -34,6 +35,7 @@ import { fetchQuestionnaireBundle } from '../questionnaireApi';
 import { fetchRiskSummary } from '../riskSummaryApi';
 import { fetchPreAuditDeliverables } from '../preAuditApi';
 import { fetchWorkspaceEntries } from '../workspaceEntriesApi';
+import { fetchIssuesWithCapas } from '../capaApi';
 import { fetchReportDraft } from '../reportApi';
 
 const m = (fn: unknown) => fn as ReturnType<typeof vi.fn>;
@@ -67,6 +69,7 @@ beforeEach(() => {
     checklist: null,
   });
   m(fetchWorkspaceEntries).mockResolvedValue([]);
+  m(fetchIssuesWithCapas).mockResolvedValue({ issues: [], capasByIssue: {} });
   m(fetchReportDraft).mockResolvedValue(null);
 });
 

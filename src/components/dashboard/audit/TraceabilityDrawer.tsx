@@ -45,6 +45,8 @@ const ENTITY_LABELS: Record<LineageEntityType, string> = {
   AGENDA: 'Agenda',
   CHECKLIST: 'Checklist',
   WORKSPACE_ENTRY: 'Finding / observation',
+  ISSUE: 'Issue',
+  CAPA: 'CAPA',
   REPORT: 'Report',
 };
 
@@ -62,7 +64,11 @@ const FILTER_GROUPS: Array<{ value: string; label: string; types: LineageEntityT
     label: 'Deliverables',
     types: ['QUESTIONNAIRE', 'RISK_SUMMARY', 'CONFIRMATION_LETTER', 'AGENDA', 'CHECKLIST', 'REPORT'],
   },
-  { value: 'FINDINGS', label: 'Findings & observations', types: ['WORKSPACE_ENTRY'] },
+  {
+    value: 'FINDINGS',
+    label: 'Findings, issues & CAPAs',
+    types: ['WORKSPACE_ENTRY', 'ISSUE', 'CAPA'],
+  },
 ];
 
 // Node fill colors for the SVG mini-map. Hex constants from the brand palette

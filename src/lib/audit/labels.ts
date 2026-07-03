@@ -10,6 +10,7 @@ import type {
   AuditStatus,
   AuditType,
   AuditWorkflowType,
+  CapaStatus,
   CompliancePosture,
   DerivedCriticality,
   EndpointTier,
@@ -64,6 +65,14 @@ export const AUDIT_TYPE_LABELS: Record<AuditType, string> = {
 export const AUDIT_WORKFLOW_TYPE_LABELS: Record<AuditWorkflowType, string> = {
   VENDOR_AUDIT: 'Vendor audit',
   INVESTIGATOR_SITE_AUDIT: 'Investigator site audit',
+};
+
+// Deliberately "Accepted", never "Approved" — the strongest in-app CAPA state
+// is "ready to export"; formal approval happens in the QMS after export.
+export const CAPA_STATUS_LABELS: Record<CapaStatus, string> = {
+  DRAFT: 'Draft',
+  NEEDS_REVISION: 'Needs revision',
+  ACCEPTED: 'Accepted',
 };
 
 export const RESPONSE_STATUS_LABELS: Record<ResponseStatus, string> = {

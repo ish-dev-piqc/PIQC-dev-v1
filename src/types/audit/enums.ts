@@ -117,6 +117,12 @@ export type ProvisionalClassification =
   | 'OPPORTUNITY_FOR_IMPROVEMENT'
   | 'NOT_YET_CLASSIFIED';
 
+// CAPA review loop — draft-only posture. ACCEPTED means "ready to export";
+// there is deliberately no approve/final state (finalization happens in the
+// QMS after export). 1:1 with Postgres capa_status
+// (20260707000200_audit_mode_issue_capa_schema.sql).
+export type CapaStatus = 'DRAFT' | 'NEEDS_REVISION' | 'ACCEPTED';
+
 export type AmendmentAlertStatus =
   | 'PENDING'
   | 'REVIEWED'
@@ -142,4 +148,6 @@ export type TrackedObjectType =
   | 'CONFIRMATION_LETTER_OBJECT'
   | 'AGENDA_OBJECT'
   | 'CHECKLIST_OBJECT'
-  | 'REPORT_DRAFT_OBJECT';
+  | 'REPORT_DRAFT_OBJECT'
+  | 'ISSUE_OBJECT'
+  | 'CAPA_OBJECT';

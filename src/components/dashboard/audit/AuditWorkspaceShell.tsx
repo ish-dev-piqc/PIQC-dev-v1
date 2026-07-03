@@ -3,13 +3,14 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useAudit } from '../../../context/AuditContext';
 import type { AuditStage } from '../../../types/audit';
 import { STAGE_LABELS, AUDIT_TYPE_LABELS, AUDIT_STATUS_LABELS } from '../../../lib/audit/labels';
-import { ChevronDown, Sparkles, FileSearch, Plus, GitBranch } from 'lucide-react';
+import { ChevronDown, Sparkles, FileSearch, Plus, GitBranch, AlertOctagon } from 'lucide-react';
 import StageNav from './StageNav';
 import AuditRequiredGate from './AuditRequiredGate';
 import RiskSummaryPanel from './RiskSummaryPanel';
 import SourceTruthListDrawer from '../../sotr/SourceTruthListDrawer';
 import NewAuditDrawer from './onboarding/NewAuditDrawer';
 import TraceabilityDrawer from './TraceabilityDrawer';
+import IssuesCapaDrawer from './IssuesCapaDrawer';
 import AuditChatPanel from './AuditChatPanel';
 import PiqcDock from './PiqcDock';
 import type { AuditChatMessage } from '../../../lib/audit/chatApi';
@@ -71,6 +72,10 @@ export default function AuditWorkspaceShell() {
   // Traceability slide-over — the audit's seed→tree lineage. Cross-stage for
   // the same reason: provenance questions arise during any audit decision.
   const [traceabilityOpen, setTraceabilityOpen] = useState(false);
+  // Issues & CAPA slide-over — triage findings into issues, draft each CAPA
+  // through review to export. Cross-stage: issues surface during conduct
+  // (Stage 6) but CAPAs are accepted/exported around Stages 7–8.
+  const [issuesCapaOpen, setIssuesCapaOpen] = useState(false);
   // New-audit drawer — reachable from the header on any stage so returning
   // auditors can start a new audit without leaving the workspace.
   const [newAuditOpen, setNewAuditOpen] = useState(false);
@@ -139,6 +144,7 @@ export default function AuditWorkspaceShell() {
   useEffect(() => {
     setProtocolSourceOpen(false);
     setTraceabilityOpen(false);
+    setIssuesCapaOpen(false);
     setChatOpen(false);
     setChatThreads((prev) => {
       if (!activeAudit) return {};
@@ -228,8 +234,11 @@ export default function AuditWorkspaceShell() {
                 </span>
               </p>
             </div>
-            {/* flex-wrap: four labeled buttons overflow below md — wrapping
-                beats clipping and keeps every label legible. */}
+            {/* flex-wrap: five labeled buttons overflow below md — wrapping
+                beats clipping and keeps every label legible. This row is at
+                its ceiling; grouping the record surfaces (Protocol source /
+                Traceability / Issues & CAPA) is flagged decision-debt in
+                plans/sixonelabs-piqc/audit-issue-capa.md. */}
             <div className="flex items-center gap-2 flex-wrap justify-end flex-shrink-0 self-start">
               {/* Mobile-only stage picker — replaces the StageNav rail below md: */}
               <MobileStagePicker
@@ -307,6 +316,23 @@ export default function AuditWorkspaceShell() {
               >
                 <GitBranch size={12} />
                 Traceability
+              </button>
+              {/* Issues & CAPA — the finding → issue → CAPA triage loop.
+                  Draft-only surface: Accepted = ready to export; formal
+                  finalization happens in the QMS. */}
+              <button
+                type="button"
+                onClick={() => setIssuesCapaOpen(true)}
+                title="Triage findings into issues and draft CAPAs for review"
+                data-testid="audit-issues-capa-button"
+                className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors ${
+                  isLight
+                    ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+                    : 'bg-[#0F172A] border-white/[0.08] text-[#CBD5E1] hover:bg-white/[0.04]'
+                }`}
+              >
+                <AlertOctagon size={12} />
+                Issues &amp; CAPA
               </button>
               {/* PIQC is summoned from the PiqcDock (bottom-right). The old
                   header "Ask" button was deliberately removed in the rename +
@@ -390,6 +416,14 @@ export default function AuditWorkspaceShell() {
         <TraceabilityDrawer
           audit={activeAudit}
           onClose={() => setTraceabilityOpen(false)}
+        />
+      )}
+
+      {/* Issues & CAPA drawer — triage + draft-only CAPA review loop. */}
+      {issuesCapaOpen && (
+        <IssuesCapaDrawer
+          audit={activeAudit}
+          onClose={() => setIssuesCapaOpen(false)}
         />
       )}
 

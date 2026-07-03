@@ -18,6 +18,7 @@ import type {
   AuditStatus,
   AuditType,
   AuditWorkflowType,
+  CapaStatus,
   ClinicalTrialPhase,
   CompliancePosture,
   DeliverableApprovalStatus,
@@ -424,6 +425,42 @@ export interface ChecklistObject {
   approval_status: DeliverableApprovalStatus;
   approved_by: string | null;
   approved_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// -----------------------------------------------------------------------------
+// Issues & CAPA (Phase 3) — triage a Stage 6 finding into an Issue; the Issue
+// carries at most one draft-only CAPA (DRAFT → NEEDS_REVISION → ACCEPTED).
+// Issue lifecycle is deliberately column-free: derived from its CAPA's state.
+// -----------------------------------------------------------------------------
+export interface IssueObject {
+  id: string;
+  audit_id: string;
+  workspace_entry_id: string | null; // the finding this was triaged from
+  title: string;
+  description: string;
+  severity: ProvisionalImpact;       // UI constrains to CRITICAL/MAJOR/MINOR
+  regulatory_reportable: boolean;
+  sponsor_reportable: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CapaObject {
+  id: string;
+  issue_id: string;                  // 1:1 with IssueObject
+  audit_id: string;                  // denormalized for RLS + fast queries
+  root_cause_text: string;
+  corrective_action_text: string;
+  preventive_action_text: string;
+  status: CapaStatus;
+  piqc_prefilled: boolean;           // TRUE until the first auditor edit
+  accepted_at: string | null;
+  accepted_by: string | null;
+  exported_at: string | null;
+  created_by: string;
   created_at: string;
   updated_at: string;
 }
