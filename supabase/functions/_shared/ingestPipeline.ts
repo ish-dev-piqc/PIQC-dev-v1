@@ -2067,8 +2067,28 @@ async function persistVisitExecutionWorkspaces(
   );
 
   if (rpcError) {
-    console.error("[ingest] vew_persist_rpc_failed", { error: rpcError.message });
+    // Historically this was swallowed with only `.message` → a persist failure
+    // (e.g. the ordinal-unique collision that zeroed the whole batch) read as a
+    // healthy ingest while Visit Prep stayed blank. Log the FULL error — code +
+    // details + hint — so the specific SQLSTATE is diagnosable from the logs.
+    console.error("[ingest] vew_persist_rpc_failed", {
+      protocol_id: args.protocolId,
+      code: (rpcError as { code?: string }).code,
+      message: rpcError.message,
+      details: (rpcError as { details?: string }).details,
+      hint: (rpcError as { hint?: string }).hint,
+    });
     return { unmatchedWithProcedures, keyCollisions };
+  }
+  // Per-visit isolation (RPC savepoints): some visits may have been skipped
+  // without aborting the batch. Surface the count so a partial persist is
+  // visible instead of quietly short.
+  const visitsFailed = (data as { visits_failed?: number } | null)?.visits_failed ?? 0;
+  if (visitsFailed > 0) {
+    console.warn("[ingest] vew_persist_visits_failed", {
+      protocol_id: args.protocolId,
+      visits_failed: visitsFailed,
+    });
   }
   // Surface the silent-empty case: the RPC "succeeded" but wrote no
   // requirements despite a non-empty payload. Previously this read as a
