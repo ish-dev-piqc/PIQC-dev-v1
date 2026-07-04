@@ -100,6 +100,9 @@ export interface NewBlockSpec {
 // every shape as hostile. Bad values skip the item, never throw.
 // -----------------------------------------------------------------------------
 
+// KEEP IN SYNC with selection/riskOverview.ts — the defensive readers below
+// are duplicated there (this file is frozen post-merge; edits must land in
+// both).
 function asTrimmedString(v: unknown): string | null {
   if (typeof v !== 'string') return null;
   const t = v.trim();
@@ -151,6 +154,8 @@ function readVisitValue(v: unknown): VisitValue | null {
 
 type ProcedureCategory = 'specimen' | 'imaging' | 'vendor';
 
+// KEEP IN SYNC with selection/riskOverview.ts — the keyword taxonomy below
+// (vendor > imaging > specimen, word-boundary regexes) is duplicated there.
 const VENDOR_PATTERNS: readonly RegExp[] = [
   /\bvendor\b/, /\bcentral lab/, /\bcourier\b/, /\bshipment\b/,
 ];

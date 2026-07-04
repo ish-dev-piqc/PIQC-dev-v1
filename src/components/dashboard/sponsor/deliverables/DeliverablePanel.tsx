@@ -484,6 +484,7 @@ export default function DeliverablePanel({
         onClose={() => setTraceabilityBlock(null)}
         block={traceabilityBlock}
         protocolVersion={packet.protocol_version}
+        sectionLabels={sectionLabels}
       />
     </div>
   );

@@ -1,7 +1,7 @@
 ---
 owner: fable-dev-piqc
 feature: risk-overview
-status: active
+status: in-review
 started: 2026-07-03
 target_pr:
 ---
@@ -101,7 +101,9 @@ SOTR `current_text` wins, `rejected_from_draft` excluded).
 
 - [x] migration (1 new: enum value + generate dispatch)
 - [x] RPC (deliverable_generate replaced with per-type dispatch)
-- [ ] adapter (packet shape unchanged — artifact-agnostic)
+- [x] adapter (whitelist derived from ARTIFACT_TYPE_LABELS — review found the
+  hand-listed set silently excluded risk_overview; + traceability drawer
+  sectionLabels prop)
 - [ ] context
 - [x] component (BlockList props, DeliverablePanel, tab picker)
 - [x] test (riskOverview selection; BlockList/panel regressions)
@@ -116,7 +118,7 @@ None.
 
 ## Verification
 
-- [ ] `npm run typecheck`, `npm run build`, `npm test` clean; new
+- [x] `npm run typecheck`, `npm run build`, `npm test` clean; new
   `riskOverview.test.ts` green; existing 139 deliverables tests still
   green (checklist regression).
 - [ ] Manual: Protocol Intelligence tab → picker shows both deliverables →
@@ -124,8 +126,8 @@ None.
   prose + evidence chips + confidence → traceability drawer works →
   review/edit/reject/add work → regenerate preserves human work →
   checklist unchanged (default props).
-- [ ] No numeric risk score rendered anywhere (doctrine check).
-- [ ] `piqc-review` clean.
+- [x] No numeric risk score rendered anywhere (doctrine check).
+- [x] `piqc-review` clean.
 
 ## Decisions encoded (don't re-litigate without reading these)
 
