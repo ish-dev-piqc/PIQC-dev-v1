@@ -6,6 +6,8 @@ import { useSubscription } from '../../../../hooks/useSubscription';
 import { canUseSponsorMode } from '../../../../lib/entitlements';
 import {
   ARTIFACT_TYPE_LABELS,
+  CRA_FOCUS_SECTION_LABELS,
+  CRA_FOCUS_SECTION_ORDER,
   MONITORING_SECTION_LABELS,
   MONITORING_SECTION_ORDER,
   RISK_SECTION_LABELS,
@@ -27,8 +29,9 @@ import DeliverablePanel from './DeliverablePanel';
 //      list; the tab defaults to the app-wide activeProtocol and offers a
 //      local <select> so a reviewer can switch protocols without leaving
 //      the tab (the override never writes back to the global selection).
-//   3. A two-chip deliverable picker (Monitoring Prep Checklist | Risk
-//      Overview) chooses the artifact type; a selected protocol mounts
+//   3. A three-chip deliverable picker (Monitoring Prep Checklist | Risk
+//      Overview | CRA Monitoring Focus) chooses the artifact type; a
+//      selected protocol mounts
 //      <DeliverablePanel/> with that type's section config. No selection
 //      renders an empty-state prompt instead.
 //
@@ -55,12 +58,18 @@ const DELIVERABLE_CONFIGS: Record<
     sectionLabels: RISK_SECTION_LABELS,
     exportEnabled: false,
   },
+  cra_monitoring_focus: {
+    sectionOrder: CRA_FOCUS_SECTION_ORDER,
+    sectionLabels: CRA_FOCUS_SECTION_LABELS,
+    exportEnabled: false,
+  },
 };
 
 /** Chip order in the picker — checklist first (the default). */
 const ARTIFACT_PICKER_ORDER: readonly DeliverableArtifactType[] = [
   'monitoring_prep_checklist',
   'risk_overview',
+  'cra_monitoring_focus',
 ];
 
 export default function ProtocolIntelligenceTab() {
@@ -212,7 +221,7 @@ export default function ProtocolIntelligenceTab() {
             role="tablist"
             aria-label="Deliverable type"
             data-testid="protocol-intelligence-deliverable-picker"
-            className={`inline-flex items-center gap-1 rounded-lg border p-1 ${
+            className={`inline-flex flex-wrap items-center gap-1 rounded-lg border p-1 ${
               isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/10'
             }`}
           >

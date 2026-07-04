@@ -1,10 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { selectRiskOverviewBlocks, type RiskBlockSpec } from '../selection/riskOverview';
+import {
+  selectCraMonitoringFocusBlocks,
+  type CraFocusBlockSpec,
+} from '../selection/craMonitoringFocus';
 import type { SelectionInput, SelectionSourceItem } from '../selection/monitoringChecklist';
-import { RISK_SECTION_ORDER } from '../../../types/deliverables';
+import { CRA_FOCUS_SECTION_ORDER } from '../../../types/deliverables';
 
 // -----------------------------------------------------------------------------
-// Fixture builders (mirrors monitoringChecklist.test.ts)
+// Fixture builders (mirrors riskOverview.test.ts / monitoringChecklist.test.ts)
 // -----------------------------------------------------------------------------
 
 function evidence(
@@ -31,7 +34,7 @@ function input(
   return { items, cohorts, protocolVersion };
 }
 
-function blocksIn(blocks: RiskBlockSpec[], sectionKey: string): RiskBlockSpec[] {
+function blocksIn(blocks: CraFocusBlockSpec[], sectionKey: string): CraFocusBlockSpec[] {
   return blocks.filter((b) => b.section_key === sectionKey);
 }
 
@@ -48,11 +51,12 @@ const LONG_CRITERION =
 
 /**
  * A protocol exercising every section: 4 usable criteria (2 flagged — one
- * conditional-keyword, one lengthy; 2 unflagged), 3 visits (one 0/0 exact-day
- * with 8 procedures incl. specimen+imaging matches, one ±1 with a vendor
- * match and an overlapping procedure for dedupe, one ±3 that must NOT flag),
- * primary + secondary endpoints, an amendment summary, non-selected items
- * (dosing, protocol_version metadata), and a cohort the risk lens ignores.
+ * conditional-keyword, one lengthy; 2 unflagged), 2 prohibited medications,
+ * 3 visits (one 0/0 exact-day with specimen+imaging matches, one ±1 with a
+ * vendor match and an overlapping procedure for dedupe, one ±3 that must NOT
+ * flag), primary + secondary endpoints, an amendment summary, non-selected
+ * items (dosing, protocol_version metadata), and a cohort the focus lens
+ * ignores.
  */
 function fullProtocolInput(): SelectionInput {
   return input(
@@ -87,6 +91,21 @@ function fullProtocolInput(): SelectionInput {
         primary_evidence: evidence('ev-exc-2', 'Pregnant or breastfeeding women are excluded', 11, 'Section 4.2'),
       }),
       item({
+        id: 'med-1',
+        field_type: 'prohibited_med',
+        field_path: 'prohibited_medications[0]',
+        extracted_value: 'Warfarin',
+        primary_evidence: evidence('ev-med-1', 'Warfarin is prohibited during the study', 12, 'Section 5.3 Prohibited Medications'),
+      }),
+      item({
+        id: 'med-2',
+        field_type: 'prohibited_med',
+        field_path: 'prohibited_medications[1]',
+        extracted_value: 'Strong CYP3A4 inhibitors',
+        confidence_state: 'medium',
+        primary_evidence: evidence('ev-med-2', 'Strong CYP3A4 inhibitors must be avoided', 12, 'Section 5.3'),
+      }),
+      item({
         id: 'vis-1',
         field_type: 'visit',
         field_path: 'schedule_of_events[0]',
@@ -95,8 +114,8 @@ function fullProtocolInput(): SelectionInput {
           study_day: 1,
           window_minus_days: 0,
           window_plus_days: 0,
-          // 8 procedures → dense; 'Blood draw' (specimen) + 'ECG (12-lead)'
-          // (imaging) match the dependency taxonomy, the rest must not.
+          // 'Blood draw' (specimen) + 'ECG (12-lead)' (imaging) match the
+          // workflow taxonomy; the rest must not.
           procedures: [
             'Blood draw',
             'Vital signs',
@@ -181,30 +200,29 @@ function fullProtocolInput(): SelectionInput {
 // Tests
 // -----------------------------------------------------------------------------
 
-describe('selectRiskOverviewBlocks', () => {
+describe('selectCraMonitoringFocusBlocks', () => {
   // ---------------------------------------------------------------------------
   // T1 — Full protocol: section grouping, counts, global ordering
   // ---------------------------------------------------------------------------
   describe('full-protocol fixture', () => {
-    const blocks = selectRiskOverviewBlocks(fullProtocolInput());
+    const blocks = selectCraMonitoringFocusBlocks(fullProtocolInput());
 
-    it('emits all six sections in RISK_SECTION_ORDER', () => {
+    it('emits all five sections in CRA_FOCUS_SECTION_ORDER', () => {
       const sectionSequence: string[] = [];
       for (const block of blocks) {
         if (sectionSequence[sectionSequence.length - 1] !== block.section_key) {
           sectionSequence.push(block.section_key);
         }
       }
-      expect(sectionSequence).toEqual([...RISK_SECTION_ORDER]);
+      expect(sectionSequence).toEqual([...CRA_FOCUS_SECTION_ORDER]);
     });
 
     it('emits the expected block count per section', () => {
-      expect(blocksIn(blocks, 'eligibility_complexity')).toHaveLength(3);         // intro + 2 flagged
-      expect(blocksIn(blocks, 'visit_window_pressure')).toHaveLength(3);          // intro + 2 narrow visits
-      expect(blocksIn(blocks, 'endpoint_critical_procedures')).toHaveLength(2);   // intro + 1 primary
-      expect(blocksIn(blocks, 'vendor_lab_imaging_dependencies')).toHaveLength(4); // intro + 3 unique matches
-      expect(blocksIn(blocks, 'coordination_burden')).toHaveLength(2);            // intro + 1 dense visit
-      expect(blocksIn(blocks, 'amendment_sensitivity')).toHaveLength(2);          // intro + fact
+      expect(blocksIn(blocks, 'eligibility_verification_emphasis')).toHaveLength(5); // intro + 2 flagged + 2 meds
+      expect(blocksIn(blocks, 'fragile_visit_windows')).toHaveLength(3);             // intro + 2 fragile visits
+      expect(blocksIn(blocks, 'endpoint_critical_verification')).toHaveLength(2);    // intro + 1 primary
+      expect(blocksIn(blocks, 'vendor_specimen_workflows')).toHaveLength(4);         // intro + 3 unique matches
+      expect(blocksIn(blocks, 'amendment_sensitive_requirements')).toHaveLength(2);  // intro + fact
       expect(blocks).toHaveLength(16);
     });
 
@@ -213,7 +231,7 @@ describe('selectRiskOverviewBlocks', () => {
     });
 
     it('opens every emitted section with a section_intro framing block', () => {
-      for (const sectionKey of RISK_SECTION_ORDER) {
+      for (const sectionKey of CRA_FOCUS_SECTION_ORDER) {
         const first = blocksIn(blocks, sectionKey)[0];
         expect(first.block_type).toBe('section_intro');
         expect(first.content_origin).toBe('derived_operational_framing');
@@ -232,13 +250,13 @@ describe('selectRiskOverviewBlocks', () => {
     });
 
     it('is deterministic — same input yields identical output', () => {
-      expect(selectRiskOverviewBlocks(fullProtocolInput())).toEqual(blocks);
+      expect(selectCraMonitoringFocusBlocks(fullProtocolInput())).toEqual(blocks);
     });
 
     it('ignores cohorts — output is identical with and without them', () => {
       const base = fullProtocolInput();
       const withoutCohorts: SelectionInput = { ...base, cohorts: [] };
-      expect(selectRiskOverviewBlocks(withoutCohorts)).toEqual(blocks);
+      expect(selectCraMonitoringFocusBlocks(withoutCohorts)).toEqual(blocks);
     });
   });
 
@@ -246,7 +264,7 @@ describe('selectRiskOverviewBlocks', () => {
   // T2 — Content-origin discipline (the 3-way taxonomy, never blurred)
   // ---------------------------------------------------------------------------
   describe('content_origin discipline', () => {
-    const blocks = selectRiskOverviewBlocks(fullProtocolInput());
+    const blocks = selectCraMonitoringFocusBlocks(fullProtocolInput());
 
     it('never emits human_editorial', () => {
       expect(blocks.every((b) => b.content_origin !== 'human_editorial')).toBe(true);
@@ -276,18 +294,18 @@ describe('selectRiskOverviewBlocks', () => {
     });
 
     it('degrades a fact with null item confidence to needs_review, never null', () => {
-      const result = selectRiskOverviewBlocks(
+      const result = selectCraMonitoringFocusBlocks(
         input([
           item({
-            id: 'inc-nc',
-            field_type: 'inclusion_criterion',
-            field_path: 'key_inclusion_criteria[0]',
-            extracted_value: 'Prior exposure to the study drug class',
+            id: 'med-nc',
+            field_type: 'prohibited_med',
+            field_path: 'prohibited_medications[0]',
+            extracted_value: 'St. John’s Wort',
             confidence_state: null,
           }),
         ]),
       );
-      const fact = result.find((b) => b.extracted_item_id === 'inc-nc');
+      const fact = result.find((b) => b.extracted_item_id === 'med-nc');
       expect(fact?.confidence_state).toBe('needs_review');
     });
   });
@@ -296,35 +314,37 @@ describe('selectRiskOverviewBlocks', () => {
   // T3 — Evidence passthrough onto fact blocks
   // ---------------------------------------------------------------------------
   describe('evidence passthrough', () => {
-    const blocks = selectRiskOverviewBlocks(fullProtocolInput());
+    const blocks = selectCraMonitoringFocusBlocks(fullProtocolInput());
 
     it('copies quote, page, and section from the primary evidence onto the block', () => {
-      const fact = blocks.find((b) => b.extracted_item_id === 'inc-2');
+      const fact = blocks.find((b) => b.extracted_item_id === 'med-1');
       expect(fact).toBeDefined();
-      expect(fact?.source_evidence_id).toBe('ev-inc-2');
-      expect(fact?.source_quote).toBe('Diagnosis documented within 5 years');
-      expect(fact?.source_page_number).toBe(10);
-      expect(fact?.source_section).toBe('Section 4.1');
+      expect(fact?.source_evidence_id).toBe('ev-med-1');
+      expect(fact?.source_quote).toBe('Warfarin is prohibited during the study');
+      expect(fact?.source_page_number).toBe(12);
+      expect(fact?.source_section).toBe('Section 5.3 Prohibited Medications');
     });
 
     it('carries the item confidence through unchanged (non-heuristic sections)', () => {
-      const fact = blocks.find((b) => b.extracted_item_id === 'inc-2');
-      expect(fact?.confidence_state).toBe('medium');
+      const criterionFact = blocks.find((b) => b.extracted_item_id === 'inc-2');
+      expect(criterionFact?.confidence_state).toBe('medium');
+      const medFact = blocks.find((b) => b.extracted_item_id === 'med-2');
+      expect(medFact?.confidence_state).toBe('medium');
     });
 
     it('emits a fact with null evidence fields when the item has no primary evidence', () => {
-      const result = selectRiskOverviewBlocks(
+      const result = selectCraMonitoringFocusBlocks(
         input([
           item({
-            id: 'inc-noev',
-            field_type: 'inclusion_criterion',
-            field_path: 'key_inclusion_criteria[0]',
-            extracted_value: 'No history of clinically significant arrhythmia',
+            id: 'med-noev',
+            field_type: 'prohibited_med',
+            field_path: 'prohibited_medications[0]',
+            extracted_value: 'Systemic corticosteroids',
             primary_evidence: null,
           }),
         ]),
       );
-      const fact = result.find((b) => b.extracted_item_id === 'inc-noev');
+      const fact = result.find((b) => b.extracted_item_id === 'med-noev');
       expect(fact).toBeDefined();
       expect(fact?.source_evidence_id).toBeNull();
       expect(fact?.source_quote).toBeNull();
@@ -334,32 +354,72 @@ describe('selectRiskOverviewBlocks', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // T4 — Section 1: eligibility complexity flags
+  // T4 — Section 1: eligibility verification emphasis (criteria + meds)
   // ---------------------------------------------------------------------------
-  describe('eligibility_complexity', () => {
+  describe('eligibility_verification_emphasis', () => {
     it('the length fixture really is longer than the 220-char threshold', () => {
       expect(LONG_CRITERION.length).toBeGreaterThan(220);
     });
 
-    it('names the reason per flagged criterion — conditional logic vs lengthy criterion', () => {
-      const blocks = selectRiskOverviewBlocks(fullProtocolInput());
-      const facts = blocksIn(blocks, 'eligibility_complexity').filter(
+    it('names the reason per flagged criterion, then one card per prohibited medication', () => {
+      const blocks = selectCraMonitoringFocusBlocks(fullProtocolInput());
+      const facts = blocksIn(blocks, 'eligibility_verification_emphasis').filter(
         (b) => b.content_origin === 'protocol_fact',
       );
       expect(facts.map((f) => f.derived_text)).toEqual([
-        'Complex eligibility — conditional logic: Documented diagnosis within the past 5 years',
-        `Complex eligibility — lengthy criterion: ${LONG_CRITERION}`,
+        'Prioritize eligibility verification — conditional logic: Documented diagnosis within the past 5 years',
+        `Prioritize eligibility verification — lengthy criterion: ${LONG_CRITERION}`,
+        'Prioritize medication-history review: Warfarin is restricted by the protocol.',
+        'Prioritize medication-history review: Strong CYP3A4 inhibitors is restricted by the protocol.',
       ]);
     });
 
-    it('states the flagged-of-total counts in the section intro', () => {
-      const blocks = selectRiskOverviewBlocks(fullProtocolInput());
-      const intro = blocksIn(blocks, 'eligibility_complexity')[0];
-      expect(intro.derived_text).toContain('PIQC flagged 2 of 4 eligibility criteria as complex');
+    it('states the combined criteria + medication counts in the section intro', () => {
+      const blocks = selectCraMonitoringFocusBlocks(fullProtocolInput());
+      const intro = blocksIn(blocks, 'eligibility_verification_emphasis')[0];
+      expect(intro.derived_text).toContain(
+        'PIQC identified 2 complex eligibility criteria and 2 protocol-restricted medications',
+      );
+    });
+
+    it('emits the section for prohibited meds alone, with a meds-only intro count', () => {
+      const blocks = selectCraMonitoringFocusBlocks(
+        input([
+          item({
+            id: 'med-only',
+            field_type: 'prohibited_med',
+            field_path: 'prohibited_medications[0]',
+            extracted_value: 'Warfarin',
+          }),
+        ]),
+      );
+      const section = blocksIn(blocks, 'eligibility_verification_emphasis');
+      expect(section).toHaveLength(2); // intro + 1 med card
+      expect(section[0].derived_text).toContain('1 protocol-restricted medication');
+      expect(section[0].derived_text).not.toContain('complex eligibility');
+      expect(section[1].derived_text).toBe(
+        'Prioritize medication-history review: Warfarin is restricted by the protocol.',
+      );
+    });
+
+    it('emits a criteria-only intro count when no prohibited meds exist', () => {
+      const blocks = selectCraMonitoringFocusBlocks(
+        input([
+          item({
+            id: 'inc-cond',
+            field_type: 'inclusion_criterion',
+            field_path: 'key_inclusion_criteria[0]',
+            extracted_value: 'Documented diagnosis within the past 5 years',
+          }),
+        ]),
+      );
+      const intro = blocksIn(blocks, 'eligibility_verification_emphasis')[0];
+      expect(intro.derived_text).toContain('1 complex eligibility criterion');
+      expect(intro.derived_text).not.toContain('protocol-restricted');
     });
 
     it('matches conditional keywords case-insensitively', () => {
-      const blocks = selectRiskOverviewBlocks(
+      const blocks = selectCraMonitoringFocusBlocks(
         input([
           item({
             id: 'exc-hist',
@@ -369,14 +429,14 @@ describe('selectRiskOverviewBlocks', () => {
           }),
         ]),
       );
-      const fact = blocksIn(blocks, 'eligibility_complexity').find(
+      const fact = blocksIn(blocks, 'eligibility_verification_emphasis').find(
         (b) => b.extracted_item_id === 'exc-hist',
       );
       expect(fact?.derived_text).toContain('conditional logic');
     });
 
     it('requires word boundaries — "if" inside "Specific" does not flag', () => {
-      const blocks = selectRiskOverviewBlocks(
+      const blocks = selectCraMonitoringFocusBlocks(
         input([
           item({
             id: 'inc-spec',
@@ -386,11 +446,11 @@ describe('selectRiskOverviewBlocks', () => {
           }),
         ]),
       );
-      expect(blocksIn(blocks, 'eligibility_complexity')).toHaveLength(0);
+      expect(blocksIn(blocks, 'eligibility_verification_emphasis')).toHaveLength(0);
     });
 
     it('names conditional logic as the reason when a criterion is both conditional AND lengthy', () => {
-      const blocks = selectRiskOverviewBlocks(
+      const blocks = selectCraMonitoringFocusBlocks(
         input([
           item({
             id: 'exc-both',
@@ -400,14 +460,39 @@ describe('selectRiskOverviewBlocks', () => {
           }),
         ]),
       );
-      const fact = blocksIn(blocks, 'eligibility_complexity').find(
+      const fact = blocksIn(blocks, 'eligibility_verification_emphasis').find(
         (b) => b.extracted_item_id === 'exc-both',
       );
-      expect(fact?.derived_text).toContain('Complex eligibility — conditional logic:');
+      expect(fact?.derived_text).toContain('Prioritize eligibility verification — conditional logic:');
     });
 
-    it('emits no section when no criterion is flagged', () => {
-      const blocks = selectRiskOverviewBlocks(
+    it('flags strictly above 220 chars and not at exactly 220 (threshold boundary)', () => {
+      const at220 = 'x'.repeat(220);
+      const at221 = 'y'.repeat(221);
+      const blocks = selectCraMonitoringFocusBlocks(
+        input([
+          item({
+            id: 'inc-220',
+            field_type: 'inclusion_criterion',
+            field_path: 'key_inclusion_criteria[0]',
+            extracted_value: at220,
+          }),
+          item({
+            id: 'inc-221',
+            field_type: 'inclusion_criterion',
+            field_path: 'key_inclusion_criteria[1]',
+            extracted_value: at221,
+          }),
+        ]),
+      );
+      const section = blocksIn(blocks, 'eligibility_verification_emphasis');
+      expect(section).toHaveLength(2); // intro + the 221-char criterion only
+      expect(section[1].extracted_item_id).toBe('inc-221');
+      expect(section[1].derived_text).toContain('lengthy criterion');
+    });
+
+    it('emits no section when no criterion is flagged and no meds exist', () => {
+      const blocks = selectCraMonitoringFocusBlocks(
         input([
           item({
             id: 'inc-plain',
@@ -423,190 +508,44 @@ describe('selectRiskOverviewBlocks', () => {
           }),
         ]),
       );
-      expect(blocksIn(blocks, 'eligibility_complexity')).toHaveLength(0);
+      expect(blocksIn(blocks, 'eligibility_verification_emphasis')).toHaveLength(0);
     });
   });
 
   // ---------------------------------------------------------------------------
-  // T4b — Section 1: restricted medications (prohibited_med risk-lens debt)
+  // T5 — Section 2: fragile visit windows
   // ---------------------------------------------------------------------------
-  describe('eligibility_complexity — restricted medications', () => {
-    /** One conditional-flagged criterion + two prohibited meds. */
-    function criteriaAndMedsInput(): SelectionInput {
-      return input([
-        item({
-          id: 'exc-cond',
-          field_type: 'exclusion_criterion',
-          field_path: 'key_exclusion_criteria[0]',
-          extracted_value: 'History of seizure disorder',
-          primary_evidence: evidence('ev-exc-cond', 'Seizure history excluded', 11, 'Section 4.2'),
-        }),
-        item({
-          id: 'med-1',
-          field_type: 'prohibited_med',
-          field_path: 'prohibited_medications[0]',
-          extracted_value: 'Strong CYP3A4 inhibitors',
-          confidence_state: 'medium',
-          primary_evidence: evidence('ev-med-1', 'Strong CYP3A4 inhibitors are prohibited', 12, 'Section 4.3 Concomitant Medications'),
-        }),
-        item({
-          id: 'med-2',
-          field_type: 'prohibited_med',
-          field_path: 'prohibited_medications[1]',
-          extracted_value: 'Warfarin',
-          confidence_state: null,
-          primary_evidence: null,
-        }),
-      ]);
-    }
-
-    function medsOnlyInput(): SelectionInput {
-      const base = criteriaAndMedsInput();
-      return { ...base, items: base.items.filter((i) => i.field_type === 'prohibited_med') };
-    }
-
-    it('emits one verbatim card per restricted medication AFTER the flagged-criteria cards', () => {
-      const blocks = selectRiskOverviewBlocks(criteriaAndMedsInput());
-      const facts = blocksIn(blocks, 'eligibility_complexity').filter(
-        (b) => b.content_origin === 'protocol_fact',
-      );
-      expect(facts.map((f) => f.derived_text)).toEqual([
-        'Complex eligibility — conditional logic: History of seizure disorder',
-        'Restricted medication in eligibility scope: Strong CYP3A4 inhibitors',
-        'Restricted medication in eligibility scope: Warfarin',
-      ]);
-      blocks.forEach((block, i) => expect(block.sort_order).toBe(i));
-    });
-
-    it('copies evidence passthrough onto med cards and carries item confidence through', () => {
-      const blocks = selectRiskOverviewBlocks(criteriaAndMedsInput());
-      const med = blocks.find((b) => b.extracted_item_id === 'med-1');
-      expect(med?.content_origin).toBe('protocol_fact');
-      expect(med?.block_type).toBe('checklist_item');
-      expect(med?.source_evidence_id).toBe('ev-med-1');
-      expect(med?.source_quote).toBe('Strong CYP3A4 inhibitors are prohibited');
-      expect(med?.source_page_number).toBe(12);
-      expect(med?.source_section).toBe('Section 4.3 Concomitant Medications');
-      expect(med?.confidence_state).toBe('medium');
-    });
-
-    it('degrades a med card with null item confidence to needs_review, with null evidence fields', () => {
-      const blocks = selectRiskOverviewBlocks(criteriaAndMedsInput());
-      const med = blocks.find((b) => b.extracted_item_id === 'med-2');
-      expect(med?.confidence_state).toBe('needs_review');
-      expect(med?.source_evidence_id).toBeNull();
-      expect(med?.source_quote).toBeNull();
-      expect(med?.source_page_number).toBeNull();
-      expect(med?.source_section).toBeNull();
-    });
-
-    it('states criteria counts AND the medication count in the combined intro', () => {
-      const blocks = selectRiskOverviewBlocks(criteriaAndMedsInput());
-      const intro = blocksIn(blocks, 'eligibility_complexity')[0];
-      expect(intro.block_type).toBe('section_intro');
-      expect(intro.content_origin).toBe('derived_operational_framing');
-      expect(intro.derived_text).toBe(
-        'PIQC flagged 1 of 1 eligibility criteria as complex — conditional logic or lengthy ' +
-        'definitions make screening errors and eligibility deviations more likely. The protocol ' +
-        'also restricts 2 medications within eligibility scope, widening the screening surface ' +
-        'with medication-history checks. Review how the site will operationalize each flagged ' +
-        'criterion and each restriction.',
-      );
-    });
-
-    it('emits the section when ONLY restricted medications exist, with a meds-only intro', () => {
-      const blocks = selectRiskOverviewBlocks(medsOnlyInput());
-      const section = blocksIn(blocks, 'eligibility_complexity');
-      expect(section).toHaveLength(3); // intro + 2 med cards
-      expect(section[0].block_type).toBe('section_intro');
-      expect(section[0].content_origin).toBe('derived_operational_framing');
-      expect(section[0].derived_text).toBe(
-        'This protocol restricts 2 medications within eligibility scope. Each restricted ' +
-        'medication widens the screening surface, and a missed medication-history match surfaces ' +
-        'late as an eligibility deviation. Review how the site will operationalize each restriction.',
-      );
-      expect(section[1].derived_text).toBe(
-        'Restricted medication in eligibility scope: Strong CYP3A4 inhibitors',
-      );
-      expect(section[2].derived_text).toBe('Restricted medication in eligibility scope: Warfarin');
-    });
-
-    it('uses the singular noun for a single restricted medication', () => {
-      const base = medsOnlyInput();
-      const single: SelectionInput = {
-        ...base,
-        items: base.items.filter((i) => i.id === 'med-1'),
-      };
-      const intro = blocksIn(selectRiskOverviewBlocks(single), 'eligibility_complexity')[0];
-      expect(intro.derived_text).toContain('restricts 1 medication within eligibility scope');
-    });
-
-    it('keeps the legacy intro byte-identical when no medications are extracted', () => {
-      const blocks = selectRiskOverviewBlocks(fullProtocolInput());
-      const intro = blocksIn(blocks, 'eligibility_complexity')[0];
-      expect(intro.derived_text).toBe(
-        'PIQC flagged 2 of 4 eligibility criteria as complex — conditional logic or lengthy ' +
-        'definitions make screening errors and eligibility deviations more likely. Review how ' +
-        'the site will operationalize each flagged criterion.',
-      );
-    });
-
-    it('skips malformed medication values — no cards, and no section when nothing else flags', () => {
-      const malformedMeds = input([
-        item({ id: 'med-bad-1', field_type: 'prohibited_med', field_path: 'prohibited_medications[0]', extracted_value: null }),
-        item({ id: 'med-bad-2', field_type: 'prohibited_med', field_path: 'prohibited_medications[1]', extracted_value: 42 }),
-        item({ id: 'med-bad-3', field_type: 'prohibited_med', field_path: 'prohibited_medications[2]', extracted_value: '   ' }),
-        item({ id: 'med-bad-4', field_type: 'prohibited_med', field_path: 'prohibited_medications[3]', extracted_value: { name: 'Warfarin' } }),
-      ]);
-      expect(() => selectRiskOverviewBlocks(malformedMeds)).not.toThrow();
-      const blocks = selectRiskOverviewBlocks(malformedMeds);
-      expect(blocksIn(blocks, 'eligibility_complexity')).toHaveLength(0);
-      expect(blocks.every((b) => b.extracted_item_id === null)).toBe(true);
-    });
-
-    it('never emits scores in medication prose (no-score doctrine)', () => {
-      for (const testInput of [criteriaAndMedsInput(), medsOnlyInput()]) {
-        for (const block of selectRiskOverviewBlocks(testInput)) {
-          expect(block.derived_text).not.toMatch(NO_SCORE_PATTERN);
-        }
-      }
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // T5 — Section 2: visit window pressure
-  // ---------------------------------------------------------------------------
-  describe('visit_window_pressure', () => {
-    it('renders 0/0 visits as exact-day requirements with deviation-risk prose', () => {
-      const blocks = selectRiskOverviewBlocks(fullProtocolInput());
+  describe('fragile_visit_windows', () => {
+    it('renders 0/0 visits as exact-date verification plans', () => {
+      const blocks = selectCraMonitoringFocusBlocks(fullProtocolInput());
       const fact = blocks.find(
-        (b) => b.extracted_item_id === 'vis-1' && b.section_key === 'visit_window_pressure',
+        (b) => b.extracted_item_id === 'vis-1' && b.section_key === 'fragile_visit_windows',
       );
       expect(fact?.derived_text).toBe(
-        'Visit window pressure — Baseline (study day 1): no window — exact day required. ' +
-        'Any scheduling slip immediately becomes a protocol deviation.',
+        'Plan on-site window verification — Baseline (study day 1): the protocol allows no ' +
+        'scheduling window — confirm the exact visit date against source records.',
       );
     });
 
-    it('states the ±window for narrow non-exact visits', () => {
-      const blocks = selectRiskOverviewBlocks(fullProtocolInput());
+    it('states the ±window for fragile non-exact visits', () => {
+      const blocks = selectCraMonitoringFocusBlocks(fullProtocolInput());
       const fact = blocks.find(
-        (b) => b.extracted_item_id === 'vis-2' && b.section_key === 'visit_window_pressure',
+        (b) => b.extracted_item_id === 'vis-2' && b.section_key === 'fragile_visit_windows',
       );
       expect(fact?.derived_text).toBe(
-        'Visit window pressure — Week 4 (study day 28): window −1/+1 days. A tolerance this ' +
-        'narrow makes scheduling conflicts likely to end in documented deviations.',
+        'Plan on-site window verification — Week 4 (study day 28): window −1/+1 days — confirm ' +
+        'each occurrence fell inside this tolerance.',
       );
     });
 
-    it('states the narrow-of-total counts in the section intro', () => {
-      const blocks = selectRiskOverviewBlocks(fullProtocolInput());
-      const intro = blocksIn(blocks, 'visit_window_pressure')[0];
-      expect(intro.derived_text).toContain('PIQC identified 2 of 3 extracted visits');
+    it('states the fragile-visit count in the section intro', () => {
+      const blocks = selectCraMonitoringFocusBlocks(fullProtocolInput());
+      const intro = blocksIn(blocks, 'fragile_visit_windows')[0];
+      expect(intro.derived_text).toContain('PIQC identified 2 visits with a fragile scheduling window');
     });
 
-    it('includes a total window of exactly 2 days and excludes 3', () => {
-      const blocks = selectRiskOverviewBlocks(
+    it('includes a total window of exactly 2 days and excludes 3 (threshold boundary)', () => {
+      const blocks = selectCraMonitoringFocusBlocks(
         input([
           item({
             id: 'vis-a',
@@ -628,14 +567,14 @@ describe('selectRiskOverviewBlocks', () => {
           }),
         ]),
       );
-      const section = blocksIn(blocks, 'visit_window_pressure');
+      const section = blocksIn(blocks, 'fragile_visit_windows');
       expect(section).toHaveLength(2); // intro + Visit A only
       expect(section[1].extracted_item_id).toBe('vis-a');
       expect(section[1].derived_text).toContain('window −2/+0 days');
     });
 
     it('falls back to "its scheduled study day" when study_day is missing', () => {
-      const blocks = selectRiskOverviewBlocks(
+      const blocks = selectCraMonitoringFocusBlocks(
         input([
           item({
             id: 'vis-noday',
@@ -650,7 +589,7 @@ describe('selectRiskOverviewBlocks', () => {
     });
 
     it('emits no section when every visit has a wide window', () => {
-      const blocks = selectRiskOverviewBlocks(
+      const blocks = selectCraMonitoringFocusBlocks(
         input([
           item({
             id: 'vis-wide',
@@ -663,25 +602,25 @@ describe('selectRiskOverviewBlocks', () => {
           }),
         ]),
       );
-      expect(blocksIn(blocks, 'visit_window_pressure')).toHaveLength(0);
+      expect(blocksIn(blocks, 'fragile_visit_windows')).toHaveLength(0);
     });
   });
 
   // ---------------------------------------------------------------------------
-  // T6 — Section 3: primary endpoints only (Decision 3)
+  // T6 — Section 3: primary endpoints only
   // ---------------------------------------------------------------------------
-  describe('endpoint_critical_procedures', () => {
-    it('emits a verification-emphasis card per PRIMARY endpoint', () => {
-      const blocks = selectRiskOverviewBlocks(fullProtocolInput());
+  describe('endpoint_critical_verification', () => {
+    it('emits a verification-priority card per PRIMARY endpoint', () => {
+      const blocks = selectCraMonitoringFocusBlocks(fullProtocolInput());
       const fact = blocks.find((b) => b.extracted_item_id === 'ep-1');
-      expect(fact?.section_key).toBe('endpoint_critical_procedures');
+      expect(fact?.section_key).toBe('endpoint_critical_verification');
       expect(fact?.derived_text).toBe(
-        'Primary endpoint — source-data verification emphasis: Change in PANSS total at week 24',
+        'Prioritize source-data verification for the primary endpoint: Change in PANSS total at week 24',
       );
     });
 
     it('emits no section when only secondary endpoints exist', () => {
-      const blocks = selectRiskOverviewBlocks(
+      const blocks = selectCraMonitoringFocusBlocks(
         input([
           item({
             id: 'ep-sec',
@@ -691,32 +630,29 @@ describe('selectRiskOverviewBlocks', () => {
           }),
         ]),
       );
-      expect(blocksIn(blocks, 'endpoint_critical_procedures')).toHaveLength(0);
+      expect(blocksIn(blocks, 'endpoint_critical_verification')).toHaveLength(0);
     });
   });
 
   // ---------------------------------------------------------------------------
-  // T7 — Section 4: vendor/lab/imaging dependency heuristic
+  // T7 — Section 4: vendor/specimen workflow heuristic
   // ---------------------------------------------------------------------------
-  describe('vendor_lab_imaging_dependencies', () => {
-    it('names the dependency category and visit, one card per unique match', () => {
-      const blocks = selectRiskOverviewBlocks(fullProtocolInput());
-      const facts = blocksIn(blocks, 'vendor_lab_imaging_dependencies').filter(
+  describe('vendor_specimen_workflows', () => {
+    it('names the workflow category and visit, one card per unique match', () => {
+      const blocks = selectCraMonitoringFocusBlocks(fullProtocolInput());
+      const facts = blocksIn(blocks, 'vendor_specimen_workflows').filter(
         (b) => b.content_origin === 'protocol_fact',
       );
       expect(facts.map((f) => f.derived_text)).toEqual([
-        "External dependency — 'Blood draw' (Baseline): specimen workflow depends on " +
-          "coordination and turnaround outside the site's direct control.",
-        "External dependency — 'ECG (12-lead)' (Baseline): imaging workflow depends on " +
-          "coordination and turnaround outside the site's direct control.",
-        "External dependency — 'Central lab sample shipment' (Week 4): vendor workflow " +
-          "depends on coordination and turnaround outside the site's direct control.",
+        "Confirm on-site: 'Blood draw' (Baseline) — specimen workflow warrants direct verification.",
+        "Confirm on-site: 'ECG (12-lead)' (Baseline) — imaging workflow warrants direct verification.",
+        "Confirm on-site: 'Central lab sample shipment' (Week 4) — vendor workflow warrants direct verification.",
       ]);
     });
 
-    it('forces low confidence on every dependency card (heuristic match)', () => {
-      const blocks = selectRiskOverviewBlocks(fullProtocolInput());
-      const facts = blocksIn(blocks, 'vendor_lab_imaging_dependencies').filter(
+    it('forces low confidence on every workflow card (heuristic match)', () => {
+      const blocks = selectCraMonitoringFocusBlocks(fullProtocolInput());
+      const facts = blocksIn(blocks, 'vendor_specimen_workflows').filter(
         (b) => b.content_origin === 'protocol_fact',
       );
       // Visit items are 'high' confidence — the heuristic still forces low.
@@ -727,16 +663,16 @@ describe('selectRiskOverviewBlocks', () => {
     });
 
     it('classifies vendor keywords ahead of specimen ("central lab" is not "lab")', () => {
-      const blocks = selectRiskOverviewBlocks(fullProtocolInput());
-      const central = blocksIn(blocks, 'vendor_lab_imaging_dependencies').find((b) =>
+      const blocks = selectCraMonitoringFocusBlocks(fullProtocolInput());
+      const central = blocksIn(blocks, 'vendor_specimen_workflows').find((b) =>
         b.derived_text.includes("'Central lab sample shipment'"),
       );
       expect(central?.derived_text).toContain('vendor workflow');
     });
 
     it('dedupes identical procedure strings across visits — first visit wins', () => {
-      const blocks = selectRiskOverviewBlocks(fullProtocolInput());
-      const bloodDraw = blocksIn(blocks, 'vendor_lab_imaging_dependencies').filter((b) =>
+      const blocks = selectCraMonitoringFocusBlocks(fullProtocolInput());
+      const bloodDraw = blocksIn(blocks, 'vendor_specimen_workflows').filter((b) =>
         b.derived_text.includes("'Blood draw'"),
       );
       expect(bloodDraw).toHaveLength(1);
@@ -746,16 +682,16 @@ describe('selectRiskOverviewBlocks', () => {
       expect(bloodDraw[0].source_evidence_id).toBe('ev-vis-1');
     });
 
-    it('opens with an intro framing block when matches exist', () => {
-      const blocks = selectRiskOverviewBlocks(fullProtocolInput());
-      const section = blocksIn(blocks, 'vendor_lab_imaging_dependencies');
+    it('opens with an intro framing block disclosing the heuristic when matches exist', () => {
+      const blocks = selectCraMonitoringFocusBlocks(fullProtocolInput());
+      const section = blocksIn(blocks, 'vendor_specimen_workflows');
       expect(section[0].block_type).toBe('section_intro');
       expect(section[0].content_origin).toBe('derived_operational_framing');
       expect(section[0].derived_text).toContain('keyword-based detection');
     });
 
     it('emits a single framing note when no procedures match', () => {
-      const blocks = selectRiskOverviewBlocks(
+      const blocks = selectCraMonitoringFocusBlocks(
         input([
           item({
             id: 'vis-plain',
@@ -769,97 +705,23 @@ describe('selectRiskOverviewBlocks', () => {
           }),
         ]),
       );
-      const section = blocksIn(blocks, 'vendor_lab_imaging_dependencies');
+      const section = blocksIn(blocks, 'vendor_specimen_workflows');
       expect(section).toHaveLength(1);
       expect(section[0].content_origin).toBe('derived_operational_framing');
       expect(section[0].confidence_state).toBeNull();
-      expect(section[0].derived_text).toContain('No laboratory, imaging, or vendor-dependent procedures');
+      expect(section[0].derived_text).toContain(
+        'PIQC detected no laboratory, imaging, or vendor-dependent procedures',
+      );
     });
   });
 
   // ---------------------------------------------------------------------------
-  // T8 — Section 5: coordination burden (dense visits)
+  // T8 — Section 5: amendment present / absent branches
   // ---------------------------------------------------------------------------
-  describe('coordination_burden', () => {
-    it('renders a dense-visit card with the procedure count and pressure prose', () => {
-      const blocks = selectRiskOverviewBlocks(fullProtocolInput());
-      const facts = blocksIn(blocks, 'coordination_burden').filter(
-        (b) => b.content_origin === 'protocol_fact',
-      );
-      expect(facts).toHaveLength(1);
-      expect(facts[0].extracted_item_id).toBe('vis-1');
-      expect(facts[0].derived_text).toBe(
-        'Dense visit — Baseline: 8 procedures scheduled; multi-role coordination pressure.',
-      );
-    });
-
-    it('states the dense-visit count in the section intro', () => {
-      const blocks = selectRiskOverviewBlocks(fullProtocolInput());
-      const intro = blocksIn(blocks, 'coordination_burden')[0];
-      expect(intro.derived_text).toContain('PIQC flagged 1 visit with a dense procedure load');
-    });
-
-    it('flags at exactly 8 procedures and not at 7 (threshold boundary)', () => {
-      const procedures = (n: number, prefix: string) =>
-        Array.from({ length: n }, (_, i) => `${prefix} assessment ${i + 1}`);
-      const blocks = selectRiskOverviewBlocks(
-        input([
-          item({
-            id: 'vis-seven',
-            field_type: 'visit',
-            field_path: 'schedule_of_events[0]',
-            extracted_value: {
-              visit_name: 'Visit Seven', study_day: 7,
-              window_minus_days: 3, window_plus_days: 3,
-              procedures: procedures(7, 'Routine'),
-            },
-          }),
-          item({
-            id: 'vis-eight',
-            field_type: 'visit',
-            field_path: 'schedule_of_events[1]',
-            extracted_value: {
-              visit_name: 'Visit Eight', study_day: 14,
-              window_minus_days: 3, window_plus_days: 3,
-              procedures: procedures(8, 'Extended'),
-            },
-          }),
-        ]),
-      );
-      const section = blocksIn(blocks, 'coordination_burden');
-      expect(section).toHaveLength(2); // intro + Visit Eight only
-      expect(section[1].extracted_item_id).toBe('vis-eight');
-      expect(section[1].derived_text).toBe(
-        'Dense visit — Visit Eight: 8 procedures scheduled; multi-role coordination pressure.',
-      );
-    });
-
-    it('emits no section when no visit is dense', () => {
-      const blocks = selectRiskOverviewBlocks(
-        input([
-          item({
-            id: 'vis-light',
-            field_type: 'visit',
-            field_path: 'schedule_of_events[0]',
-            extracted_value: {
-              visit_name: 'Visit Light', study_day: 1,
-              window_minus_days: 0, window_plus_days: 0,
-              procedures: ['Vital signs'],
-            },
-          }),
-        ]),
-      );
-      expect(blocksIn(blocks, 'coordination_burden')).toHaveLength(0);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // T9 — Section 6: amendment present / absent branches
-  // ---------------------------------------------------------------------------
-  describe('amendment_sensitivity', () => {
+  describe('amendment_sensitive_requirements', () => {
     it('emits intro + a fact with evidence passthrough when an amendment exists', () => {
-      const blocks = selectRiskOverviewBlocks(fullProtocolInput());
-      const section = blocksIn(blocks, 'amendment_sensitivity');
+      const blocks = selectCraMonitoringFocusBlocks(fullProtocolInput());
+      const section = blocksIn(blocks, 'amendment_sensitive_requirements');
       expect(section).toHaveLength(2);
       expect(section[0].block_type).toBe('section_intro');
 
@@ -869,22 +731,22 @@ describe('selectRiskOverviewBlocks', () => {
       expect(fact.source_evidence_id).toBe('ev-amd-1');
       expect(fact.source_quote).toBe('Amendment 2: dosing frequency reduced');
       expect(fact.derived_text).toBe(
-        'Amendment in force: Dosing frequency reduced in Amendment 2 — affected requirements ' +
-        'deserve monitoring emphasis.',
+        'Amendment-affected: Dosing frequency reduced in Amendment 2 — re-verify impacted ' +
+        'requirements against the current version.',
       );
     });
 
     it('emits a single framing note to confirm the current version when no amendment exists', () => {
-      const blocks = selectRiskOverviewBlocks(input([]));
-      const section = blocksIn(blocks, 'amendment_sensitivity');
+      const blocks = selectCraMonitoringFocusBlocks(input([]));
+      const section = blocksIn(blocks, 'amendment_sensitive_requirements');
       expect(section).toHaveLength(1);
       expect(section[0].content_origin).toBe('derived_operational_framing');
-      expect(section[0].derived_text).toContain('No amendment was detected');
-      expect(section[0].derived_text).toContain('current protocol version');
+      expect(section[0].derived_text).toContain('PIQC detected no amendment');
+      expect(section[0].derived_text).toContain('current version');
     });
 
     it('treats an empty-string amendment_summary as no amendment', () => {
-      const blocks = selectRiskOverviewBlocks(
+      const blocks = selectCraMonitoringFocusBlocks(
         input([
           item({
             id: 'amd-empty',
@@ -894,13 +756,13 @@ describe('selectRiskOverviewBlocks', () => {
           }),
         ]),
       );
-      const section = blocksIn(blocks, 'amendment_sensitivity');
+      const section = blocksIn(blocks, 'amendment_sensitive_requirements');
       expect(section).toHaveLength(1);
       expect(section[0].content_origin).toBe('derived_operational_framing');
     });
 
     it('does not treat other metadata field_paths as amendments', () => {
-      const blocks = selectRiskOverviewBlocks(
+      const blocks = selectCraMonitoringFocusBlocks(
         input([
           item({
             id: 'meta-ver',
@@ -910,23 +772,23 @@ describe('selectRiskOverviewBlocks', () => {
           }),
         ]),
       );
-      const section = blocksIn(blocks, 'amendment_sensitivity');
+      const section = blocksIn(blocks, 'amendment_sensitive_requirements');
       expect(section).toHaveLength(1);
-      expect(section[0].derived_text).toContain('No amendment was detected');
+      expect(section[0].derived_text).toContain('PIQC detected no amendment');
     });
   });
 
   // ---------------------------------------------------------------------------
-  // T10 — Empty input: only the always-emit fallbacks, all framing
+  // T9 — Empty input: only the always-emit fallbacks, all framing
   // ---------------------------------------------------------------------------
   describe('empty input', () => {
-    it('emits only the dependency and amendment fallback framing blocks', () => {
-      const blocks = selectRiskOverviewBlocks(input([], [], null));
-      // 1 (dependency fallback) + 1 (no-amendment note) = 2
+    it('emits only the workflow and amendment fallback framing blocks', () => {
+      const blocks = selectCraMonitoringFocusBlocks(input([], [], null));
+      // 1 (workflow fallback) + 1 (no-amendment note) = 2
       expect(blocks).toHaveLength(2);
       expect(blocks.map((b) => b.section_key)).toEqual([
-        'vendor_lab_imaging_dependencies',
-        'amendment_sensitivity',
+        'vendor_specimen_workflows',
+        'amendment_sensitive_requirements',
       ]);
       expect(blocks.every((b) => b.content_origin === 'derived_operational_framing')).toBe(true);
       blocks.forEach((block, i) => expect(block.sort_order).toBe(i));
@@ -934,7 +796,7 @@ describe('selectRiskOverviewBlocks', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // T11 — Malformed extracted_value: skip, never throw
+  // T10 — Malformed extracted_value: skip, never throw
   // ---------------------------------------------------------------------------
   describe('malformed input guards', () => {
     const malformed: SelectionSourceItem[] = [
@@ -946,17 +808,20 @@ describe('selectRiskOverviewBlocks', () => {
       item({ id: 'bad-6', field_type: 'visit', field_path: 'schedule_of_events[2]', extracted_value: ['array', 'not', 'object'] }),
       item({ id: 'bad-7', field_type: 'endpoint', field_path: 'primary_endpoints[0]', extracted_value: undefined }),
       item({ id: 'bad-8', field_type: 'metadata', field_path: 'amendment_summary', extracted_value: { nested: true } }),
-      item({ id: 'bad-9', field_type: 'unknown_future_type', field_path: 'whatever', extracted_value: 'text' }),
+      item({ id: 'bad-9', field_type: 'prohibited_med', field_path: 'prohibited_medications[0]', extracted_value: null }),
+      item({ id: 'bad-10', field_type: 'prohibited_med', field_path: 'prohibited_medications[1]', extracted_value: '   ' }),
+      item({ id: 'bad-11', field_type: 'prohibited_med', field_path: 'prohibited_medications[2]', extracted_value: { name: 'Warfarin' } }),
+      item({ id: 'bad-12', field_type: 'unknown_future_type', field_path: 'whatever', extracted_value: 'text' }),
     ];
 
     it('does not throw on malformed values and emits no fact blocks for them', () => {
-      expect(() => selectRiskOverviewBlocks(input(malformed))).not.toThrow();
-      const blocks = selectRiskOverviewBlocks(input(malformed));
+      expect(() => selectCraMonitoringFocusBlocks(input(malformed))).not.toThrow();
+      const blocks = selectCraMonitoringFocusBlocks(input(malformed));
       expect(blocks.every((b) => b.extracted_item_id === null)).toBe(true);
     });
 
-    it('degrades a non-array procedures field to zero dependencies and zero density', () => {
-      const blocks = selectRiskOverviewBlocks(
+    it('degrades a non-array procedures field to zero workflow matches', () => {
+      const blocks = selectCraMonitoringFocusBlocks(
         input([
           item({
             id: 'vis-badproc',
@@ -972,25 +837,81 @@ describe('selectRiskOverviewBlocks', () => {
           }),
         ]),
       );
-      // The visit still produces its window-pressure card...
-      expect(blocksIn(blocks, 'visit_window_pressure')).toHaveLength(2);
-      // ...but no dependency matches (fallback framing) and no dense flag.
-      const deps = blocksIn(blocks, 'vendor_lab_imaging_dependencies');
-      expect(deps).toHaveLength(1);
-      expect(deps[0].content_origin).toBe('derived_operational_framing');
-      expect(blocksIn(blocks, 'coordination_burden')).toHaveLength(0);
+      // The visit still produces its fragile-window card...
+      expect(blocksIn(blocks, 'fragile_visit_windows')).toHaveLength(2);
+      // ...but no workflow matches (fallback framing).
+      const workflows = blocksIn(blocks, 'vendor_specimen_workflows');
+      expect(workflows).toHaveLength(1);
+      expect(workflows[0].content_origin).toBe('derived_operational_framing');
     });
   });
 
   // ---------------------------------------------------------------------------
-  // T12 — Doctrine: no numeric risk scores anywhere in generated prose
+  // T11 — Doctrine: no numeric risk scores anywhere in generated prose
   // ---------------------------------------------------------------------------
   describe('no-score doctrine (handover §6.1-A)', () => {
     it('never emits "N/M", "N out of M", or the word "score" in any derived_text', () => {
       for (const testInput of [fullProtocolInput(), input([], [], null)]) {
-        for (const block of selectRiskOverviewBlocks(testInput)) {
+        for (const block of selectCraMonitoringFocusBlocks(testInput)) {
           expect(block.derived_text).not.toMatch(NO_SCORE_PATTERN);
         }
+      }
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // T12 — Doctrine: attention-allocation register, never the other lenses'
+  // card templates (plan Decision 3 — same facts, different question)
+  // ---------------------------------------------------------------------------
+  describe('prose-register uniqueness (plan Decision 3)', () => {
+    /** Distinctive card-template prefixes owned by the OTHER two lenses.
+     *  KEEP IN SYNC with selection/monitoringChecklist.ts and
+     *  selection/riskOverview.ts card templates. */
+    const FOREIGN_TEMPLATE_PREFIXES = [
+      // monitoringChecklist card templates
+      'Verify: ',
+      'Confirm absence of: ',
+      'Confirm absence of prohibited medication: ',
+      'Verify ',                 // visit-window checklist cards
+      'PRIMARY ENDPOINT — ',
+      'Secondary endpoint — ',
+      'Confirm handling/documentation for ',
+      'Amendment noted: ',
+      // riskOverview card templates
+      'Complex eligibility — ',
+      'Visit window pressure — ',
+      'Primary endpoint — ',
+      'External dependency — ',
+      'Dense visit — ',
+      'Amendment in force: ',
+      'Restricted medication in eligibility scope: ',
+    ];
+
+    it('no derived_text starts with a checklist or risk-overview card template', () => {
+      for (const testInput of [fullProtocolInput(), input([], [], null)]) {
+        for (const block of selectCraMonitoringFocusBlocks(testInput)) {
+          for (const prefix of FOREIGN_TEMPLATE_PREFIXES) {
+            expect(block.derived_text.startsWith(prefix)).toBe(false);
+          }
+        }
+      }
+    });
+
+    it('every fact card opens in the attention-allocation register', () => {
+      const OWN_PREFIXES = [
+        'Prioritize eligibility verification — ',
+        'Prioritize medication-history review: ',
+        'Plan on-site window verification — ',
+        'Prioritize source-data verification for the primary endpoint: ',
+        "Confirm on-site: '",
+        'Amendment-affected: ',
+      ];
+      const facts = selectCraMonitoringFocusBlocks(fullProtocolInput()).filter(
+        (b) => b.content_origin === 'protocol_fact',
+      );
+      expect(facts.length).toBeGreaterThan(0);
+      for (const fact of facts) {
+        expect(OWN_PREFIXES.some((prefix) => fact.derived_text.startsWith(prefix))).toBe(true);
       }
     });
   });

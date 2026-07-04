@@ -22,11 +22,15 @@
 
 /** Mirror of deliverable_artifact_type. Future kinds (siv_package, ...)
  *  extend the enum — never fork tables. */
-export type DeliverableArtifactType = 'monitoring_prep_checklist' | 'risk_overview';
+export type DeliverableArtifactType =
+  | 'monitoring_prep_checklist'
+  | 'risk_overview'
+  | 'cra_monitoring_focus';
 
 export const ARTIFACT_TYPE_LABELS: Record<DeliverableArtifactType, string> = {
   monitoring_prep_checklist: 'Monitoring Prep Checklist',
   risk_overview: 'Risk Overview',
+  cra_monitoring_focus: 'CRA Monitoring Focus',
 };
 
 /**
@@ -165,6 +169,35 @@ export const RISK_SECTION_LABELS: Record<RiskOverviewSectionKey, string> = {
   vendor_lab_imaging_dependencies: 'Vendor, Lab & Imaging Dependencies',
   coordination_burden: 'Coordination Burden',
   amendment_sensitivity: 'Amendment Sensitivity',
+};
+
+// -----------------------------------------------------------------------------
+// CRA Monitoring Focus — section vocabulary (handover §6.1-D: attention
+// allocation for a monitor's limited on-site time, never opaque risk scores)
+// -----------------------------------------------------------------------------
+
+export type CraFocusSectionKey =
+  | 'eligibility_verification_emphasis'
+  | 'fragile_visit_windows'
+  | 'endpoint_critical_verification'
+  | 'vendor_specimen_workflows'
+  | 'amendment_sensitive_requirements';
+
+/** Stable render order for CRA-focus sections. */
+export const CRA_FOCUS_SECTION_ORDER: readonly CraFocusSectionKey[] = [
+  'eligibility_verification_emphasis',
+  'fragile_visit_windows',
+  'endpoint_critical_verification',
+  'vendor_specimen_workflows',
+  'amendment_sensitive_requirements',
+];
+
+export const CRA_FOCUS_SECTION_LABELS: Record<CraFocusSectionKey, string> = {
+  eligibility_verification_emphasis: 'Eligibility Verification Emphasis',
+  fragile_visit_windows: 'Fragile Visit Windows',
+  endpoint_critical_verification: 'Endpoint-Critical Verification',
+  vendor_specimen_workflows: 'Vendor & Specimen Workflows',
+  amendment_sensitive_requirements: 'Amendment-Sensitive Requirements',
 };
 
 // -----------------------------------------------------------------------------
