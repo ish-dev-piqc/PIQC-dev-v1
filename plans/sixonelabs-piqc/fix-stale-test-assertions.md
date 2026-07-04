@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: fix-stale-test-assertions
-status: active
+status: in-review
 started: 2026-07-03
 target_pr:
 ---
