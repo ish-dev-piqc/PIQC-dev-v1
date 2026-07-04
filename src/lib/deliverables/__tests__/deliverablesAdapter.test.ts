@@ -131,7 +131,11 @@ describe('adaptDeliverablePacket — null / wrong-shape tolerance', () => {
   });
 
   it('adapts EVERY enum artifact_type — regression: a stale whitelist nulled risk_overview packets end-to-end', () => {
-    for (const artifactType of ['monitoring_prep_checklist', 'risk_overview'] as const) {
+    for (const artifactType of [
+      'monitoring_prep_checklist',
+      'risk_overview',
+      'cra_monitoring_focus',
+    ] as const) {
       const packet = adaptDeliverablePacket({ ...basePacket, artifact_type: artifactType });
       expect(packet).not.toBeNull();
       expect(packet?.artifact_type).toBe(artifactType);
