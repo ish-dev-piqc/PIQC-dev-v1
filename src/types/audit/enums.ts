@@ -44,7 +44,11 @@ export const AUDIT_WORKFLOW_TYPES: readonly AuditWorkflowType[] = [
 
 export type AuditStatus = 'DRAFT' | 'IN_PROGRESS' | 'REVIEW' | 'CLOSED';
 
-// D-010: Authoritative workflow position for an Audit.
+// D-010: Authoritative workflow position for an Audit. The first 8 are the
+// VENDOR_AUDIT pipeline; the ISA_* values are the INVESTIGATOR_SITE_AUDIT
+// pipeline (20260709000000). An audit only ever occupies stages from its own
+// workflow's set (stagesForWorkflow); the union is flat because current_stage is
+// a single audit_stage column shared by both workflows.
 export type AuditStage =
   | 'INTAKE'
   | 'VENDOR_ENRICHMENT'
@@ -53,7 +57,15 @@ export type AuditStage =
   | 'PRE_AUDIT_DRAFTING'
   | 'AUDIT_CONDUCT'
   | 'REPORT_DRAFTING'
-  | 'FINAL_REVIEW_EXPORT';
+  | 'FINAL_REVIEW_EXPORT'
+  // Investigator Site Audit pipeline
+  | 'ISA_SITE_INTAKE'
+  | 'ISA_RISK_ASSESSMENT'
+  | 'ISA_SCOPE_BUILDER'
+  | 'ISA_PREP'
+  | 'ISA_CONDUCT'
+  | 'ISA_REPORT'
+  | 'ISA_EXPORT';
 
 // Ordered array — useful for stage navigation rendering and "next stage" logic.
 export const AUDIT_STAGES: readonly AuditStage[] = [

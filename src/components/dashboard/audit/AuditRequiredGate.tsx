@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ClipboardList, ChevronRight, Calendar, Building2, Plus, CheckCircle2, Clock } from 'lucide-react';
+import { ClipboardList, ChevronRight, Calendar, Building2, Stethoscope, Plus, CheckCircle2, Clock } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useAudit, type AuditWithContext } from '../../../context/AuditContext';
 import {
@@ -60,7 +60,7 @@ export default function AuditRequiredGate() {
   const [newAuditOpen, setNewAuditOpen] = useState(false);
   // Worklist segmentation — one workspace, filterable by workflow. 'ALL' is the
   // default; the Investigator chip is clickable even at count 0 so the second
-  // workflow is legible (its empty state says "coming soon" honestly).
+  // workflow is legible before the first site audit exists.
   const [workflowFilter, setWorkflowFilter] = useState<'ALL' | AuditWorkflowType>('ALL');
   // After the drawer fires onCreated, the AuditContext's refresh may not have
   // settled into this component's `audits` snapshot yet. Park the id and let
@@ -155,8 +155,8 @@ export default function AuditRequiredGate() {
           </p>
           <h2 className={`${headingColor} text-xl font-semibold mt-1`}>Your audits</h2>
           <p className={`${subColor} text-sm mt-1`}>
-            Open an existing audit, or start a new one — protocol upload, vendor, and
-            scheduling all happen in one step.
+            Open an existing audit, or start a new one — protocol upload, vendor or site,
+            and scheduling all happen in one step.
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap flex-shrink-0">
@@ -198,7 +198,8 @@ export default function AuditRequiredGate() {
           </div>
           <h3 className={`${headingColor} font-semibold text-base mb-1`}>No audits yet</h3>
           <p className={`${subColor} text-sm max-w-xs mx-auto mb-4`}>
-            Start your first audit — upload the protocol, pick the vendor, and you're in.
+            Start your first audit — upload the protocol, pick the vendor or site, and
+            you're in.
           </p>
           <button
             type="button"
@@ -248,7 +249,7 @@ export default function AuditRequiredGate() {
                             {audit.audit_name}
                           </p>
                           <p className={`${subColor} text-xs mt-0.5 truncate`}>
-                            {audit.vendor_name} · Stage {stageIndex(audit)} —{' '}
+                            {audit.auditee_name} · Stage {stageIndex(audit)} —{' '}
                             {STAGE_LABELS[audit.current_stage]}
                           </p>
                         </div>
@@ -286,7 +287,7 @@ export default function AuditRequiredGate() {
               </p>
               {/* Workflow segmentation — one workspace, two workflows. The
                   Investigator chip stays clickable at 0 so the second workflow
-                  is legible; its empty state is honest about "coming soon". */}
+                  is legible before the first site audit exists. */}
               <div className="flex items-center gap-2 flex-wrap" role="group" aria-label="Filter audits by workflow">
               <button
                 type="button"
@@ -323,9 +324,7 @@ export default function AuditRequiredGate() {
                     : AUDIT_WORKFLOW_TYPE_LABELS.VENDOR_AUDIT.toLowerCase()}s yet
                 </h3>
                 <p className={`${subColor} text-sm max-w-sm mx-auto`}>
-                  {workflowFilter === 'INVESTIGATOR_SITE_AUDIT'
-                    ? 'This workflow is coming soon — you’ll initiate and manage investigator site audits from this same workspace.'
-                    : 'Start one with the button above.'}
+                  Start one with the button above.
                 </p>
               </div>
             ) : (
@@ -357,8 +356,12 @@ export default function AuditRequiredGate() {
                     </p>
                     <div className={`flex items-center gap-3 mt-0.5 text-xs ${subColor} flex-wrap`}>
                       <span className="flex items-center gap-1 truncate">
-                        <Building2 size={10} className={mutedColor} />
-                        {audit.vendor_name}
+                        {audit.workflow_type === 'INVESTIGATOR_SITE_AUDIT' ? (
+                          <Stethoscope size={10} className={mutedColor} />
+                        ) : (
+                          <Building2 size={10} className={mutedColor} />
+                        )}
+                        {audit.auditee_name}
                       </span>
                       <span className={`${mutedColor} hidden sm:inline`}>·</span>
                       <span className={`${mutedColor} hidden sm:inline truncate`}>

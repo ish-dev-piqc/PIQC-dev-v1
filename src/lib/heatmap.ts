@@ -176,6 +176,19 @@ export function scoreStage(stage: AuditStage): HeatScore {
     case 'REPORT_DRAFTING':
     case 'FINAL_REVIEW_EXPORT':
       return 'none';
+    // Investigator Site Audit stages — the friction heuristic above is derived
+    // from vendor-audit history, so ISA stages carry no heat until the ISA
+    // pipeline has its own signal base. Explicit cases (not a default) so the
+    // switch stays exhaustive and a future stage addition fails to compile
+    // until it's scored.
+    case 'ISA_SITE_INTAKE':
+    case 'ISA_RISK_ASSESSMENT':
+    case 'ISA_SCOPE_BUILDER':
+    case 'ISA_PREP':
+    case 'ISA_CONDUCT':
+    case 'ISA_REPORT':
+    case 'ISA_EXPORT':
+      return 'none';
   }
 }
 
