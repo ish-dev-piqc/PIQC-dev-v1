@@ -61,6 +61,8 @@ vi.mock('../../../../../hooks/useOverlay', () => ({
 vi.mock('../../../../../lib/audit/auditCreationApi', () => ({
   listVendors: vi.fn(),
   createVendor: vi.fn(),
+  listSites: vi.fn(),
+  createSite: vi.fn(),
   listAuditorProtocolLibrary: vi.fn(),
   uploadProtocolPdf: vi.fn(),
   createProtocolFromDocument: vi.fn(),
@@ -71,6 +73,7 @@ vi.mock('../../../../../lib/audit/auditCreationApi', () => ({
 import NewAuditDrawer from '../NewAuditDrawer';
 import {
   listVendors,
+  listSites,
   listAuditorProtocolLibrary,
   uploadProtocolPdf,
   createProtocolFromDocument,
@@ -78,6 +81,7 @@ import {
 } from '../../../../../lib/audit/auditCreationApi';
 
 const mockListVendors = listVendors as ReturnType<typeof vi.fn>;
+const mockListSites = listSites as ReturnType<typeof vi.fn>;
 const mockListLibrary = listAuditorProtocolLibrary as ReturnType<typeof vi.fn>;
 const mockUploadPdf = uploadProtocolPdf as ReturnType<typeof vi.fn>;
 const mockCreateProtocol = createProtocolFromDocument as ReturnType<typeof vi.fn>;
@@ -149,6 +153,7 @@ describe('NewAuditDrawer — orphan-document retry (PR #61)', () => {
     // Bootstrap effect reads vendors + library. Library empty → drawer
     // defaults to upload mode, which is the path we're testing.
     mockListVendors.mockResolvedValue(VENDORS);
+    mockListSites.mockResolvedValue([]);
     mockListLibrary.mockResolvedValue([]);
     // Suppress the expected '[NewAuditDrawer] submit error:' logs in the
     // failure-path tests. The drawer logs every caught error; we don't
