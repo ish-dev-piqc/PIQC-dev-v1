@@ -76,13 +76,18 @@ everything).
 - `src/lib/deliverables/selection/craMonitoringFocus.ts` (+ test, new).
 - `src/lib/deliverables/selection/riskOverview.ts` + its test — med debt.
 - `src/components/dashboard/sponsor/deliverables/ProtocolIntelligenceTab.tsx`.
+- `src/components/dashboard/sponsor/deliverables/DeliverablePanel.tsx` —
+  ONE map entry: DELIVERABLE_COPY is Record<DeliverableArtifactType, …>
+  (exhaustive by type), so the new enum value REQUIRES a noun/emptyBody
+  entry. Build surfaced this; the out-of-scope claim below was wrong for
+  exhaustive maps.
 - `supabase/migrations/*_deliverable_cra_focus.sql` — new migration.
 
 ## Out of scope (files forbidden)
 
 - `selection/monitoringChecklist.ts` — checklist untouched this slice.
-- `DeliverablePanel.tsx`, `src/components/deliverables/` — no UI
-  machinery changes; the third type is pure config.
+- `src/components/deliverables/` — no UI machinery changes.
+  (DeliverablePanel: copy-map entry ONLY — see Scope.)
 - `deliverablesAdapter.ts` — whitelist extends via the labels map by
   design; an edit here means the design broke (investigate, don't patch).
 - CRA mode plumbing (`ModeContext`, `LeftRail`, `Dashboard`, `App`,

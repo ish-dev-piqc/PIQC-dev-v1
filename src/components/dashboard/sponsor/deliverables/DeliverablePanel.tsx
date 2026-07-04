@@ -82,6 +82,14 @@ const DELIVERABLE_COPY: Record<
       'selected from the parsed protocol, every card traceable to its source. ' +
       'No scores — factors in plain language.',
   },
+  cra_monitoring_focus: {
+    noun: 'monitoring focus',
+    emptyBody:
+      'PIQC drafts a CRA monitoring focus from the facts already extracted ' +
+      'from this protocol — where a monitor\'s limited on-site attention ' +
+      'should go, every card traceable to its protocol source. Attention ' +
+      'guidance in plain language; a draft that requires human review.',
+  },
 };
 
 interface Props {
