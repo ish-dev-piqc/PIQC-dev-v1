@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: archive-kiara-merged-plans
-status: in-review
+status: merged
+merged: 2026-07-04
 started: 2026-07-03
-target_pr:
+target_pr: #407
 ---
 
 # Archive kiara's 81 merged plan MDs
