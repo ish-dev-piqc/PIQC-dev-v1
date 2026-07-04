@@ -1,7 +1,7 @@
 ---
 owner: fable-dev-piqc
 feature: prohibited-meds-extraction
-status: active
+status: in-review
 started: 2026-07-03
 target_pr:
 ---
@@ -56,6 +56,10 @@ facts → deliverable.
 - `supabase/functions/_shared/sotrTypes.ts` — only if the mirror needs it.
 - `src/lib/sotr/sourceEvidenceAdapter.ts` — mapping entry.
 - `src/lib/sotr/__tests__/` — mapping + drift-check coverage.
+- `src/components/sotr/WorksheetItemsList.tsx` — ONE line: the
+  FIELD_TYPE_LABELS entry for 'prohibited_med' (adversarial review found
+  the group header rendering the raw key on the exact verification
+  surface). No other SOTR UI changes.
 - `src/lib/deliverables/selection/monitoringChecklist.ts` + its test —
   section-2 spec upgrade (and the reciprocal KEEP IN SYNC notes).
 - `supabase/migrations/*_deliverable_prohibited_meds.sql` — new migration.
@@ -92,19 +96,21 @@ None.
   will not gain prohibited_med rows until re-ingest (documented in
   Verification).
 - Ishika (`@ish-dev-piqc`) — `src/lib/sotr/sourceEvidenceAdapter.ts` +
-  its tests (one mapping entry + coverage).
+  its tests (one mapping entry + coverage), and the one-line
+  FIELD_TYPE_LABELS addition in `src/components/sotr/WorksheetItemsList.tsx`.
 
 ## Verification
 
-- [ ] `npm run typecheck`, `npm run build`, `npm test` clean; adapter
-  drift-check green; checklist spec tests updated + green; deliverables
-  suite (187) still green.
+- [x] `npm run typecheck`, `npm run build`, `npm test` clean; adapter
+  drift-check green (72/72 sotr); checklist spec tests updated + green
+  (193 deliverables, up from 187); zero new full-suite failures vs the
+  fork-point baseline (same-environment comparison).
 - [ ] Manual after `functions deploy ingest` + `db push` + re-ingest of a
   demo protocol: SOTR review list shows prohibited_med items with
   citations → regenerate monitoring checklist → section 2 lists the
   medications with evidence chips; gap block gone; a protocol with no
   restrictions still shows the gap-block fallback.
-- [ ] `piqc-review` clean.
+- [x] `piqc-review` clean.
 
 ## Decisions encoded
 
