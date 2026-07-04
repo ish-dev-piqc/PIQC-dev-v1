@@ -13,14 +13,15 @@
 // SENSITIVE: source_quote / review_note flow through here — never log them.
 // =============================================================================
 
-import type {
-  DeliverableArtifactType,
-  DeliverableBlockType,
-  DeliverableConfidenceState,
-  DeliverableContentOrigin,
-  DeliverablePacket,
-  DeliverablePacketBlock,
-  DeliverableReviewState,
+import {
+  ARTIFACT_TYPE_LABELS,
+  type DeliverableArtifactType,
+  type DeliverableBlockType,
+  type DeliverableConfidenceState,
+  type DeliverableContentOrigin,
+  type DeliverablePacket,
+  type DeliverablePacketBlock,
+  type DeliverableReviewState,
 } from '../../types/deliverables';
 import { displayTextForBlock } from '../../types/deliverables';
 
@@ -36,9 +37,11 @@ function asFiniteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-const ARTIFACT_TYPES: ReadonlySet<string> = new Set([
-  'monitoring_prep_checklist',
-] satisfies DeliverableArtifactType[]);
+// Derived from ARTIFACT_TYPE_LABELS, whose Record<DeliverableArtifactType, …>
+// type FORCES exhaustiveness — a hand-listed array here silently went stale
+// when risk_overview landed (`satisfies T[]` accepts subsets), which nulled
+// every risk-overview packet into "malformed RPC response".
+const ARTIFACT_TYPES: ReadonlySet<string> = new Set(Object.keys(ARTIFACT_TYPE_LABELS));
 
 const BLOCK_TYPES: ReadonlySet<string> = new Set([
   'checklist_item',
