@@ -331,7 +331,7 @@ describe('selectMonitoringChecklistBlocks', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // T5 — Section 2: exclusion + the always-present prohibited-med gap block
+  // T5 — Section 2: exclusions + prohibited-med facts + the zero-med gap fallback
   // ---------------------------------------------------------------------------
   describe('exclusion_prohibited_med_review', () => {
     const GAP_TEXT =
@@ -339,13 +339,36 @@ describe('selectMonitoringChecklistBlocks', () => {
       'concomitant/prohibited medication section of the protocol manually and ' +
       'verify medication-history cross-checks at the site.';
 
+    const medItems: SelectionSourceItem[] = [
+      item({
+        id: 'med-1',
+        field_type: 'prohibited_med',
+        field_path: 'prohibited_medications[0]',
+        extracted_value: 'Strong CYP3A4 inhibitors',
+        primary_evidence: evidence(
+          'ev-med-1',
+          'Strong CYP3A4 inhibitors are prohibited within 14 days of dosing',
+          12,
+          'Section 4.3 Concomitant Medications',
+        ),
+      }),
+      item({
+        id: 'med-2',
+        field_type: 'prohibited_med',
+        field_path: 'prohibited_medications[1]',
+        extracted_value: 'Warfarin',
+        confidence_state: 'medium',
+        primary_evidence: evidence('ev-med-2', 'Warfarin use is not permitted', 12, 'Section 4.3'),
+      }),
+    ];
+
     it('prefixes each exclusion criterion with "Confirm absence of: "', () => {
       const blocks = selectMonitoringChecklistBlocks(fullProtocolInput());
       const fact = blocks.find((b) => b.extracted_item_id === 'exc-1');
       expect(fact?.derived_text).toBe('Confirm absence of: Pregnancy or breastfeeding');
     });
 
-    it('always appends the coverage-gap framing block after the exclusion facts', () => {
+    it('appends the coverage-gap framing block after the exclusion facts when no prohibited_med facts exist', () => {
       const blocks = selectMonitoringChecklistBlocks(fullProtocolInput());
       const section = blocksIn(blocks, 'exclusion_prohibited_med_review');
       const gap = section[section.length - 1];
@@ -362,6 +385,109 @@ describe('selectMonitoringChecklistBlocks', () => {
       expect(section).toHaveLength(2); // intro + gap, no facts
       expect(section.some((b) => b.derived_text === GAP_TEXT)).toBe(true);
       expect(section.every((b) => b.content_origin === 'derived_operational_framing')).toBe(true);
+    });
+
+    it('emits one checklist_item per prohibited medication with the exact prose and evidence passthrough', () => {
+      const blocks = selectMonitoringChecklistBlocks(input(medItems));
+      const section = blocksIn(blocks, 'exclusion_prohibited_med_review');
+      expect(section).toHaveLength(3); // intro + 2 med facts, no gap
+
+      const med1 = section[1];
+      expect(med1.derived_text).toBe(
+        'Confirm absence of prohibited medication: Strong CYP3A4 inhibitors — ' +
+        "cross-check the participant's medication history.",
+      );
+      expect(med1.content_origin).toBe('protocol_fact');
+      expect(med1.block_type).toBe('checklist_item');
+      expect(med1.extracted_item_id).toBe('med-1');
+      expect(med1.source_evidence_id).toBe('ev-med-1');
+      expect(med1.source_quote).toBe(
+        'Strong CYP3A4 inhibitors are prohibited within 14 days of dosing',
+      );
+      expect(med1.source_page_number).toBe(12);
+      expect(med1.source_section).toBe('Section 4.3 Concomitant Medications');
+      expect(med1.confidence_state).toBe('high');
+
+      const med2 = section[2];
+      expect(med2.derived_text).toBe(
+        "Confirm absence of prohibited medication: Warfarin — cross-check the participant's medication history.",
+      );
+      expect(med2.extracted_item_id).toBe('med-2');
+      expect(med2.confidence_state).toBe('medium');
+    });
+
+    it('suppresses the coverage-gap block when any prohibited_med fact exists', () => {
+      const blocks = selectMonitoringChecklistBlocks(input(medItems));
+      const section = blocksIn(blocks, 'exclusion_prohibited_med_review');
+      expect(section.some((b) => b.derived_text === GAP_TEXT)).toBe(false);
+    });
+
+    it('orders the section intro → exclusion facts → medication facts, and nothing else', () => {
+      // Meds deliberately interleaved before/after the exclusion in input order.
+      const blocks = selectMonitoringChecklistBlocks(
+        input([
+          medItems[0],
+          item({
+            id: 'exc-a',
+            field_type: 'exclusion_criterion',
+            field_path: 'key_exclusion_criteria[0]',
+            extracted_value: 'Pregnancy or breastfeeding',
+          }),
+          medItems[1],
+        ]),
+      );
+      const section = blocksIn(blocks, 'exclusion_prohibited_med_review');
+      expect(section.map((b) => b.block_type)).toEqual([
+        'section_intro', 'checklist_item', 'checklist_item', 'checklist_item',
+      ]);
+      expect(section.map((b) => b.extracted_item_id)).toEqual([null, 'exc-a', 'med-1', 'med-2']);
+      expect(section.some((b) => b.derived_text === GAP_TEXT)).toBe(false);
+    });
+
+    it('degrades a prohibited_med fact with null item confidence to needs_review', () => {
+      const blocks = selectMonitoringChecklistBlocks(
+        input([
+          item({
+            id: 'med-nc',
+            field_type: 'prohibited_med',
+            field_path: 'prohibited_medications[0]',
+            extracted_value: 'Systemic corticosteroids',
+            confidence_state: null,
+          }),
+        ]),
+      );
+      const fact = blocks.find((b) => b.extracted_item_id === 'med-nc');
+      expect(fact?.confidence_state).toBe('needs_review');
+    });
+
+    it('skips malformed prohibited_med values without throwing and falls back to the gap block', () => {
+      const badMeds: SelectionSourceItem[] = [
+        item({ id: 'med-bad-1', field_type: 'prohibited_med', field_path: 'prohibited_medications[0]', extracted_value: null }),
+        item({ id: 'med-bad-2', field_type: 'prohibited_med', field_path: 'prohibited_medications[1]', extracted_value: 42 }),
+        item({ id: 'med-bad-3', field_type: 'prohibited_med', field_path: 'prohibited_medications[2]', extracted_value: '   ' }),
+        item({ id: 'med-bad-4', field_type: 'prohibited_med', field_path: 'prohibited_medications[3]', extracted_value: { unexpected: 'object' } }),
+      ];
+      expect(() => selectMonitoringChecklistBlocks(input(badMeds))).not.toThrow();
+      const section = blocksIn(
+        selectMonitoringChecklistBlocks(input(badMeds)),
+        'exclusion_prohibited_med_review',
+      );
+      expect(section).toHaveLength(2); // intro + gap — no usable meds
+      expect(section.some((b) => b.derived_text === GAP_TEXT)).toBe(true);
+      expect(section.every((b) => b.extracted_item_id === null)).toBe(true);
+    });
+
+    it('keeps usable medications when sibling values are malformed (no gap block)', () => {
+      const blocks = selectMonitoringChecklistBlocks(
+        input([
+          item({ id: 'med-bad', field_type: 'prohibited_med', field_path: 'prohibited_medications[0]', extracted_value: null }),
+          medItems[1],
+        ]),
+      );
+      const section = blocksIn(blocks, 'exclusion_prohibited_med_review');
+      expect(section).toHaveLength(2); // intro + the one usable med
+      expect(section[1].extracted_item_id).toBe('med-2');
+      expect(section.some((b) => b.derived_text === GAP_TEXT)).toBe(false);
     });
   });
 
@@ -730,6 +856,7 @@ describe('selectMonitoringChecklistBlocks', () => {
       item({ id: 'bad-6', field_type: 'visit', field_path: 'schedule_of_events[1]', extracted_value: { study_day: 14 } }), // no visit_name
       item({ id: 'bad-7', field_type: 'visit', field_path: 'schedule_of_events[2]', extracted_value: ['array', 'not', 'object'] }),
       item({ id: 'bad-8', field_type: 'endpoint', field_path: 'primary_endpoints[0]', extracted_value: undefined }),
+      item({ id: 'bad-11', field_type: 'prohibited_med', field_path: 'prohibited_medications[0]', extracted_value: { med: 'object' } }),
       item({ id: 'bad-9', field_type: 'metadata', field_path: 'amendment_summary', extracted_value: { nested: true } }),
       item({ id: 'bad-10', field_type: 'unknown_future_type', field_path: 'whatever', extracted_value: 'text' }),
     ];

@@ -257,6 +257,85 @@ describe('mapReductoExtractToSotr', () => {
   });
 
   // -------------------------------------------------------------------------
+  // T7b — prohibited_medications: array field mapped to 'prohibited_med'
+  // -------------------------------------------------------------------------
+  describe('prohibited_medications mapping', () => {
+    it('emits one prohibited_med item per array element with evidence links', () => {
+      const input: ReductoExtractResponse = {
+        prohibited_medications: [
+          'Strong CYP3A4 inhibitors',
+          'Systemic corticosteroids within 28 days of first dose',
+        ],
+        _reducto_citations: {
+          prohibited_medications: [
+            { text: 'Strong CYP3A4 inhibitors are prohibited throughout the study',
+              pages: [30], confidence: 'high' },
+            { text: 'Systemic corticosteroids within 28 days of first dose',
+              pages: [30], confidence: 'medium' },
+          ],
+        },
+      };
+
+      const { items, evidence, links } = mapReductoExtractToSotr(DOC_ID, input, RUN_ID);
+
+      expect(items).toHaveLength(2);
+      expect(evidence).toHaveLength(2);
+      expect(links).toHaveLength(2);
+
+      const medItems = items.filter((i) => i.field_type === 'prohibited_med');
+      expect(medItems).toHaveLength(2);
+      expect(medItems[0].field_path).toBe('prohibited_medications[0]');
+      expect(medItems[1].field_path).toBe('prohibited_medications[1]');
+
+      // Extracted values pass through verbatim — no normalization.
+      expect(medItems[0].extracted_value).toBe('Strong CYP3A4 inhibitors');
+      expect(medItems[1].extracted_value).toBe(
+        'Systemic corticosteroids within 28 days of first dose',
+      );
+
+      // Each item is linked to its own primary evidence row.
+      links.forEach((link, i) => {
+        expect(link.item_index).toBe(i);
+        expect(link.evidence_index).toBe(i);
+        expect(link.is_primary_source).toBe(true);
+      });
+      expect(items[0].confidence_state).toBe('high');
+      expect(items[1].confidence_state).toBe('medium');
+      expect(evidence[0].page_number).toBe(30);
+      expect(evidence[0].support_type).toBe('primary');
+    });
+
+    it('marks needs_review when a prohibited medication has no citation', () => {
+      const input: ReductoExtractResponse = {
+        prohibited_medications: ['Live vaccines'],
+        _reducto_citations: {},
+      };
+
+      const { items, evidence, links } = mapReductoExtractToSotr(DOC_ID, input);
+
+      expect(items).toHaveLength(1);
+      expect(items[0].field_type).toBe('prohibited_med');
+      expect(items[0].confidence_state).toBe('needs_review');
+      expect(items[0].missing_source_reason).toBe('parser_output_missing_citation');
+      expect(evidence).toHaveLength(0);
+      expect(links).toHaveLength(0);
+    });
+
+    it('emits no items for an empty prohibited_medications array', () => {
+      const input: ReductoExtractResponse = {
+        prohibited_medications: [],
+        _reducto_citations: {},
+      };
+
+      const { items, evidence, links } = mapReductoExtractToSotr(DOC_ID, input);
+
+      expect(items).toHaveLength(0);
+      expect(evidence).toHaveLength(0);
+      expect(links).toHaveLength(0);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // T8 — Visit deduplication: Source B (inline section) wins over Source A
   //      (SOA table) but Source A's citation is preserved as evidence.
   // -------------------------------------------------------------------------

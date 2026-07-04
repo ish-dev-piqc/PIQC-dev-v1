@@ -31,6 +31,7 @@ const FIXTURE: ReductoExtractResponse = {
   study_phase:       'Phase II',
   primary_endpoints: ['Maintain parity across two adapter copies'],
   key_inclusion_criteria: ['Both files exist'],
+  prohibited_medications: ['Strong CYP3A4 inhibitors'],
   schedule_of_events: [
     // Source B — inline section (winner)
     { visit_name: 'Visit 2', study_day: 14, window_minus_days: 3, window_plus_days: 3 },
@@ -48,6 +49,9 @@ const FIXTURE: ReductoExtractResponse = {
     ],
     key_inclusion_criteria: [
       { text: 'Both files exist', pages: [10], confidence: 'high' },
+    ],
+    prohibited_medications: [
+      { text: 'Strong CYP3A4 inhibitors are prohibited', pages: [30], confidence: 'high' },
     ],
     schedule_of_events: [
       { text: '6.3.2 Visit 2 (Week 2, Day 14±3)', pages: [22], confidence: 'high' },

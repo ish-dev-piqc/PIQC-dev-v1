@@ -189,6 +189,7 @@ function fieldTypeFor(key: string): string {
   if (key === 'primary_endpoints' || key === 'secondary_endpoints') return 'endpoint';
   if (key === 'key_inclusion_criteria') return 'inclusion_criterion';
   if (key === 'key_exclusion_criteria') return 'exclusion_criterion';
+  if (key === 'prohibited_medications') return 'prohibited_med';
   if (key === 'schedule_of_events') return 'visit';
   return 'other';
 }

@@ -46,8 +46,8 @@ import type {
 export interface SelectionSourceItem {
   id: string;
   /** Persisted SOTR field_type: 'inclusion_criterion' | 'exclusion_criterion'
-   *  | 'endpoint' | 'visit' | 'dosing' | 'metadata' | 'other'. Kept as string
-   *  — unknown values are simply not selected. */
+   *  | 'prohibited_med' | 'endpoint' | 'visit' | 'dosing' | 'metadata'
+   *  | 'other'. Kept as string — unknown values are simply not selected. */
   field_type: string;
   /** e.g. 'primary_endpoints[0]', 'schedule_of_events[2]', 'amendment_summary'. */
   field_path: string;
@@ -250,6 +250,10 @@ export function selectMonitoringChecklistBlocks(input: SelectionInput): NewBlock
     .map((item) => ({ item, text: item.field_type === 'exclusion_criterion' ? asTrimmedString(item.extracted_value) : null }))
     .filter((e): e is { item: SelectionSourceItem; text: string } => e.text !== null);
 
+  const prohibitedMedItems = input.items
+    .map((item) => ({ item, text: item.field_type === 'prohibited_med' ? asTrimmedString(item.extracted_value) : null }))
+    .filter((e): e is { item: SelectionSourceItem; text: string } => e.text !== null);
+
   const visitItems = input.items
     .map((item) => ({ item, visit: item.field_type === 'visit' ? readVisitValue(item.extracted_value) : null }))
     .filter((e): e is { item: SelectionSourceItem; visit: VisitValue } => e.visit !== null);
@@ -284,7 +288,9 @@ export function selectMonitoringChecklistBlocks(input: SelectionInput): NewBlock
     }
   }
 
-  // --- 2. exclusion_prohibited_med_review (facts + ALWAYS a coverage gap) ---
+  // --- 2. exclusion_prohibited_med_review (facts; gap block ONLY when zero
+  //     prohibited_med facts — absence of extraction ≠ absence of restrictions,
+  //     so the section never goes silent on medications) ---------------------
   pushFraming(
     state, 'exclusion_prohibited_med_review', 'section_intro',
     'Confirm no enrolled participant meets an exclusion criterion below, and ' +
@@ -293,12 +299,21 @@ export function selectMonitoringChecklistBlocks(input: SelectionInput): NewBlock
   for (const { item, text } of exclusionItems) {
     pushFact(state, 'exclusion_prohibited_med_review', item, `Confirm absence of: ${text}`);
   }
-  pushFraming(
-    state, 'exclusion_prohibited_med_review', 'checklist_item',
-    'No prohibited-medication list was extracted from this protocol. Review the ' +
-    'concomitant/prohibited medication section of the protocol manually and ' +
-    'verify medication-history cross-checks at the site.',
-  );
+  for (const { item, text } of prohibitedMedItems) {
+    pushFact(
+      state, 'exclusion_prohibited_med_review', item,
+      `Confirm absence of prohibited medication: ${text} — cross-check the ` +
+      "participant's medication history.",
+    );
+  }
+  if (prohibitedMedItems.length === 0) {
+    pushFraming(
+      state, 'exclusion_prohibited_med_review', 'checklist_item',
+      'No prohibited-medication list was extracted from this protocol. Review the ' +
+      'concomitant/prohibited medication section of the protocol manually and ' +
+      'verify medication-history cross-checks at the site.',
+    );
+  }
 
   // --- 3. visit_window_verification (facts; empty when nothing extracted) ---
   if (visitItems.length > 0) {

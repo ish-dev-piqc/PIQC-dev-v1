@@ -23,6 +23,7 @@ const FIELD_TYPE_LABELS: Record<string, string> = {
   endpoint:            'Endpoints',
   inclusion_criterion: 'Inclusion criteria',
   exclusion_criterion: 'Exclusion criteria',
+  prohibited_med:      'Prohibited medications',
   visit:               'Visits',
   dosing:              'Dosing',
   metadata:            'Protocol metadata',

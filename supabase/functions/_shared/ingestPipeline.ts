@@ -461,6 +461,14 @@ const CLINICAL_EXTRACT_SCHEMA = {
       items: { type: "string" },
       description: "Key patient exclusion criteria",
     },
+    prohibited_medications: {
+      type: "array",
+      items: { type: "string" },
+      description:
+        "Medications or medication classes the protocol prohibits or restricts " +
+        "(concomitant-medication restrictions, washout requirements), extracted verbatim " +
+        "as written in the protocol. Empty array when none are stated.",
+    },
     dosing_regimen: {
       type: "string",
       description: "Dosing regimen including dose levels, route of administration, frequency, and duration",
