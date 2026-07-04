@@ -90,8 +90,9 @@ SOTR `current_text` wins, `rejected_from_draft` excluded).
   `SponsorProtocolDrawer.tsx`, `src/lib/sponsor/`, `src/types/sponsor/` —
   Kiara's territory; NOT needed this slice.
 - `src/lib/{sotr,site,audit,visit-execution}/` + their dashboards/types.
-- `src/lib/deliverables/deliverablesExportApi.ts` — risk-overview PDF
-  export intentionally deferred (see Decisions).
+- `src/lib/deliverables/deliverablesExportApi.ts` — no risk-overview
+  export FEATURE (see Decisions); signature-compat updates for the
+  groupBlocksBySection generalization are allowed (mechanical only).
 - `src/lib/entitlements.ts`, `src/context/`, `supabase/functions/`.
 - Merged migrations (20260708*) — append-only; the new migration
   redefines `deliverable_generate` via CREATE OR REPLACE.

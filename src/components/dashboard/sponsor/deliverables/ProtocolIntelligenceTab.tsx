@@ -4,11 +4,19 @@ import { useTheme } from '../../../../context/ThemeContext';
 import { useProtocol } from '../../../../context/ProtocolContext';
 import { useSubscription } from '../../../../hooks/useSubscription';
 import { canUseSponsorMode } from '../../../../lib/entitlements';
-import MonitoringChecklistPanel from './MonitoringChecklistPanel';
+import {
+  ARTIFACT_TYPE_LABELS,
+  MONITORING_SECTION_LABELS,
+  MONITORING_SECTION_ORDER,
+  RISK_SECTION_LABELS,
+  RISK_SECTION_ORDER,
+  type DeliverableArtifactType,
+} from '../../../../types/deliverables';
+import DeliverablePanel from './DeliverablePanel';
 
 // =============================================================================
 // ProtocolIntelligenceTab — the Sponsor page's "Protocol Intelligence" sub-tab
-// (Protocol Deliverable Engine, Phase 1).
+// (Protocol Deliverable Engine).
 //
 // Order of gates, top to bottom:
 //   1. Entitlement — canUseSponsorMode(subscription) (its first consumer).
@@ -19,11 +27,41 @@ import MonitoringChecklistPanel from './MonitoringChecklistPanel';
 //      list; the tab defaults to the app-wide activeProtocol and offers a
 //      local <select> so a reviewer can switch protocols without leaving
 //      the tab (the override never writes back to the global selection).
-//   3. A selected protocol mounts <MonitoringChecklistPanel/>; no selection
+//   3. A two-chip deliverable picker (Monitoring Prep Checklist | Risk
+//      Overview) chooses the artifact type; a selected protocol mounts
+//      <DeliverablePanel/> with that type's section config. No selection
 //      renders an empty-state prompt instead.
 //
 // Draft-only vocabulary throughout: PIQC drafts; humans review.
 // =============================================================================
+
+/** Per-artifact panel config: each artifact type owns its section
+ *  vocabulary; PDF export is checklist-only for now (plan Decision 4). */
+const DELIVERABLE_CONFIGS: Record<
+  DeliverableArtifactType,
+  {
+    sectionOrder: readonly string[];
+    sectionLabels: Record<string, string>;
+    exportEnabled: boolean;
+  }
+> = {
+  monitoring_prep_checklist: {
+    sectionOrder: MONITORING_SECTION_ORDER,
+    sectionLabels: MONITORING_SECTION_LABELS,
+    exportEnabled: true,
+  },
+  risk_overview: {
+    sectionOrder: RISK_SECTION_ORDER,
+    sectionLabels: RISK_SECTION_LABELS,
+    exportEnabled: false,
+  },
+};
+
+/** Chip order in the picker — checklist first (the default). */
+const ARTIFACT_PICKER_ORDER: readonly DeliverableArtifactType[] = [
+  'monitoring_prep_checklist',
+  'risk_overview',
+];
 
 export default function ProtocolIntelligenceTab() {
   const { theme } = useTheme();
@@ -36,6 +74,12 @@ export default function ProtocolIntelligenceTab() {
   // activeProtocol. If the override id vanishes from the list (protocol
   // removed), the fallback chain quietly returns to activeProtocol.
   const [overrideProtocolId, setOverrideProtocolId] = useState<string | null>(null);
+
+  // Which deliverable the picker shows. Deliberately NOT reset on protocol
+  // switches — the artifact choice is protocol-independent.
+  const [artifactType, setArtifactType] = useState<DeliverableArtifactType>(
+    'monitoring_prep_checklist',
+  );
 
   // Full-screen spinner ONLY while there is nothing to show yet. Protocol
   // realtime events re-run ProtocolContext's load() (isLoading flips true)
@@ -162,8 +206,45 @@ export default function ProtocolIntelligenceTab() {
             </select>
           </div>
 
+          {/* Deliverable picker — chip strip mirroring the SponsorPage
+              sub-tab pattern. Artifact choice is protocol-independent. */}
+          <div
+            role="tablist"
+            aria-label="Deliverable type"
+            data-testid="protocol-intelligence-deliverable-picker"
+            className={`inline-flex items-center gap-1 rounded-lg border p-1 ${
+              isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/10'
+            }`}
+          >
+            {ARTIFACT_PICKER_ORDER.map((key) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={artifactType === key}
+                onClick={() => setArtifactType(key)}
+                data-testid={`deliverable-picker-${key}`}
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold ${
+                  artifactType === key
+                    ? isLight
+                      ? 'bg-[#534AB7] text-white'
+                      : 'bg-[#7F77DD] text-white'
+                    : 'text-fg-sub hover:text-fg-body'
+                }`}
+              >
+                {ARTIFACT_TYPE_LABELS[key]}
+              </button>
+            ))}
+          </div>
+
           {selectedProtocol ? (
-            <MonitoringChecklistPanel protocolId={selectedProtocol.id} />
+            <DeliverablePanel
+              protocolId={selectedProtocol.id}
+              artifactType={artifactType}
+              sectionOrder={DELIVERABLE_CONFIGS[artifactType].sectionOrder}
+              sectionLabels={DELIVERABLE_CONFIGS[artifactType].sectionLabels}
+              exportEnabled={DELIVERABLE_CONFIGS[artifactType].exportEnabled}
+            />
           ) : (
             <div
               data-testid="protocol-intelligence-no-selection"
@@ -173,8 +254,8 @@ export default function ProtocolIntelligenceTab() {
             >
               <p className="text-fg-body text-sm">Select a protocol to begin.</p>
               <p className="text-fg-sub text-[11px] mt-1 leading-relaxed">
-                PIQC drafts the monitoring preparation checklist for the
-                protocol you choose above.
+                PIQC drafts the {ARTIFACT_TYPE_LABELS[artifactType].toLowerCase()} for
+                the protocol you choose above.
               </p>
             </div>
           )}
