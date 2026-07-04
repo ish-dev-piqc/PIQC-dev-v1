@@ -16,5 +16,13 @@ export default defineConfig({
     ],
     setupFiles: ['./src/test/setup.ts'],
     globals: false,
+    // src/lib/supabase.ts calls createClient() at module top level, so any
+    // test that transitively imports it needs these VITE_ vars to exist at
+    // collection time. Dummy values only — tests that exercise the client
+    // vi.mock it (see src/lib/orgs/__tests__/orgEventsApi.test.ts).
+    env: {
+      VITE_SUPABASE_URL: 'http://localhost:54321',
+      VITE_SUPABASE_ANON_KEY: 'test-anon-key',
+    },
   },
 });
