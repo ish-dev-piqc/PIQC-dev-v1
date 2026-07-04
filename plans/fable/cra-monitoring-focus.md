@@ -1,7 +1,7 @@
 ---
 owner: fable-dev-piqc
 feature: cra-monitoring-focus
-status: active
+status: in-review
 started: 2026-07-04
 target_pr:
 ---
@@ -113,17 +113,17 @@ None.
 
 ## Verification
 
-- [ ] `npm run typecheck` / `build` / deliverables + sotr suites green;
-  new CRA spec suite green; risk-lens med tests green; zero new
-  full-suite failures vs same-environment baseline.
+- [x] `npm run typecheck` / `build` / deliverables + sotr suites green
+  (322/322); new CRA spec suite green (48); risk-lens med tests green;
+  zero new full-suite failures vs same-environment baseline.
 - [ ] Manual (post `db push`): third chip renders → Generate CRA focus →
   attention-allocation cards with evidence + confidence, prohibited
   meds present in eligibility emphasis → review/edit/reject/regenerate
   behave → checklist + risk overview unregressed; risk overview now
   shows med cards after regenerate.
-- [ ] No numeric scores anywhere; prose distinct from the other two
-  lenses (no duplicated card text).
-- [ ] `piqc-review` clean.
+- [x] No numeric scores anywhere; prose distinct from the other two
+  lenses (no duplicated card text — test-asserted both directions).
+- [x] `piqc-review` clean.
 
 ## Decisions encoded
 
