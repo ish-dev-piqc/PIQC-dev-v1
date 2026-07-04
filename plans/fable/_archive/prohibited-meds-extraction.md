@@ -1,9 +1,10 @@
 ---
 owner: fable-dev-piqc
 feature: prohibited-meds-extraction
-status: in-review
+status: merged
+merged: 2026-07-04
 started: 2026-07-03
-target_pr:
+target_pr: #412
 ---
 
 # Prohibited-medications extraction — Reducto schema → SOTR facts → checklist upgrade
