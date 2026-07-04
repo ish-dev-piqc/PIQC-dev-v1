@@ -26,10 +26,12 @@
 // - human_editorial is never emitted here; humans add those blocks later.
 //
 // Section emission policy (order = RISK_SECTION_ORDER):
-// - eligibility_complexity, visit_window_pressure,
-//   endpoint_critical_procedures, and coordination_burden emit nothing when
-//   no facts are flagged (empty sections are hidden by groupBlocksBySection
-//   downstream).
+// - eligibility_complexity emits when a criterion is flagged OR a restricted
+//   medication was extracted (prohibited_med facts — the risk-lens debt named
+//   in the prohibited-meds plan, settled here); silent only when neither.
+// - visit_window_pressure, endpoint_critical_procedures, and
+//   coordination_burden emit nothing when no facts are flagged (empty
+//   sections are hidden by groupBlocksBySection downstream).
 // - vendor_lab_imaging_dependencies and amendment_sensitivity always say
 //   something: explicit fallback framing instead of silence.
 //
@@ -238,6 +240,10 @@ export function selectRiskOverviewBlocks(input: SelectionInput): RiskBlockSpec[]
     }))
     .filter((e): e is { item: SelectionSourceItem; text: string } => e.text !== null);
 
+  const prohibitedMedItems = input.items
+    .map((item) => ({ item, text: item.field_type === 'prohibited_med' ? asTrimmedString(item.extracted_value) : null }))
+    .filter((e): e is { item: SelectionSourceItem; text: string } => e.text !== null);
+
   const visitItems = input.items
     .map((item) => ({ item, visit: item.field_type === 'visit' ? readVisitValue(item.extracted_value) : null }))
     .filter((e): e is { item: SelectionSourceItem; visit: VisitValue } => e.visit !== null);
@@ -262,9 +268,15 @@ export function selectRiskOverviewBlocks(input: SelectionInput): RiskBlockSpec[]
     }))
     .find((e): e is { item: SelectionSourceItem; text: string } => e.text !== null) ?? null;
 
-  // --- 1. eligibility_complexity (facts; absent when nothing is flagged) ----
+  // --- 1. eligibility_complexity (facts; absent only when nothing is flagged
+  //     AND no restricted medication was extracted) --------------------------
   // A criterion flags for conditional language OR excessive length; when both
   // apply, conditional logic wins as the named reason (deterministic).
+  // Restricted medications (prohibited_med facts) always emit — every one is
+  // a medication-history screen the site can miss, so there is no flagging
+  // heuristic to apply. Med cards follow the flagged-criteria cards. Prose is
+  // this lens's own (fragility register) — never the checklist's imperative
+  // "Confirm absence of ..." wording for the same facts.
   const flaggedCriteria: Array<{
     item: SelectionSourceItem;
     text: string;
@@ -277,15 +289,39 @@ export function selectRiskOverviewBlocks(input: SelectionInput): RiskBlockSpec[]
       flaggedCriteria.push({ item, text, reason: 'lengthy criterion' });
     }
   }
-  if (flaggedCriteria.length > 0) {
-    pushFraming(
-      state, 'eligibility_complexity', 'section_intro',
-      `PIQC flagged ${flaggedCriteria.length} of ${criterionItems.length} eligibility criteria as ` +
-      'complex — conditional logic or lengthy definitions make screening errors and eligibility ' +
-      'deviations more likely. Review how the site will operationalize each flagged criterion.',
-    );
+  if (flaggedCriteria.length > 0 || prohibitedMedItems.length > 0) {
+    const medCount = prohibitedMedItems.length;
+    const medNoun = medCount === 1 ? 'medication' : 'medications';
+    if (flaggedCriteria.length > 0 && medCount > 0) {
+      pushFraming(
+        state, 'eligibility_complexity', 'section_intro',
+        `PIQC flagged ${flaggedCriteria.length} of ${criterionItems.length} eligibility criteria as ` +
+        'complex — conditional logic or lengthy definitions make screening errors and eligibility ' +
+        `deviations more likely. The protocol also restricts ${medCount} ${medNoun} within ` +
+        'eligibility scope, widening the screening surface with medication-history checks. Review ' +
+        'how the site will operationalize each flagged criterion and each restriction.',
+      );
+    } else if (flaggedCriteria.length > 0) {
+      // No restricted medications extracted — byte-identical legacy intro.
+      pushFraming(
+        state, 'eligibility_complexity', 'section_intro',
+        `PIQC flagged ${flaggedCriteria.length} of ${criterionItems.length} eligibility criteria as ` +
+        'complex — conditional logic or lengthy definitions make screening errors and eligibility ' +
+        'deviations more likely. Review how the site will operationalize each flagged criterion.',
+      );
+    } else {
+      pushFraming(
+        state, 'eligibility_complexity', 'section_intro',
+        `This protocol restricts ${medCount} ${medNoun} within eligibility scope. Each restricted ` +
+        'medication widens the screening surface, and a missed medication-history match surfaces ' +
+        'late as an eligibility deviation. Review how the site will operationalize each restriction.',
+      );
+    }
     for (const { item, text, reason } of flaggedCriteria) {
       pushFact(state, 'eligibility_complexity', item, `Complex eligibility — ${reason}: ${text}`);
+    }
+    for (const { item, text } of prohibitedMedItems) {
+      pushFact(state, 'eligibility_complexity', item, `Restricted medication in eligibility scope: ${text}`);
     }
   }
 

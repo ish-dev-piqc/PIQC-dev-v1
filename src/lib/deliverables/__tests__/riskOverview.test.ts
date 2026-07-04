@@ -428,6 +428,152 @@ describe('selectRiskOverviewBlocks', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // T4b — Section 1: restricted medications (prohibited_med risk-lens debt)
+  // ---------------------------------------------------------------------------
+  describe('eligibility_complexity — restricted medications', () => {
+    /** One conditional-flagged criterion + two prohibited meds. */
+    function criteriaAndMedsInput(): SelectionInput {
+      return input([
+        item({
+          id: 'exc-cond',
+          field_type: 'exclusion_criterion',
+          field_path: 'key_exclusion_criteria[0]',
+          extracted_value: 'History of seizure disorder',
+          primary_evidence: evidence('ev-exc-cond', 'Seizure history excluded', 11, 'Section 4.2'),
+        }),
+        item({
+          id: 'med-1',
+          field_type: 'prohibited_med',
+          field_path: 'prohibited_medications[0]',
+          extracted_value: 'Strong CYP3A4 inhibitors',
+          confidence_state: 'medium',
+          primary_evidence: evidence('ev-med-1', 'Strong CYP3A4 inhibitors are prohibited', 12, 'Section 4.3 Concomitant Medications'),
+        }),
+        item({
+          id: 'med-2',
+          field_type: 'prohibited_med',
+          field_path: 'prohibited_medications[1]',
+          extracted_value: 'Warfarin',
+          confidence_state: null,
+          primary_evidence: null,
+        }),
+      ]);
+    }
+
+    function medsOnlyInput(): SelectionInput {
+      const base = criteriaAndMedsInput();
+      return { ...base, items: base.items.filter((i) => i.field_type === 'prohibited_med') };
+    }
+
+    it('emits one verbatim card per restricted medication AFTER the flagged-criteria cards', () => {
+      const blocks = selectRiskOverviewBlocks(criteriaAndMedsInput());
+      const facts = blocksIn(blocks, 'eligibility_complexity').filter(
+        (b) => b.content_origin === 'protocol_fact',
+      );
+      expect(facts.map((f) => f.derived_text)).toEqual([
+        'Complex eligibility — conditional logic: History of seizure disorder',
+        'Restricted medication in eligibility scope: Strong CYP3A4 inhibitors',
+        'Restricted medication in eligibility scope: Warfarin',
+      ]);
+      blocks.forEach((block, i) => expect(block.sort_order).toBe(i));
+    });
+
+    it('copies evidence passthrough onto med cards and carries item confidence through', () => {
+      const blocks = selectRiskOverviewBlocks(criteriaAndMedsInput());
+      const med = blocks.find((b) => b.extracted_item_id === 'med-1');
+      expect(med?.content_origin).toBe('protocol_fact');
+      expect(med?.block_type).toBe('checklist_item');
+      expect(med?.source_evidence_id).toBe('ev-med-1');
+      expect(med?.source_quote).toBe('Strong CYP3A4 inhibitors are prohibited');
+      expect(med?.source_page_number).toBe(12);
+      expect(med?.source_section).toBe('Section 4.3 Concomitant Medications');
+      expect(med?.confidence_state).toBe('medium');
+    });
+
+    it('degrades a med card with null item confidence to needs_review, with null evidence fields', () => {
+      const blocks = selectRiskOverviewBlocks(criteriaAndMedsInput());
+      const med = blocks.find((b) => b.extracted_item_id === 'med-2');
+      expect(med?.confidence_state).toBe('needs_review');
+      expect(med?.source_evidence_id).toBeNull();
+      expect(med?.source_quote).toBeNull();
+      expect(med?.source_page_number).toBeNull();
+      expect(med?.source_section).toBeNull();
+    });
+
+    it('states criteria counts AND the medication count in the combined intro', () => {
+      const blocks = selectRiskOverviewBlocks(criteriaAndMedsInput());
+      const intro = blocksIn(blocks, 'eligibility_complexity')[0];
+      expect(intro.block_type).toBe('section_intro');
+      expect(intro.content_origin).toBe('derived_operational_framing');
+      expect(intro.derived_text).toBe(
+        'PIQC flagged 1 of 1 eligibility criteria as complex — conditional logic or lengthy ' +
+        'definitions make screening errors and eligibility deviations more likely. The protocol ' +
+        'also restricts 2 medications within eligibility scope, widening the screening surface ' +
+        'with medication-history checks. Review how the site will operationalize each flagged ' +
+        'criterion and each restriction.',
+      );
+    });
+
+    it('emits the section when ONLY restricted medications exist, with a meds-only intro', () => {
+      const blocks = selectRiskOverviewBlocks(medsOnlyInput());
+      const section = blocksIn(blocks, 'eligibility_complexity');
+      expect(section).toHaveLength(3); // intro + 2 med cards
+      expect(section[0].block_type).toBe('section_intro');
+      expect(section[0].content_origin).toBe('derived_operational_framing');
+      expect(section[0].derived_text).toBe(
+        'This protocol restricts 2 medications within eligibility scope. Each restricted ' +
+        'medication widens the screening surface, and a missed medication-history match surfaces ' +
+        'late as an eligibility deviation. Review how the site will operationalize each restriction.',
+      );
+      expect(section[1].derived_text).toBe(
+        'Restricted medication in eligibility scope: Strong CYP3A4 inhibitors',
+      );
+      expect(section[2].derived_text).toBe('Restricted medication in eligibility scope: Warfarin');
+    });
+
+    it('uses the singular noun for a single restricted medication', () => {
+      const base = medsOnlyInput();
+      const single: SelectionInput = {
+        ...base,
+        items: base.items.filter((i) => i.id === 'med-1'),
+      };
+      const intro = blocksIn(selectRiskOverviewBlocks(single), 'eligibility_complexity')[0];
+      expect(intro.derived_text).toContain('restricts 1 medication within eligibility scope');
+    });
+
+    it('keeps the legacy intro byte-identical when no medications are extracted', () => {
+      const blocks = selectRiskOverviewBlocks(fullProtocolInput());
+      const intro = blocksIn(blocks, 'eligibility_complexity')[0];
+      expect(intro.derived_text).toBe(
+        'PIQC flagged 2 of 4 eligibility criteria as complex — conditional logic or lengthy ' +
+        'definitions make screening errors and eligibility deviations more likely. Review how ' +
+        'the site will operationalize each flagged criterion.',
+      );
+    });
+
+    it('skips malformed medication values — no cards, and no section when nothing else flags', () => {
+      const malformedMeds = input([
+        item({ id: 'med-bad-1', field_type: 'prohibited_med', field_path: 'prohibited_medications[0]', extracted_value: null }),
+        item({ id: 'med-bad-2', field_type: 'prohibited_med', field_path: 'prohibited_medications[1]', extracted_value: 42 }),
+        item({ id: 'med-bad-3', field_type: 'prohibited_med', field_path: 'prohibited_medications[2]', extracted_value: '   ' }),
+        item({ id: 'med-bad-4', field_type: 'prohibited_med', field_path: 'prohibited_medications[3]', extracted_value: { name: 'Warfarin' } }),
+      ]);
+      expect(() => selectRiskOverviewBlocks(malformedMeds)).not.toThrow();
+      const blocks = selectRiskOverviewBlocks(malformedMeds);
+      expect(blocksIn(blocks, 'eligibility_complexity')).toHaveLength(0);
+      expect(blocks.every((b) => b.extracted_item_id === null)).toBe(true);
+    });
+
+    it('never emits scores in medication prose (no-score doctrine)', () => {
+      for (const testInput of [criteriaAndMedsInput(), medsOnlyInput()]) {
+        for (const block of selectRiskOverviewBlocks(testInput)) {
+          expect(block.derived_text).not.toMatch(NO_SCORE_PATTERN);
+        }
+      }
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // T5 — Section 2: visit window pressure
   // ---------------------------------------------------------------------------
   describe('visit_window_pressure', () => {
