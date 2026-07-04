@@ -44,6 +44,7 @@ import {
   CONFIDENCE_LABELS,
   CONTENT_ORIGIN_LABELS,
   MONITORING_SECTION_LABELS,
+  MONITORING_SECTION_ORDER,
   REVIEW_STATE_LABELS,
   groupBlocksBySection,
 } from '../../types/deliverables';
@@ -332,7 +333,10 @@ export function buildDeliverablePdf(packet: DeliverableExportPacket): jsPDF {
   // ---- Per-section autotables ----------------------------------------------
   // groupBlocksBySection hides empty sections and preserves
   // MONITORING_SECTION_ORDER + per-section sort_order.
-  for (const { sectionKey, blocks } of groupBlocksBySection(packet.blocks)) {
+  for (const { sectionKey, blocks } of groupBlocksBySection(
+    packet.blocks,
+    MONITORING_SECTION_ORDER,
+  )) {
     if (cursorY > pageHeight - margin - 80) {
       doc.addPage();
       cursorY = margin + 20;
