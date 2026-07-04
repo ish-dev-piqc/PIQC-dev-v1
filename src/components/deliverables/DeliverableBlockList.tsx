@@ -2,22 +2,24 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import {
-  MONITORING_SECTION_LABELS,
   groupBlocksBySection,
   type DeliverablePacketBlock,
-  type MonitoringChecklistSectionKey,
 } from '../../types/deliverables';
 import { DeliverableBlockRow } from './DeliverableBlockRow';
 
 // =============================================================================
 // DeliverableBlockList — the deliverable's main surface. Groups packet blocks
-// by section via groupBlocksBySection (stable MONITORING_SECTION_ORDER, empty
-// sections hidden), renders each section as a collapsible card in the VEW
-// phase-card style: header button with label + reviewed/total counter, rows in
-// a divided list, and a quiet "+ Add item" footer per section.
+// by section via groupBlocksBySection (stable caller-provided sectionOrder,
+// empty sections hidden), renders each section as a collapsible card in the
+// VEW phase-card style: header button with label + reviewed/total counter,
+// rows in a divided list, and a quiet "+ Add item" footer per section.
+//
+// Artifact-agnostic: each artifact type owns its section vocabulary, so the
+// caller passes its ORDER/LABELS pair (MONITORING_* or RISK_*). Required
+// props — with exactly two callers there is no meaningful default.
 //
 // Phase-1 simplification (deliberate, vs VEW's defaultExpandedPhases
-// heuristics): all sections start expanded — a monitoring-prep reviewer scans
+// heuristics): all sections start expanded — a deliverable reviewer scans
 // the whole draft top to bottom, so there's no "current phase" to spotlight.
 //
 // Pure presentation: block state lives in the parent (the sponsor panel
@@ -26,6 +28,10 @@ import { DeliverableBlockRow } from './DeliverableBlockRow';
 
 interface Props {
   blocks: DeliverablePacketBlock[];
+  /** Stable render order for this artifact type's sections. */
+  sectionOrder: readonly string[];
+  /** Display labels for this artifact type's section keys. */
+  sectionLabels: Record<string, string>;
   onMarkReviewed: (block: DeliverablePacketBlock) => void;
   onUnmarkReviewed: (block: DeliverablePacketBlock) => void;
   onFlag: (block: DeliverablePacketBlock) => void;
@@ -34,11 +40,13 @@ interface Props {
   onAddNote: (block: DeliverablePacketBlock) => void;
   onShowSource: (block: DeliverablePacketBlock) => void;
   onDelete: (block: DeliverablePacketBlock) => void;
-  onAddBlock: (sectionKey: MonitoringChecklistSectionKey) => void;
+  onAddBlock: (sectionKey: string) => void;
 }
 
 export function DeliverableBlockList({
   blocks,
+  sectionOrder,
+  sectionLabels,
   onMarkReviewed,
   onUnmarkReviewed,
   onFlag,
@@ -52,14 +60,15 @@ export function DeliverableBlockList({
   const { theme } = useTheme();
   const isLight = theme === 'light';
 
-  const grouped = useMemo(() => groupBlocksBySection(blocks), [blocks]);
-
-  // All expanded by default — track the collapsed exceptions.
-  const [collapsed, setCollapsed] = useState<Set<MonitoringChecklistSectionKey>>(
-    () => new Set(),
+  const grouped = useMemo(
+    () => groupBlocksBySection(blocks, sectionOrder),
+    [blocks, sectionOrder],
   );
 
-  const toggleSection = (sectionKey: MonitoringChecklistSectionKey) => {
+  // All expanded by default — track the collapsed exceptions.
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+
+  const toggleSection = (sectionKey: string) => {
     setCollapsed((prev) => {
       const next = new Set(prev);
       if (next.has(sectionKey)) next.delete(sectionKey);
@@ -76,9 +85,9 @@ export function DeliverableBlockList({
           isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5'
         }`}
       >
-        <p className="text-fg-body text-sm">No checklist items yet.</p>
+        <p className="text-fg-body text-sm">No draft items yet.</p>
         <p className="text-fg-sub text-[11px] mt-1 leading-relaxed">
-          Generate the checklist to draft evidence-linked items from the protocol.
+          Generate the deliverable to draft evidence-linked items from the protocol.
         </p>
       </div>
     );
@@ -119,7 +128,7 @@ export function DeliverableBlockList({
                   <ChevronRight size={14} className="text-fg-sub flex-shrink-0" aria-hidden />
                 )}
                 <span className="text-fg-heading text-[15px] font-semibold tracking-tight truncate">
-                  {MONITORING_SECTION_LABELS[sectionKey]}
+                  {sectionLabels[sectionKey] ?? sectionKey}
                 </span>
               </div>
               <span

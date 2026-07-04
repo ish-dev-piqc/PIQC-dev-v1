@@ -5,9 +5,7 @@ import { useSwipeDismiss } from '../../hooks/useSwipeDismiss';
 import { useTheme } from '../../context/ThemeContext';
 import {
   CONFIDENCE_LABELS,
-  MONITORING_SECTION_LABELS,
   type DeliverablePacketBlock,
-  type MonitoringChecklistSectionKey,
 } from '../../types/deliverables';
 
 // =============================================================================
@@ -33,6 +31,8 @@ interface Props {
   block: DeliverablePacketBlock | null;
   /** From DeliverablePacket.protocol_version — packet-level, not block-level. */
   protocolVersion?: string | null;
+  /** Section labels for the mounted artifact type (drawer is artifact-agnostic). */
+  sectionLabels: Record<string, string>;
 }
 
 export function DeliverableTraceabilityDrawer({
@@ -40,6 +40,7 @@ export function DeliverableTraceabilityDrawer({
   onClose,
   block,
   protocolVersion = null,
+  sectionLabels,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
   const { theme } = useTheme();
@@ -53,9 +54,7 @@ export function DeliverableTraceabilityDrawer({
 
   if (!isOpen || !block) return null;
 
-  const sectionLabel =
-    MONITORING_SECTION_LABELS[block.section_key as MonitoringChecklistSectionKey] ??
-    block.section_key;
+  const sectionLabel = sectionLabels[block.section_key] ?? block.section_key;
 
   const hasAnyField =
     block.source_quote !== null ||

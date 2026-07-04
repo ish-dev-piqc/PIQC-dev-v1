@@ -8,12 +8,11 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
-import {
-  MONITORING_SECTION_LABELS,
-  type DeliverablePacket,
-  type DeliverablePacketBlock,
-  type DeliverablesResult,
-  type MonitoringChecklistSectionKey,
+import type {
+  DeliverableArtifactType,
+  DeliverablePacket,
+  DeliverablePacketBlock,
+  DeliverablesResult,
 } from '../../../../types/deliverables';
 import {
   fetchDeliverablePacket,
@@ -38,35 +37,68 @@ import {
 import { DeliverableTraceabilityDrawer } from '../../../deliverables/DeliverableTraceabilityDrawer';
 
 // =============================================================================
-// MonitoringChecklistPanel — the orchestrator for one protocol's monitoring
-// preparation checklist. This is where data flows: fetch/generate/mutate via
-// the src/lib/deliverables API layers, then hand the typed packet to the pure
-// components in src/components/deliverables (which never fetch).
+// DeliverablePanel — the orchestrator for one protocol's deliverable of a
+// given artifact type (monitoring prep checklist, risk overview, ...). This
+// is where data flows: fetch/generate/mutate via the src/lib/deliverables API
+// layers, then hand the typed packet to the pure components in
+// src/components/deliverables (which never fetch).
 //
 // State discipline:
-//   - fetchTokenRef guards rapid protocol switches (SiteDataContext pattern):
-//     only the latest fetch applies its result.
-//   - protocolIdRef guards mutation → refetch chains: a mutation that
-//     resolves after the user switched protocols must not trigger a stale
-//     refetch that could clobber the new protocol's packet.
+//   - fetchTokenRef guards rapid protocol/artifact switches (SiteDataContext
+//     pattern): only the latest fetch applies its result.
+//   - protocolIdRef + artifactTypeRef guard mutation → refetch chains: a
+//     mutation that resolves after the user switched protocols or artifact
+//     types must not trigger a stale refetch that could clobber the new
+//     selection's packet.
 //   - No optimistic updates anywhere — every mutation refetches the packet
 //     so the UI always shows the server's truth (VEW precedent).
+//
+// data-testids stay monitoring-checklist-* for BOTH artifact types — they are
+// panel-scoped (one panel mounts at a time) and existing piqc-review greps +
+// tests key off them; renaming buys nothing.
 //
 // SENSITIVE: block text, source quotes, and reviewer notes are never logged.
 // Draft-only vocabulary: PIQC drafted; humans review; nothing is "approved".
 // =============================================================================
 
-const ARTIFACT_TYPE = 'monitoring_prep_checklist' as const;
+/** Per-artifact copy — the panel's structure is identical across types; only
+ *  the prose differs. Keyed by artifactType (Decision 5: two real callers). */
+const DELIVERABLE_COPY: Record<
+  DeliverableArtifactType,
+  { noun: string; emptyBody: string }
+> = {
+  monitoring_prep_checklist: {
+    noun: 'checklist',
+    emptyBody:
+      'PIQC drafts a monitoring preparation checklist from the facts already ' +
+      'extracted from this protocol. Every protocol-fact item links back to ' +
+      'its source quote, page, and extraction confidence — and the whole ' +
+      'checklist stays a draft that requires human review.',
+  },
+  risk_overview: {
+    noun: 'risk overview',
+    emptyBody:
+      'PIQC drafts a protocol risk overview — explainable complexity factors ' +
+      'selected from the parsed protocol, every card traceable to its source. ' +
+      'No scores — factors in plain language.',
+  },
+};
 
 interface Props {
   protocolId: string;
+  artifactType: DeliverableArtifactType;
+  /** Artifact-specific section vocabulary, passed through to the block list. */
+  sectionOrder: readonly string[];
+  sectionLabels: Record<string, string>;
+  /** PDF export is checklist-only for now (plan Decision 4). */
+  exportEnabled: boolean;
 }
 
 /** Which text-input flow the DeliverableTextDrawer is currently serving. */
 type TextDrawerTarget =
   | { mode: 'edit'; block: DeliverablePacketBlock }
   | { mode: 'note'; block: DeliverablePacketBlock }
-  | { mode: 'add'; sectionKey: MonitoringChecklistSectionKey };
+  | { mode: 'add'; sectionKey: string };
 
 function formatTimestamp(iso: string): string {
   const d = new Date(iso);
@@ -78,9 +110,16 @@ function formatTimestamp(iso: string): string {
   })} ${d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-export default function MonitoringChecklistPanel({ protocolId }: Props) {
+export default function DeliverablePanel({
+  protocolId,
+  artifactType,
+  sectionOrder,
+  sectionLabels,
+  exportEnabled,
+}: Props) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
+  const copy = DELIVERABLE_COPY[artifactType];
 
   const [packet, setPacket] = useState<DeliverablePacket | null>(null);
   const [loading, setLoading] = useState(true);
@@ -94,19 +133,23 @@ export default function MonitoringChecklistPanel({ protocolId }: Props) {
   );
 
   // Monotonic token: only the latest fetch applies its result (copied from
-  // SiteDataContext — protects against rapid protocol switches).
+  // SiteDataContext — protects against rapid protocol/artifact switches).
   const fetchTokenRef = useRef(0);
 
-  // Current protocol, readable from stale closures: a mutation resolving
-  // after a protocol switch checks this before firing its refetch.
+  // Current selection, readable from stale closures: a mutation resolving
+  // after a protocol or artifact switch checks these before firing its
+  // refetch (same guard the checklist panel used for protocol switches,
+  // extended now that the artifact type can change while mounted).
   const protocolIdRef = useRef(protocolId);
+  const artifactTypeRef = useRef(artifactType);
   useEffect(() => {
     protocolIdRef.current = protocolId;
-  }, [protocolId]);
+    artifactTypeRef.current = artifactType;
+  }, [protocolId, artifactType]);
 
   const refresh = useCallback(async () => {
     const token = ++fetchTokenRef.current;
-    const result = await fetchDeliverablePacket(protocolId, ARTIFACT_TYPE);
+    const result = await fetchDeliverablePacket(protocolId, artifactType);
     if (token !== fetchTokenRef.current) return;
     if (!result.ok) {
       setLoadError(result.error);
@@ -116,9 +159,9 @@ export default function MonitoringChecklistPanel({ protocolId }: Props) {
       setPacket(result.data);
     }
     setLoading(false);
-  }, [protocolId]);
+  }, [protocolId, artifactType]);
 
-  // On mount + protocol switch: drop the previous protocol's packet and any
+  // On mount + protocol/artifact switch: drop the previous packet and any
   // transient UI (open drawers, banners) before fetching the new one.
   useEffect(() => {
     setPacket(null);
@@ -133,20 +176,20 @@ export default function MonitoringChecklistPanel({ protocolId }: Props) {
 
   // One-click row mutations: run the RPC, then refetch (no optimistic
   // updates). Failures surface in the action banner; a stale resolve (user
-  // switched protocols mid-flight) is dropped silently.
+  // switched protocols or artifact types mid-flight) is dropped silently.
   const runRowAction = useCallback(
     async (mutate: () => Promise<DeliverablesResult<unknown>>) => {
       const pid = protocolId;
       setActionError(null);
       const result = await mutate();
-      if (protocolIdRef.current !== pid) return;
+      if (protocolIdRef.current !== pid || artifactTypeRef.current !== artifactType) return;
       if (!result.ok) {
         setActionError(result.error);
         return;
       }
       await refresh();
     },
-    [protocolId, refresh],
+    [protocolId, artifactType, refresh],
   );
 
   const handleGenerate = async () => {
@@ -154,8 +197,10 @@ export default function MonitoringChecklistPanel({ protocolId }: Props) {
     const pid = protocolId;
     setGenerating(true);
     setActionError(null);
-    const result = await generateDeliverable(protocolId, ARTIFACT_TYPE);
-    if (protocolIdRef.current !== pid) return; // switch effect already reset UI
+    const result = await generateDeliverable(protocolId, artifactType);
+    if (protocolIdRef.current !== pid || artifactTypeRef.current !== artifactType) {
+      return; // switch effect already reset UI
+    }
     if (!result.ok) {
       setActionError(result.error);
       setGenerating(false);
@@ -188,7 +233,9 @@ export default function MonitoringChecklistPanel({ protocolId }: Props) {
 
     if (result.ok) {
       setTextDrawerTarget(null);
-      if (protocolIdRef.current === protocolId) await refresh();
+      if (protocolIdRef.current === protocolId && artifactTypeRef.current === artifactType) {
+        await refresh();
+      }
     }
     return result;
   };
@@ -201,7 +248,7 @@ export default function MonitoringChecklistPanel({ protocolId }: Props) {
     if (!textDrawerTarget) return null;
     if (textDrawerTarget.mode === 'add') {
       return {
-        title: MONITORING_SECTION_LABELS[textDrawerTarget.sectionKey],
+        title: sectionLabels[textDrawerTarget.sectionKey] ?? textDrawerTarget.sectionKey,
         initialText: '',
         driftFromText: null,
       };
@@ -220,7 +267,7 @@ export default function MonitoringChecklistPanel({ protocolId }: Props) {
       initialText: textDrawerTarget.block.display_text,
       driftFromText: textDrawerTarget.block.derived_text,
     };
-  }, [textDrawerTarget]);
+  }, [textDrawerTarget, sectionLabels]);
 
   const cardChrome = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
 
@@ -236,7 +283,7 @@ export default function MonitoringChecklistPanel({ protocolId }: Props) {
           className={isLight ? 'text-[#534AB7] animate-spin' : 'text-[#7F77DD] animate-spin'}
           aria-hidden
         />
-        <span className="text-fg-sub text-sm">Loading draft checklist…</span>
+        <span className="text-fg-sub text-sm">Loading draft {copy.noun}…</span>
       </div>
     );
   }
@@ -256,7 +303,9 @@ export default function MonitoringChecklistPanel({ protocolId }: Props) {
             aria-hidden
           />
           <div className="min-w-0 flex-1">
-            <p className="text-fg-body text-sm">Couldn't load the checklist: {loadError}</p>
+            <p className="text-fg-body text-sm">
+              Couldn't load the {copy.noun}: {loadError}
+            </p>
             <button
               type="button"
               onClick={() => {
@@ -287,13 +336,10 @@ export default function MonitoringChecklistPanel({ protocolId }: Props) {
       >
         <ClipboardList size={20} className="text-fg-muted mx-auto mb-3" aria-hidden />
         <h2 className="text-fg-heading text-sm font-semibold">
-          No draft checklist for this protocol yet
+          No draft {copy.noun} for this protocol yet
         </h2>
         <p className="text-fg-sub text-xs mt-2 leading-relaxed max-w-md mx-auto">
-          PIQC drafts a monitoring preparation checklist from the facts already
-          extracted from this protocol. Every protocol-fact item links back to
-          its source quote, page, and extraction confidence — and the whole
-          checklist stays a draft that requires human review.
+          {copy.emptyBody}
         </p>
         {actionError && (
           <p
@@ -301,7 +347,7 @@ export default function MonitoringChecklistPanel({ protocolId }: Props) {
             data-testid="monitoring-checklist-generate-error"
             className={`text-xs mt-3 ${isLight ? 'text-rose-700' : 'text-rose-400'}`}
           >
-            Couldn't generate the checklist: {actionError}
+            Couldn't generate the {copy.noun}: {actionError}
           </p>
         )}
         <button
@@ -324,7 +370,7 @@ export default function MonitoringChecklistPanel({ protocolId }: Props) {
           ) : (
             <ClipboardList size={12} aria-hidden />
           )}
-          {generating ? 'Drafting…' : 'Generate draft checklist'}
+          {generating ? 'Drafting…' : `Generate draft ${copy.noun}`}
         </button>
       </div>
     );
@@ -369,7 +415,7 @@ export default function MonitoringChecklistPanel({ protocolId }: Props) {
               type="button"
               onClick={() => void handleGenerate()}
               disabled={generating}
-              title="Redrafts the checklist from the protocol. Your edits, added items, and removed items are preserved."
+              title={`Redrafts the ${copy.noun} from the protocol. Your edits, added items, and removed items are preserved.`}
               data-testid="monitoring-checklist-regenerate"
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border ${
                 generating
@@ -386,7 +432,9 @@ export default function MonitoringChecklistPanel({ protocolId }: Props) {
               />
               {generating ? 'Regenerating…' : 'Regenerate'}
             </button>
-            <ExportChecklistButton deliverableId={packet.deliverable_id} isLight={isLight} />
+            {exportEnabled && (
+              <ExportChecklistButton deliverableId={packet.deliverable_id} isLight={isLight} />
+            )}
           </div>
         </div>
       </div>
@@ -410,6 +458,8 @@ export default function MonitoringChecklistPanel({ protocolId }: Props) {
       {/* Sectioned block list — pure component; every mutation round-trips */}
       <DeliverableBlockList
         blocks={packet.blocks}
+        sectionOrder={sectionOrder}
+        sectionLabels={sectionLabels}
         onMarkReviewed={(b) => void runRowAction(() => markBlockReviewed(b.id))}
         onUnmarkReviewed={(b) => void runRowAction(() => unmarkBlockReviewed(b.id))}
         onFlag={(b) => void runRowAction(() => flagBlock(b.id))}
@@ -434,6 +484,7 @@ export default function MonitoringChecklistPanel({ protocolId }: Props) {
         onClose={() => setTraceabilityBlock(null)}
         block={traceabilityBlock}
         protocolVersion={packet.protocol_version}
+        sectionLabels={sectionLabels}
       />
     </div>
   );
