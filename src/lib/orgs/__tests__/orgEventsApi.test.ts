@@ -16,47 +16,39 @@ const eqMock = vi.fn();
 const selectMock = vi.fn();
 const fromMock = vi.fn();
 
-// Each chained call returns the same builder so we can re-use the
-// same vi.fn for assertions. The terminal call (`limit`) is awaited
-// in the API, so it returns a promise of { data, error }.
-function setBuilderResolution(value: { data: unknown[] | null; error: unknown }) {
-  limitMock.mockResolvedValue(value);
+// Mirrors supabase-js's PostgrestFilterBuilder: every chained call records
+// its args and returns the same thenable builder, so the API can chain in
+// any order (including `.limit()` before `.lt()`) and `await q` resolves to
+// the configured { data, error }.
+type BuilderResolution = { data: unknown[] | null; error: unknown };
+
+let builderResolution: BuilderResolution = { data: [], error: null };
+function setBuilderResolution(value: BuilderResolution) {
+  builderResolution = value;
+}
+
+interface BuilderMock extends PromiseLike<BuilderResolution> {
+  select: (...a: unknown[]) => BuilderMock;
+  eq: (...a: unknown[]) => BuilderMock;
+  order: (...a: unknown[]) => BuilderMock;
+  limit: (...a: unknown[]) => BuilderMock;
+  lt: (...a: unknown[]) => BuilderMock;
 }
 
 vi.mock('../../supabase', () => ({
   supabase: {
     from: (...args: unknown[]) => {
       fromMock(...args);
-      return {
-        select: (...a: unknown[]) => {
-          selectMock(...a);
-          return {
-            eq: (...a2: unknown[]) => {
-              eqMock(...a2);
-              return {
-                order: (...a3: unknown[]) => {
-                  orderMock(...a3);
-                  return {
-                    limit: (...a4: unknown[]) => {
-                      limitMock(...a4);
-                      return limitMock.mock.results[limitMock.mock.results.length - 1].value;
-                    },
-                    lt: (...a4: unknown[]) => {
-                      ltMock(...a4);
-                      return {
-                        limit: (...a5: unknown[]) => {
-                          limitMock(...a5);
-                          return limitMock.mock.results[limitMock.mock.results.length - 1].value;
-                        },
-                      };
-                    },
-                  };
-                },
-              };
-            },
-          };
-        },
+      const builder: BuilderMock = {
+        select: (...a: unknown[]) => { selectMock(...a); return builder; },
+        eq: (...a: unknown[]) => { eqMock(...a); return builder; },
+        order: (...a: unknown[]) => { orderMock(...a); return builder; },
+        limit: (...a: unknown[]) => { limitMock(...a); return builder; },
+        lt: (...a: unknown[]) => { ltMock(...a); return builder; },
+        then: (onfulfilled, onrejected) =>
+          Promise.resolve(builderResolution).then(onfulfilled, onrejected),
       };
+      return builder;
     },
   },
 }));

@@ -13,8 +13,27 @@ describe('orgMessagesAdapter', () => {
       author_user_id: 'user-1',
       body: 'hello team',
       created_at: '2026-06-01T12:00:00.000Z',
+      edited_at: '2026-06-01T12:05:00.000Z',
+      deleted_at: null,
+      parent_message_id: 'msg-0',
     };
     expect(adaptOrgMessage(row)).toEqual(row);
+  });
+
+  it('defaults edited_at / deleted_at / parent_message_id to null on legacy rows', () => {
+    const legacy: OrgMessageRow = {
+      id: 'msg-1',
+      org_id: 'org-1',
+      author_user_id: 'user-1',
+      body: 'hello team',
+      created_at: '2026-06-01T12:00:00.000Z',
+    };
+    expect(adaptOrgMessage(legacy)).toEqual({
+      ...legacy,
+      edited_at: null,
+      deleted_at: null,
+      parent_message_id: null,
+    });
   });
 
   it('preserves null author_user_id (deleted user case)', () => {

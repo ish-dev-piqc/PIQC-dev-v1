@@ -84,8 +84,9 @@ export async function requestAuditChat(
       res.status,
     );
   }
-  if (!data.reply) {
+  const reply = data.reply?.trim();
+  if (!reply) {
     throw new AuditChatError('Chat service returned empty reply', 502);
   }
-  return data.reply;
+  return reply;
 }

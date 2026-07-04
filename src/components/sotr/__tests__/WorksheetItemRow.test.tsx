@@ -23,14 +23,19 @@ function makeItem(overrides: Partial<ExtractedItemRecord> = {}): ExtractedItemRe
 }
 
 describe('WorksheetItemRow', () => {
-  it('renders extracted value, confidence badge, and reason', () => {
-    render(<WorksheetItemRow item={makeItem()} onViewSource={() => {}} />);
+  it('renders extracted value, review-status badge, and reason', () => {
+    render(
+      <WorksheetItemRow
+        item={makeItem({ review_status: 'accepted_for_draft' })}
+        onViewSource={() => {}}
+      />,
+    );
 
     expect(screen.getByTestId('sotr-worksheet-item-value'))
       .toHaveTextContent('Change in PANSS score at week 24');
 
-    const badge = screen.getByTestId('sotr-confidence-badge');
-    expect(badge).toHaveTextContent('High');
+    const badge = screen.getByTestId('sotr-review-status-badge');
+    expect(badge).toHaveTextContent('Accepted for Draft');
 
     expect(screen.getByTestId('sotr-worksheet-item-reason'))
       .toHaveTextContent(/Section 7\.2/);

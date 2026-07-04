@@ -17,6 +17,7 @@ const baseOrgRow: ChatAttachmentRow = {
   original_filename: 'protocol-amendment.pdf',
   uploaded_by_user_id: 'user-1',
   created_at: '2026-06-04T12:00:00Z',
+  pinned_at: '2026-06-05T09:00:00Z',
 };
 
 describe('chatAttachmentsAdapter', () => {
@@ -35,6 +36,12 @@ describe('chatAttachmentsAdapter', () => {
     };
     expect(adaptChatAttachment(row).protocol_id).toBe('proto-1');
     expect(adaptChatAttachment(row).protocol_message_id).toBe('pmsg-1');
+  });
+
+  it('defaults pinned_at to null when the column is absent (legacy select)', () => {
+    const legacy: ChatAttachmentRow = { ...baseOrgRow };
+    delete legacy.pinned_at;
+    expect(adaptChatAttachment(legacy).pinned_at).toBeNull();
   });
 
   it('preserves null uploader (auth.users deletion)', () => {
