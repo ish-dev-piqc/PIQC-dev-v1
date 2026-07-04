@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: audit-investigator-foundation
-status: in-review
+status: merged
 started: 2026-07-03
 target_pr:
 ---

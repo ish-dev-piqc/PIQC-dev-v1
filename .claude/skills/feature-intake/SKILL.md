@@ -29,11 +29,32 @@ Everything else: run the intake.
 
 4. **Detect overlap across all devs.** Plan MDs live on feature branches, not just main, so you must scan the whole repo:
    1. `git fetch --all --prune` — pull every dev's latest branches.
-   2. List candidate branches: `git for-each-ref --format='%(refname:short)' refs/remotes/origin/ | grep -v 'origin/HEAD\|origin/main'`.
-   3. For each branch, list its plan files: `git ls-tree -r <branch> --name-only -- 'plans/*/*.md' | grep -v '/_archive/'`.
-   4. For each plan file, read it with `git show <branch>:<path>` and check the frontmatter — count it if `status` is `active` or `in-review`.
-   5. Also include any plan files in your local working tree with the same statuses (in case the dev hasn't pushed yet).
-   6. For every active/in-review plan you find, read its Scope section. If any file in your impact list appears in another dev's Scope, flag a conflict — name the dev, branch, plan path, and file.
+   2. Run the batched scan below as ONE shell command (not per-branch tool calls). It skips `origin/archive/*` (bot snapshots from archive-plan-on-merge.yml — their plans are always already on main) and, for branch copies, skips any plan identical to main's copy so a stale branch can't resurrect a plan main has since archived:
+
+      ```bash
+      # NB: git ls-tree does NOT wildcard-match 'plans/*/*.md' — pass the
+      # directory and filter with grep.
+      plan_files() { git ls-tree -r "$1" --name-only -- plans/ \
+        | grep -E '^plans/[^/]+/[^/]+\.md$' \
+        | grep -vE '/_archive/|_template\.md|README\.md'; }
+      { plan_files origin/main | while read -r f; do
+          printf 'origin/main %s %s\n' "$f" "$(git show "origin/main:$f" 2>/dev/null | awk '/^status:/{print $2; exit}')"
+        done
+        git for-each-ref --format='%(refname:short)' refs/remotes/origin/ \
+          | grep -v 'origin/HEAD\|origin/main$\|origin/archive/' \
+          | while read -r b; do
+            plan_files "$b" | while read -r f; do
+              main_blob=$(git rev-parse -q --verify "origin/main:$f" 2>/dev/null || true)
+              branch_blob=$(git rev-parse -q --verify "$b:$f")
+              [ "$main_blob" = "$branch_blob" ] && continue
+              printf '%s %s %s\n' "$b" "$f" "$(git show "$b:$f" 2>/dev/null | awk '/^status:/{print $2; exit}')"
+            done
+          done
+      } | awk '$3=="active" || $3=="in-review"'
+      ```
+
+   3. Also include any plan files in your local working tree with the same statuses (in case the dev hasn't pushed yet).
+   4. For every active/in-review plan the scan emits, read its Scope section (`git show <branch>:<path>`). If any file in your impact list appears in another dev's Scope, flag a conflict — name the dev, branch, plan path, and file.
 
 5. **Post a heads-up to the dev**, formatted like this:
 

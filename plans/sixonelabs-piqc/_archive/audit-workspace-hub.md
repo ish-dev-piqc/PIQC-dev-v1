@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: audit-workspace-hub
-status: in-review
+status: merged
 started: 2026-07-02
 target_pr:
 ---

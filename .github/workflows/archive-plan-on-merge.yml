@@ -96,4 +96,8 @@ jobs:
             --body "Auto-archive of \`${PLAN}\` after #${PR_NUM} merged. Safe to squash-merge — no review needed (docs-only)." \
             --base main \
             --head "$branch"
-          gh pr merge --squash --auto || echo "::notice::Auto-merge not enabled on this repo. Merge the followup PR manually."
+          # --delete-branch: without it every merged PR leaks a permanent
+          # archive/pr-N branch (47 accumulated by 2026-07-03), and each
+          # leaked branch is a full-tree snapshot that pollutes
+          # feature-intake's cross-branch overlap scan.
+          gh pr merge --squash --auto --delete-branch || echo "::notice::Auto-merge not enabled on this repo (Settings → General → 'Allow auto-merge'). Merge the followup PR manually."

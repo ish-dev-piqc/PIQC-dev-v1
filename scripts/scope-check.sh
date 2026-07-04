@@ -63,24 +63,32 @@ if [ -z "$plan_dir" ]; then
   exit 0
 fi
 
-active_plan=""
+# Union the Scope of ALL active and in-review plans in the dev's folder.
+# Previously only the alphabetically-first `active` plan was consulted, so a
+# dev with two features in flight (or one waiting on review) was checked
+# against the wrong scope. In-review counts: review-fix edits are legitimate
+# against a locked scope.
+active_plans=""
+scope_patterns=""
 for p in "$plan_dir"/*.md; do
   [ -f "$p" ] || continue
-  if grep -qE '^status: active$' "$p" 2>/dev/null; then
-    active_plan="$p"
-    break
+  if grep -qE '^status: (active|in-review)$' "$p" 2>/dev/null; then
+    active_plans="${active_plans}${active_plans:+, }${p#$repo_root/}"
+    # Scope bullets: take only the first whitespace-delimited token (after
+    # stripping backticks) — plans annotate bullets with trailing prose like
+    # `src/foo.ts (NEW — reason)`, which must not poison the glob.
+    pats=$(awk '
+      /^## Scope/      { in_scope=1; next }
+      /^## /            { in_scope=0 }
+      in_scope && /^- / { sub(/^- */, ""); gsub(/`/, ""); print $1 }
+    ' "$p")
+    scope_patterns="${scope_patterns}
+${pats}"
   fi
 done
 
-# No active plan → nothing to enforce against
-[ -z "$active_plan" ] && exit 0
-
-# Extract Scope section bullets
-scope_patterns=$(awk '
-  /^## Scope/      { in_scope=1; next }
-  /^## /            { in_scope=0 }
-  in_scope && /^- / { sub(/^- */, ""); gsub(/`/, ""); print }
-' "$active_plan")
+# No active/in-review plan → nothing to enforce against
+[ -z "$active_plans" ] && exit 0
 
 in_scope=0
 while IFS= read -r raw; do
@@ -100,13 +108,12 @@ if [ "$in_scope" -eq 1 ]; then
   exit 0
 fi
 
-plan_rel="${active_plan#$repo_root/}"
 {
   echo "scope-check BLOCK: ${rel_path}"
-  echo "Not in the Scope of ${plan_rel}."
+  echo "Not in the Scope of any active/in-review plan (checked: ${active_plans})."
   echo ""
   echo "Options:"
-  echo "  (a) Add ${rel_path} to the plan's Scope (notify the codeowner if outside your ownership)."
+  echo "  (a) Add ${rel_path} to your plan's Scope (notify the codeowner if outside your ownership)."
   echo "  (b) Finish the current scope first."
   echo "  (c) Hand this off to the codeowner."
 } >&2

@@ -1,3 +1,9 @@
+---
+owner: sixonelabs-piqc
+feature: signal-resolution
+status: merged
+---
+
 # Signal Resolution - Visit Execution Sprint 4C
 
 ## Overview
