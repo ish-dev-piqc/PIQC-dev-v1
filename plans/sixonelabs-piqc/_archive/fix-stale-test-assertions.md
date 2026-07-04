@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: fix-stale-test-assertions
-status: in-review
+status: merged
+merged: 2026-07-04
 started: 2026-07-03
-target_pr:
+target_pr: #406
 ---
 
 # Fix 10 stale test assertions that drifted from implementation
