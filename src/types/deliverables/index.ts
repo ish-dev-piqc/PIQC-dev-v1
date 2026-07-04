@@ -20,9 +20,14 @@
 // Enums (mirror Postgres enums exactly)
 // -----------------------------------------------------------------------------
 
-/** Mirror of deliverable_artifact_type. One value in Phase 1; future kinds
- *  (siv_package, risk_overview, ...) extend the enum — never fork tables. */
-export type DeliverableArtifactType = 'monitoring_prep_checklist';
+/** Mirror of deliverable_artifact_type. Future kinds (siv_package, ...)
+ *  extend the enum — never fork tables. */
+export type DeliverableArtifactType = 'monitoring_prep_checklist' | 'risk_overview';
+
+export const ARTIFACT_TYPE_LABELS: Record<DeliverableArtifactType, string> = {
+  monitoring_prep_checklist: 'Monitoring Prep Checklist',
+  risk_overview: 'Risk Overview',
+};
 
 /**
  * Mirror of deliverable_content_origin — the 3-way taxonomy. Never blurred:
@@ -128,6 +133,38 @@ export const MONITORING_SECTION_LABELS: Record<MonitoringChecklistSectionKey, st
   source_doc_focus: 'Source Documentation Focus Areas',
   amendment_sensitive: 'Amendment-Sensitive Requirements',
   site_questions: 'Site Questions to Consider',
+};
+
+// -----------------------------------------------------------------------------
+// Risk Overview — section vocabulary (handover §6.1-A: explainable
+// complexity factors, never opaque risk scores)
+// -----------------------------------------------------------------------------
+
+export type RiskOverviewSectionKey =
+  | 'eligibility_complexity'
+  | 'visit_window_pressure'
+  | 'endpoint_critical_procedures'
+  | 'vendor_lab_imaging_dependencies'
+  | 'coordination_burden'
+  | 'amendment_sensitivity';
+
+/** Stable render order for risk-overview sections. */
+export const RISK_SECTION_ORDER: readonly RiskOverviewSectionKey[] = [
+  'eligibility_complexity',
+  'visit_window_pressure',
+  'endpoint_critical_procedures',
+  'vendor_lab_imaging_dependencies',
+  'coordination_burden',
+  'amendment_sensitivity',
+];
+
+export const RISK_SECTION_LABELS: Record<RiskOverviewSectionKey, string> = {
+  eligibility_complexity: 'Eligibility Complexity',
+  visit_window_pressure: 'Visit Window Pressure',
+  endpoint_critical_procedures: 'Endpoint-Critical Procedures',
+  vendor_lab_imaging_dependencies: 'Vendor, Lab & Imaging Dependencies',
+  coordination_burden: 'Coordination Burden',
+  amendment_sensitivity: 'Amendment Sensitivity',
 };
 
 // -----------------------------------------------------------------------------
@@ -315,11 +352,14 @@ export function displayTextForBlock(
   return block.current_text ?? block.derived_text ?? '';
 }
 
-/** Group packet blocks by section, preserving MONITORING_SECTION_ORDER and
- *  hiding empty sections (mirrors the VEW phase-grouping discipline). */
-export function groupBlocksBySection(
+/** Group packet blocks by section in the given order, hiding empty sections
+ *  (mirrors the VEW phase-grouping discipline). Generic over the section-key
+ *  vocabulary — pass MONITORING_SECTION_ORDER or RISK_SECTION_ORDER; each
+ *  artifact type owns its own order + labels. */
+export function groupBlocksBySection<K extends string>(
   blocks: DeliverablePacketBlock[],
-): Array<{ sectionKey: MonitoringChecklistSectionKey; blocks: DeliverablePacketBlock[] }> {
+  order: readonly K[],
+): Array<{ sectionKey: K; blocks: DeliverablePacketBlock[] }> {
   const bySection = new Map<string, DeliverablePacketBlock[]>();
   for (const block of blocks) {
     const list = bySection.get(block.section_key);
@@ -329,11 +369,8 @@ export function groupBlocksBySection(
       bySection.set(block.section_key, [block]);
     }
   }
-  const grouped: Array<{
-    sectionKey: MonitoringChecklistSectionKey;
-    blocks: DeliverablePacketBlock[];
-  }> = [];
-  for (const sectionKey of MONITORING_SECTION_ORDER) {
+  const grouped: Array<{ sectionKey: K; blocks: DeliverablePacketBlock[] }> = [];
+  for (const sectionKey of order) {
     const sectionBlocks = bySection.get(sectionKey);
     if (sectionBlocks && sectionBlocks.length > 0) {
       grouped.push({
