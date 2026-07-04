@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: audit-investigator-foundation
-status: in-review
+status: merged
+merged: 2026-07-04
 started: 2026-07-03
-target_pr:
+target_pr: #404
 ---
 
 # Investigator Site Audit — Phase 1 foundation scaffold
