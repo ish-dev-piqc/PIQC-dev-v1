@@ -64,10 +64,12 @@ const MAX_RESPONSE_TEXT_CHARS     = 500;
 const MAX_SOTR_ITEMS              = 15;
 const MAX_SOTR_TEXT_CHARS         = 600;
 
-// Allow-list for viewed_stage. Mirrors AUDIT_STAGES in src/types/audit.ts;
-// kept inline rather than imported so this Deno function has no app-side
-// coupling. Unknown values are rejected (400) rather than silently dropped,
-// matching the section discriminator pattern from audit-summary.
+// Allow-list for viewed_stage. Mirrors the full audit_stage union in
+// src/types/audit/enums.ts — both the vendor pipeline and the Investigator
+// Site Audit (ISA_*) pipeline, since the shell forwards viewedStage for every
+// workflow. Kept inline rather than imported so this Deno function has no
+// app-side coupling. Unknown values are rejected (400) rather than silently
+// dropped, matching the section discriminator pattern from audit-summary.
 const VALID_VIEWED_STAGES = new Set([
   "INTAKE",
   "VENDOR_ENRICHMENT",
@@ -77,6 +79,13 @@ const VALID_VIEWED_STAGES = new Set([
   "AUDIT_CONDUCT",
   "REPORT_DRAFTING",
   "FINAL_REVIEW_EXPORT",
+  "ISA_SITE_INTAKE",
+  "ISA_RISK_ASSESSMENT",
+  "ISA_SCOPE_BUILDER",
+  "ISA_PREP",
+  "ISA_CONDUCT",
+  "ISA_REPORT",
+  "ISA_EXPORT",
 ]);
 
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();

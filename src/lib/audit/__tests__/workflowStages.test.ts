@@ -23,13 +23,29 @@ describe('stagesForWorkflow', () => {
     expect(stagesForWorkflow('VENDOR_AUDIT')).toEqual([...AUDIT_STAGES]);
   });
 
-  it('INVESTIGATOR_SITE_AUDIT has no stages yet (deferred initiative)', () => {
-    expect(stagesForWorkflow('INVESTIGATOR_SITE_AUDIT')).toEqual([]);
+  it('INVESTIGATOR_SITE_AUDIT returns the 7-stage ISA pipeline in order', () => {
+    expect(stagesForWorkflow('INVESTIGATOR_SITE_AUDIT')).toEqual([
+      'ISA_SITE_INTAKE',
+      'ISA_RISK_ASSESSMENT',
+      'ISA_SCOPE_BUILDER',
+      'ISA_PREP',
+      'ISA_CONDUCT',
+      'ISA_REPORT',
+      'ISA_EXPORT',
+    ]);
   });
 
-  it('resolves a stage list for every declared workflow type', () => {
+  it('the two workflows share no stage (dispatch stays isolated)', () => {
+    const vendor = new Set(stagesForWorkflow('VENDOR_AUDIT'));
+    const investigator = stagesForWorkflow('INVESTIGATOR_SITE_AUDIT');
+    for (const stage of investigator) {
+      expect(vendor.has(stage)).toBe(false);
+    }
+  });
+
+  it('resolves a non-empty stage list for every declared workflow type', () => {
     for (const wf of AUDIT_WORKFLOW_TYPES) {
-      expect(Array.isArray(stagesForWorkflow(wf))).toBe(true);
+      expect(stagesForWorkflow(wf).length).toBeGreaterThan(0);
     }
   });
 });

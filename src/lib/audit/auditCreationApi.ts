@@ -3,6 +3,7 @@ import type {
   AuditStage,
   AuditStatus,
   AuditType,
+  AuditWorkflowType,
   ClinicalTrialPhase,
 } from '../../types/audit';
 
@@ -31,6 +32,14 @@ export interface VendorRow {
   website: string | null;
 }
 
+export interface SiteRow {
+  id: string;
+  name: string;
+  site_number: string | null;
+  principal_investigator: string | null;
+  country: string;
+}
+
 export interface AuditorProtocolRow {
   id: string;                          // protocols.id
   study_number: string | null;
@@ -52,9 +61,11 @@ export interface AuditRow {
   id: string;
   audit_name: string;
   audit_type: AuditType;
+  workflow_type: AuditWorkflowType;
   status: AuditStatus;
   current_stage: AuditStage;
-  vendor_id: string;
+  vendor_id: string | null;
+  site_id: string | null;
   protocol_id: string;
   protocol_version_id: string;
   scheduled_date: string | null;
@@ -94,6 +105,44 @@ export async function createVendor(input: {
     return null;
   }
   return data as VendorRow;
+}
+
+// -----------------------------------------------------------------------------
+// Site reads + creates (investigator site audit auditee)
+//
+// Mirrors the vendor functions above. Sites are a shared namespace (SELECT-only
+// RLS); creation goes through the SECURITY DEFINER audit_mode_create_site RPC.
+// -----------------------------------------------------------------------------
+
+export async function listSites(): Promise<SiteRow[]> {
+  const { data, error } = await supabase
+    .from('sites')
+    .select('id, name, site_number, principal_investigator, country')
+    .order('name', { ascending: true });
+  if (error) {
+    console.error('[auditCreationApi] listSites error:', error);
+    return [];
+  }
+  return (data ?? []) as SiteRow[];
+}
+
+export async function createSite(input: {
+  name: string;
+  country: string;
+  siteNumber?: string;
+  principalInvestigator?: string;
+}): Promise<SiteRow | null> {
+  const { data, error } = await supabase.rpc('audit_mode_create_site', {
+    p_name: input.name,
+    p_country: input.country,
+    p_site_number: input.siteNumber ?? null,
+    p_principal_investigator: input.principalInvestigator ?? null,
+  });
+  if (error) {
+    console.error('[auditCreationApi] createSite error:', error);
+    return null;
+  }
+  return data as SiteRow;
 }
 
 // -----------------------------------------------------------------------------
@@ -270,19 +319,26 @@ export async function createProtocolFromDocument(input: {
 // Audit creation
 // -----------------------------------------------------------------------------
 
+// Creates an audit for either workflow. Vendor audits pass vendorId; investigator
+// site audits pass siteId. The RPC enforces the auditee/workflow pairing and lands
+// the audit at the workflow's first stage (INTAKE vs ISA_SITE_INTAKE).
 export async function createAudit(input: {
   auditName: string;
-  vendorId: string;
+  workflowType: AuditWorkflowType;
+  vendorId?: string | null;
+  siteId?: string | null;
   protocolVersionId: string;
   auditType: AuditType;
   scheduledDate?: string | null;
 }): Promise<AuditRow | null> {
   const { data, error } = await supabase.rpc('audit_mode_create_audit', {
     p_audit_name: input.auditName,
-    p_vendor_id: input.vendorId,
+    p_vendor_id: input.vendorId ?? null,
     p_protocol_version_id: input.protocolVersionId,
     p_audit_type: input.auditType,
     p_scheduled_date: input.scheduledDate ?? null,
+    p_workflow_type: input.workflowType,
+    p_site_id: input.siteId ?? null,
   });
   if (error) {
     console.error('[auditCreationApi] createAudit error:', error);

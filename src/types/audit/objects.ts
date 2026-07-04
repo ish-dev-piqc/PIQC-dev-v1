@@ -65,6 +65,18 @@ export interface Vendor {
   updated_at: string;
 }
 
+// Investigator Site Audit auditee — mirrors Vendor (shared namespace).
+// 1:1 with the `sites` table (20260709000000).
+export interface Site {
+  id: string;
+  name: string;
+  site_number: string | null;
+  principal_investigator: string | null;
+  country: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Protocol {
   id: string;
   study_number: string | null;
@@ -164,7 +176,10 @@ export interface QuestionnaireQuestion {
 // -----------------------------------------------------------------------------
 export interface Audit {
   id: string;
-  vendor_id: string;
+  // Auditee FKs are workflow-exclusive (audits_auditee_matches_workflow CHECK):
+  // vendor audits carry vendor_id, investigator site audits carry site_id.
+  vendor_id: string | null;
+  site_id: string | null;
   protocol_id: string;
   protocol_version_id: string;
   audit_name: string;

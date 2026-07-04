@@ -6,15 +6,18 @@ import { useOverlay } from '../../../../hooks/useOverlay';
 import {
   listVendors,
   createVendor,
+  listSites,
+  createSite,
   listAuditorProtocolLibrary,
   uploadProtocolPdf,
   createProtocolFromDocument,
   createAudit,
   type VendorRow,
+  type SiteRow,
   type AuditorProtocolRow,
 } from '../../../../lib/audit/auditCreationApi';
 import { AUDIT_TYPE_LABELS, AUDIT_WORKFLOW_TYPE_LABELS } from '../../../../lib/audit/labels';
-import type { AuditType, ClinicalTrialPhase } from '../../../../types/audit';
+import type { AuditType, AuditWorkflowType, ClinicalTrialPhase } from '../../../../types/audit';
 
 // =============================================================================
 // NewAuditDrawer — Audit Mode onramp (F-1).
@@ -61,14 +64,23 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
   // Form state
   // ---------------------------------------------------------------------------
   const [auditName, setAuditName] = useState('');
+  const [workflowType, setWorkflowType] = useState<AuditWorkflowType>('VENDOR_AUDIT');
   const [auditType, setAuditType] = useState<AuditType>('REMOTE');
   const [scheduledDate, setScheduledDate] = useState<string>('');
 
-  // Vendors
+  // Vendors (VENDOR_AUDIT auditee)
   const [vendors, setVendors] = useState<VendorRow[]>([]);
   const [vendorId, setVendorId] = useState<string>('');
   const [addingVendor, setAddingVendor] = useState(false);
   const [newVendor, setNewVendor] = useState({ name: '', country: '', website: '' });
+  const [vendorError, setVendorError] = useState<string | null>(null);
+
+  // Sites (INVESTIGATOR_SITE_AUDIT auditee)
+  const [sites, setSites] = useState<SiteRow[]>([]);
+  const [siteId, setSiteId] = useState<string>('');
+  const [addingSite, setAddingSite] = useState(false);
+  const [newSite, setNewSite] = useState({ name: '', country: '', siteNumber: '', principalInvestigator: '' });
+  const [siteError, setSiteError] = useState<string | null>(null);
 
   // Protocols
   const [protocols, setProtocols] = useState<AuditorProtocolRow[]>([]);
@@ -98,8 +110,13 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
   // ---------------------------------------------------------------------------
   useEffect(() => {
     void (async () => {
-      const [v, p] = await Promise.all([listVendors(), listAuditorProtocolLibrary()]);
+      const [v, s, p] = await Promise.all([
+        listVendors(),
+        listSites(),
+        listAuditorProtocolLibrary(),
+      ]);
       setVendors(v);
+      setSites(s);
       setProtocols(p);
       // If the auditor has no library yet, default to upload mode.
       if (p.length === 0) setProtocolMode('upload');
@@ -134,7 +151,8 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
   // ---------------------------------------------------------------------------
   const canSubmit = (() => {
     if (!auditName.trim()) return false;
-    if (!vendorId) return false;
+    if (workflowType === 'VENDOR_AUDIT' && !vendorId) return false;
+    if (workflowType === 'INVESTIGATOR_SITE_AUDIT' && !siteId) return false;
     if (protocolMode === 'existing' && !protocolVersionId) return false;
     if (protocolMode === 'upload') {
       if (!pdfFile) return false;
@@ -181,7 +199,9 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
       setProgressStep('Creating audit…');
       const audit = await createAudit({
         auditName: auditName.trim(),
-        vendorId,
+        workflowType,
+        vendorId: workflowType === 'VENDOR_AUDIT' ? vendorId : null,
+        siteId: workflowType === 'INVESTIGATOR_SITE_AUDIT' ? siteId : null,
         protocolVersionId: versionId,
         auditType,
         scheduledDate: scheduledDate || null,
@@ -205,6 +225,7 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
 
   const handleAddVendor = async () => {
     if (!newVendor.name.trim() || !newVendor.country.trim()) return;
+    setVendorError(null);
     const created = await createVendor({
       name: newVendor.name,
       country: newVendor.country,
@@ -215,6 +236,31 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
       setVendorId(created.id);
       setAddingVendor(false);
       setNewVendor({ name: '', country: '', website: '' });
+    } else {
+      // createVendor degrades to null on failure (console.error'd in the API
+      // layer) — surface one visible signal instead of silently doing nothing.
+      setVendorError('Could not save the vendor. Try again.');
+    }
+  };
+
+  const handleAddSite = async () => {
+    if (!newSite.name.trim() || !newSite.country.trim()) return;
+    setSiteError(null);
+    const created = await createSite({
+      name: newSite.name,
+      country: newSite.country,
+      siteNumber: newSite.siteNumber || undefined,
+      principalInvestigator: newSite.principalInvestigator || undefined,
+    });
+    if (created) {
+      setSites((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+      setSiteId(created.id);
+      setAddingSite(false);
+      setNewSite({ name: '', country: '', siteNumber: '', principalInvestigator: '' });
+    } else {
+      // createSite degrades to null on failure (console.error'd in the API
+      // layer) — surface one visible signal instead of silently doing nothing.
+      setSiteError('Could not save the site. Try again.');
     }
   };
 
@@ -275,66 +321,33 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
 
         <div className="px-5 py-5 space-y-6">
           {/* ----- Audit workflow -----
-              VENDOR_AUDIT is the only live workflow, so the vendor card renders
-              statically selected (no state — nothing to choose yet) and nothing
-              is passed to createAudit: audits.workflow_type defaults server-side
-              (docs/audit/two-workflow-architecture.md). When the investigator
-              workflow ships, this becomes a real radio pair with state that
-              feeds the create RPC. */}
+              Both workflows are live. The choice drives which auditee field
+              renders below (vendor vs site) and is passed to createAudit, which
+              lands the audit at the workflow's first stage. */}
           <Field label="Audit workflow" labelColor={labelColor}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Audit workflow">
-              <div
-                role="radio"
-                aria-checked="true"
-                className={`text-left rounded-md border px-3 py-2.5 ${
-                  isLight
-                    ? 'bg-brand-600/10 border-brand-600'
-                    : 'bg-brand-600/15 border-brand-300'
-                }`}
-              >
-                <span className={`flex items-center gap-1.5 text-xs font-semibold ${
-                  isLight ? 'text-brand-600' : 'text-brand-300'
-                }`}>
-                  <Building2 size={12} />
-                  {AUDIT_WORKFLOW_TYPE_LABELS.VENDOR_AUDIT}
-                </span>
-                <span className={`block text-[11px] mt-0.5 ${subColor}`}>
-                  Audit a vendor — CRO, lab, ePRO, IRT — against a protocol.
-                </span>
-              </div>
-              {/* Investigator site audits initiate from this same workspace once
-                  that workflow ships. Disabled, not hidden — the choice is part
-                  of the product's shape, not a hidden roadmap item. */}
-              <button
-                type="button"
-                role="radio"
-                aria-checked={false}
-                disabled
-                aria-disabled="true"
-                title="Investigator site audits are coming soon"
-                className={`text-left rounded-md border px-3 py-2.5 cursor-not-allowed ${
-                  isLight
-                    ? 'bg-[#F8FAFC] border-[#E2E8F0]'
-                    : 'bg-white/[0.02] border-white/10'
-                }`}
-              >
-                <span className={`flex items-center gap-1.5 text-xs font-semibold ${
-                  isLight ? 'text-[#334155]/45' : 'text-[#CBD5E1]/40'
-                }`}>
-                  <Stethoscope size={12} />
-                  {AUDIT_WORKFLOW_TYPE_LABELS.INVESTIGATOR_SITE_AUDIT}
-                  <span className={`ml-auto inline-flex items-center text-[9px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded border ${
-                    isLight
-                      ? 'bg-white border-[#E2E8F0] text-[#334155]/50'
-                      : 'bg-white/[0.04] border-white/10 text-[#CBD5E1]/45'
-                  }`}>
-                    Coming soon
-                  </span>
-                </span>
-                <span className={`block text-[11px] mt-0.5 ${isLight ? 'text-[#334155]/40' : 'text-[#CBD5E1]/35'}`}>
-                  Audit an investigator site — protocol compliance, ICF, source data.
-                </span>
-              </button>
+            {/* Toggle-button pair (aria-pressed), not a radiogroup — matches the
+                house pattern for the Audit-type chips and the hub's workflow
+                filter, and avoids promising arrow-key radio semantics the
+                buttons don't implement. */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <WorkflowCard
+                icon={Building2}
+                title={AUDIT_WORKFLOW_TYPE_LABELS.VENDOR_AUDIT}
+                description="Audit a vendor — CRO, lab, ePRO, IRT — against a protocol."
+                selected={workflowType === 'VENDOR_AUDIT'}
+                onSelect={() => setWorkflowType('VENDOR_AUDIT')}
+                isLight={isLight}
+                disabled={submitting}
+              />
+              <WorkflowCard
+                icon={Stethoscope}
+                title={AUDIT_WORKFLOW_TYPE_LABELS.INVESTIGATOR_SITE_AUDIT}
+                description="Audit an investigator site — protocol compliance, ICF, source data."
+                selected={workflowType === 'INVESTIGATOR_SITE_AUDIT'}
+                onSelect={() => setWorkflowType('INVESTIGATOR_SITE_AUDIT')}
+                isLight={isLight}
+                disabled={submitting}
+              />
             </div>
           </Field>
 
@@ -350,7 +363,8 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
             />
           </Field>
 
-          {/* ----- Vendor ----- */}
+          {/* ----- Auditee: vendor (vendor audit) or site (investigator site audit) ----- */}
+          {workflowType === 'VENDOR_AUDIT' && (
           <Field label="Vendor" required labelColor={labelColor} icon={Building2}>
             {!addingVendor ? (
               <div className="flex gap-2">
@@ -409,6 +423,7 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
                     onClick={() => {
                       setAddingVendor(false);
                       setNewVendor({ name: '', country: '', website: '' });
+                      setVendorError(null);
                     }}
                     className={`text-xs font-medium px-2.5 py-1.5 rounded-md ${buttonSecondary}`}
                   >
@@ -423,12 +438,116 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
                     Save vendor
                   </button>
                 </div>
+                {vendorError && (
+                  <p role="alert" className={`text-[11px] ${isLight ? 'text-red-700' : 'text-red-300'}`}>
+                    {vendorError}
+                  </p>
+                )}
                 <p className={`text-[11px] ${mutedColor}`}>
                   Vendor records are shared across PIQC Clinical · Audit users.
                 </p>
               </div>
             )}
           </Field>
+          )}
+
+          {workflowType === 'INVESTIGATOR_SITE_AUDIT' && (
+          <Field label="Investigator site" required labelColor={labelColor} icon={Stethoscope}>
+            {!addingSite ? (
+              <div className="flex gap-2">
+                <select
+                  value={siteId}
+                  onChange={(e) => setSiteId(e.target.value)}
+                  className={`flex-1 rounded-md border px-3 py-2 text-sm ${inputBg} ${inputBorder} ${headingColor} focus:outline-none`}
+                  disabled={submitting}
+                >
+                  <option value="">Pick the site you're auditing…</option>
+                  {sites.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                      {s.site_number ? ` · ${s.site_number}` : ''}
+                      {s.country ? ` · ${s.country}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setAddingSite(true)}
+                  className={`text-xs font-medium px-3 py-2 rounded-md transition-colors ${buttonSecondary}`}
+                  disabled={submitting}
+                >
+                  + Add
+                </button>
+              </div>
+            ) : (
+              <div
+                className={`space-y-2 p-3 rounded-md border ${
+                  isLight ? 'bg-white border-[#E2E8F0]' : 'bg-white/[0.02] border-white/10'
+                }`}
+              >
+                <input
+                  type="text"
+                  value={newSite.name}
+                  onChange={(e) => setNewSite({ ...newSite, name: e.target.value })}
+                  placeholder="Site name (required)"
+                  className={`w-full rounded-md border px-3 py-2 text-sm ${inputBg} ${inputBorder} ${headingColor} focus:outline-none`}
+                />
+                <input
+                  type="text"
+                  value={newSite.principalInvestigator}
+                  onChange={(e) => setNewSite({ ...newSite, principalInvestigator: e.target.value })}
+                  placeholder="Principal investigator (optional)"
+                  className={`w-full rounded-md border px-3 py-2 text-sm ${inputBg} ${inputBorder} ${headingColor} focus:outline-none`}
+                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={newSite.siteNumber}
+                    onChange={(e) => setNewSite({ ...newSite, siteNumber: e.target.value })}
+                    placeholder="Site number (optional)"
+                    className={`rounded-md border px-3 py-2 text-sm ${inputBg} ${inputBorder} ${headingColor} focus:outline-none`}
+                  />
+                  <input
+                    type="text"
+                    value={newSite.country}
+                    onChange={(e) => setNewSite({ ...newSite, country: e.target.value })}
+                    placeholder="Country (required) — e.g. USA"
+                    className={`rounded-md border px-3 py-2 text-sm ${inputBg} ${inputBorder} ${headingColor} focus:outline-none`}
+                  />
+                </div>
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddingSite(false);
+                      setNewSite({ name: '', country: '', siteNumber: '', principalInvestigator: '' });
+                      setSiteError(null);
+                    }}
+                    className={`text-xs font-medium px-2.5 py-1.5 rounded-md ${buttonSecondary}`}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddSite}
+                    disabled={!newSite.name.trim() || !newSite.country.trim()}
+                    className={`text-xs font-semibold px-2.5 py-1.5 rounded-md transition-colors disabled:opacity-50 ${buttonPrimary}`}
+                  >
+                    Save site
+                  </button>
+                </div>
+                {siteError && (
+                  <p role="alert" className={`text-[11px] ${isLight ? 'text-red-700' : 'text-red-300'}`}>
+                    {siteError}
+                  </p>
+                )}
+                <p className={`text-[11px] ${mutedColor}`}>
+                  Site records are shared across PIQC Clinical · Audit users.
+                </p>
+              </div>
+            )}
+          </Field>
+          )}
 
           {/* ----- Protocol ----- */}
           <div>
@@ -702,6 +821,59 @@ function Field({
       </label>
       {children}
     </div>
+  );
+}
+
+// ============================================================================
+// WorkflowCard — selectable toggle card for the audit-workflow chooser.
+// ============================================================================
+function WorkflowCard({
+  icon: Icon,
+  title,
+  description,
+  selected,
+  onSelect,
+  isLight,
+  disabled,
+}: {
+  icon: typeof Building2;
+  title: string;
+  description: string;
+  selected: boolean;
+  onSelect: () => void;
+  isLight: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onSelect}
+      disabled={disabled}
+      className={`text-left rounded-md border px-3 py-2.5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
+        selected
+          ? isLight
+            ? 'bg-brand-600/10 border-brand-600'
+            : 'bg-brand-600/15 border-brand-300'
+          : isLight
+            ? 'bg-white border-[#E2E8F0] hover:border-[#CBD5E1]'
+            : 'bg-white/[0.02] border-white/10 hover:border-white/20'
+      }`}
+    >
+      <span
+        className={`flex items-center gap-1.5 text-xs font-semibold ${
+          selected ? (isLight ? 'text-brand-600' : 'text-brand-300') : 'text-fg-heading'
+        }`}
+      >
+        <Icon size={12} />
+        {title}
+      </span>
+      {/* text-fg-sub in both states — the description is what drives the
+          choice, so it never drops to the lowest-contrast token. */}
+      <span className="block text-[11px] mt-0.5 text-fg-sub">
+        {description}
+      </span>
+    </button>
   );
 }
 

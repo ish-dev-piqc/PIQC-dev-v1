@@ -9,6 +9,7 @@ import {
 import { useTheme } from '../../../context/ThemeContext';
 import { useAuditData } from '../../../context/AuditDataContext';
 import type { ClinicalTrialPhase } from '../../../types/audit';
+import { CLINICAL_TRIAL_PHASE_LABELS } from '../../../lib/audit/labels';
 import { scoreFocusArea } from '../../../lib/heatmap';
 import HeatIndicator from '../../heatmap/HeatIndicator';
 import HistoryDrawer from './HistoryDrawer';
@@ -41,16 +42,6 @@ interface RiskSummaryPanelProps {
   variant?: 'rail' | 'drawer';
   onClose?: () => void;
 }
-
-const PHASE_LABEL: Record<ClinicalTrialPhase, string> = {
-  PHASE_1: 'Phase 1',
-  PHASE_1_2: 'Phase 1/2',
-  PHASE_2: 'Phase 2',
-  PHASE_2_3: 'Phase 2/3',
-  PHASE_3: 'Phase 3',
-  PHASE_4: 'Phase 4',
-  NOT_APPLICABLE: 'N/A',
-};
 
 export default function RiskSummaryPanel({
   auditId,
@@ -267,7 +258,7 @@ export default function RiskSummaryPanel({
               <dl className="space-y-1">
                 <Row
                   label="Phase"
-                  value={PHASE_LABEL[summary.study_context.clinical_trial_phase]}
+                  value={CLINICAL_TRIAL_PHASE_LABELS[summary.study_context.clinical_trial_phase]}
                   subColor={subColor}
                   headingColor={headingColor}
                 />

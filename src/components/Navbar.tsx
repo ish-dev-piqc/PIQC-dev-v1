@@ -14,7 +14,7 @@ import { useUnreadMentionsDisplay } from '../context/UnreadMentionsContext';
 import OrgSwitcher from './dashboard/orgs/OrgSwitcher';
 import RequestAccessButton from './dashboard/orgs/RequestAccessButton';
 import ProtocolUploadModal from './dashboard/site/ProtocolUploadModal';
-import type { AuditStage } from '../types/audit';
+import { STAGE_LABELS } from '../lib/audit/labels';
 import type { AppView } from '../App';
 import type { SettingsSection } from './dashboard/Dashboard';
 
@@ -66,17 +66,6 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
   const { myProtocolIds, myOrgs } = useOrg();
   const { audits, activeAudit, setActiveAudit } = useAudit();
   const { demoActive, setDemoActive, canUseDemo } = useDemoMode();
-
-  const STAGE_LABELS: Record<AuditStage, string> = {
-    INTAKE: 'Intake',
-    VENDOR_ENRICHMENT: 'Vendor enrichment',
-    QUESTIONNAIRE_REVIEW: 'Questionnaire review',
-    SCOPE_AND_RISK_REVIEW: 'Scope & risk review',
-    PRE_AUDIT_DRAFTING: 'Pre-audit drafting',
-    AUDIT_CONDUCT: 'Audit conduct',
-    REPORT_DRAFTING: 'Report drafting',
-    FINAL_REVIEW_EXPORT: 'Final review & export',
-  };
 
   const isLight = theme === 'light';
 
@@ -401,7 +390,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                     </div>
                   </div>
                   <div className={`text-[11px] mt-0.5 ml-4 truncate ${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'}`}>
-                    {a.vendor_name} · {a.protocol_code}
+                    {a.auditee_name} · {a.protocol_code}
                   </div>
                   <div className={`text-[10px] mt-0.5 ml-4 uppercase tracking-wider font-medium ${isLight ? 'text-[#334155]/45' : 'text-[#CBD5E1]/40'}`}>
                     {STAGE_LABELS[a.current_stage]}
