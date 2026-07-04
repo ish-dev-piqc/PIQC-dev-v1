@@ -1,9 +1,10 @@
 ---
 owner: fable-dev-piqc
 feature: risk-overview
-status: in-review
+status: merged
+merged: 2026-07-04
 started: 2026-07-03
-target_pr:
+target_pr: #409
 ---
 
 # Sponsor Risk Overview — second artifact_type on the Deliverable Engine
