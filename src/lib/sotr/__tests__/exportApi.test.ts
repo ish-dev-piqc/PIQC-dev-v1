@@ -97,9 +97,13 @@ describe('buildDraftConfidencePacketCsv — disclaimer + metadata block', () => 
     expect(csv).toContain('"# Row count","2"');
   });
 
-  it('uses no final-approval / signature language anywhere', () => {
+  it('uses no final-approval / signature language outside the disclaimer', () => {
     const csv = buildDraftConfidencePacketCsv(makePacket([makeRow()]));
-    expect(csv).not.toMatch(/\bApproved\b|\bApproval\b|\bSigned\b|\bCertified\b|\bGxP\b|\bPart 11\b/i);
+    // The disclaimer deliberately names approval / signature / release to say
+    // they happen OUTSIDE PIQC. Strip that one sentence; everything else in
+    // the export must stay free of sign-off language.
+    const outsideDisclaimer = csv.replace(DRAFT_DISCLAIMER, '');
+    expect(outsideDisclaimer).not.toMatch(/\bApproved\b|\bApproval\b|\bSigned\b|\bCertified\b|\bGxP\b|\bPart 11\b/i);
   });
 });
 

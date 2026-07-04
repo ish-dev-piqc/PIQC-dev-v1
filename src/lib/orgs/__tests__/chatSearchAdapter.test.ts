@@ -61,11 +61,10 @@ describe('splitForHighlight', () => {
     expect(splitForHighlight('hello', 'world')).toEqual(['hello']);
   });
 
-  it('returns [before, match, after] for one match', () => {
+  it('returns [before, match] with no trailing segment for a match at the end', () => {
     expect(splitForHighlight('hello world', 'world')).toEqual([
       'hello ',
       'world',
-      '',
     ]);
   });
 
@@ -73,7 +72,6 @@ describe('splitForHighlight', () => {
     expect(splitForHighlight('Hello World', 'world')).toEqual([
       'Hello ',
       'World',
-      '',
     ]);
   });
 
@@ -85,7 +83,6 @@ describe('splitForHighlight', () => {
       'X',
       'c',
       'X',
-      '',
     ]);
   });
 });
