@@ -14,6 +14,17 @@ export default defineConfig({
       // the test next to the helper keeps discovery + import paths simple.
       'supabase/functions/_shared/__tests__/*.test.ts',
     ],
+    // Deno-only test (Deno.test + https: std imports) — run via `deno test`,
+    // permanently un-collectable under vitest's node ESM loader.
+    exclude: ['**/node_modules/**', 'supabase/functions/_shared/__tests__/ingestPipeline.test.ts'],
+    // src/lib/supabase.ts calls createClient() at module scope and throws
+    // without these. Dummy values are safe: the client does no I/O at
+    // construction, and every test that exercises data paths mocks the API
+    // layer anyway. Keeps the suite green with no .env (fresh clones, CI).
+    env: {
+      VITE_SUPABASE_URL: 'http://localhost:54321',
+      VITE_SUPABASE_ANON_KEY: 'test-anon-key',
+    },
     setupFiles: ['./src/test/setup.ts'],
     globals: false,
   },

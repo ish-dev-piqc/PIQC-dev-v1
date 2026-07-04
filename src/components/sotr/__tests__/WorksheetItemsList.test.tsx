@@ -6,6 +6,10 @@ import userEvent from '@testing-library/user-event';
 
 vi.mock('../../../lib/sotr/sourceEvidenceApi', () => ({
   listWorksheetItemsForStudy: vi.fn(),
+  // Pure one-liner mirrored from the real module — mocking the module for
+  // the API call also swallows this helper, so restate its logic here.
+  isAwaitingReview: (item: { review_status?: string | null }) =>
+    !item.review_status || item.review_status === 'draft',
 }));
 
 vi.mock('../../../hooks/useWorksheetItemEvidence', () => ({

@@ -98,14 +98,20 @@ function setupContext(draft: MockReportDraft | null) {
   };
 }
 
-class MockLlmError extends Error {
-  status: number;
-  constructor(message: string, status: number) {
-    super(message);
-    this.name = 'LlmExecutiveSummaryError';
-    this.status = status;
+// vi.hoisted, not a plain class statement: the vi.mock factory below is
+// hoisted above this line and runs when the mocked module is first imported
+// (also hoisted), so a plain `class` binding would still be in its TDZ.
+const { MockLlmError } = vi.hoisted(() => {
+  class MockLlmError extends Error {
+    status: number;
+    constructor(message: string, status: number) {
+      super(message);
+      this.name = 'LlmExecutiveSummaryError';
+      this.status = status;
+    }
   }
-}
+  return { MockLlmError };
+});
 
 vi.mock('../../../../../lib/audit/reportApi', () => ({
   fetchReportDraft: vi.fn(),

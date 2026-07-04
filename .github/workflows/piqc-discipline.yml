@@ -131,6 +131,29 @@ jobs:
             exit 1
           fi
 
+      - name: New migrations must not reuse an existing version prefix
+        # Two devs future-dating filenames independently picked the same
+        # version once already (20260705000000, PRs #379 + #391). Supabase's
+        # schema_migrations keys on the version, so a duplicate makes
+        # `db push` skip or collide — silently, if the first copy is applied.
+        # Scoped to ADDED files: the #379/#391 dup is permanent history
+        # (append-only rule) and is being resolved via a reissued migration.
+        run: |
+          set -u
+          base="origin/main"
+          added=$(git diff "${base}...HEAD" --diff-filter=A --name-only -- 'supabase/migrations/*.sql' 2>/dev/null || true)
+          [ -z "$added" ] && exit 0
+          fail=0
+          for f in $added; do
+            v=$(basename "$f" | sed -E 's/^([0-9]+)_.*/\1/')
+            clashes=$(ls supabase/migrations | grep -E "^${v}_" | grep -vF "$(basename "$f")" || true)
+            if [ -n "$clashes" ]; then
+              echo "::error::$(basename "$f") reuses migration version ${v}, already taken by: ${clashes}. Supabase keys on the version — one file would be silently skipped on db push. Pick an unused version."
+              fail=1
+            fi
+          done
+          exit $fail
+
       - name: DB schema change should update TS type mirror
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
@@ -203,3 +226,26 @@ jobs:
             echo "::error::PR body must reference a plan MD (e.g. plans/ishika/draft-comments.md). See .github/pull_request_template.md."
             exit 1
           fi
+
+  # Runs the code the grep checks above can't see. Before this job existed,
+  # a PR that broke every test file and the type-checker merged fully green.
+  # The vitest suite needs no secrets: vitest.config.ts injects dummy
+  # VITE_SUPABASE_* values, and `vite build` only inlines env at build time
+  # (the client never constructs during a build).
+  # NB: same no-skip rule as mechanical-checks — archive/* PRs must run this
+  # too if it's a required check, and plan-MD-only diffs pass it trivially.
+  quality-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Tests
+        run: npm run test
+      - name: Production build
+        run: npm run build
