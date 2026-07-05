@@ -40,6 +40,11 @@ import { DeliverableReviewBadge } from './DeliverableReviewBadge';
 
 interface Props {
   block: DeliverablePacketBlock;
+  /** The packet's current generation_seq — defined ONLY when the deliverable
+   *  has regenerated at least once (the panel enforces the seq > 1 rule;
+   *  first generation is birth, not change). When defined, blocks born in
+   *  that run render a quiet "New" chip. */
+  latestGenerationSeq?: number;
   onMarkReviewed: (block: DeliverablePacketBlock) => void;
   onUnmarkReviewed: (block: DeliverablePacketBlock) => void;
   onFlag: (block: DeliverablePacketBlock) => void;
@@ -52,6 +57,7 @@ interface Props {
 
 export function DeliverableBlockRow({
   block,
+  latestGenerationSeq,
   onMarkReviewed,
   onUnmarkReviewed,
   onFlag,
@@ -199,6 +205,20 @@ export function DeliverableBlockRow({
             {block.confidence_state !== null && (
               <ConfidenceChip confidence={block.confidence_state} isLight={isLight} />
             )}
+            {latestGenerationSeq !== undefined &&
+              block.generation_seq === latestGenerationSeq && (
+                <span
+                  title="Added by the latest regeneration — review before relying on it."
+                  data-testid="deliverable-new-chip"
+                  className={`inline-flex items-center font-semibold uppercase tracking-wider rounded-md border text-[10px] px-1.5 py-0.5 ${
+                    isLight
+                      ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                      : 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20'
+                  }`}
+                >
+                  New
+                </span>
+              )}
           </div>
 
           {block.review_note && (
