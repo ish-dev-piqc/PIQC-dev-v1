@@ -102,6 +102,15 @@ const DELIVERABLE_COPY: Record<
       'every speaker note requiring sponsor confirmation, all of it a draft ' +
       'for human review.',
   },
+  site_training_priorities: {
+    noun: 'site training priorities',
+    emptyBody:
+      'PIQC drafts site training priorities from the facts already extracted ' +
+      'from this protocol — what the site must be trained on before activation, ' +
+      'across eligibility, visits, procedures, endpoints, safety, and ' +
+      'amendments. Every fact links back to its source; a draft that requires ' +
+      'human review.',
+  },
 };
 
 interface Props {
