@@ -9,19 +9,19 @@ import {
   Loader2,
   RefreshCw,
 } from 'lucide-react';
-import { useTheme } from '../../../../context/ThemeContext';
+import { useTheme } from '../../context/ThemeContext';
 import type {
   DeliverableArtifactType,
   DeliverableChangeSummary,
   DeliverablePacket,
   DeliverablePacketBlock,
   DeliverablesResult,
-} from '../../../../types/deliverables';
+} from '../../types/deliverables';
 import {
   fetchChangeSummary,
   fetchDeliverablePacket,
   generateDeliverable,
-} from '../../../../lib/deliverables/deliverablesApi';
+} from '../../lib/deliverables/deliverablesApi';
 import {
   addBlock,
   addBlockNote,
@@ -31,14 +31,14 @@ import {
   markBlockReviewed,
   rejectBlock,
   unmarkBlockReviewed,
-} from '../../../../lib/deliverables/deliverablesMutationsApi';
-import { downloadDeliverable } from '../../../../lib/deliverables/deliverablesExportApi';
-import { DeliverableBlockList } from '../../../deliverables/DeliverableBlockList';
+} from '../../lib/deliverables/deliverablesMutationsApi';
+import { downloadDeliverable } from '../../lib/deliverables/deliverablesExportApi';
+import { DeliverableBlockList } from './DeliverableBlockList';
 import {
   DeliverableTextDrawer,
   type DeliverableTextDrawerSubject,
-} from '../../../deliverables/DeliverableTextDrawer';
-import { DeliverableTraceabilityDrawer } from '../../../deliverables/DeliverableTraceabilityDrawer';
+} from './DeliverableTextDrawer';
+import { DeliverableTraceabilityDrawer } from './DeliverableTraceabilityDrawer';
 
 // =============================================================================
 // DeliverablePanel — the orchestrator for one protocol's deliverable of a
