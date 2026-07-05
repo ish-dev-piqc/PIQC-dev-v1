@@ -231,3 +231,29 @@ export function canUseSponsorMode(
     addonProductKind: null,
   };
 }
+
+/**
+ * CRA/Monitor Mode is an enterprise capability. Deliberately a SEPARATE
+ * gate from canUseSponsorMode even though both check the enterprise tier
+ * today — entitlements are product levers, and coupling them would couple
+ * future pricing decisions.
+ */
+export function canUseCraMode(
+  subscription: Subscription | null,
+): EntitlementDecision {
+  if (!subscription || subscription.kind === null) {
+    return {
+      allowed: false,
+      reason: 'No active plan. CRA Mode requires the enterprise tier.',
+      addonProductKind: null,
+    };
+  }
+  if (subscription.kind === 'enterprise') {
+    return { allowed: true };
+  }
+  return {
+    allowed: false,
+    reason: 'CRA Mode requires the enterprise tier. Talk to PIQC to upgrade.',
+    addonProductKind: null,
+  };
+}
