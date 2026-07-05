@@ -114,6 +114,8 @@ function statusIcon(status: VisitStatus, size = 13) {
       return <AlertCircle size={size} className="text-red-500" />;
     case 'closing_soon':
       return <Clock size={size} className="text-amber-500" />;
+    case 'cancelled':
+      return <XCircle size={size} className="text-fg-muted" />;
     default:
       return null;
   }
@@ -133,6 +135,8 @@ function statusLabel(status: VisitStatus): string {
       return 'Window closing soon';
     case 'scheduled':
       return 'Scheduled';
+    case 'cancelled':
+      return 'Cancelled';
   }
 }
 
@@ -149,9 +153,9 @@ interface TodayTabProps {
 
 export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: TodayTabProps = {}) {
   const { theme } = useTheme();
-  const { activeProtocol, protocols } = useProtocol();
+  const { activeProtocol, protocols, isLoading: protocolsLoading } = useProtocol();
   const { demoActive } = useDemoMode();
-  const { visits: allSiteVisits, participants: allSiteParticipants, teamMembers: allSiteTeam, refresh } = useSiteData();
+  const { visits: allSiteVisits, participants: allSiteParticipants, teamMembers: allSiteTeam, documents, refresh } = useSiteData();
   const { user } = useAuth();
   const isLight = theme === 'light';
   const isHome = activeProtocol === null;
@@ -327,6 +331,23 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
   const isEmptyRange = visibleInRange.length === 0;
   const isFilteredEmpty = isEmptyRange && scopedInRange.length > 0;
 
+  // A3: same pending/failed-parse derivation as VisitExecutionTab, so the
+  // "no visits scheduled" banner doesn't read as a user error while a
+  // protocol document is still being parsed (or failed to parse).
+  const pendingDoc = useMemo(
+    () => documents.find((d) => d.status === 'pending'),
+    [documents],
+  );
+  const failedDoc = useMemo(
+    () => documents.find((d) => d.status === 'failed'),
+    [documents],
+  );
+  const docStatus: 'pending' | 'failed' | null = pendingDoc
+    ? 'pending'
+    : failedDoc
+    ? 'failed'
+    : null;
+
   const clearFilters = () => setFilters({ hiddenProtocols: [], hiddenParticipants: [] });
 
   // Theme tokens.
@@ -364,7 +385,15 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
 
   // First-run state: user is in real mode (not demo), has no protocols
   // anywhere, and the Home/All-protocols scope is active. Replace the empty
-  // calendar with the welcome panel.
+  // calendar with the welcome panel. While protocols are still loading we
+  // don't know yet whether the user is genuinely zero-protocol, so render
+  // nothing here — Dashboard.tsx's own onboarding gate already waits for
+  // loading to finish before deciding what a zero-protocol user sees, and
+  // rendering the welcome panel here first would flash it even for users
+  // who do have protocols.
+  if (protocolsLoading && isHome) {
+    return null;
+  }
   if (!demoActive && protocols.length === 0 && isHome) {
     return <SiteWelcomePanel />;
   }
@@ -609,6 +638,7 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
               filtered={isFilteredEmpty}
               hiddenCount={scopedInRange.length}
               onClearFilters={clearFilters}
+              docStatus={isHome ? null : docStatus}
             />
           )}
           {view === 'week' ? (
@@ -1602,6 +1632,11 @@ interface CalendarEmptyBannerProps {
   filtered: boolean;
   hiddenCount: number;
   onClearFilters: () => void;
+  // A3: when the active protocol's document is still parsing (or failed to
+  // parse), the calendar being empty isn't the user's fault — swap the
+  // "add a participant" nudge for a parsing-aware message. null/undefined =
+  // no relevant document status (or home/all-protocols scope).
+  docStatus?: 'pending' | 'failed' | null;
 }
 
 // Compact banner that sits above the still-rendered calendar grid when there
@@ -1614,8 +1649,16 @@ function CalendarEmptyBanner({
   filtered,
   hiddenCount,
   onClearFilters,
+  docStatus,
 }: CalendarEmptyBannerProps) {
   const subColor = 'text-fg-sub';
+
+  const emptyMessage =
+    docStatus === 'pending'
+      ? "Your protocol is still parsing — visits will appear once it's ready."
+      : docStatus === 'failed'
+      ? 'Parsing failed — check the Protocol panel.'
+      : `No visits scheduled this ${view}. Add a participant or schedule a visit to populate the calendar.`;
 
   return (
     <div
@@ -1634,7 +1677,7 @@ function CalendarEmptyBanner({
         <span className={`${subColor} truncate`}>
           {filtered
             ? `${hiddenCount} ${hiddenCount === 1 ? 'visit is' : 'visits are'} hidden this ${view} — pick a participant in the filter panel to see their visits.`
-            : `No visits scheduled this ${view}. Add a participant or schedule a visit to populate the calendar.`}
+            : emptyMessage}
         </span>
       </div>
       {filtered && (

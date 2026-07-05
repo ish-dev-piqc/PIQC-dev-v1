@@ -3,6 +3,7 @@ import { Loader2, FlaskConical, X, AlertTriangle, Plus, Database, BookMarked } f
 import { useAuth } from '../../../context/AuthContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useTheme } from '../../../context/ThemeContext';
+import { useSiteData } from '../../../context/SiteDataContext';
 import { fetchVisitExecutionWorkspaces, fetchVisitCoverage, fetchProtocolCohorts, isMockEnabled } from '../../../lib/visit-execution/visitExecutionApi';
 // Cross-mode import allowed: sourceEvidenceApi is on the piqc-discipline
 // ALLOWED_CROSS_MODE allowlist (same helper the old Protocol tab badge used).
@@ -105,8 +106,21 @@ export default function VisitExecutionTab() {
   const { activeProtocol } = useProtocol();
   const { theme } = useTheme();
   const { user } = useAuth();
+  const { documents } = useSiteData();
   const currentUserId = user?.id ?? null;
   const isLight = theme === 'light';
+
+  // A3: distinguish "still parsing" from "genuinely no visit templates" in
+  // the empty-workspace state below — a pending/failed protocol document
+  // means the empty checklist isn't the user's fault.
+  const pendingDoc = useMemo(
+    () => documents.find((d) => d.status === 'pending'),
+    [documents],
+  );
+  const failedDoc = useMemo(
+    () => documents.find((d) => d.status === 'failed'),
+    [documents],
+  );
 
   const [workspaces, setWorkspaces] = useState<VisitExecutionWorkspace[]>([]);
   const [coverage, setCoverage] = useState<VisitCoverage | null>(null);
@@ -980,6 +994,39 @@ export default function VisitExecutionTab() {
         <div>
           <p className="text-fg-heading text-sm font-semibold mb-1">Couldn't load visits</p>
           <p className="text-fg-sub text-xs">{error}</p>
+        </div>
+      </div>
+    );
+  } else if (pendingDoc) {
+    body = (
+      <div className="flex-1 flex items-center justify-center px-6 text-center">
+        <div className="max-w-md">
+          <Loader2 size={20} className="mx-auto text-fg-muted mb-3 animate-spin" aria-hidden />
+          <p className="text-fg-heading text-sm font-semibold mb-1">
+            Your protocol is still parsing
+          </p>
+          <p className="text-fg-sub text-xs leading-relaxed">
+            This usually takes 30–180 seconds. The visit checklist will appear here as soon as
+            parsing finishes.
+          </p>
+        </div>
+      </div>
+    );
+  } else if (failedDoc) {
+    body = (
+      <div className="flex-1 flex items-center justify-center px-6 text-center">
+        <div className="max-w-md">
+          <AlertTriangle size={20} className="mx-auto text-red-500 mb-3" aria-hidden />
+          <p className="text-fg-heading text-sm font-semibold mb-1">
+            Parsing failed: {failedDoc.error_message ?? 'please try again'}
+          </p>
+          <button
+            type="button"
+            onClick={() => setProtocolOpen(true)}
+            className="text-xs font-medium text-brand-500 hover:text-brand-400 underline"
+          >
+            Open the Protocol panel
+          </button>
         </div>
       </div>
     );

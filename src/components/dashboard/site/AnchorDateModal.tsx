@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Calendar, AlertTriangle } from 'lucide-react';
+import { X, Calendar, AlertTriangle, Info } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { setAnchorDate, materializeVisits } from '../../../lib/site/siteApi';
 import { TIMEZONE_OPTIONS } from '../../../lib/timezones';
@@ -40,6 +40,11 @@ export default function AnchorDateModal({
   const [timezone, setTimezone] = useState<string>(initialTimezone ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Separate from `error` — the created===0 branch below is a genuine
+  // partial success (anchor saved, nothing to project yet), not a failure.
+  // Reusing `error`'s styling there previously also skipped onSaved, so
+  // callers' success plumbing (banners, refresh) never fired.
+  const [notice, setNotice] = useState<string | null>(null);
 
   const submit = async () => {
     if (!date) {
@@ -48,6 +53,7 @@ export default function AnchorDateModal({
     }
     setSubmitting(true);
     setError(null);
+    setNotice(null);
 
     const setResult = await setAnchorDate(protocolId, date, timezone || null);
     if (!setResult.ok) {
@@ -63,9 +69,11 @@ export default function AnchorDateModal({
     }
     // materializeVisits cross-products participants × templates. With zero
     // participants we save the anchor but project nothing onto the calendar
-    // — surface that explicitly so the user knows the next step.
+    // — surface that explicitly, but still notify the caller: the anchor
+    // itself DID save successfully.
     if (matResult.data.created === 0) {
-      setError(
+      onSaved(matResult.data);
+      setNotice(
         'Anchor date saved. Add a participant on the Participants tab to project visits onto the calendar.',
       );
       return;
@@ -136,6 +144,19 @@ export default function AnchorDateModal({
             </div>
           )}
 
+          {notice && (
+            <div
+              className={`flex items-start gap-2 border rounded-md px-3 py-2 text-xs ${
+                isLight
+                  ? 'bg-brand-600/[0.05] border-brand-600/20 text-brand-700'
+                  : 'bg-brand-300/[0.06] border-brand-300/25 text-brand-300'
+              }`}
+            >
+              <Info size={14} className="flex-shrink-0 mt-0.5" />
+              <span>{notice}</span>
+            </div>
+          )}
+
           <label className="block">
             <span className={`${labelColor} text-[11px] uppercase tracking-wider font-semibold block mb-1.5`}>
               Day 0 calendar date
@@ -188,24 +209,38 @@ export default function AnchorDateModal({
 
         {/* Footer */}
         <div className={`flex items-center justify-end gap-2 px-5 py-3 border-t ${border}`}>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className={`text-xs font-medium px-3 py-1.5 rounded-md ${subColor} hover:opacity-75 disabled:opacity-50`}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={submitting}
-            className={`text-xs font-semibold px-4 py-1.5 rounded-md text-white transition-colors disabled:opacity-50 ${
-              isLight ? 'bg-brand-600 hover:bg-brand-800' : 'bg-brand-300 hover:bg-brand-400'
-            }`}
-          >
-            {submitting ? 'Projecting visits…' : 'Set anchor & project'}
-          </button>
+          {notice ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className={`text-xs font-semibold px-4 py-1.5 rounded-md text-white transition-colors ${
+                isLight ? 'bg-brand-600 hover:bg-brand-800' : 'bg-brand-300 hover:bg-brand-400'
+              }`}
+            >
+              Got it
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={submitting}
+                className={`text-xs font-medium px-3 py-1.5 rounded-md ${subColor} hover:opacity-75 disabled:opacity-50`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submit}
+                disabled={submitting}
+                className={`text-xs font-semibold px-4 py-1.5 rounded-md text-white transition-colors disabled:opacity-50 ${
+                  isLight ? 'bg-brand-600 hover:bg-brand-800' : 'bg-brand-300 hover:bg-brand-400'
+                }`}
+              >
+                {submitting ? 'Projecting visits…' : 'Set anchor & project'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

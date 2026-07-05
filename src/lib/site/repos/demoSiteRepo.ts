@@ -191,6 +191,19 @@ async function updateVisit(visitId: string, patch: VisitPatch): Promise<Result<S
   return ok(updated);
 }
 
+async function cancelVisit(visitId: string): Promise<Result<SiteVisit>> {
+  const store = getDemoStore();
+  const current = store.getState().visits.find((v) => v.id === visitId);
+  if (!current) return notFound('visit');
+
+  const updated: SiteVisit = { ...current, status: 'cancelled' };
+  store.mutate((s) => ({
+    ...s,
+    visits: s.visits.map((v) => (v.id === visitId ? updated : v)),
+  }));
+  return ok(updated);
+}
+
 // -----------------------------------------------------------------------------
 
 async function createVisit(input: NewVisitInput): Promise<Result<SiteVisit>> {
@@ -342,6 +355,7 @@ export const demoSiteRepo: SiteRepo = {
   fetchVisitsForProtocol,
   createVisit,
   updateVisit,
+  cancelVisit,
   fetchTeamMembers,
   createTeamMember,
   updateTeamMember,

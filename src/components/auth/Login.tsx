@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Eye, EyeOff, ArrowLeft, Mail } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
+import { friendlyAuthError } from '../../lib/authErrors';
 import type { AppView } from '../../App';
 
 interface LoginProps {
@@ -27,6 +29,7 @@ export default function Login({ onViewChange }: LoginProps) {
 
   const { theme } = useTheme();
   const isLight = theme === 'light';
+  const { sessionExpired, clearSessionExpired } = useAuth();
 
   const passwordInUse = email.length > 0 || password.length > 0;
 
@@ -35,6 +38,12 @@ export default function Login({ onViewChange }: LoginProps) {
       if (cooldownRef.current) window.clearInterval(cooldownRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (sessionExpired) clearSessionExpired();
+    };
+  }, [sessionExpired, clearSessionExpired]);
 
   const startCooldown = () => {
     setResendCooldown(RESEND_COOLDOWN_SECONDS);
@@ -59,7 +68,7 @@ export default function Login({ onViewChange }: LoginProps) {
     const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
 
     if (authError) {
-      setError(authError.message);
+      setError(friendlyAuthError(authError));
       setLoading(false);
       return;
     }
@@ -81,7 +90,7 @@ export default function Login({ onViewChange }: LoginProps) {
     setMagicLoading(true);
     const authError = await sendMagicLink(magicEmail);
     if (authError) {
-      setError(authError.message);
+      setError(friendlyAuthError(authError));
       setMagicLoading(false);
       return;
     }
@@ -97,7 +106,7 @@ export default function Login({ onViewChange }: LoginProps) {
     const authError = await sendMagicLink(magicEmail);
     setResending(false);
     if (authError) {
-      setError(authError.message);
+      setError(friendlyAuthError(authError));
       return;
     }
     startCooldown();
@@ -161,6 +170,12 @@ export default function Login({ onViewChange }: LoginProps) {
           <h1 className={`text-2xl font-bold ${headingColor} mb-1.5`}>Sign in or create your account</h1>
           <p className={`${subColor} text-sm`}>Magic link works for new and returning users — no password required.</p>
         </div>
+
+        {sessionExpired && (
+          <div className="mb-4 px-3.5 py-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+            <p className="text-amber-400 text-sm">Your session expired — please sign in again.</p>
+          </div>
+        )}
 
         {!magicOpen && !passwordInUse && (
           <div>

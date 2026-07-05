@@ -15,6 +15,7 @@ export function getDemoDocuments(): ProtocolDocument[] {
       filename: 'pp06489_pledox_protocol_v5.0.pdf',
       created_at: addDays(-30),
       status: 'ready',
+      error_message: null,
       extracted_fields: {
         protocol_number: 'PP06489',
         sponsor: 'PledPharma AB',
@@ -33,6 +34,7 @@ export function getDemoDocuments(): ProtocolDocument[] {
       filename: 'pp06489_central_lab_manual_v1.3.pdf',
       created_at: addDays(-25),
       status: 'ready',
+      error_message: null,
       extracted_fields: { protocol_number: 'PP06489' },
     },
     {
@@ -42,6 +44,7 @@ export function getDemoDocuments(): ProtocolDocument[] {
       filename: 'pp06489_pharmacy_manual_v1.1.pdf',
       created_at: addDays(-25),
       status: 'ready',
+      error_message: null,
       extracted_fields: { protocol_number: 'PP06489' },
     },
     {
@@ -51,6 +54,7 @@ export function getDemoDocuments(): ProtocolDocument[] {
       filename: 'clr_18_06_k0706_protocol_amd02.pdf',
       created_at: addDays(-18),
       status: 'ready',
+      error_message: null,
       extracted_fields: {
         protocol_number: 'CLR_18_06',
         sponsor: 'Sun Pharma Advanced Research Company (SPARC)',
@@ -66,6 +70,7 @@ export function getDemoDocuments(): ProtocolDocument[] {
       filename: 'nd-l02-s0201-005_protocol_amd04.pdf',
       created_at: addDays(-22),
       status: 'ready',
+      error_message: null,
       extracted_fields: {
         protocol_number: 'ND-L02-s0201-005',
         sponsor: 'Nitto Denko Corporation',

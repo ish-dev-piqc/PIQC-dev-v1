@@ -45,7 +45,8 @@ export type VisitStatus =
   | 'missed'
   | 'deviation'
   | 'overdue'
-  | 'closing_soon';
+  | 'closing_soon'
+  | 'cancelled';
 
 // One additional mention of a visit found elsewhere in the protocol's
 // documents — populated by the ingest pipeline (Phase B) and rendered in
@@ -144,6 +145,7 @@ export interface ProtocolDocument {
   source: string;
   filename: string | null;
   created_at: string;
-  status: string;
+  status: 'pending' | 'ready' | 'failed';
+  error_message: string | null;
   extracted_fields: Record<string, unknown> | null;
 }

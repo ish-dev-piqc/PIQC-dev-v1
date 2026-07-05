@@ -106,6 +106,10 @@ export function updateVisit(visitId: string, patch: VisitPatch): Promise<Result<
   return activeRepo.updateVisit(visitId, patch);
 }
 
+export function cancelVisit(visitId: string): Promise<Result<SiteVisit>> {
+  return activeRepo.cancelVisit(visitId);
+}
+
 export function fetchTeamMembers(protocolId: string): Promise<Result<SiteTeamMember[]>> {
   return activeRepo.fetchTeamMembers(protocolId);
 }

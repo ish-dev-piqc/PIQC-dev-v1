@@ -16,6 +16,7 @@ import { DirtyStateProvider, useDirtyState } from './context/DirtyStateContext';
 import Login from './components/auth/Login';
 import ForgotPassword from './components/auth/ForgotPassword';
 import ProfileCompletion from './components/auth/ProfileCompletion';
+import SetNewPassword from './components/auth/SetNewPassword';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { ModeProvider, useMode } from './context/ModeContext';
@@ -136,7 +137,7 @@ function AppContent() {
       action();
     }
   };
-  const { session, loading, profile, profileLoading } = useAuth();
+  const { session, loading, profile, profileLoading, profileFetchError, passwordRecoveryPending, refreshProfile } = useAuth();
   const { theme } = useTheme();
   const { isRedirecting } = useCheckoutRedirect();
   const { mode, setMode } = useMode();
@@ -164,13 +165,13 @@ function AppContent() {
   }, [dashboardTab]);
 
   useEffect(() => {
-    if (!loading && session && (view === 'login' || view === 'landing')) {
+    if (!loading && session && !passwordRecoveryPending && (view === 'login' || view === 'landing')) {
       setView('dashboard');
     }
     if (!loading && !session && view === 'dashboard') {
       setView('login');
     }
-  }, [session, loading, view]);
+  }, [session, loading, view, passwordRecoveryPending]);
 
   // Accept-invite flow: if the URL has ?invite=<token> and the user is signed
   // in, redeem the invite on dashboard load. Strips the param after either
@@ -387,10 +388,17 @@ function AppContent() {
 
   if (loading || (session && profileLoading && !profile)) {
     return (
-      <div className={`min-h-screen ${theme === 'light' ? 'bg-[#F8FAFC]' : 'bg-[#020617]'} flex items-center justify-center`}>
+      <div className={`min-h-screen ${theme === 'light' ? 'bg-[#F8FAFC]' : 'bg-[#020617]'} flex flex-col items-center justify-center gap-3`}>
         <div className="w-6 h-6 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+        <p className={`text-sm ${theme === 'light' ? 'text-[#334155]/60' : 'text-[#CBD5E1]/45'}`}>
+          Loading your workspace...
+        </p>
       </div>
     );
+  }
+
+  if (passwordRecoveryPending) {
+    return <SetNewPassword onDone={() => setView('dashboard')} />;
   }
 
   // Short-circuit to the full-screen Stripe-redirect view whenever we're in
@@ -418,7 +426,7 @@ function AppContent() {
   }
 
   if (needsProfileCompletion) {
-    return <ProfileCompletion />;
+    return <ProfileCompletion loadError={profileFetchError} onRetryLoad={refreshProfile} />;
   }
 
   if (view === 'dashboard') {
