@@ -15,6 +15,7 @@ import {
   type DeliverableArtifactType,
 } from '../../../../types/deliverables';
 import DeliverablePanel from './DeliverablePanel';
+import { ActionCardRail } from '../../../actions/ActionCardRail';
 
 // =============================================================================
 // ProtocolIntelligenceTab — the Sponsor page's "Protocol Intelligence" sub-tab
@@ -247,13 +248,20 @@ export default function ProtocolIntelligenceTab() {
           </div>
 
           {selectedProtocol ? (
-            <DeliverablePanel
-              protocolId={selectedProtocol.id}
-              artifactType={artifactType}
-              sectionOrder={DELIVERABLE_CONFIGS[artifactType].sectionOrder}
-              sectionLabels={DELIVERABLE_CONFIGS[artifactType].sectionLabels}
-              exportEnabled={DELIVERABLE_CONFIGS[artifactType].exportEnabled}
-            />
+            <>
+              <DeliverablePanel
+                protocolId={selectedProtocol.id}
+                artifactType={artifactType}
+                sectionOrder={DELIVERABLE_CONFIGS[artifactType].sectionOrder}
+                sectionLabels={DELIVERABLE_CONFIGS[artifactType].sectionLabels}
+                exportEnabled={DELIVERABLE_CONFIGS[artifactType].exportEnabled}
+              />
+              {/* Warm-handoff rail — self-hiding when the protocol has no
+                  suggested cards. refreshKey re-syncs on chip switches so a
+                  freshly generated deliverable surfaces its card without a
+                  panel callback (DeliverablePanel stays out of scope). */}
+              <ActionCardRail protocolId={selectedProtocol.id} refreshKey={artifactType} />
+            </>
           ) : (
             <div
               data-testid="protocol-intelligence-no-selection"
