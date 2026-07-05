@@ -12,6 +12,8 @@ import {
   MONITORING_SECTION_ORDER,
   RISK_SECTION_LABELS,
   RISK_SECTION_ORDER,
+  SIV_SECTION_LABELS,
+  SIV_SECTION_ORDER,
   type DeliverableArtifactType,
 } from '../../../../types/deliverables';
 import DeliverablePanel from './DeliverablePanel';
@@ -30,9 +32,9 @@ import { ActionCardRail } from '../../../actions/ActionCardRail';
 //      list; the tab defaults to the app-wide activeProtocol and offers a
 //      local <select> so a reviewer can switch protocols without leaving
 //      the tab (the override never writes back to the global selection).
-//   3. A three-chip deliverable picker (Monitoring Prep Checklist | Risk
-//      Overview | CRA Monitoring Focus) chooses the artifact type; a
-//      selected protocol mounts
+//   3. A four-chip deliverable picker (Monitoring Prep Checklist | Risk
+//      Overview | CRA Monitoring Focus | SIV Package) chooses the artifact
+//      type; a selected protocol mounts
 //      <DeliverablePanel/> with that type's section config. No selection
 //      renders an empty-state prompt instead.
 //
@@ -40,7 +42,8 @@ import { ActionCardRail } from '../../../actions/ActionCardRail';
 // =============================================================================
 
 /** Per-artifact panel config: each artifact type owns its section
- *  vocabulary; PDF export is checklist-only for now (plan Decision 4). */
+ *  vocabulary; export ships for the checklist (PDF) and the SIV package
+ *  (deck) — risk/CRA stay export-disabled. */
 const DELIVERABLE_CONFIGS: Record<
   DeliverableArtifactType,
   {
@@ -64,6 +67,11 @@ const DELIVERABLE_CONFIGS: Record<
     sectionLabels: CRA_FOCUS_SECTION_LABELS,
     exportEnabled: false,
   },
+  siv_package: {
+    sectionOrder: SIV_SECTION_ORDER,
+    sectionLabels: SIV_SECTION_LABELS,
+    exportEnabled: true,
+  },
 };
 
 /** Chip order in the picker — checklist first (the default). */
@@ -71,6 +79,7 @@ const ARTIFACT_PICKER_ORDER: readonly DeliverableArtifactType[] = [
   'monitoring_prep_checklist',
   'risk_overview',
   'cra_monitoring_focus',
+  'siv_package',
 ];
 
 export default function ProtocolIntelligenceTab() {

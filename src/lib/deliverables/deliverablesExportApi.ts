@@ -13,7 +13,9 @@
 //   2. buildDeliverablePdf — pure function: packet → jsPDF document.
 //        No DOM, no Blob, no download — testable without jsdom shenanigans.
 //
-//   3. downloadDeliverable — orchestrates fetch + build + save.
+//   3. downloadDeliverable — orchestrates fetch + build + save, dispatching
+//        on packet.artifact_type: 'siv_package' → exporters/buildSivDeck
+//        (landscape deck), everything else → buildDeliverablePdf below.
 //        Returns DeliverablesResult<{filename, blockCount}>.
 //
 // Draft-only vocabulary: every page carries a DRAFT watermark, the
@@ -48,6 +50,7 @@ import {
   REVIEW_STATE_LABELS,
   groupBlocksBySection,
 } from '../../types/deliverables';
+import { buildSivDeck } from './exporters/buildSivDeck';
 
 /**
  * jspdf-autotable patches the jsPDF instance with `lastAutoTable` after each
@@ -134,6 +137,18 @@ export function buildDeliverableFilename(
   return `${code}_monitoring_prep_checklist_draft_${isoDateForFilename(packet.generated_at)}.pdf`;
 }
 
+/**
+ * Filename for an exported SIV deck:
+ *   `<protocol_code-slug>_siv_package_draft_<YYYY-MM-DD>.pdf`
+ * Same fallback + server-stamped-date rules as buildDeliverableFilename.
+ */
+export function buildSivDeckFilename(
+  packet: Pick<DeliverableExportPacket, 'protocol_code' | 'generated_at'>,
+): string {
+  const code = packet.protocol_code ? slugifyForFilename(packet.protocol_code) : 'protocol';
+  return `${code}_siv_package_draft_${isoDateForFilename(packet.generated_at)}.pdf`;
+}
+
 // ---------------------------------------------------------------------------
 // Layer 1 — fetch
 // ---------------------------------------------------------------------------
@@ -165,8 +180,11 @@ export async function fetchDeliverableExportPacket(
     return { ok: false, error: 'malformed export packet' };
   }
 
+  // Exportable artifact types pass through; anything else degrades to the
+  // checklist rendering (risk/CRA exports stay disabled upstream).
   const artifactType: DeliverableArtifactType =
-    payload.artifact_type === 'monitoring_prep_checklist'
+    payload.artifact_type === 'monitoring_prep_checklist' ||
+    payload.artifact_type === 'siv_package'
       ? payload.artifact_type
       : 'monitoring_prep_checklist';
 
@@ -524,9 +542,13 @@ export async function downloadDeliverable(
   const fetchResult = await fetchDeliverableExportPacket(deliverableId);
   if (!fetchResult.ok) return fetchResult;
 
+  // Per-artifact-type dispatch (plan decision 3: a two-arm switch, not a
+  // builder registry). Everything that is not the SIV deck keeps the
+  // original checklist path byte-for-byte.
   const packet = fetchResult.data;
-  const doc = buildDeliverablePdf(packet);
-  const filename = buildDeliverableFilename(packet);
+  const isSivDeck = packet.artifact_type === 'siv_package';
+  const doc = isSivDeck ? buildSivDeck(packet) : buildDeliverablePdf(packet);
+  const filename = isSivDeck ? buildSivDeckFilename(packet) : buildDeliverableFilename(packet);
 
   try {
     (opts.triggerDownload ?? defaultDownload)(filename, doc);
@@ -538,7 +560,7 @@ export async function downloadDeliverable(
   }
 
   // Counts-only log — no block content, quotes, or notes go to the console.
-  console.info('[deliverables] checklist exported', {
+  console.info(isSivDeck ? '[deliverables] siv deck exported' : '[deliverables] checklist exported', {
     deliverableId,
     blockCount: packet.blocks.length,
     filename,

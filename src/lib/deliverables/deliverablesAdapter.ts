@@ -47,6 +47,7 @@ const BLOCK_TYPES: ReadonlySet<string> = new Set([
   'checklist_item',
   'section_intro',
   'site_question',
+  'speaker_note',
 ] satisfies DeliverableBlockType[]);
 
 const CONTENT_ORIGINS: ReadonlySet<string> = new Set([

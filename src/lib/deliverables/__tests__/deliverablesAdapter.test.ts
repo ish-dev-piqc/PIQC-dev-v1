@@ -125,8 +125,18 @@ describe('adaptDeliverablePacket — null / wrong-shape tolerance', () => {
     expect(adaptDeliverablePacket({ ...basePacket, protocol_id: null })).toBeNull();
   });
 
+  it('adapts EVERY block_type the enum declares — regression: hand-listed whitelists go stale', () => {
+    for (const blockType of ['checklist_item', 'section_intro', 'site_question', 'speaker_note'] as const) {
+      const packet = adaptDeliverablePacket({
+        ...basePacket,
+        blocks: [{ ...basePacket.blocks[0], block_type: blockType }],
+      });
+      expect(packet?.blocks[0]?.block_type).toBe(blockType);
+    }
+  });
+
   it('returns null for an artifact_type outside the enum', () => {
-    expect(adaptDeliverablePacket({ ...basePacket, artifact_type: 'siv_package' })).toBeNull();
+    expect(adaptDeliverablePacket({ ...basePacket, artifact_type: 'closeout_package' })).toBeNull();
     expect(adaptDeliverablePacket({ ...basePacket, artifact_type: null })).toBeNull();
   });
 
