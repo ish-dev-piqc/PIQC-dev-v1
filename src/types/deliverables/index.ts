@@ -25,12 +25,14 @@
 export type DeliverableArtifactType =
   | 'monitoring_prep_checklist'
   | 'risk_overview'
-  | 'cra_monitoring_focus';
+  | 'cra_monitoring_focus'
+  | 'siv_package';
 
 export const ARTIFACT_TYPE_LABELS: Record<DeliverableArtifactType, string> = {
   monitoring_prep_checklist: 'Monitoring Prep Checklist',
   risk_overview: 'Risk Overview',
   cra_monitoring_focus: 'CRA Monitoring Focus',
+  siv_package: 'SIV Package',
 };
 
 /**
@@ -71,7 +73,10 @@ export type DeliverableReviewState =
 export type DeliverableBlockType =
   | 'checklist_item'
   | 'section_intro'
-  | 'site_question';
+  | 'site_question'
+  /** Teaching prose for the SIV deck's notes band — reviewable like any
+   *  other block, always carrying the sponsor-confirmation warning. */
+  | 'speaker_note';
 
 /** Re-declaration of SOTR's confidence_state values (see isolation note). */
 export type DeliverableConfidenceState =
@@ -198,6 +203,48 @@ export const CRA_FOCUS_SECTION_LABELS: Record<CraFocusSectionKey, string> = {
   endpoint_critical_verification: 'Endpoint-Critical Verification',
   vendor_specimen_workflows: 'Vendor & Specimen Workflows',
   amendment_sensitive_requirements: 'Amendment-Sensitive Requirements',
+};
+
+// -----------------------------------------------------------------------------
+// SIV Knowledge Transfer Package — section vocabulary (handover §6.4: a
+// protocol-specific teaching outline, never a generic table-of-contents deck;
+// every block sponsor-reviewable before anything is presented)
+// -----------------------------------------------------------------------------
+
+export type SivSectionKey =
+  | 'study_overview'
+  | 'participant_journey'
+  | 'eligibility_emphasis'
+  | 'endpoint_critical'
+  | 'windows_and_timing'
+  | 'vendor_lab_workflows'
+  | 'safety_expectations'
+  | 'amendment_changes'
+  | 'before_first_patient';
+
+/** Stable slide order for the SIV package (teaching order). */
+export const SIV_SECTION_ORDER: readonly SivSectionKey[] = [
+  'study_overview',
+  'participant_journey',
+  'eligibility_emphasis',
+  'endpoint_critical',
+  'windows_and_timing',
+  'vendor_lab_workflows',
+  'safety_expectations',
+  'amendment_changes',
+  'before_first_patient',
+];
+
+export const SIV_SECTION_LABELS: Record<SivSectionKey, string> = {
+  study_overview: 'Study Purpose & Design',
+  participant_journey: 'Participant Journey & Visit Schedule',
+  eligibility_emphasis: 'Eligibility & Prohibited Medications',
+  endpoint_critical: 'Endpoint-Critical Procedures',
+  windows_and_timing: 'Visit Windows & Timing',
+  vendor_lab_workflows: 'Laboratory, Specimen & Vendor Workflows',
+  safety_expectations: 'Safety & Reporting Expectations',
+  amendment_changes: 'Amendment Changes',
+  before_first_patient: 'Before the First Patient',
 };
 
 // -----------------------------------------------------------------------------
