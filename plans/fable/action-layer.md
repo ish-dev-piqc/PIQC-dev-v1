@@ -1,7 +1,7 @@
 ---
 owner: fable-dev-piqc
 feature: action-layer
-status: active
+status: in-review
 started: 2026-07-04
 target_pr:
 ---
@@ -121,15 +121,16 @@ None.
 
 ## Verification
 
-- [ ] typecheck / build / new suites green; existing 322 unregressed;
-  zero new full-suite failures vs baseline.
+- [x] typecheck / build / new suites green (15 new actions tests;
+  741/741 across src/lib); existing suites unregressed; zero new
+  full-suite failures vs baseline.
 - [ ] Manual (post db push): generate a deliverable → travel card
   appears with fact-derived rationale + evidence count + disclaimer;
   no link when no URL template configured; Dismiss hides it; re-sync
   (regenerate) does NOT resurrect it; set_status probes.
-- [ ] Card language contains no booking/mandate/approval verbs
-  (planning-support framing only).
-- [ ] `piqc-review` clean.
+- [x] Card language contains no booking/mandate/approval verbs
+  (planning-support framing only — grep-verified in SQL + components).
+- [x] `piqc-review` clean.
 
 ## Decisions encoded
 
