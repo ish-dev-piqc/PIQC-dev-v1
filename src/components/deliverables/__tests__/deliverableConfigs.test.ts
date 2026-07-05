@@ -42,11 +42,12 @@ describe('DELIVERABLE_CONFIGS', () => {
     }
   });
 
-  it('enables export only for the document deliverables (checklist, SIV)', () => {
-    expect(DELIVERABLE_CONFIGS.monitoring_prep_checklist.exportEnabled).toBe(true);
-    expect(DELIVERABLE_CONFIGS.siv_package.exportEnabled).toBe(true);
-    // Read surfaces, not documents handed onward.
-    expect(DELIVERABLE_CONFIGS.risk_overview.exportEnabled).toBe(false);
-    expect(DELIVERABLE_CONFIGS.cra_monitoring_focus.exportEnabled).toBe(false);
+  it('enables export for every deliverable (all five are draft PDFs)', () => {
+    // The config-driven export builder made every artifact type exportable
+    // (founder decision 2026-07-05). A regression that silently disabled one
+    // would strand that deliverable with no download.
+    for (const type of ALL_ARTIFACT_TYPES) {
+      expect(DELIVERABLE_CONFIGS[type].exportEnabled, type).toBe(true);
+    }
   });
 });
