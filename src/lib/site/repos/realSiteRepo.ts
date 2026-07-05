@@ -291,6 +291,21 @@ async function updateVisit(visitId: string, patch: VisitPatch): Promise<Result<S
   }
 }
 
+async function cancelVisit(visitId: string): Promise<Result<SiteVisit>> {
+  try {
+    const { data, error } = await supabase
+      .from('site_visits')
+      .update({ status: 'cancelled' })
+      .eq('id', visitId)
+      .select(VISIT_COLUMNS)
+      .single();
+    if (error) throw error;
+    return { ok: true, data: rowToVisit(data as unknown as VisitRow) };
+  } catch (e) {
+    return fail('cancelVisit', e);
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Team
 // -----------------------------------------------------------------------------
@@ -425,9 +440,8 @@ async function fetchProtocolDocuments(protocolId: string): Promise<Result<Protoc
   try {
     const { data, error } = await supabase
       .from('documents')
-      .select('id, title, source, filename, created_at, status, extracted_fields')
+      .select('id, title, source, filename, created_at, status, error_message, extracted_fields')
       .eq('protocol_id', protocolId)
-      .eq('status', 'ready')
       .order('created_at', { ascending: false });
     if (error) throw error;
     return { ok: true, data: (data ?? []) as ProtocolDocument[] };
@@ -498,6 +512,7 @@ export const realSiteRepo: SiteRepo = {
   fetchVisitsForProtocol,
   createVisit,
   updateVisit,
+  cancelVisit,
   fetchTeamMembers,
   createTeamMember,
   updateTeamMember,

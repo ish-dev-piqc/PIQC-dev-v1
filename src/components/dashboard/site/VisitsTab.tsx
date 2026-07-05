@@ -11,6 +11,7 @@ import {
   FileWarning,
   Calendar as CalendarIcon,
   ChevronRight,
+  Ban,
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
@@ -48,6 +49,7 @@ const STATUS_FILTER_LABELS: Record<StatusFilter, string> = {
   deviation: 'Deviation',
   overdue: 'Overdue',
   closing_soon: 'Closing soon',
+  cancelled: 'Cancelled',
 };
 
 const STATUS_FILTERS: StatusFilter[] = [
@@ -58,6 +60,7 @@ const STATUS_FILTERS: StatusFilter[] = [
   'closing_soon',
   'deviation',
   'missed',
+  'cancelled',
 ];
 
 export default function VisitsTab() {
@@ -167,6 +170,7 @@ export default function VisitsTab() {
       deviation: 0,
       overdue: 0,
       closing_soon: 0,
+      cancelled: 0,
     };
     for (const v of scoped) {
       if (v.date < today) c.PAST++;
@@ -598,6 +602,8 @@ function statusIcon(status: VisitStatus, size = 13) {
       return <AlertCircle size={size} className="text-red-500" />;
     case 'closing_soon':
       return <Clock size={size} className="text-amber-500" />;
+    case 'cancelled':
+      return <Ban size={size} className="opacity-50" />;
     default:
       return <CalendarIcon size={size} className="opacity-50" />;
   }
@@ -617,6 +623,8 @@ function statusLabel(status: VisitStatus): string {
       return 'Overdue';
     case 'closing_soon':
       return 'Window closing soon';
+    case 'cancelled':
+      return 'Cancelled';
   }
 }
 

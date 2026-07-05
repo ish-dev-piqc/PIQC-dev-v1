@@ -5,6 +5,7 @@ import { useOverlay } from '../../../hooks/useOverlay';
 import { useSwipeDismiss } from '../../../hooks/useSwipeDismiss';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useSiteData } from '../../../context/SiteDataContext';
+import { useDirty } from '../../../context/DirtyStateContext';
 import { createVisit } from '../../../lib/site/siteApi';
 import { fetchVisitTemplates } from '../../../lib/site/siteApi';
 
@@ -32,10 +33,10 @@ export default function VisitFormDrawer({ protocolId, defaultParticipantUuid, on
   const isLight = theme === 'light';
   const overlay = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  useOverlay({ isOpen: true, onClose, containerRef: panelRef });
-  const swipe = useSwipeDismiss({ onClose });
   const { participants } = useSiteData();
   const { activeProtocol } = useProtocol();
+
+  const [confirmingClose, setConfirmingClose] = useState(false);
 
   // Only participants on this protocol; exclude screen-failures (can't visit)
   // and withdrawn (out of study). UI affordance, not enforced server-side.
@@ -56,6 +57,24 @@ export default function VisitFormDrawer({ protocolId, defaultParticipantUuid, on
   const [priorNote, setPriorNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // B6: unsaved-work guard — dirty if the user has typed/selected anything
+  // beyond the pre-filled defaults (participant + today's date don't count).
+  const isDirty = Boolean(
+    time || visitName.trim() || selectedProcedures.size > 0 || adhocProcedure.trim() || priorNote.trim(),
+  );
+  useDirty('Schedule visit form', isDirty);
+
+  const requestClose = () => {
+    if (isDirty && !confirmingClose) {
+      setConfirmingClose(true);
+      return;
+    }
+    onClose();
+  };
+
+  useOverlay({ isOpen: true, onClose: requestClose, containerRef: panelRef });
+  const swipe = useSwipeDismiss({ onClose: requestClose });
 
   // Procedure catalog — union of all procedures used by this protocol's
   // visit templates, deduped + sorted. Lets the user pick from the standard
@@ -207,7 +226,7 @@ export default function VisitFormDrawer({ protocolId, defaultParticipantUuid, on
     <div
       ref={overlay}
       onClick={(e) => {
-        if (e.target === overlay.current) onClose();
+        if (e.target === overlay.current) requestClose();
       }}
       className="fixed inset-0 z-50 bg-black/30 flex justify-end animate-fade-in"
     >
@@ -219,10 +238,41 @@ export default function VisitFormDrawer({ protocolId, defaultParticipantUuid, on
         <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
           <div className={`flex items-center justify-between px-5 py-4 border-b ${border}`}>
             <h2 className={`${headingColor} font-semibold text-base`}>Schedule a visit</h2>
-            <button type="button" onClick={onClose} className={`${subColor} hover:opacity-75`} aria-label="Close">
+            <button type="button" onClick={requestClose} className={`${subColor} hover:opacity-75`} aria-label="Close">
               <X size={18} />
             </button>
           </div>
+
+          {confirmingClose && (
+            <div
+              className={`px-5 py-3 border-b ${border} ${isLight ? 'bg-rose-50' : 'bg-rose-500/[0.06]'}`}
+            >
+              <p className={`text-xs font-semibold ${isLight ? 'text-rose-800' : 'text-rose-200'}`}>
+                Discard unsaved visit details?
+              </p>
+              <p className={`text-[11px] mt-0.5 leading-snug ${isLight ? 'text-rose-700' : 'text-rose-300/85'}`}>
+                This cannot be undone.
+              </p>
+              <div className="flex items-center gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className={`text-[11px] font-semibold px-2.5 py-1 rounded-md text-white transition-colors ${
+                    isLight ? 'bg-rose-600 hover:bg-rose-700' : 'bg-rose-500 hover:bg-rose-400'
+                  }`}
+                >
+                  Discard
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingClose(false)}
+                  className={`text-[11px] font-medium px-2.5 py-1 rounded-md ${isLight ? 'text-rose-700 hover:bg-rose-100' : 'text-rose-300 hover:bg-rose-500/10'}`}
+                >
+                  Keep editing
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="flex-1 overflow-y-auto p-5 space-y-4">
             <p className={`${subColor} text-xs leading-relaxed`}>
@@ -378,7 +428,7 @@ export default function VisitFormDrawer({ protocolId, defaultParticipantUuid, on
           </div>
 
           <div className={`flex items-center justify-end gap-2 px-5 py-3.5 border-t ${border}`}>
-            <button type="button" onClick={onClose} disabled={submitting} className={`px-4 py-1.5 text-sm rounded-md transition-colors ${buttonSecondary} disabled:opacity-50`}>
+            <button type="button" onClick={requestClose} disabled={submitting} className={`px-4 py-1.5 text-sm rounded-md transition-colors ${buttonSecondary} disabled:opacity-50`}>
               Cancel
             </button>
             <button type="submit" disabled={submitting} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${buttonPrimary}`}>

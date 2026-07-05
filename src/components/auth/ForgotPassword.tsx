@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ArrowLeft, CheckCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { friendlyAuthError } from '../../lib/authErrors';
 import type { AppView } from '../../App';
 
 interface ForgotPasswordProps {
@@ -26,7 +27,7 @@ export default function ForgotPassword({ onViewChange }: ForgotPasswordProps) {
     });
 
     if (authError) {
-      setError(authError.message);
+      setError(friendlyAuthError(authError));
       setLoading(false);
       return;
     }

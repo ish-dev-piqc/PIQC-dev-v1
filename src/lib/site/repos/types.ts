@@ -85,6 +85,7 @@ export interface SiteRepo {
   fetchVisitsForProtocol(protocolId: string): Promise<Result<SiteVisit[]>>;
   createVisit(input: NewVisitInput): Promise<Result<SiteVisit>>;
   updateVisit(visitId: string, patch: VisitPatch): Promise<Result<SiteVisit>>;
+  cancelVisit(visitId: string): Promise<Result<SiteVisit>>;
 
   // Team
   fetchTeamMembers(protocolId: string): Promise<Result<SiteTeamMember[]>>;

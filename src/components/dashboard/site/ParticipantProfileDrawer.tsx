@@ -63,6 +63,7 @@ function visitStatusIcon(status: VisitStatus, size = 12) {
     case 'deviation':   return <FileWarning size={size} className="text-amber-500" />;
     case 'overdue':     return <AlertCircle size={size} className="text-red-500" />;
     case 'closing_soon':return <Clock size={size} className="text-amber-500" />;
+    case 'cancelled':   return <XCircle size={size} className="text-fg-muted" />;
     default:            return <CalendarCheck size={size} className="text-fg-muted" />;
   }
 }
@@ -75,6 +76,7 @@ function visitStatusLabel(status: VisitStatus): string {
     overdue:      'Overdue',
     closing_soon: 'Closing soon',
     scheduled:    'Scheduled',
+    cancelled:    'Cancelled',
   };
   return map[status];
 }
@@ -96,7 +98,7 @@ export default function ParticipantProfileDrawer({ participantId, protocols, onC
   useOverlay({ isOpen: true, onClose, containerRef: panelRef });
   const swipe = useSwipeDismiss({ onClose });
 
-  const { participants, visits } = useSiteData();
+  const { participants, visits, refresh } = useSiteData();
   const { activeOrg } = useOrg();
   const { navigateToOrgChat } = useChatNavigation();
   const participant = participants.find((p) => p.id === participantId) ?? null;
@@ -448,7 +450,10 @@ export default function ParticipantProfileDrawer({ participantId, protocols, onC
           protocolCode={protocol.code}
           initial={participant}
           onSaved={() => {
-            // Realtime update brings the change back into context.
+            // Supabase realtime intermittently misses UPDATE events in prod
+            // (same class of issue as ParticipantsTab's create path) — force
+            // an explicit refresh rather than relying on it alone.
+            refresh();
           }}
           onClose={() => setEditing(false)}
         />

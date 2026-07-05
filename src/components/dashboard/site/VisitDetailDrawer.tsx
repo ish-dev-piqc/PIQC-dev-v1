@@ -10,15 +10,17 @@ import {
   ExternalLink,
   Check,
   Users,
+  Ban,
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useOverlay } from '../../../hooks/useOverlay';
 import { useSwipeDismiss } from '../../../hooks/useSwipeDismiss';
+import { useSiteData } from '../../../context/SiteDataContext';
 import { getProtocolColorsById } from '../../../lib/site/protocolColors';
 import type { SiteVisit, VisitStatus } from '../../../lib/site/types';
 import type { Protocol } from '../../../context/ProtocolContext';
 import ParticipantProfileDrawer from './ParticipantProfileDrawer';
-import { updateVisit } from '../../../lib/site/siteApi';
+import { updateVisit, cancelVisit } from '../../../lib/site/siteApi';
 import InlineEditableText from './InlineEditableText';
 import {
   parseYmd,
@@ -48,6 +50,8 @@ function statusIcon(status: VisitStatus, size = 13) {
       return <AlertCircle size={size} className="text-red-500" />;
     case 'closing_soon':
       return <Clock size={size} className="text-amber-500" />;
+    case 'cancelled':
+      return <Ban size={size} className="text-fg-muted" />;
     default:
       return null;
   }
@@ -67,8 +71,19 @@ function statusLabel(status: VisitStatus): string {
       return 'Window closing soon';
     case 'scheduled':
       return 'Scheduled';
+    case 'cancelled':
+      return 'Cancelled';
   }
 }
+
+// Terminal statuses — once a visit reaches one of these, "Cancel visit"
+// no longer makes sense as an action.
+const TERMINAL_STATUSES: ReadonlySet<VisitStatus> = new Set([
+  'completed',
+  'missed',
+  'deviation',
+  'cancelled',
+]);
 
 export interface VisitDetailDrawerProps {
   visit: SiteVisit;
@@ -91,13 +106,18 @@ export default function VisitDetailDrawer({
   const panelRef = useRef<HTMLDivElement>(null);
   useOverlay({ isOpen: true, onClose, containerRef: panelRef });
   const swipe = useSwipeDismiss({ onClose });
+  const { refresh } = useSiteData();
 
   const [startMode, setStartMode] = useState(false);
   const [checked, setChecked] = useState<Set<number>>(new Set());
   const [visitComplete, setVisitComplete] = useState(false);
+  const [visitCancelled, setVisitCancelled] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [persisting, setPersisting] = useState(false);
   const [persistError, setPersistError] = useState<string | null>(null);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   const day = parseYmd(visit.date);
   const past = isPast(day, today);
@@ -164,6 +184,26 @@ export default function VisitDetailDrawer({
       return;
     }
     setVisitComplete(true);
+    // Supabase realtime intermittently misses UPDATE events in prod — force
+    // an explicit refresh rather than relying on it alone.
+    refresh();
+  };
+
+  // A5: cancel visit — same soft-confirm shape as ParticipantProfileDrawer's
+  // delete-confirm, and the same error-handling shape as completeVisit above.
+  const handleCancelVisit = async () => {
+    if (cancelling) return;
+    setCancelling(true);
+    setCancelError(null);
+    const result = await cancelVisit(visit.id);
+    setCancelling(false);
+    if (!result.ok) {
+      setCancelError(result.error);
+      return;
+    }
+    setConfirmingCancel(false);
+    setVisitCancelled(true);
+    refresh();
   };
 
   return (
@@ -430,6 +470,70 @@ export default function VisitDetailDrawer({
                 Close
               </button>
             </>
+          ) : visitCancelled ? (
+            <>
+              <span className={`inline-flex items-center gap-2 text-sm font-semibold ${mutedColor}`}>
+                <Ban size={16} />
+                Visit cancelled
+              </span>
+              <button
+                type="button"
+                onClick={onClose}
+                className={`ml-auto inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors ${buttonSecondary}`}
+              >
+                Close
+              </button>
+            </>
+          ) : confirmingCancel ? (
+            <div className="flex flex-col gap-2 w-full">
+              {cancelError && (
+                <div
+                  className={`flex items-start gap-2 border rounded-md px-3 py-2 text-xs ${
+                    isLight
+                      ? 'bg-rose-50 border-rose-200 text-rose-700'
+                      : 'bg-rose-500/[0.06] border-rose-500/20 text-rose-300'
+                  }`}
+                >
+                  <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                  <span>Couldn't cancel visit: {cancelError}</span>
+                </div>
+              )}
+              <div
+                className={`flex items-start gap-2.5 rounded-lg border px-3.5 py-3 ${
+                  isLight ? 'bg-rose-50 border-rose-200' : 'bg-rose-500/[0.06] border-rose-500/20'
+                }`}
+              >
+                <AlertCircle size={14} className={`mt-0.5 flex-shrink-0 ${isLight ? 'text-rose-600' : 'text-rose-400'}`} />
+                <div className="flex-1 min-w-0">
+                  <p className={`text-xs font-semibold ${isLight ? 'text-rose-800' : 'text-rose-200'}`}>
+                    Cancel this visit?
+                  </p>
+                  <p className={`text-[11px] mt-0.5 leading-snug ${isLight ? 'text-rose-700' : 'text-rose-300/85'}`}>
+                    This cannot be undone.
+                  </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={handleCancelVisit}
+                      disabled={cancelling}
+                      className={`text-[11px] font-semibold px-2.5 py-1 rounded-md text-white transition-colors disabled:opacity-50 ${
+                        isLight ? 'bg-rose-600 hover:bg-rose-700' : 'bg-rose-500 hover:bg-rose-400'
+                      }`}
+                    >
+                      {cancelling ? 'Cancelling…' : 'Confirm cancel'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingCancel(false)}
+                      disabled={cancelling}
+                      className={`text-[11px] font-medium px-2.5 py-1 rounded-md ${isLight ? 'text-rose-700 hover:bg-rose-100' : 'text-rose-300 hover:bg-rose-500/10'} disabled:opacity-50`}
+                    >
+                      Keep visit
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           ) : startMode ? (
             <div className="flex flex-col gap-2 w-full">
               {persistError && (
@@ -515,6 +619,18 @@ export default function VisitDetailDrawer({
                 <Users size={14} />
                 View participant profile
               </button>
+              {!TERMINAL_STATUSES.has(visit.status) && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmingCancel(true)}
+                  className={`ml-auto inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isLight ? 'text-rose-700 hover:bg-rose-50' : 'text-rose-300 hover:bg-rose-500/10'
+                  }`}
+                >
+                  <Ban size={14} />
+                  Cancel visit
+                </button>
+              )}
             </>
           )}
         </div>
