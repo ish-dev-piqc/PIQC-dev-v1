@@ -62,8 +62,9 @@ map (the `Record<DeliverableArtifactType,...>` stays exhaustive-typed).
 - `src/components/dashboard/sponsor/deliverables/ProtocolIntelligenceTab.tsx` — imports + config extraction (Fable-owned).
 - `src/components/dashboard/cra/CraWorkspaceShell.tsx` — NEW (renamed from placeholder).
 - `src/components/dashboard/cra/CraWorkspacePlaceholder.tsx` — DELETED (renamed).
-- `src/components/dashboard/cra/__tests__/CraWorkspaceShell.test.tsx` — NEW.
-- `src/components/dashboard/Dashboard.tsx` — 2-line import/tag rename (UNOWNED).
+- `src/components/dashboard/cra/craDeliverables.ts` — NEW (pure CRA lens: the deliverable subset).
+- `src/components/dashboard/cra/__tests__/craDeliverables.test.ts` — NEW.
+- `src/components/dashboard/Dashboard.tsx` — import/tag rename + stale-comment fix (UNOWNED).
 
 ## Out of scope (files forbidden)
 
