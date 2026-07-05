@@ -67,6 +67,10 @@ const AUDIT_TAB_SET: ReadonlySet<DashboardTab> = new Set<DashboardTab>([
   'workflows',
 ]);
 
+const CRA_TAB_SET: ReadonlySet<DashboardTab> = new Set<DashboardTab>([
+  'cra-workspace',
+]);
+
 const VALID_DASHBOARD_TABS: ReadonlySet<DashboardTab> = new Set<DashboardTab>([
   'audit-overview',
   'chat',
@@ -80,6 +84,7 @@ const VALID_DASHBOARD_TABS: ReadonlySet<DashboardTab> = new Set<DashboardTab>([
   'reports',
   'organization',
   'sponsor',
+  'cra-workspace',
   'settings',
 ]);
 
@@ -457,6 +462,10 @@ function AppContent() {
                   case 'audit':
                     setMode('audit');
                     if (!AUDIT_TAB_SET.has(dashboardTab)) setDashboardTab('audit-overview');
+                    return;
+                  case 'cra':
+                    setMode('cra');
+                    if (!CRA_TAB_SET.has(dashboardTab)) setDashboardTab('cra-workspace');
                     return;
                   case 'sponsor':
                     setDashboardTab('sponsor');

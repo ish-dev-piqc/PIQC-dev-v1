@@ -5,6 +5,7 @@ import {
   ShieldCheck,
   Building2,
   Hash,
+  SearchCheck,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -49,7 +50,7 @@ interface LeftRailProps {
   chatOverlayOpen?: boolean;
 }
 
-type RailKey = 'workspace' | 'site' | 'audit' | 'sponsor' | 'chat';
+type RailKey = 'workspace' | 'site' | 'audit' | 'cra' | 'sponsor' | 'chat';
 
 interface RailItem {
   key: RailKey;
@@ -63,6 +64,7 @@ const ITEMS: ReadonlyArray<RailItem> = [
   { key: 'workspace', label: 'Workspace', icon: LayoutGrid },
   { key: 'site', label: 'Site mode', icon: ClipboardList },
   { key: 'audit', label: 'Audit mode', icon: ShieldCheck },
+  { key: 'cra', label: 'CRA mode', icon: SearchCheck },
   { key: 'sponsor', label: 'Sponsor mode (coming soon)', icon: Building2, soon: true },
   { key: 'chat', label: 'Chat', icon: Hash },
 ];
@@ -73,6 +75,7 @@ const PALETTE: Record<RailKey, { activeBg: string; activeFg: string }> = {
   workspace: { activeBg: '#EEEDFE', activeFg: '#3C3489' },
   site: { activeBg: '#E6F1FB', activeFg: '#0C447C' },
   audit: { activeBg: '#E1F5EE', activeFg: '#085041' },
+  cra: { activeBg: '#FDF3E7', activeFg: '#8A4B0F' },
   sponsor: { activeBg: '#EEEDFE', activeFg: '#3C3489' },
   chat: { activeBg: '#FAECE7', activeFg: '#993C1D' },
 };
@@ -93,11 +96,16 @@ const AUDIT_TABS: ReadonlySet<DashboardTab> = new Set<DashboardTab>([
   'workflows',
 ]);
 
+const CRA_TABS: ReadonlySet<DashboardTab> = new Set<DashboardTab>([
+  'cra-workspace',
+]);
+
 function activeKey(dashboardTab: DashboardTab, mode: DashboardMode): RailKey | null {
   if (dashboardTab === 'organization') return 'workspace';
   if (dashboardTab === 'sponsor') return 'sponsor';
   if (SITE_TABS.has(dashboardTab) || mode === 'site') return 'site';
   if (AUDIT_TABS.has(dashboardTab) || mode === 'audit') return 'audit';
+  if (CRA_TABS.has(dashboardTab) || mode === 'cra') return 'cra';
   return null;
 }
 
@@ -160,6 +168,10 @@ export default function LeftRail({
       case 'audit':
         setMode('audit');
         if (!AUDIT_TABS.has(dashboardTab)) onDashboardTabChange('audit-overview');
+        return;
+      case 'cra':
+        setMode('cra');
+        if (!CRA_TABS.has(dashboardTab)) onDashboardTabChange('cra-workspace');
         return;
       case 'sponsor':
         onDashboardTabChange('sponsor');

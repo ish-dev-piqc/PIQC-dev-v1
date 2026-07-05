@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { MessageSquare, LayoutDashboard, Activity, FileText, Database, UserCircle2, Users, CalendarCheck, CreditCard, Bell, Loader2, CheckCircle2, AlertCircle, ClipboardList, type LucideIcon } from 'lucide-react';
+import { MessageSquare, LayoutDashboard, Activity, FileText, Database, UserCircle2, Users, CalendarCheck, CreditCard, Bell, Loader2, CheckCircle2, AlertCircle, ClipboardList, SearchCheck, type LucideIcon } from 'lucide-react';
 import NotificationsSettings from './NotificationsSettings';
 import SponsorPage from './sponsor/SponsorPage';
+import CraWorkspacePlaceholder from './cra/CraWorkspacePlaceholder';
 import DashboardChat from './DashboardChat';
 import KnowledgeBase from './KnowledgeBase';
 import TodayTab from './site/TodayTab';
@@ -43,6 +44,8 @@ export type DashboardTab =
   | 'overview'           // legacy alias; redirects to 'visit-execution' via the fallback effect
   | 'participants'
   | 'visits'
+  // CRA Mode (plumbing PR-A; workspace content lands in PR-B)
+  | 'cra-workspace'
   // Shared
   | 'reports'
   | 'organization'
@@ -78,6 +81,10 @@ const AUDIT_TABS: TabConfig[] = [
   { id: 'knowledge', label: 'Knowledge Base', icon: Database },
   { id: 'workflows', label: 'Workflows', icon: Activity },
   { id: 'reports', label: 'Reports', icon: FileText },
+];
+
+const CRA_TABS: TabConfig[] = [
+  { id: 'cra-workspace', label: 'Monitoring Workspace', icon: SearchCheck },
 ];
 
 
@@ -706,7 +713,7 @@ export default function Dashboard({
   const resolvedActiveTab = activeTab ?? internalActiveTab;
   const resolvedSettingsSection = settingsSection ?? internalSettingsSection;
 
-  const tabs = mode === 'site' ? SITE_TABS : AUDIT_TABS;
+  const tabs = mode === 'site' ? SITE_TABS : mode === 'cra' ? CRA_TABS : AUDIT_TABS;
 
   // If the active tab isn't valid for the current mode (and isn't the shared settings tab),
   // fall back to the mode's default landing tab. Catches both mode switches and external
@@ -841,6 +848,26 @@ export default function Dashboard({
   // owns its own navigation (StageNav). Settings is still reachable via the
   // Navbar user dropdown — when activeTab flips to 'settings' we render the
   // Settings tab inside the constrained panel instead of the shell.
+  // CRA Mode (plumbing PR-A): full-page placeholder surface; settings stays
+  // reachable via the Navbar dropdown — the same shape as the audit branch.
+  if (mode === 'cra') {
+    return (
+      <div className={`h-screen ${pageBg} pt-16 flex flex-col overflow-hidden`}>
+        {resolvedActiveTab === 'settings' ? (
+          <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 flex flex-col" style={{ minHeight: 0 }}>
+            <div className={`flex-1 ${panelBg} border rounded-2xl overflow-hidden flex flex-col`} style={{ minHeight: 0 }}>
+              {renderContent()}
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto">
+            <CraWorkspacePlaceholder />
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (mode === 'audit') {
     return (
       <div className={`h-screen ${pageBg} pt-16 flex flex-col overflow-hidden`}>
