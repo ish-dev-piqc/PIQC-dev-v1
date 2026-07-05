@@ -119,8 +119,9 @@ interface Props {
   /** Artifact-specific section vocabulary, passed through to the block list. */
   sectionOrder: readonly string[];
   sectionLabels: Record<string, string>;
-  /** Export ships for the checklist (PDF) and SIV package (deck);
-   *  risk/CRA stay export-disabled. */
+  /** Whether this artifact type ships an export. All five deliverables now
+   *  export a DRAFT PDF (the four portrait types via buildDeliverablePdf, the
+   *  SIV package via its own landscape deck). Sourced from deliverableConfigs. */
   exportEnabled: boolean;
 }
 

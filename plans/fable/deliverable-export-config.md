@@ -1,7 +1,7 @@
 ---
 owner: fable-dev-piqc
 feature: deliverable-export-config
-status: active
+status: in-review
 started: 2026-07-05
 target_pr:
 ---
@@ -82,9 +82,14 @@ None.
 
 ## Verification
 
-- [ ] typecheck / build green; existing export tests still pass UNCHANGED
-  (monitoring output byte-identical); new multi-type tests pass; zero new
-  full-suite failures vs baseline.
+- [x] typecheck / build green; the 46 existing export tests pass UNCHANGED
+  (monitoring output byte-identical — verified the re-exported constants equal
+  the former hardcoded strings); +26 new tests (config invariants + multi-type);
+  full suite 19 failed / 1032 passed — the same pre-existing baseline (one own
+  stale assertion updated for the new all-exportable behavior).
+- [x] Adversarial review (4 verified lenses): behavior-preservation, multi-type
+  correctness, and discipline lenses clean; 1 confirmed low finding — a stale
+  JSDoc on Props.exportEnabled still said "risk/CRA export-disabled". Fixed.
 - [ ] Manual (enterprise sub, Sponsor → Protocol Intelligence): each of the 5
   chips now shows an Export button; exporting risk/CRA/site-training produces a
   DRAFT PDF with that type's sections, header label, disclaimer, filename slug,
