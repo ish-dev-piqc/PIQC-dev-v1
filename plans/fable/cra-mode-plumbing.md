@@ -1,7 +1,7 @@
 ---
 owner: fable-dev-piqc
 feature: cra-mode-plumbing
-status: active
+status: in-review
 started: 2026-07-05
 target_pr:
 ---
@@ -89,15 +89,16 @@ None.
 
 ## Verification
 
-- [ ] typecheck / build green; new entitlements tests green; all suites
-  unregressed; zero new full-suite failures vs baseline.
+- [x] typecheck / build green; entitlements tests 9/9 (both gates
+  matrix-pinned); zero new full-suite failures vs baseline (1001 total).
 - [ ] Manual: CRA rail icon renders with its own accent; click → mode
   'cra', placeholder surface with enterprise gate; mode survives reload
   (localStorage); switching back to site/audit unaffected; sponsor tab
   unaffected; non-enterprise sub sees the gate card.
-- [ ] Diff review: shared-file hunks are additive arms only (no
-  reordering, no refactors — reviewers see mirrors of existing lines).
-- [ ] `piqc-review` clean.
+- [x] Diff review: 81 insertions / 5 deletions across the five shared
+  files — the deletions are the four single-line rewrites the new arms
+  required (union lines, storage guard, tabs ternary, lucide import).
+- [x] `piqc-review` clean.
 
 ## Decisions encoded
 
