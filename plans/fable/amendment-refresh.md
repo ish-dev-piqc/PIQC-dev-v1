@@ -1,7 +1,7 @@
 ---
 owner: fable-dev-piqc
 feature: amendment-refresh
-status: active
+status: in-review
 started: 2026-07-05
 target_pr:
 ---
@@ -81,6 +81,10 @@ This slice's change story is deliverable-side and stands alone.
 - `src/lib/deliverables/deliverablesAdapter.ts` + test — new fields.
 - `src/lib/deliverables/deliverablesApi.ts` + test — fetchChangeSummary.
 - `src/components/deliverables/DeliverableBlockRow.tsx` — "New" chip.
+- `src/components/deliverables/DeliverableBlockList.tsx` — ONE optional
+  prop (`latestGenerationSeq`) threaded to rows; the chip cannot know the
+  packet's seq otherwise (scope amended during build — same
+  exhaustive-threading class as the #414 copy-map lesson).
 - `src/components/dashboard/sponsor/deliverables/DeliverablePanel.tsx` —
   what-changed banner.
 - `supabase/migrations/*_deliverable_amendment_refresh.sql` (new).
@@ -119,18 +123,17 @@ None.
 
 ## Verification
 
-- [ ] typecheck / build green; new + prior suites green; zero new
-  full-suite failures vs baseline.
-- [ ] Old-packet tolerance: adapter test proves packets WITHOUT
+- [x] typecheck / build green; 789/789 src/lib (298 deliverables incl.
+  15 new); zero new full-suite failures vs baseline.
+- [x] Old-packet tolerance: adapter test proves packets WITHOUT
   generation_seq still adapt (dev DB not yet migrated ≠ broken UI).
-- [ ] Migration audit: v6-vs-v5 hunk list confined to shared stages
-  (all four branch sections byte-identical); pglast parse; log-row
-  correctness reasoning for each regenerate path (matched / deleted /
-  kept-flagged / inserted).
+- [x] Migration audit: exactly 8 hunks, all in shared stages; all four
+  branch sections byte-identical to v5; pglast 18 statements + 3 bodies;
+  RETURN contract unchanged.
 - [ ] Manual (post db push): generate → no banner (seq 1); regenerate
   after re-ingest → banner shows new/removed/flagged with lists; "New"
   chips on inserted blocks; human-edited blocks never in removed list.
-- [ ] `piqc-review` clean.
+- [x] `piqc-review` clean (12 files in scope, 0 style/arch hits).
 
 ## Decisions encoded
 
