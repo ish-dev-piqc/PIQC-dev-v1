@@ -26,13 +26,15 @@ export type DeliverableArtifactType =
   | 'monitoring_prep_checklist'
   | 'risk_overview'
   | 'cra_monitoring_focus'
-  | 'siv_package';
+  | 'siv_package'
+  | 'site_training_priorities';
 
 export const ARTIFACT_TYPE_LABELS: Record<DeliverableArtifactType, string> = {
   monitoring_prep_checklist: 'Monitoring Prep Checklist',
   risk_overview: 'Risk Overview',
   cra_monitoring_focus: 'CRA Monitoring Focus',
   siv_package: 'SIV Package',
+  site_training_priorities: 'Site Training Priorities',
 };
 
 /**
@@ -245,6 +247,43 @@ export const SIV_SECTION_LABELS: Record<SivSectionKey, string> = {
   safety_expectations: 'Safety & Reporting Expectations',
   amendment_changes: 'Amendment Changes',
   before_first_patient: 'Before the First Patient',
+};
+
+// -----------------------------------------------------------------------------
+// Site Training Priorities — section vocabulary (handover §6.1: what the site
+// must be trained on before activation, in an instructional register — never
+// the checklist's imperative "verify" voice or a numeric readiness score)
+// -----------------------------------------------------------------------------
+
+export type SiteTrainingSectionKey =
+  | 'eligibility_screening_training'
+  | 'visit_schedule_training'
+  | 'procedure_specimen_training'
+  | 'endpoint_data_training'
+  | 'safety_oversight_training'
+  | 'amendment_retraining'
+  | 'training_logistics_questions';
+
+/** Stable render order for site-training-priorities sections (training order:
+ *  screening → schedule → procedures → data → safety → change → logistics). */
+export const SITE_TRAINING_SECTION_ORDER: readonly SiteTrainingSectionKey[] = [
+  'eligibility_screening_training',
+  'visit_schedule_training',
+  'procedure_specimen_training',
+  'endpoint_data_training',
+  'safety_oversight_training',
+  'amendment_retraining',
+  'training_logistics_questions',
+];
+
+export const SITE_TRAINING_SECTION_LABELS: Record<SiteTrainingSectionKey, string> = {
+  eligibility_screening_training: 'Eligibility & Screening Training',
+  visit_schedule_training: 'Visit Schedule & Timing Training',
+  procedure_specimen_training: 'Procedure, Specimen & Vendor Training',
+  endpoint_data_training: 'Endpoint Data & Source-Documentation Training',
+  safety_oversight_training: 'Safety Reporting & Oversight Training',
+  amendment_retraining: 'Amendment Retraining',
+  training_logistics_questions: 'Training Logistics — Questions for the Site',
 };
 
 // -----------------------------------------------------------------------------
