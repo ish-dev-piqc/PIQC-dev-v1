@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 
-export type DashboardMode = 'site' | 'audit';
+export type DashboardMode = 'site' | 'audit' | 'cra';
 
 interface ModeContextValue {
   mode: DashboardMode;
@@ -18,7 +18,9 @@ export function ModeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setModeState] = useState<DashboardMode>(() => {
     try {
       const stored = localStorage.getItem(MODE_STORAGE_KEY);
-      return stored === 'audit' ? 'audit' : 'site';
+      if (stored === 'audit') return 'audit';
+      if (stored === 'cra') return 'cra';
+      return 'site';
     } catch {
       return 'site';
     }
