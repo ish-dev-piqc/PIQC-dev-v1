@@ -26,12 +26,36 @@ export interface ExtractedCohort {
   source_quote: string | null;
   /** false when the extraction attached no citation — surfaced by the reconcile. */
   has_evidence: boolean;
+  /**
+   * How this cohort appears in the SoA table headings/markers when that differs
+   * from `label` — e.g. label 'CSF' → ['Cerebrospinal Fluid Cohort']. Drives
+   * alias-aware per-visit binding in soaGridParser (an alias only ever resolves
+   * to this cohort — never invents one). [] when the extraction stated none.
+   */
+  soa_aliases: string[];
 }
 
 function asTrimmedString(v: unknown): string | null {
   if (typeof v !== "string") return null;
   const t = v.trim();
   return t.length ? t : null;
+}
+
+/** Normalize an extracted string-array field (e.g. soa_aliases): trim each,
+ * drop empties + case-insensitive dupes, preserve order. */
+function asStringArray(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of v) {
+    const s = asTrimmedString(item);
+    if (!s) continue;
+    const k = s.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(s);
+  }
+  return out;
 }
 
 /** Normalized dedup key for a cohort label. */
@@ -86,6 +110,8 @@ export function parseStudyCohorts(
       source_page: pages.length ? pages[0] : null,
       source_quote: quote ? quote.slice(0, 500) : null,
       has_evidence: !!(cit && (pages.length || quote)),
+      // Drop an alias that merely restates the label — the label already matches.
+      soa_aliases: asStringArray(e.soa_aliases).filter((a) => a.toLowerCase() !== key),
     });
   }
   return out;
@@ -100,13 +126,15 @@ const NUMBER_WORDS: Record<string, number> = {
  * Deterministic corroboration: a prose-stated cohort/arm count
  * ("six dose cohorts", "6 ascending-dose cohorts", "three treatment arms").
  * null when no count is clearly stated. Conservative — the number must sit
- * within a few words of "cohorts"/"arms"/"dose groups", so a stray figure
- * elsewhere isn't read as a count.
+ * within ONE descriptive word of "cohorts"/"arms"/"dose groups" AND not be a
+ * sectioning ordinal ("Part 1", "Table 2", "Phase 3"). The old {0,3}-word
+ * window + no preceding guard read stray figures ("…Part 1 … cohorts") as a
+ * count, flagging a bogus reconcile mismatch on correct multi-arm designs.
  */
 export function parseStatedCohortCount(text: string | null | undefined): number | null {
   if (!text) return null;
   const re =
-    /\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b(?:\s+[a-z-]+){0,3}?\s+(?:dose\s+|treatment\s+)?(?:cohorts|arms|dose\s+groups)\b/i;
+    /(?<!\b(?:part|parts|table|figure|section|phase|day|week|visit|cycle|arm|arms|group|groups|cohort|cohorts)\s+)\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b(?:\s+[a-z-]+)?\s+(?:dose\s+|treatment\s+)?(?:cohorts|arms|dose\s+groups)\b/i;
   const m = text.match(re);
   if (!m) return null;
   const tok = m[1].toLowerCase();
@@ -132,8 +160,14 @@ export interface CohortReconciliation {
  * never hides — divergence so the guarantee is "all cohorts appear OR the gap is
  * flagged":
  *   • stated count ≠ extracted count  → "prose states N; extraction found M"
- *   • an extracted cohort no schedule references (and no shared backbone) →
- *     "K of M cohort(s) have no schedule coverage"
+ *   • an extracted cohort no schedule references (only a real gap when there is
+ *     NO shared backbone) → "K of M cohort(s) have no schedule coverage"
+ *   • an ORPHAN schedule ref — the schedule scopes a visit to a cohort token
+ *     that matches no extracted cohort → "schedule references … not in the
+ *     extracted list". This fires regardless of a shared backbone: the old code
+ *     took a blanket `covered = all` shortcut when any backbone existed, which
+ *     silently MASKED a mis-bound / under-extracted cohort. Computing it
+ *     independently is the fix.
  *   • a cohort with no citation evidence → "K cohort(s) lack a source citation"
  * Pure; the caller persists `notes` (on documents.extracted_fields + a log) so
  * nothing is silently dropped.
@@ -147,8 +181,12 @@ export function reconcileCohorts(
   const notes: string[] = [];
   const labels = extracted.map((c) => c.label);
   const cohort_count = labels.length;
-
+  const labelSet = new Set(labels.map((l) => l.toLowerCase()));
   const refs = new Set(scheduleCohorts.map((s) => s.toLowerCase()));
+
+  // A shared-backbone visit genuinely applies to every cohort, so it covers
+  // all — we keep that (dropping it would over-flag every clean shared schedule,
+  // i.e. reconcile noise). What it must NOT do is mask an orphan ref (below).
   const covered_count = scheduleHasSharedBackbone
     ? cohort_count
     : labels.filter((l) => refs.has(l.toLowerCase())).length;
@@ -156,8 +194,18 @@ export function reconcileCohorts(
   if (statedCount != null && cohort_count > 0 && statedCount !== cohort_count) {
     notes.push(`protocol prose states ${statedCount} cohort(s); extraction found ${cohort_count}`);
   }
-  if (cohort_count > 0 && covered_count < cohort_count) {
+  // An extracted cohort the schedule never names — only a gap without a backbone.
+  if (!scheduleHasSharedBackbone && cohort_count > 0 && covered_count < cohort_count) {
     notes.push(`${cohort_count - covered_count} of ${cohort_count} cohort(s) have no schedule coverage`);
+  }
+  // Orphan schedule ref: a cohort token the schedule scopes to but that matches
+  // no extracted cohort — mis-binding or an under-extracted cohort. Independent
+  // of the backbone (the false-pass the blanket shortcut used to hide).
+  const orphanRefs = [...new Set(scheduleCohorts)].filter((s) => !labelSet.has(s.toLowerCase()));
+  if (orphanRefs.length > 0) {
+    notes.push(
+      `schedule references ${orphanRefs.length} cohort scope(s) not in the extracted list: ${orphanRefs.join(", ")}`,
+    );
   }
   const noEvidence = extracted.filter((c) => !c.has_evidence).length;
   if (noEvidence > 0) {

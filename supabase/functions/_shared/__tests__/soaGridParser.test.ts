@@ -12,6 +12,7 @@ import {
   cohortOnlyRestriction,
   cohortsFromTableHeading,
   markerCohortScope,
+  leadingCohortToken,
   type TableBlock,
 } from "../soaGridParser.ts";
 // Golden fixture: the real Schedule-of-Assessments table blocks Reducto returned
@@ -617,5 +618,86 @@ describe("assembleVisitsFromGrouping — cohort binding with an authoritative li
     expect(by["Screening"]).toBeNull(); // ...but ignored without an authoritative list
     expect(by["Day 1"]).toBeNull();
     expect(schedule.find((s) => /S4 Only/.test(s.visit_name))!.applies_to).toEqual(["S4"]); // marker still works
+  });
+});
+
+// =============================================================================
+// Slice 3.1 — binding when the extracted cohort list is MORE GRANULAR than the
+// SoA labels: parent→period prefix expansion (S4 ↔ S4 Period 1/2), stated
+// aliases (CSF ↔ "Cerebrospinal Fluid Cohort"), and the marker-resolve that
+// stops emitting an orphan ["S4"]. Guards: a granular heading ("S4 Period 2")
+// must NOT over-bind its sibling; the parent token still respects boundaries.
+// =============================================================================
+describe("leadingCohortToken — coarse parent of a granular label", () => {
+  it("strips the period/segment qualifier; null for a single token", () => {
+    expect(leadingCohortToken("S4 Period 1")).toBe("S4");
+    expect(leadingCohortToken("S4 Period 2")).toBe("S4");
+    expect(leadingCohortToken("Cohort 3 Expansion")).toBe("Cohort 3");
+    expect(leadingCohortToken("Arm A")).toBe("Arm");
+    expect(leadingCohortToken("S4")).toBeNull();
+    expect(leadingCohortToken("MAD")).toBeNull();
+  });
+});
+
+describe("cohortsFromTableHeading — alias + parent→period (Slice 3.1)", () => {
+  const PERIODS = ["S4 Period 1", "S4 Period 2", "S6"];
+
+  it("binds a coarse parent heading ('S4') to every granular label under it (not S6)", () => {
+    expect(cohortsFromTableHeading("S4 dosing schedule", PERIODS)).toEqual(["S4 Period 1", "S4 Period 2"]);
+  });
+
+  it("does NOT over-bind when the heading is itself granular (sibling guard)", () => {
+    expect(cohortsFromTableHeading("S4 Period 2 schedule", PERIODS)).toEqual(["S4 Period 2"]);
+  });
+
+  it("respects token boundaries on the parent ('S4' ∌ 'S40')", () => {
+    expect(cohortsFromTableHeading("S40 cohort", PERIODS)).toEqual([]);
+  });
+
+  it("matches a cohort by a stated SoA alias (CSF ↔ 'Cerebrospinal Fluid Cohort')", () => {
+    const alias = { CSF: ["Cerebrospinal Fluid Cohort"] };
+    expect(cohortsFromTableHeading("Cerebrospinal Fluid Cohort — LP Schedule", ["CSF", "MAD"], alias))
+      .toEqual(["CSF"]);
+  });
+
+  it("a numeric range reaches granular labels via the leading token (S1–S6 → both S4 periods)", () => {
+    expect(cohortsFromTableHeading("Cohorts S1–S6", PERIODS)).toEqual(["S4 Period 1", "S4 Period 2", "S6"]);
+  });
+});
+
+describe("markerCohortScope — resolves the raw restriction token against the list (Slice 3.1)", () => {
+  it("[S4 only] with a granular list binds both periods, not the orphan ['S4']", () => {
+    expect(markerCohortScope("(D4 [S4 Only])", ["S4 Period 1", "S4 Period 2", "S6"]))
+      .toEqual(["S4 Period 1", "S4 Period 2"]);
+  });
+  it("falls back to the raw token when nothing resolves (surfaced by the reconcile)", () => {
+    expect(markerCohortScope("[S9 Only]", ["S1", "S2"])).toEqual(["S9"]);
+  });
+});
+
+describe("assembleVisitsFromGrouping — granular + alias binding end-to-end (Slice 3.1)", () => {
+  const col = (idx: number, header: string, section: string): import("../soaGridParser.ts").RawColumn => ({
+    idx, header, page: 1, section,
+    procedures: [{ label: `P${idx}`, note: null, mark: "marked" }],
+    markCount: 1,
+  });
+  const idGroup = (cols: import("../soaGridParser.ts").RawColumn[]) => ({
+    visits: cols.map((c) => ({ name: c.header, source_idx: [c.idx] })),
+  });
+
+  it("an 'S4' heading binds both S4 periods; a CSF-alias heading binds CSF; no orphan tags", () => {
+    const list = ["S4 Period 1", "S4 Period 2", "CSF"];
+    const aliasMap = { CSF: ["Cerebrospinal Fluid Cohort"] };
+    const cols = [
+      col(0, "Screening", "Schedule of Activities — All Cohorts"), // generic → shared
+      col(1, "S4 Dosing", "S4 dosing schedule"),                   // coarse parent → both periods
+      col(2, "LP", "Cerebrospinal Fluid Cohort — LP Schedule"),    // alias → CSF
+    ];
+    const { schedule } = assembleVisitsFromGrouping(cols, idGroup(cols), list, aliasMap);
+    const by = Object.fromEntries(schedule.map((s) => [s.visit_name, s.applies_to]));
+    expect(by["S4 Dosing"]).toEqual(["S4 Period 1", "S4 Period 2"]);
+    expect(by["LP"]).toEqual(["CSF"]);
+    // no-invention: every non-null tag is a real cohort from the list
+    for (const s of schedule) for (const t of s.applies_to ?? []) expect(list).toContain(t);
   });
 });
