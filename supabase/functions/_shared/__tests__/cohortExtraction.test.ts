@@ -85,6 +85,16 @@ describe("parseStatedCohortCount", () => {
     expect(parseStatedCohortCount("")).toBeNull();
     expect(parseStatedCohortCount(null)).toBeNull();
   });
+  it("does NOT read a sectioning ordinal as a count (the over-fire fix)", () => {
+    // "Part 1" is a section label, not "1 cohort" — must not flag a bogus mismatch.
+    expect(parseStatedCohortCount("In Part 1 the treatment arms differ across sites.")).toBeNull();
+    expect(parseStatedCohortCount("See Table 2 for the cohorts.")).toBeNull();
+    expect(parseStatedCohortCount("During Phase 3 the dose cohorts are unblinded.")).toBeNull();
+  });
+  it("does NOT read a figure separated from the cohort noun by multiple words", () => {
+    // tightened intervening window: >1 descriptive word between number and noun
+    expect(parseStatedCohortCount("we identified 1 previously unreported exploratory cohorts")).toBeNull();
+  });
 });
 
 describe("reconcileCohorts — flag divergence, never hide", () => {
