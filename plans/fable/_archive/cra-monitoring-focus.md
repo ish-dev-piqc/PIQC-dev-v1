@@ -1,9 +1,10 @@
 ---
 owner: fable-dev-piqc
 feature: cra-monitoring-focus
-status: in-review
+status: merged
+merged: 2026-07-04
 started: 2026-07-04
-target_pr:
+target_pr: #414
 ---
 
 # CRA Monitoring Focus — third artifact_type + risk-lens prohibited-med debt
