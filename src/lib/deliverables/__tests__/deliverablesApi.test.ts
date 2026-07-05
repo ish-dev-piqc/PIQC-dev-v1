@@ -7,7 +7,11 @@ vi.mock('../../supabase', () => ({
   supabase: { rpc: (...args: unknown[]) => rpcMock(...args) },
 }));
 
-import { generateDeliverable, fetchDeliverablePacket } from '../deliverablesApi';
+import {
+  generateDeliverable,
+  fetchDeliverablePacket,
+  fetchChangeSummary,
+} from '../deliverablesApi';
 
 // =============================================================================
 // deliverablesApi — DeliverablesResult<T> contract for the generate/read
@@ -137,6 +141,83 @@ describe('fetchDeliverablePacket', () => {
   it('rejects a non-null payload the adapter cannot shape as malformed — distinct from "no deliverable"', async () => {
     rpcMock.mockResolvedValueOnce({ data: 42, error: null });
     const r = await fetchDeliverablePacket('prot-1', 'monitoring_prep_checklist');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('malformed RPC response');
+  });
+});
+
+describe('fetchChangeSummary', () => {
+  const summaryPayload = {
+    log: {
+      id: 'log-1',
+      deliverable_id: 'del-1',
+      generation_seq: 2,
+      protocol_version: 'v2.0',
+      generated_by: 'user-1',
+      generated_at: '2026-07-05T09:00:00Z',
+      blocks_created: 3,
+      blocks_matched: 24,
+      blocks_kept_flagged: 2,
+      blocks_deleted: 1,
+      removed_blocks: [
+        {
+          section_key: 'visit_window_verification',
+          block_type: 'checklist_item',
+          derived_text: 'Verify: Week 4 visit within ±3 days',
+        },
+      ],
+    },
+    new_blocks: [
+      {
+        id: 'blk-9',
+        section_key: 'amendment_sensitive',
+        display_text: 'Verify: New washout period of 14 days',
+      },
+    ],
+    flagged_blocks: [],
+    removed_blocks: [
+      {
+        section_key: 'visit_window_verification',
+        block_type: 'checklist_item',
+        derived_text: 'Verify: Week 4 visit within ±3 days',
+      },
+    ],
+  };
+
+  it('calls deliverable_get_change_summary with p_deliverable_id', async () => {
+    rpcMock.mockResolvedValueOnce({ data: summaryPayload, error: null });
+    const r = await fetchChangeSummary('del-1');
+    expect(rpcMock).toHaveBeenCalledWith('deliverable_get_change_summary', {
+      p_deliverable_id: 'del-1',
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data?.log?.generation_seq).toBe(2);
+      expect(r.data?.new_blocks).toHaveLength(1);
+      expect(r.data?.removed_blocks).toHaveLength(1);
+    }
+  });
+
+  it('treats a SQL NULL payload as ok:true with data null (nothing to summarize / not visible)', async () => {
+    rpcMock.mockResolvedValueOnce({ data: null, error: null });
+    const r = await fetchChangeSummary('del-1');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data).toBeNull();
+  });
+
+  it('surfaces the RPC error message on failure', async () => {
+    rpcMock.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'permission denied' },
+    });
+    const r = await fetchChangeSummary('del-1');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('permission denied');
+  });
+
+  it('rejects a non-null payload the adapter cannot shape as malformed', async () => {
+    rpcMock.mockResolvedValueOnce({ data: 'junk', error: null });
+    const r = await fetchChangeSummary('del-1');
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('malformed RPC response');
   });

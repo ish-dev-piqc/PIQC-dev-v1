@@ -16,11 +16,12 @@
 import { supabase } from '../supabase';
 import type {
   DeliverableArtifactType,
+  DeliverableChangeSummary,
   DeliverableGenerateResult,
   DeliverablePacket,
   DeliverablesResult,
 } from '../../types/deliverables';
-import { adaptDeliverablePacket } from './deliverablesAdapter';
+import { adaptChangeSummary, adaptDeliverablePacket } from './deliverablesAdapter';
 
 /**
  * Generate (or regenerate) a deliverable for a protocol. Regeneration
@@ -81,4 +82,28 @@ export async function fetchDeliverablePacket(
   if (packet === null) return { ok: false, error: 'malformed RPC response' };
 
   return { ok: true, data: packet };
+}
+
+/**
+ * Fetch the change summary for a deliverable (latest generation-log row +
+ * new / flagged / removed lists). A SQL NULL payload means "no deliverable /
+ * not visible" — ok:true with data null, same semantic as
+ * fetchDeliverablePacket; the UI simply shows no banner.
+ */
+export async function fetchChangeSummary(
+  deliverableId: string,
+): Promise<DeliverablesResult<DeliverableChangeSummary | null>> {
+  const { data, error } = await supabase.rpc('deliverable_get_change_summary', {
+    p_deliverable_id: deliverableId,
+  });
+
+  if (error) return { ok: false, error: error.message };
+  if (data === null || data === undefined) return { ok: true, data: null };
+
+  // Non-null payload that doesn't adapt is malformed — distinct from the
+  // RPC's SQL-NULL "nothing to summarize" answer.
+  const summary = adaptChangeSummary(data);
+  if (summary === null) return { ok: false, error: 'malformed RPC response' };
+
+  return { ok: true, data: summary };
 }

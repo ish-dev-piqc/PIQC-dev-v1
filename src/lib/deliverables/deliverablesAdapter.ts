@@ -15,13 +15,17 @@
 
 import {
   ARTIFACT_TYPE_LABELS,
+  type ChangeSummaryBlockRef,
   type DeliverableArtifactType,
   type DeliverableBlockType,
+  type DeliverableChangeSummary,
   type DeliverableConfidenceState,
   type DeliverableContentOrigin,
+  type DeliverableGenerationLog,
   type DeliverablePacket,
   type DeliverablePacketBlock,
   type DeliverableReviewState,
+  type RemovedBlockSnapshot,
 } from '../../types/deliverables';
 import { displayTextForBlock } from '../../types/deliverables';
 
@@ -84,7 +88,9 @@ const CONFIDENCE_STATES: ReadonlySet<string> = new Set([
  * Optional fields degrade instead: wrong-typed evidence fields become null,
  * missing version defaults to 1 (the contract's starting version), missing
  * sort_order to 0, and an invalid confidence_state degrades to null (framing
- * and human blocks legitimately carry none).
+ * and human blocks legitimately carry none). A missing/invalid generation_seq
+ * degrades to 1 — packets from a DB that predates the amendment-refresh
+ * migration must keep adapting.
  */
 export function adaptDeliverablePacketBlock(raw: unknown): DeliverablePacketBlock | null {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
@@ -127,6 +133,7 @@ export function adaptDeliverablePacketBlock(raw: unknown): DeliverablePacketBloc
     review_note: asString(r.review_note),
     version: asFiniteNumber(r.version) ?? 1,
     sort_order: asFiniteNumber(r.sort_order) ?? 0,
+    generation_seq: asFiniteNumber(r.generation_seq) ?? 1,
   };
 }
 
@@ -167,6 +174,119 @@ export function adaptDeliverablePacket(raw: unknown): DeliverablePacket | null {
     protocol_version: asString(r.protocol_version),
     generated_at: asString(r.generated_at) ?? '',
     regenerated_at: asString(r.regenerated_at),
+    // Degrades to 1 on pre-migration packets (same tolerance as blocks).
+    generation_seq: asFiniteNumber(r.generation_seq) ?? 1,
     blocks,
+  };
+}
+
+// -----------------------------------------------------------------------------
+// Change-summary adapter (deliverable_get_change_summary)
+// -----------------------------------------------------------------------------
+
+/** Entry in new_blocks / flagged_blocks: id + section_key + display_text,
+ *  all required strings — anything else is skipped. */
+function adaptChangeSummaryBlockRef(raw: unknown): ChangeSummaryBlockRef | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+
+  const id = asString(r.id);
+  const sectionKey = asString(r.section_key);
+  const displayText = asString(r.display_text);
+  if (!id || !sectionKey || displayText === null) return null;
+
+  return { id, section_key: sectionKey, display_text: displayText };
+}
+
+/** Removed-block snapshot from the generation log's JSONB: section_key +
+ *  derived_text strings and a block_type inside the enum, or skipped. */
+function adaptRemovedBlockSnapshot(raw: unknown): RemovedBlockSnapshot | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+
+  const sectionKey = asString(r.section_key);
+  const blockType = asString(r.block_type);
+  const derivedText = asString(r.derived_text);
+  if (!sectionKey || derivedText === null) return null;
+  if (blockType === null || !BLOCK_TYPES.has(blockType)) return null;
+
+  return {
+    section_key: sectionKey,
+    block_type: blockType as DeliverableBlockType,
+    derived_text: derivedText,
+  };
+}
+
+/** Generation-log row, adapted tolerantly: ids are required, counters
+ *  degrade to 0, generation_seq to 1, and removed_blocks entries are
+ *  adapted entry-by-entry (malformed ones skipped). */
+function adaptGenerationLog(raw: unknown): DeliverableGenerationLog | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+
+  const id = asString(r.id);
+  const deliverableId = asString(r.deliverable_id);
+  if (!id || !deliverableId) return null;
+
+  const rawRemoved: unknown[] = Array.isArray(r.removed_blocks) ? r.removed_blocks : [];
+  const removedBlocks: RemovedBlockSnapshot[] = [];
+  for (const entry of rawRemoved) {
+    const snapshot = adaptRemovedBlockSnapshot(entry);
+    if (snapshot !== null) removedBlocks.push(snapshot);
+  }
+
+  return {
+    id,
+    deliverable_id: deliverableId,
+    generation_seq: asFiniteNumber(r.generation_seq) ?? 1,
+    protocol_version: asString(r.protocol_version),
+    generated_by: asString(r.generated_by),
+    generated_at: asString(r.generated_at) ?? '',
+    blocks_created: asFiniteNumber(r.blocks_created) ?? 0,
+    blocks_matched: asFiniteNumber(r.blocks_matched) ?? 0,
+    blocks_kept_flagged: asFiniteNumber(r.blocks_kept_flagged) ?? 0,
+    blocks_deleted: asFiniteNumber(r.blocks_deleted) ?? 0,
+    removed_blocks: removedBlocks,
+  };
+}
+
+/**
+ * Adapt the deliverable_get_change_summary JSON. Returns null for anything
+ * that is not an object (the RPC's SQL-NULL "no deliverable" answer is
+ * handled by the API layer before this runs). Inside a summary object,
+ * everything degrades instead of failing: a malformed log sub-object becomes
+ * null (the summary's own "no log yet" value), and each of the three lists
+ * is adapted entry-by-entry with malformed entries skipped.
+ */
+export function adaptChangeSummary(raw: unknown): DeliverableChangeSummary | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+
+  const newBlocks: ChangeSummaryBlockRef[] = [];
+  const rawNew: unknown[] = Array.isArray(r.new_blocks) ? r.new_blocks : [];
+  for (const entry of rawNew) {
+    const ref = adaptChangeSummaryBlockRef(entry);
+    if (ref !== null) newBlocks.push(ref);
+  }
+
+  const flaggedBlocks: ChangeSummaryBlockRef[] = [];
+  const rawFlagged: unknown[] = Array.isArray(r.flagged_blocks) ? r.flagged_blocks : [];
+  for (const entry of rawFlagged) {
+    const ref = adaptChangeSummaryBlockRef(entry);
+    if (ref !== null) flaggedBlocks.push(ref);
+  }
+
+  const removedBlocks: RemovedBlockSnapshot[] = [];
+  const rawRemoved: unknown[] = Array.isArray(r.removed_blocks) ? r.removed_blocks : [];
+  for (const entry of rawRemoved) {
+    const snapshot = adaptRemovedBlockSnapshot(entry);
+    if (snapshot !== null) removedBlocks.push(snapshot);
+  }
+
+  return {
+    log: adaptGenerationLog(r.log),
+    new_blocks: newBlocks,
+    flagged_blocks: flaggedBlocks,
+    removed_blocks: removedBlocks,
   };
 }
