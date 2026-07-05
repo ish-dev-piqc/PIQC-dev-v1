@@ -548,6 +548,36 @@ describe('downloadDeliverable — orchestrator', () => {
   });
 });
 
+describe('downloadDeliverable — SIV dispatch', () => {
+  it('routes a siv_package packet to the deck builder + deck filename', async () => {
+    const sivPacket = {
+      ...makePacket(),
+      artifact_type: 'siv_package',
+      title: 'SIV Knowledge Transfer Package — Draft',
+    };
+    rpcMock.mockResolvedValueOnce({ data: sivPacket, error: null });
+
+    const triggered: string[] = [];
+    const r = await downloadDeliverable('d-siv', {
+      triggerDownload: (filename) => triggered.push(filename),
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data.filename).toBe('onc-4021_siv_package_draft_2026-07-03.pdf');
+    }
+    expect(triggered).toHaveLength(1);
+  });
+
+  it('checklist dispatch regression: non-SIV packets keep the original filename', async () => {
+    rpcMock.mockResolvedValueOnce({ data: makePacket(), error: null });
+    const r = await downloadDeliverable('d-1', { triggerDownload: () => {} });
+    if (r.ok) {
+      expect(r.data.filename).toBe('onc-4021_monitoring_prep_checklist_draft_2026-07-03.pdf');
+    }
+    expect(r.ok).toBe(true);
+  });
+});
+
 // ===========================================================================
 // Constants — spot-check the disclaimer + header label so future
 // "polish-strip" passes can't quietly remove them.
