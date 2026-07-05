@@ -150,6 +150,30 @@ describe('demoSiteRepo — visits + protocols', () => {
     expect(same?.status).toBe('completed');
   });
 
+  it('cancelVisit flips status to cancelled and persists', async () => {
+    const visits = await demoSiteRepo.fetchVisitsForProtocol(BRIGHTEN);
+    if (!visits.ok) throw new Error(visits.error);
+    const scheduled = visits.data.find((v) => v.status === 'scheduled');
+    expect(scheduled).toBeTruthy();
+    if (!scheduled) return;
+
+    const cancelled = await demoSiteRepo.cancelVisit(scheduled.id);
+    expect(cancelled.ok).toBe(true);
+    if (!cancelled.ok) return;
+    expect(cancelled.data.status).toBe('cancelled');
+
+    // Refetch confirms persistence in store.
+    const refetch = await demoSiteRepo.fetchVisitsForProtocol(BRIGHTEN);
+    if (!refetch.ok) throw new Error(refetch.error);
+    const same = refetch.data.find((v) => v.id === scheduled.id);
+    expect(same?.status).toBe('cancelled');
+  });
+
+  it('cancelVisit returns an error for unknown visit id', async () => {
+    const result = await demoSiteRepo.cancelVisit('00000000-0000-0000-0000-000000000000');
+    expect(result.ok).toBe(false);
+  });
+
   it('setAnchorDate updates the protocol row', async () => {
     const result = await demoSiteRepo.setAnchorDate(BRIGHTEN, '2026-01-01');
     expect(result.ok).toBe(true);

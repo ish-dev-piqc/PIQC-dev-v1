@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { UploadForm } from '../KnowledgeBase';
 import { useTheme } from '../../../context/ThemeContext';
@@ -27,7 +27,18 @@ export default function ProtocolUploadModal({ onClose }: ProtocolUploadModalProp
   const isLight = theme === 'light';
   const overlay = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  useOverlay({ isOpen: true, onClose, containerRef: panelRef });
+  const [isParsing, setIsParsing] = useState(false);
+  const [confirmingClose, setConfirmingClose] = useState(false);
+
+  const requestClose = () => {
+    if (isParsing && !confirmingClose) {
+      setConfirmingClose(true);
+      return;
+    }
+    onClose();
+  };
+
+  useOverlay({ isOpen: true, onClose: requestClose, containerRef: panelRef });
 
   const bg = isLight ? 'bg-white' : 'bg-[#0F172A]';
   const border = isLight ? 'border-[#E2E8F0]' : 'border-white/5';
@@ -38,7 +49,7 @@ export default function ProtocolUploadModal({ onClose }: ProtocolUploadModalProp
     <div
       ref={overlay}
       onClick={(e) => {
-        if (e.target === overlay.current) onClose();
+        if (e.target === overlay.current) requestClose();
       }}
       className="fixed inset-0 z-50 bg-black/40 flex items-start sm:items-center justify-center p-4 overflow-y-auto animate-fade-in"
     >
@@ -55,7 +66,7 @@ export default function ProtocolUploadModal({ onClose }: ProtocolUploadModalProp
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className={`${subColor} hover:opacity-75 ml-4 flex-shrink-0`}
             aria-label="Close"
           >
@@ -64,7 +75,32 @@ export default function ProtocolUploadModal({ onClose }: ProtocolUploadModalProp
         </div>
 
         <div className="p-5">
-          <UploadForm isLight={isLight} onSuccess={onClose} />
+          {confirmingClose ? (
+            <div className="rounded-xl border border-amber-400/30 bg-amber-400/5 p-4 space-y-3">
+              <p className={`${headingColor} text-sm`}>
+                Your protocol is still parsing — closing now won't stop it, but you'll need to
+                check the Protocol panel to see when it's ready. Close anyway?
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmingClose(false)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${border} ${subColor} hover:opacity-75`}
+                >
+                  Keep waiting
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium bg-red-500 hover:bg-red-400 text-white"
+                >
+                  Close anyway
+                </button>
+              </div>
+            </div>
+          ) : (
+            <UploadForm isLight={isLight} onSuccess={onClose} onParsingChange={setIsParsing} />
+          )}
         </div>
       </div>
     </div>

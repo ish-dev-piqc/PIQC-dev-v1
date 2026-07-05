@@ -68,9 +68,11 @@ export interface IngestResponse {
 export function UploadForm({
   onSuccess,
   isLight,
+  onParsingChange,
 }: {
   onSuccess: (data: IngestResponse) => void;
   isLight: boolean;
+  onParsingChange?: (isParsing: boolean) => void;
 }) {
   const [title, setTitle] = useState('');
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -182,6 +184,10 @@ export function UploadForm({
   // pipeline. State flips out of 'parsing' when the tick reports terminal
   // status (ready/failed). The documents realtime channel in SiteDataContext
   // is a parallel notifier — the UI listens to both, whichever resolves first.
+  useEffect(() => {
+    onParsingChange?.(state.status === 'uploading' || state.status === 'parsing');
+  }, [state.status, onParsingChange]);
+
   const pendingDocId = state.status === 'parsing' ? state.pendingDocumentId : null;
   useEffect(() => {
     if (!pendingDocId) return;

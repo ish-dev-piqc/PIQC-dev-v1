@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  Ban,
   CheckCircle2,
   Clock,
   ExternalLink,
@@ -48,6 +49,7 @@ const VISIT_STATUS_ORDER: VisitStatus[] = [
   'deviation',
   'overdue',
   'closing_soon',
+  'cancelled',
 ];
 
 function daysBetween(from: string, to: Date): number {
@@ -111,6 +113,7 @@ export default function ProtocolDetailDrawer({
           deviation: 0,
           overdue: 0,
           closing_soon: 0,
+          cancelled: 0,
         } as Record<VisitStatus, number>,
         enrollment: { screening: 0, active: 0, completed: 0, withdrawn: 0, screenFailure: 0 },
         recentVisits: [] as SiteVisit[],
@@ -130,6 +133,7 @@ export default function ProtocolDetailDrawer({
       deviation: 0,
       overdue: 0,
       closing_soon: 0,
+      cancelled: 0,
     };
     for (const v of visits30d) {
       if (v.status in visitCounts) visitCounts[v.status as VisitStatus]++;
@@ -203,6 +207,7 @@ export default function ProtocolDetailDrawer({
     deviation: { color: '#BA7517', Icon: FileWarning },
     overdue: { color: isLight ? '#993C1D' : '#F0997B', Icon: AlertTriangle },
     closing_soon: { color: isLight ? '#993C1D' : '#F0997B', Icon: AlertTriangle },
+    cancelled: { color: isLight ? '#64748B' : '#94A3B8', Icon: Ban },
   };
 
   return (

@@ -3,6 +3,7 @@ import { X, AlertTriangle } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useOverlay } from '../../../hooks/useOverlay';
 import { useSwipeDismiss } from '../../../hooks/useSwipeDismiss';
+import { useDirty } from '../../../context/DirtyStateContext';
 import { createParticipant, updateParticipant } from '../../../lib/site/siteApi';
 import type { SiteParticipant, ParticipantStatus } from '../../../lib/site/types';
 import { PARTICIPANT_STATUS_LABELS } from '../../../lib/site/labels';
@@ -84,18 +85,32 @@ export default function ParticipantFormDrawer({
   const isLight = theme === 'light';
   const panelRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
-  useOverlay({ isOpen: true, onClose, containerRef: panelRef });
-  const swipe = useSwipeDismiss({ onClose });
 
-  const [form, setForm] = useState<FormState>(
-    mode === 'edit' && initial ? fromParticipant(initial) : EMPTY,
-  );
+  const initialForm = mode === 'edit' && initial ? fromParticipant(initial) : EMPTY;
+  const [form, setForm] = useState<FormState>(initialForm);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingClose, setConfirmingClose] = useState(false);
 
   useEffect(() => {
     if (mode === 'edit' && initial) setForm(fromParticipant(initial));
   }, [mode, initial]);
+
+  // B6: unsaved-work guard — dirty if the form has diverged from its
+  // create-mode empty defaults / edit-mode initial values.
+  const isDirty = JSON.stringify(form) !== JSON.stringify(initialForm);
+  useDirty('Participant form', isDirty);
+
+  const requestClose = () => {
+    if (isDirty && !confirmingClose) {
+      setConfirmingClose(true);
+      return;
+    }
+    onClose();
+  };
+
+  useOverlay({ isOpen: true, onClose: requestClose, containerRef: panelRef });
+  const swipe = useSwipeDismiss({ onClose: requestClose });
 
   const update = <K extends keyof FormState>(k: K, v: FormState[K]) => {
     setForm((s) => ({ ...s, [k]: v }));
@@ -171,7 +186,7 @@ export default function ParticipantFormDrawer({
     <div
       ref={overlayRef}
       onClick={(e) => {
-        if (e.target === overlayRef.current) onClose();
+        if (e.target === overlayRef.current) requestClose();
       }}
       className="fixed inset-0 z-[70] bg-black/30 flex justify-end animate-fade-in"
     >
@@ -190,10 +205,39 @@ export default function ParticipantFormDrawer({
               {mode === 'create' ? 'Add participant' : `Edit ${initial?.id ?? 'participant'}`}
             </h3>
           </div>
-          <button type="button" onClick={onClose} className={`${subColor} hover:opacity-75`} aria-label="Close">
+          <button type="button" onClick={requestClose} className={`${subColor} hover:opacity-75`} aria-label="Close">
             <X size={18} />
           </button>
         </div>
+
+        {confirmingClose && (
+          <div className={`px-5 py-3 border-b ${border} ${isLight ? 'bg-rose-50' : 'bg-rose-500/[0.06]'}`}>
+            <p className={`text-xs font-semibold ${isLight ? 'text-rose-800' : 'text-rose-200'}`}>
+              Discard unsaved participant details?
+            </p>
+            <p className={`text-[11px] mt-0.5 leading-snug ${isLight ? 'text-rose-700' : 'text-rose-300/85'}`}>
+              This cannot be undone.
+            </p>
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className={`text-[11px] font-semibold px-2.5 py-1 rounded-md text-white transition-colors ${
+                  isLight ? 'bg-rose-600 hover:bg-rose-700' : 'bg-rose-500 hover:bg-rose-400'
+                }`}
+              >
+                Discard
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmingClose(false)}
+                className={`text-[11px] font-medium px-2.5 py-1 rounded-md ${isLight ? 'text-rose-700 hover:bg-rose-100' : 'text-rose-300 hover:bg-rose-500/10'}`}
+              >
+                Keep editing
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Form */}
         <form onSubmit={submit} className="flex-1 overflow-y-auto p-5 space-y-4">
@@ -316,7 +360,7 @@ export default function ParticipantFormDrawer({
         <div className={`flex items-center justify-end gap-2 px-5 py-3 border-t ${border}`}>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             disabled={submitting}
             className={`text-xs font-medium px-3 py-1.5 rounded-md ${subColor} hover:opacity-75 disabled:opacity-50`}
           >

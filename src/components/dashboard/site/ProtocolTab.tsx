@@ -53,7 +53,11 @@ export default function ProtocolTab() {
 
   const docs = documents;
 
-  const latest = docs[0]?.extracted_fields;
+  // extracted_fields only ever populates once Reducto finishes, so pull
+  // highlights from the most recent *ready* doc — otherwise a pending/failed
+  // re-upload sitting at docs[0] would blank out highlights that an earlier
+  // ready doc already provided.
+  const latest = docs.find((d) => d.status === 'ready')?.extracted_fields;
   const highlights = collectHighlights(latest);
 
   const handleMaterialize = async () => {
@@ -264,10 +268,28 @@ export default function ProtocolTab() {
                       className={`mt-0.5 flex-shrink-0 ${isLight ? 'text-[#334155]/35' : 'text-[#CBD5E1]/30'}`}
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="text-fg-heading text-sm font-medium truncate">{d.title || d.filename}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-fg-heading text-sm font-medium truncate">{d.title || d.filename}</p>
+                        {d.status === 'pending' && (
+                          <span className="flex-shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-400/15 text-amber-500">
+                            Parsing…
+                          </span>
+                        )}
+                        {d.status === 'failed' && (
+                          <span
+                            className="flex-shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400"
+                            title={d.error_message ?? ''}
+                          >
+                            Failed
+                          </span>
+                        )}
+                      </div>
                       <p className={`${mutedColor} text-[11px] mt-0.5 truncate`}>
                         {d.filename ? `${d.filename} · ` : ''}ingested {formatDate(d.created_at)}
                       </p>
+                      {d.status === 'failed' && d.error_message && (
+                        <p className="text-[11px] mt-0.5 text-red-400 truncate">{d.error_message}</p>
+                      )}
                     </div>
                   </div>
                 </div>

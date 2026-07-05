@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { friendlyAuthError } from '../../lib/authErrors';
 
 const PHONE_PATTERN = /^[+0-9()\-\s]{7,}$/;
 
@@ -39,7 +40,12 @@ function getTimezoneOptions(): string[] {
   return fallback;
 }
 
-export default function ProfileCompletion() {
+interface ProfileCompletionProps {
+  loadError?: boolean;
+  onRetryLoad?: () => void;
+}
+
+export default function ProfileCompletion({ loadError, onRetryLoad }: ProfileCompletionProps) {
   const { user, profile, refreshProfile, signOut } = useAuth();
   const { theme } = useTheme();
   const isLight = theme === 'light';
@@ -58,6 +64,53 @@ export default function ProfileCompletion() {
   const [error, setError] = useState('');
 
   const timezoneOptions = useMemo(() => getTimezoneOptions(), []);
+
+  if (loadError) {
+    const pageBg = isLight ? 'bg-[#F8FAFC]' : 'bg-[#020617]';
+    const subColor = isLight ? 'text-[#334155]/60' : 'text-[#CBD5E1]/60';
+
+    return (
+      <div className={`min-h-screen ${pageBg} flex flex-col items-center justify-center px-4 py-10 relative overflow-hidden`}>
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: isLight
+              ? 'radial-gradient(ellipse 80% 50% at 50% -10%, rgb(var(--brand-600) / 0.10) 0%, transparent 65%)'
+              : 'radial-gradient(ellipse 80% 50% at 50% -10%, rgb(var(--brand-600) / 0.18) 0%, transparent 65%)',
+          }}
+        />
+
+        <div className="relative z-10 w-full max-w-md flex flex-col items-center text-center">
+          <div className="flex items-center gap-2.5 mb-8">
+            <img src="/PIQC_Logo.png" alt="" className="w-8 h-8 object-contain" />
+            <span className="text-[15px] font-semibold text-fg-heading tracking-tight">
+              <span className="text-brand-600">PIQC</span>linical
+            </span>
+          </div>
+
+          <h1 className="text-2xl font-bold text-fg-heading mb-1.5">We couldn't load your profile</h1>
+          <p className={`text-sm ${subColor} mb-6`}>
+            Something went wrong loading your account details. This is usually temporary.
+          </p>
+
+          <button
+            type="button"
+            onClick={onRetryLoad ?? refreshProfile}
+            className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-all duration-150 shadow-btn hover:shadow-btn-hover"
+          >
+            Try again
+          </button>
+          <button
+            type="button"
+            onClick={signOut}
+            className={`mt-3 text-sm ${isLight ? 'text-[#334155]/40 hover:text-[#334155]/70' : 'text-[#CBD5E1]/40 hover:text-[#CBD5E1]/70'} transition-colors`}
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const trimmed = {
     name: name.trim(),
@@ -95,7 +148,7 @@ export default function ProfileCompletion() {
       .eq('id', user.id);
 
     if (updateError) {
-      setError(updateError.message);
+      setError(friendlyAuthError(updateError));
       setSubmitting(false);
       return;
     }

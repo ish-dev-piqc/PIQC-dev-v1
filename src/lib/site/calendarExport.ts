@@ -120,6 +120,8 @@ function icsStatusFor(visitStatus: SiteVisit['status']): string | null {
       return 'CONFIRMED';
     case 'missed':
       return 'CANCELLED';
+    case 'cancelled':
+      return 'CANCELLED';
     default:
       return null;
   }
