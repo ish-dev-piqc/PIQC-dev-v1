@@ -1,0 +1,120 @@
+/* ============================================================================
+   PIQClinical — design tokens & shared component classes
+   Single source of truth for color / gradient / surface / control styles.
+   Extracted verbatim from landing.html. Claude Design: retune the whole site
+   by editing THIS file — do not hardcode hex or magic numbers in page markup.
+   ============================================================================ */
+
+:root {
+  /* ── Brand palette (medical scrub) ── */
+  --scrub-blue:       #1e7fd4;
+  --scrub-bluelight:  #4a9fe0;
+  --scrub-bluedark:   #1568b8;
+  --scrub-teal:       #14b8a6;
+  --scrub-teallight:  #2dd4bf;
+  --scrub-tealdark:   #0e9488;
+  --scrub-sage:       #a7c9bf;
+  --ink:              #0f2942;
+
+  /* ── Dark product-mockup navy scale ── */
+  --navy-900: #070d1a;
+  --navy-850: #0a1020;
+  --navy-800: #0d1528;
+  --navy-750: #111c33;
+  --navy-700: #162240;
+  --navy-600: #1e3060;
+
+  /* ── Marketing chrome ── */
+  --page-bg:    #ffffff;
+  --body-text:  #334155;   /* slate-600 */
+  --hairline:   #e8eef3;
+  --surface-2:  #f7fafc;
+
+  /* ── Signature gradient ── */
+  --grad-brand: linear-gradient(135deg, #1e7fd4 0%, #14b8a6 100%);
+
+  /* ── Radii / shadows ── */
+  --radius-card: 1rem;
+  --shadow-card:      0 1px 3px rgba(15,41,66,0.05), 0 8px 28px rgba(15,41,66,0.05);
+  --shadow-card-hover:0 8px 36px rgba(30,127,212,0.13), 0 1px 3px rgba(15,41,66,0.06);
+  --shadow-screenshot:0 12px 48px rgba(15,41,66,0.20), 0 2px 8px rgba(15,41,66,0.12);
+
+  /* ── Motion (Claude Design: tune hero animation pacing here) ── */
+  --anim-fast:   180ms;
+  --anim-base:   220ms;
+  --anim-hero:   5000ms;   /* full hero animation cycle */
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+* { box-sizing: border-box; }
+body { background: var(--page-bg); color: var(--body-text); }
+
+/* ── Signature gradient utilities ── */
+.grad-brand { background: var(--grad-brand); }
+.grad-text {
+  background: linear-gradient(120deg, #1e7fd4 0%, #14b8a6 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.grad-soft {
+  background: radial-gradient(ellipse 70% 55% at 50% 0%,
+    rgba(30,127,212,0.10) 0%, rgba(20,184,166,0.06) 40%, transparent 75%);
+}
+.grid-pattern {
+  background-image:
+    linear-gradient(rgba(15,41,66,0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15,41,66,0.035) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* ── Light cards ── */
+.card {
+  background: #ffffff;
+  border: 1px solid var(--hairline);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow var(--anim-base) ease, transform var(--anim-base) ease, border-color var(--anim-base) ease;
+}
+.card:hover {
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-3px);
+  border-color: rgba(30,127,212,0.25);
+}
+
+/* ── Dark product-screenshot surface ── */
+.screenshot {
+  background: var(--navy-800);
+  border: 1px solid rgba(255,255,255,0.07);
+  box-shadow: var(--shadow-screenshot);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+
+/* ── Buttons ── */
+.btn-primary {
+  background: var(--grad-brand);
+  box-shadow: 0 4px 14px rgba(20,127,180,0.35);
+  transition: box-shadow var(--anim-fast) ease, transform 150ms ease, filter var(--anim-fast) ease;
+}
+.btn-primary:hover { box-shadow: 0 6px 22px rgba(20,127,180,0.45); transform: translateY(-1px); filter: brightness(1.04); }
+.btn-primary:active { transform: translateY(0); }
+.btn-ghost { transition: background 150ms ease, border-color 150ms ease; }
+.btn-ghost:hover { background: #f1f6fa; border-color: #cfe0ec; }
+
+/* ── Badges (dark mockups) ── */
+.badge-high   { background: rgba(34,197,94,0.14); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
+.badge-medium { background: rgba(234,179,8,0.14); color: #facc15; border: 1px solid rgba(234,179,8,0.3); }
+.badge-blue   { background: rgba(37,99,235,0.16); color: #60a5fa; border: 1px solid rgba(37,99,235,0.3); }
+.stage-pill   { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 8px; border-radius: 4px; }
+
+/* ── Form focus ── */
+input:focus, select:focus, textarea:focus {
+  outline: none; border-color: var(--scrub-teal); box-shadow: 0 0 0 3px rgba(20,184,166,0.16);
+}
+
+/* ── Anchor offset for fixed nav ── */
+[id] { scroll-margin-top: 80px; }
+
+/* ── Motion safety: hero animations fall back to final state ── */
+@media (prefers-reduced-motion: reduce) {
+  [data-anim] { animation: none !important; transition: none !important; }
+  [data-anim] .is-static { opacity: 1 !important; transform: none !important; }
+}

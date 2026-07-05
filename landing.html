@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- ─────────────  PRIMARY SEO  ───────────── -->
+  <title>PIQClinical — Protocol Intelligence Platform for Clinical Trials</title>
+  <meta name="description" content="PIQClinical turns your clinical-trial protocol PDF into structured, evidence-linked, review-ready data — AI-powered extraction with confidence scoring, an enforced 8-stage vendor audit workflow, and role-filtered visit worksheets. HIPAA & GDPR compliant. Every output traceable to its source." />
+  <meta name="keywords" content="clinical trial software, protocol intelligence, protocol extraction, vendor audit workflow, clinical trial management, SOTR, visit execution workspace, clinical compliance, HIPAA clinical software, 21 CFR Part 11, clinical research automation" />
+  <meta name="author" content="PIQClinical" />
+  <!-- Allow indexing when this page is deployed as the public marketing site.
+       NOTE: the in-development SPA at the apex domain is currently noindex by design —
+       keep that on a subdomain (e.g. app.piqclinical.com) and serve THIS page publicly. -->
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+  <link rel="canonical" href="https://piqclinical.com/" />
+  <meta name="theme-color" content="#1e7fd4" />
+
+  <!-- ─────────────  OPEN GRAPH (Facebook / LinkedIn / Slack)  ───────────── -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="PIQClinical" />
+  <meta property="og:title" content="PIQClinical — Protocol Intelligence Platform for Clinical Trials" />
+  <meta property="og:description" content="AI-powered protocol extraction with confidence scoring, an enforced 8-stage vendor audit workflow, and role-filtered visit worksheets. HIPAA & GDPR compliant. Every output traceable." />
+  <meta property="og:url" content="https://piqclinical.com/" />
+  <!-- TODO: replace with a real, self-hosted 1200×630 PNG social card (do NOT use the microlink dev-URL screenshot) -->
+  <meta property="og:image" content="https://piqclinical.com/og-card.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="PIQClinical — Protocol Intelligence Platform for Clinical Trials" />
+  <meta property="og:locale" content="en_US" />
+
+  <!-- ─────────────  TWITTER / X CARD  ───────────── -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="PIQClinical — Protocol Intelligence for Clinical Trials" />
+  <meta name="twitter:description" content="AI-powered protocol extraction, an enforced 8-stage vendor audit workflow, and role-filtered visit worksheets. HIPAA & GDPR compliant. Every output traceable." />
+  <meta name="twitter:image" content="https://piqclinical.com/og-card.png" />
+
+  <!-- ─────────────  FAVICON (swap vite.svg for the real brand mark)  ───────────── -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+  <!-- ─────────────  STRUCTURED DATA — powers Google rich results / knowledge panel  ───────────── -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://piqclinical.com/#organization",
+        "name": "PIQClinical",
+        "url": "https://piqclinical.com/",
+        "logo": "https://piqclinical.com/piqc-logo.png",
+        "description": "PIQClinical is an AI-powered protocol-intelligence platform for clinical trials, covering protocol extraction, vendor audit workflows, and visit execution.",
+        "sameAs": []
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://piqclinical.com/#website",
+        "url": "https://piqclinical.com/",
+        "name": "PIQClinical",
+        "publisher": { "@id": "https://piqclinical.com/#organization" }
+      },
+      {
+        "@type": "SoftwareApplication",
+        "name": "PIQClinical",
+        "applicationCategory": "BusinessApplication",
+        "applicationSubCategory": "Clinical Trial Management Software",
+        "operatingSystem": "Web",
+        "url": "https://piqclinical.com/",
+        "description": "Protocol-intelligence platform for clinical trials: AI-powered protocol extraction with confidence scoring and source citations, an enforced 8-stage vendor audit workflow, and role-filtered visit execution worksheets. HIPAA and GDPR compliant with a 21 CFR Part 11-aligned audit trail.",
+        "featureList": [
+          "AI-powered protocol extraction with confidence scoring",
+          "Bounding-box source citations to the protocol PDF",
+          "8-stage gated vendor audit workflow",
+          "Risk-scored audit findings with criticality derivation",
+          "Role-filtered visit execution worksheets",
+          "Amendment / protocol-version tracking",
+          "21 CFR Part 11-aligned immutable audit trail"
+        ],
+        "offers": {
+          "@type": "Offer",
+          "availability": "https://schema.org/InStock",
+          "price": "0",
+          "priceCurrency": "USD",
+          "description": "Request a demo"
+        },
+        "publisher": { "@id": "https://piqclinical.com/#organization" }
+      }
+    ]
+  }
+  </script>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            // Medical-scrub brand palette
+            scrub: {
+              blue:       '#1e7fd4',
+              bluelight:  '#4a9fe0',
+              bluedark:   '#1568b8',
+              teal:       '#14b8a6',
+              teallight:  '#2dd4bf',
+              tealdark:   '#0e9488',
+              sage:       '#a7c9bf',
+            },
+            ink:   '#0f2942',
+            // dark product-screenshot navy (real in-app theme)
+            navy: {
+              900: '#070d1a', 850: '#0a1020', 800: '#0d1528',
+              750: '#111c33', 700: '#162240', 600: '#1e3060',
+            },
+          },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          keyframes: {
+            'fade-up': { '0%': { opacity: '0', transform: 'translateY(16px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+          },
+          animation: { 'fade-up': 'fade-up 0.5s ease-out both' },
+        },
+      },
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; }
+    body { background: #ffffff; color: #334155; }
+
+    /* ── Signature gradient ── */
+    .grad-brand   { background: linear-gradient(135deg, #1e7fd4 0%, #14b8a6 100%); }
+    .grad-text {
+      background: linear-gradient(120deg, #1e7fd4 0%, #14b8a6 100%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .grad-soft {
+      background: radial-gradient(ellipse 70% 55% at 50% 0%, rgba(30,127,212,0.10) 0%, rgba(20,184,166,0.06) 40%, transparent 75%);
+    }
+
+    .grid-pattern {
+      background-image:
+        linear-gradient(rgba(15,41,66,0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(15,41,66,0.035) 1px, transparent 1px);
+      background-size: 48px 48px;
+    }
+
+    /* ── Cards (light) ── */
+    .card {
+      background: #ffffff;
+      border: 1px solid #e8eef3;
+      box-shadow: 0 1px 3px rgba(15,41,66,0.05), 0 8px 28px rgba(15,41,66,0.05);
+      transition: box-shadow 220ms ease, transform 220ms ease, border-color 220ms ease;
+    }
+    .card:hover {
+      box-shadow: 0 8px 36px rgba(30,127,212,0.13), 0 1px 3px rgba(15,41,66,0.06);
+      transform: translateY(-3px);
+      border-color: rgba(30,127,212,0.25);
+    }
+
+    /* ── Dark product-screenshot card ── */
+    .screenshot {
+      background: #0d1528;
+      border: 1px solid rgba(255,255,255,0.07);
+      box-shadow: 0 12px 48px rgba(15,41,66,0.20), 0 2px 8px rgba(15,41,66,0.12);
+      border-radius: 1rem;
+      overflow: hidden;
+    }
+
+    /* ── Buttons ── */
+    .btn-primary {
+      background: linear-gradient(135deg, #1e7fd4 0%, #14b8a6 100%);
+      box-shadow: 0 4px 14px rgba(20,127,180,0.35);
+      transition: box-shadow 180ms ease, transform 150ms ease, filter 180ms ease;
+    }
+    .btn-primary:hover { box-shadow: 0 6px 22px rgba(20,127,180,0.45); transform: translateY(-1px); filter: brightness(1.04); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-ghost { transition: background 150ms ease, border-color 150ms ease; }
+    .btn-ghost:hover { background: #f1f6fa; border-color: #cfe0ec; }
+
+    /* ── Badges (dark mockups) ── */
+    .badge-high   { background: rgba(34,197,94,0.14);  color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
+    .badge-medium { background: rgba(234,179,8,0.14);  color: #facc15; border: 1px solid rgba(234,179,8,0.3); }
+    .badge-blue   { background: rgba(37,99,235,0.16);  color: #60a5fa; border: 1px solid rgba(37,99,235,0.3); }
+
+    .stage-pill { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 8px; border-radius: 4px; }
+
+    .tab-btn.active { background: linear-gradient(135deg, rgba(30,127,212,0.10), rgba(20,184,166,0.10)); border-color: rgba(20,184,166,0.4); color: #1568b8; }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    input:focus, select:focus, textarea:focus { outline: none; border-color: #14b8a6; box-shadow: 0 0 0 3px rgba(20,184,166,0.16); }
+
+    .logo-slot {
+      width: 124px; height: 46px;
+      background: #f6f9fb; border: 1px dashed #d3e0ea; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      color: #9fb3c2; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    }
+
+    .compliance-badge {
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      padding: 18px 20px; background: #ffffff; border: 1px solid #e8eef3; border-radius: 14px; min-width: 100px;
+      box-shadow: 0 1px 3px rgba(15,41,66,0.04);
+    }
+    .compliance-badge-icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: linear-gradient(135deg, rgba(30,127,212,0.12), rgba(20,184,166,0.12));
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    [id] { scroll-margin-top: 80px; }
+    @media (max-width: 640px) { .hide-mobile { display: none !important; } }
+  </style>
+</head>
+
+<body class="font-sans antialiased text-slate-600">
+
+<!-- ═══════════ LOGO MARK (reusable SVG symbol) ═══════════ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="ribbonGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#2b8fd9"/>
+      <stop offset="55%" stop-color="#1e9fc0"/>
+      <stop offset="100%" stop-color="#14b8a6"/>
+    </linearGradient>
+    <linearGradient id="wingGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"  stop-color="#c6e0d8"/>
+      <stop offset="100%" stop-color="#a0c8bc"/>
+    </linearGradient>
+    <symbol id="piqc-mark" viewBox="0 0 64 64">
+      <!-- soft wing -->
+      <path d="M6 24 C 14 14, 30 14, 33 38 C 20 40, 8 34, 6 24 Z" fill="url(#wingGrad)" opacity="0.6"/>
+      <path d="M12 30 C 18 24, 28 24, 31 39 C 22 40, 14 37, 12 30 Z" fill="url(#wingGrad)" opacity="0.5"/>
+      <!-- ribbon strand 1 (thick) -->
+      <path d="M28 58 C 20 46, 46 39, 39 24 C 35 15, 43 11, 47 8"
+            fill="none" stroke="url(#ribbonGrad)" stroke-width="4" stroke-linecap="round"/>
+      <!-- ribbon strand 2 (thin, crossing) -->
+      <path d="M33 58 C 45 47, 23 40, 31 25 C 36 16, 33 12, 41 7"
+            fill="none" stroke="url(#ribbonGrad)" stroke-width="2.2" stroke-linecap="round" opacity="0.85"/>
+      <!-- 4-point sparkle star -->
+      <path d="M47 3 L48.7 8.3 L54 10 L48.7 11.7 L47 17 L45.3 11.7 L40 10 L45.3 8.3 Z" fill="#2b8fd9"/>
+      <!-- dot trail -->
+      <circle cx="40" cy="15" r="1.3" fill="#2b8fd9"/>
+      <circle cx="37" cy="19" r="1.05" fill="#2b8fd9"/>
+      <circle cx="35" cy="23" r="0.85" fill="#2b8fd9"/>
+      <circle cx="45" cy="31" r="1.3" fill="#1e9fc0"/>
+      <circle cx="47" cy="36" r="1.05" fill="#14b8a6"/>
+      <circle cx="46" cy="41" r="0.85" fill="#14b8a6"/>
+    </symbol>
+  </defs>
+</svg>
+
+
+<!-- ═══════════════════════════════════════ NAV ═══════════════════════════════════════ -->
+<nav class="fixed top-0 left-0 right-0 z-50 border-b border-slate-100 bg-white/85 backdrop-blur-md">
+  <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+    <a href="#" class="flex items-center gap-2.5 select-none">
+      <!-- TODO: swap <svg use> for real asset, e.g. <img src="/piqc-mark.svg" class="w-8 h-8"> -->
+      <svg class="w-9 h-9" aria-hidden="true"><use href="#piqc-mark"/></svg>
+      <span class="text-xl font-bold tracking-tight">
+        <span class="grad-text">PIQC</span><span class="text-ink font-light">linical</span>
+      </span>
+    </a>
+
+    <div class="hide-mobile flex items-center gap-8 text-sm font-medium text-slate-500">
+      <a href="#features" class="hover:text-ink transition-colors">Features</a>
+      <a href="#workflow" class="hover:text-ink transition-colors">How it works</a>
+      <a href="#security" class="hover:text-ink transition-colors">Security</a>
+      <a href="#contact" class="hover:text-ink transition-colors">Contact</a>
+    </div>
+
+    <a href="#contact" class="btn-primary text-sm font-semibold text-white px-5 py-2.5 rounded-lg">Request a Demo</a>
+  </div>
+</nav>
+
+
+<!-- ═══════════════════════════════════════ HERO ═══════════════════════════════════════ -->
+<section class="relative pt-32 pb-24 overflow-hidden bg-white">
+  <div class="absolute inset-0 grid-pattern pointer-events-none"></div>
+  <div class="absolute inset-0 grad-soft pointer-events-none"></div>
+
+  <div class="relative max-w-7xl mx-auto px-6">
+    <div class="max-w-3xl mx-auto text-center">
+
+      <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-scrub-teal/30 bg-scrub-teal/5 mb-8">
+        <span class="w-1.5 h-1.5 rounded-full grad-brand animate-pulse"></span>
+        <span class="text-xs font-semibold grad-text tracking-wide uppercase">Clinical Protocol Intelligence Platform</span>
+      </div>
+
+      <h1 class="text-5xl sm:text-6xl font-extrabold leading-[1.08] tracking-tight text-ink mb-6">
+        Protocol intelligence<br class="hide-mobile" />
+        <span class="grad-text">for teams that can't afford to guess.</span>
+      </h1>
+
+      <p class="text-lg sm:text-xl text-slate-500 leading-relaxed mb-10 max-w-2xl mx-auto">
+        PIQClinical turns your protocol PDF into structured, evidence-linked, review-ready data —
+        with AI-powered extraction, confidence scoring, an enforced 8-stage vendor audit workflow,
+        and role-filtered visit worksheets. Every output traceable to its source.
+      </p>
+
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+        <a href="#contact" class="btn-primary w-full sm:w-auto text-base font-semibold text-white px-8 py-3.5 rounded-xl">Request a Demo</a>
+        <a href="#workflow" class="btn-ghost w-full sm:w-auto text-base font-medium text-ink px-8 py-3.5 rounded-xl border border-slate-200">See how it works →</a>
+      </div>
+    </div>
+
+    <!-- Hero product screenshot (dark = real product) -->
+    <div class="mt-20 max-w-4xl mx-auto">
+      <div class="screenshot">
+        <div class="flex items-center gap-2 px-4 py-3 border-b border-white/6 bg-[#0a1020]">
+          <span class="w-2.5 h-2.5 rounded-full bg-red-500/60"></span>
+          <span class="w-2.5 h-2.5 rounded-full bg-yellow-500/60"></span>
+          <span class="w-2.5 h-2.5 rounded-full bg-green-500/60"></span>
+          <span class="ml-3 text-xs text-white/30 font-mono">PIQC — Visit Execution Workspace</span>
+          <div class="ml-auto flex items-center gap-2">
+            <span class="badge-blue stage-pill">PROTOCOL v2.1</span>
+            <span class="stage-pill" style="background:rgba(34,197,94,0.12);color:#4ade80;border:1px solid rgba(34,197,94,0.25)">EXTRACTION COMPLETE</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 divide-x divide-white/6 text-sm">
+          <div class="p-4 space-y-1">
+            <p class="text-[10px] font-semibold text-white/30 uppercase tracking-widest mb-3">Visits</p>
+            <div class="flex items-center justify-between px-3 py-2 rounded-lg bg-scrub-blue/15 border border-scrub-blue/25">
+              <span class="text-white font-medium text-xs">Day 1 — Screening</span><span class="badge-high stage-pill">HIGH</span>
+            </div>
+            <div class="flex items-center justify-between px-3 py-2 rounded-lg"><span class="text-white/70 text-xs">Day 15 — Cycle 1</span><span class="badge-medium stage-pill">MED</span></div>
+            <div class="flex items-center justify-between px-3 py-2 rounded-lg"><span class="text-white/70 text-xs">Day 29 — Cycle 2</span><span class="badge-high stage-pill">HIGH</span></div>
+            <div class="flex items-center justify-between px-3 py-2 rounded-lg"><span class="text-white/70 text-xs">Day 43 — EOT</span><span class="badge-medium stage-pill">MED</span></div>
+          </div>
+
+          <div class="p-4 col-span-2">
+            <div class="flex items-center justify-between mb-3">
+              <p class="text-[10px] font-semibold text-white/30 uppercase tracking-widest">Day 1 — Screening</p>
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] text-white/40">View as:</span>
+                <span class="text-[10px] font-semibold text-scrub-teallight border border-scrub-teal/40 px-2 py-0.5 rounded">Coordinator</span>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <div class="flex items-start gap-3 px-3 py-2.5 rounded-lg bg-white/3 border border-white/6">
+                <div class="w-4 h-4 mt-0.5 rounded border-2 border-scrub-teal/60 flex items-center justify-center shrink-0"><div class="w-2 h-2 rounded-sm grad-brand"></div></div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-xs text-white font-medium">Informed Consent</span>
+                    <span class="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style="background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.2)">REQUIRED</span>
+                    <span class="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style="background:rgba(239,68,68,0.08);color:#fca5a5;border:1px solid rgba(239,68,68,0.15)">SAFETY CRITICAL</span>
+                  </div>
+                  <p class="text-[10px] text-white/40 mt-0.5">Must be obtained prior to any study procedures. §4.8 ICH E6(R2)</p>
+                </div>
+                <span class="badge-high stage-pill shrink-0">HIGH</span>
+              </div>
+              <div class="flex items-start gap-3 px-3 py-2.5 rounded-lg bg-white/3 border border-white/6">
+                <div class="w-4 h-4 mt-0.5 rounded border border-white/20 shrink-0"></div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-xs text-white/80">12-Lead ECG</span>
+                    <span class="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded badge-blue">PRIMARY ENDPOINT</span>
+                  </div>
+                  <p class="text-[10px] text-white/40 mt-0.5">Pre-dose, triplicate. Protocol §6.2.1 p.34</p>
+                </div>
+                <span class="badge-high stage-pill shrink-0">HIGH</span>
+              </div>
+              <div class="flex items-start gap-3 px-3 py-2.5 rounded-lg bg-white/3 border border-white/6">
+                <div class="w-4 h-4 mt-0.5 rounded border border-white/20 shrink-0"></div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs text-white/80">ECOG Performance Status</span>
+                    <span class="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style="background:rgba(168,85,247,0.12);color:#c084fc;border:1px solid rgba(168,85,247,0.25)">ELIGIBILITY</span>
+                  </div>
+                  <p class="text-[10px] text-white/40 mt-0.5">Score 0–1 required for enrollment. Protocol §5.1 p.22</p>
+                </div>
+                <span class="badge-medium stage-pill shrink-0">MED</span>
+              </div>
+            </div>
+            <div class="mt-3 flex items-center justify-between px-1">
+              <p class="text-[10px] text-white/30"><span class="text-scrub-teallight font-medium">PIQC drafted</span> · 14 requirements · 0 gaps detected</p>
+              <button class="text-[10px] font-semibold text-scrub-teallight border border-scrub-teal/40 px-2.5 py-1 rounded-md">Export Worksheet →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════ TRUST BAR ═══════════════════════════════════════ -->
+<section class="border-y border-slate-100 bg-[#f7fafc] py-10">
+  <div class="max-w-7xl mx-auto px-6">
+    <p class="text-center text-xs font-semibold uppercase tracking-widest text-slate-400 mb-8">Trusted by clinical operations teams at</p>
+    <div class="flex flex-wrap items-center justify-center gap-6">
+      <div class="logo-slot">Partner 01</div><div class="logo-slot">Partner 02</div><div class="logo-slot">Partner 03</div><div class="logo-slot">Partner 04</div><div class="logo-slot">Partner 05</div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════ VALUE PROPS ═══════════════════════════════════════ -->
+<section id="features" class="py-24 bg-white">
+  <div class="max-w-7xl mx-auto px-6">
+    <div class="text-center mb-16">
+      <h2 class="text-3xl sm:text-4xl font-bold tracking-tight text-ink mb-4">Built for clinical compliance from day one</h2>
+      <p class="text-slate-500 text-lg max-w-2xl mx-auto">Not a generic document tool repurposed for trials. Every PIQC feature was designed around the trust, traceability, and audit requirements of regulated clinical research.</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <!-- Compliance -->
+      <div class="card rounded-2xl p-8">
+        <div class="w-12 h-12 rounded-xl mb-6 flex items-center justify-center" style="background:linear-gradient(135deg,rgba(30,127,212,0.12),rgba(20,184,166,0.12))">
+          <svg width="24" height="24" fill="none" stroke="#1568b8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+        </div>
+        <h3 class="text-xl font-bold text-ink mb-3">HIPAA &amp; GDPR Compliant</h3>
+        <p class="text-slate-500 leading-relaxed mb-6">Protocol data only — no PHI ever enters PIQC. Row-level security enforces org, study, and role boundaries at the database layer. Every action is logged with actor, timestamp, and state transition.</p>
+        <ul class="space-y-2.5">
+          <li class="flex items-center gap-2.5 text-sm text-slate-600"><span class="w-1.5 h-1.5 rounded-full grad-brand shrink-0"></span>RLS-enforced org isolation</li>
+          <li class="flex items-center gap-2.5 text-sm text-slate-600"><span class="w-1.5 h-1.5 rounded-full grad-brand shrink-0"></span>Zero PHI storage — protocols only</li>
+          <li class="flex items-center gap-2.5 text-sm text-slate-600"><span class="w-1.5 h-1.5 rounded-full grad-brand shrink-0"></span>21 CFR Part 11 audit trail</li>
+          <li class="flex items-center gap-2.5 text-sm text-slate-600"><span class="w-1.5 h-1.5 rounded-full grad-brand shrink-0"></span>Amendment version tracking</li>
+        </ul>
+      </div>
+      <!-- Speed -->
+      <div class="card rounded-2xl p-8">
+        <div class="w-12 h-12 rounded-xl mb-6 flex items-center justify-center" style="background:linear-gradient(135deg,rgba(30,127,212,0.12),rgba(20,184,166,0.12))">
+          <svg width="24" height="24" fill="none" stroke="#1568b8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        </div>
+        <h3 class="text-xl font-bold text-ink mb-3">Protocol Extraction in Minutes</h3>
+        <p class="text-slate-500 leading-relaxed mb-6">Upload your protocol PDF. PIQC extracts endpoints, eligibility criteria, visit schedules, and dosing — structured, confidence-scored, and linked to the exact page and paragraph. What used to take days now takes minutes.</p>
+        <ul class="space-y-2.5">
+          <li class="flex items-center gap-2.5 text-sm text-slate-600"><span class="w-1.5 h-1.5 rounded-full grad-brand shrink-0"></span>AI-powered protocol parsing</li>
+          <li class="flex items-center gap-2.5 text-sm text-slate-600"><span class="w-1.5 h-1.5 rounded-full grad-brand shrink-0"></span>Confidence score on every field</li>
+          <li class="flex items-center gap-2.5 text-sm text-slate-600"><span class="w-1.5 h-1.5 rounded-full grad-brand shrink-0"></span>Bounding-box source citations</li>
+          <li class="flex items-center gap-2.5 text-sm text-slate-600"><span class="w-1.5 h-1.5 rounded-full grad-brand shrink-0"></span>Auto-drafted visit checklists</li>
+        </ul>
+      </div>
+      <!-- Precision -->
+      <div class="card rounded-2xl p-8">
+        <div class="w-12 h-12 rounded-xl mb-6 flex items-center justify-center" style="background:linear-gradient(135deg,rgba(30,127,212,0.12),rgba(20,184,166,0.12))">
+          <svg width="24" height="24" fill="none" stroke="#1568b8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+        </div>
+        <h3 class="text-xl font-bold text-ink mb-3">Precision You Can Verify</h3>
+        <p class="text-slate-500 leading-relaxed mb-6">AI outputs are evidence-backed drafts, not black-box truth. Reviewers see exactly why each field was extracted, can accept, edit, or reject, and every decision is logged with editor identity and timestamp.</p>
+        <ul class="space-y-2.5">
+          <li class="flex items-center gap-2.5 text-sm text-slate-600"><span class="w-1.5 h-1.5 rounded-full grad-brand shrink-0"></span>4 evidence support types per field</li>
+          <li class="flex items-center gap-2.5 text-sm text-slate-600"><span class="w-1.5 h-1.5 rounded-full grad-brand shrink-0"></span>Reviewer approve / edit / reject</li>
+          <li class="flex items-center gap-2.5 text-sm text-slate-600"><span class="w-1.5 h-1.5 rounded-full grad-brand shrink-0"></span>Gap and conflict auto-detection</li>
+          <li class="flex items-center gap-2.5 text-sm text-slate-600"><span class="w-1.5 h-1.5 rounded-full grad-brand shrink-0"></span>Completeness verification signal</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════ STATS BAND ═══════════════════════════════════════ -->
+<section class="py-16 grad-brand">
+  <div class="max-w-7xl mx-auto px-6">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-8 text-center text-white">
+      <div><div class="text-4xl font-extrabold mb-1">8</div><div class="text-sm text-white/80">Enforced audit stages<br />with advancement gates</div></div>
+      <div><div class="text-4xl font-extrabold mb-1">5</div><div class="text-sm text-white/80">Role-filtered views<br />from one canonical dataset</div></div>
+      <div><div class="text-4xl font-extrabold mb-1">4</div><div class="text-sm text-white/80">Evidence support types<br />per extracted field</div></div>
+      <div><div class="text-4xl font-extrabold mb-1">0</div><div class="text-sm text-white/80">PHI stored — ever</div></div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════ FEATURE DEEP-DIVE ═══════════════════════════════════════ -->
+<section id="workflow" class="py-24 bg-white">
+  <div class="max-w-7xl mx-auto px-6">
+    <div class="text-center mb-14">
+      <h2 class="text-3xl sm:text-4xl font-bold tracking-tight text-ink mb-4">Three surfaces. One source of truth.</h2>
+      <p class="text-slate-500 text-lg max-w-2xl mx-auto">PIQC covers the full protocol lifecycle — from raw PDF to structured review, from vendor audit to day-of-visit execution.</p>
+    </div>
+
+    <div class="flex flex-col sm:flex-row gap-2 mb-10 p-1 rounded-xl border border-slate-200 bg-[#f7fafc] sm:w-fit mx-auto" id="tab-nav">
+      <button class="tab-btn active text-sm font-semibold px-5 py-2.5 rounded-lg border border-transparent text-slate-500 transition-all" data-tab="sotr">Protocol Intelligence</button>
+      <button class="tab-btn text-sm font-semibold px-5 py-2.5 rounded-lg border border-transparent text-slate-500 transition-all" data-tab="audit">Audit Workflow</button>
+      <button class="tab-btn text-sm font-semibold px-5 py-2.5 rounded-lg border border-transparent text-slate-500 transition-all" data-tab="visit">Visit Execution</button>
+    </div>
+
+    <!-- SOTR -->
+    <div class="tab-pane active" id="tab-sotr">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+        <div>
+          <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-scrub-blue/8 border border-scrub-blue/20 mb-6">
+            <span class="text-xs font-bold uppercase tracking-widest text-scrub-bluedark">SOTR</span>
+            <span class="text-xs text-scrub-blue/70">Source-of-Truth Reviewer</span>
+          </div>
+          <h3 class="text-2xl sm:text-3xl font-bold text-ink mb-4">Your protocol, parsed, cited, and ready to review.</h3>
+          <p class="text-slate-500 leading-relaxed mb-6">Manual protocol extraction is the hidden bottleneck at every site — teams re-typing requirements from PDFs into spreadsheets, with no record of what they interpreted or why. SOTR makes the extraction AI-assisted and the interpretation human-owned.</p>
+          <ul class="space-y-4">
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-scrub-blue/15 flex items-center justify-center shrink-0 mt-0.5"><svg width="12" height="12" fill="none" stroke="#1568b8" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+              <div><p class="text-sm font-semibold text-ink mb-0.5">AI extracts — humans approve</p><p class="text-sm text-slate-500">Every field is a draft with a confidence score and a reason. Reviewers accept, edit, or flag.</p></div>
+            </li>
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-scrub-blue/15 flex items-center justify-center shrink-0 mt-0.5"><svg width="12" height="12" fill="none" stroke="#1568b8" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+              <div><p class="text-sm font-semibold text-ink mb-0.5">Source-cited to the paragraph</p><p class="text-sm text-slate-500">Quoted text, page number, bounding box — every extracted item can be verified against the PDF.</p></div>
+            </li>
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-scrub-blue/15 flex items-center justify-center shrink-0 mt-0.5"><svg width="12" height="12" fill="none" stroke="#1568b8" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+              <div><p class="text-sm font-semibold text-ink mb-0.5">Amendment alerts, version-aware</p><p class="text-sm text-slate-500">When a protocol version changes, PIQC flags affected extractions and requires an adopt-or-dismiss decision.</p></div>
+            </li>
+          </ul>
+        </div>
+        <div class="screenshot">
+          <div class="px-5 py-4 border-b border-white/6 flex items-center justify-between">
+            <span class="text-xs font-semibold text-white/50 uppercase tracking-widest">Extraction Review</span>
+            <div class="flex gap-2"><span class="badge-high stage-pill">12 APPROVED</span><span class="badge-medium stage-pill">3 NEEDS REVIEW</span></div>
+          </div>
+          <div class="p-5 space-y-3">
+            <div class="rounded-lg border border-green-500/20 bg-green-500/5 p-4">
+              <div class="flex items-center justify-between mb-2"><span class="text-xs font-bold text-white/80">Primary Endpoint</span><span class="badge-high stage-pill">HIGH CONFIDENCE</span></div>
+              <p class="text-sm text-white/70 leading-relaxed">"Overall response rate (ORR) assessed per RECIST 1.1 by independent central review at Week 24."</p>
+              <div class="mt-3 flex items-center gap-2 text-[10px] text-white/35"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>Protocol §7.1.1 · p.42 · Cited: primary</span><span class="ml-auto text-green-400/70">✓ Approved by K. Rivera</span></div>
+            </div>
+            <div class="rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-4">
+              <div class="flex items-center justify-between mb-2"><span class="text-xs font-bold text-white/80">Washout Period</span><span class="badge-medium stage-pill">NEEDS REVIEW</span></div>
+              <p class="text-sm text-white/70 leading-relaxed">"≥14 days or 5 half-lives (whichever is longer) from prior systemic therapy."</p>
+              <div class="mt-3 flex items-center gap-2 text-[10px] text-white/35"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>Protocol §5.2 · p.28 · Cited: context</span><span class="ml-auto text-yellow-400/70">⚠ Ambiguity detected</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Audit -->
+    <div class="tab-pane" id="tab-audit">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+        <div>
+          <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-scrub-teal/8 border border-scrub-teal/20 mb-6">
+            <span class="text-xs font-bold uppercase tracking-widest text-scrub-tealdark">AUDIT MODE</span>
+            <span class="text-xs text-scrub-teal/80">Vendor Audit Workflow</span>
+          </div>
+          <h3 class="text-2xl sm:text-3xl font-bold text-ink mb-4">An 8-stage audit workflow that enforces itself.</h3>
+          <p class="text-slate-500 leading-relaxed mb-6">Vendor audits today run on emails, shared folders, and version chaos. PIQC replaces that with a gated 8-stage workflow — from intake through final export — where nothing advances until the right approvals are in place.</p>
+          <div class="flex flex-wrap items-center gap-1.5 mb-6">
+            <span class="stage-pill text-white grad-brand">INTAKE</span><span class="text-slate-300">→</span>
+            <span class="stage-pill text-white grad-brand">ENRICH</span><span class="text-slate-300">→</span>
+            <span class="stage-pill text-white grad-brand">QUESTIONNAIRE</span><span class="text-slate-300">→</span>
+            <span class="stage-pill text-white grad-brand">RISK</span><span class="text-slate-300">→</span>
+            <span class="stage-pill text-white grad-brand">DRAFTING</span><span class="text-slate-300">→</span>
+            <span class="stage-pill text-white grad-brand">CONDUCT</span><span class="text-slate-300">→</span>
+            <span class="stage-pill text-white grad-brand">REPORT</span><span class="text-slate-300">→</span>
+            <span class="stage-pill text-white grad-brand">EXPORT</span>
+          </div>
+          <ul class="space-y-4">
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-scrub-teal/15 flex items-center justify-center shrink-0 mt-0.5"><svg width="12" height="12" fill="none" stroke="#0e9488" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+              <div><p class="text-sm font-semibold text-ink mb-0.5">Questionnaire with vendor response tracking</p><p class="text-sm text-slate-500">ANSWERED / PARTIAL / DEFERRED / UNANSWERED status on every item. Amendment alerts when protocol changes mid-audit.</p></div>
+            </li>
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-scrub-teal/15 flex items-center justify-center shrink-0 mt-0.5"><svg width="12" height="12" fill="none" stroke="#0e9488" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+              <div><p class="text-sm font-semibold text-ink mb-0.5">Risk-scored findings with criticality derivation</p><p class="text-sm text-slate-500">CRITICAL / HIGH / MODERATE / LOW with DATA_INTEGRITY and PATIENT_SAFETY impact surfaces.</p></div>
+            </li>
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-scrub-teal/15 flex items-center justify-center shrink-0 mt-0.5"><svg width="12" height="12" fill="none" stroke="#0e9488" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+              <div><p class="text-sm font-semibold text-ink mb-0.5">Gated report generation</p><p class="text-sm text-slate-500">Confirmation letter, agenda, checklist, and final export — each requiring explicit approval before the next gate opens.</p></div>
+            </li>
+          </ul>
+        </div>
+        <div class="screenshot">
+          <div class="px-5 py-4 border-b border-white/6">
+            <div class="flex items-center justify-between mb-1"><span class="text-xs font-semibold text-white/50 uppercase tracking-widest">Risk Assessment</span><span class="stage-pill" style="background:rgba(20,184,166,0.12);color:#2dd4bf;border:1px solid rgba(20,184,166,0.3)">RISK REVIEW</span></div>
+            <p class="text-sm font-semibold text-white">Acme BioPharma — Phase III Sponsor Audit</p>
+          </div>
+          <div class="p-5 space-y-3">
+            <div class="rounded-lg border border-red-500/25 bg-red-500/6 p-4">
+              <div class="flex items-center justify-between mb-2"><span class="text-xs font-bold text-red-400 uppercase tracking-wide">CRITICAL · Data Integrity</span><span class="text-[10px] text-white/30">Finding #3</span></div>
+              <p class="text-sm text-white/75">Electronic data capture system lacks 21 CFR Part 11 audit trail for field-level edits.</p>
+              <div class="mt-2 text-[10px] text-white/35">Impact surface: DATA_INTEGRITY · Source: EDC questionnaire §4.2</div>
+            </div>
+            <div class="rounded-lg border border-orange-500/20 bg-orange-500/5 p-4">
+              <div class="flex items-center justify-between mb-2"><span class="text-xs font-bold text-orange-400 uppercase tracking-wide">HIGH · Patient Safety</span><span class="text-[10px] text-white/30">Finding #7</span></div>
+              <p class="text-sm text-white/75">Safety reporting SOP not updated to reflect protocol amendment v2.1 SAE timelines.</p>
+              <div class="mt-2 text-[10px] text-white/35">Impact surface: PATIENT_SAFETY · Adopted from: amendment alert #2</div>
+            </div>
+            <div class="flex items-center justify-between px-1 mt-1">
+              <div class="flex gap-3 text-xs text-white/40"><span><span class="text-red-400 font-semibold">2</span> Critical</span><span><span class="text-orange-400 font-semibold">5</span> High</span><span><span class="text-yellow-400 font-semibold">8</span> Moderate</span></div>
+              <button class="text-[10px] font-semibold text-scrub-teallight border border-scrub-teal/40 px-2.5 py-1 rounded-md">Approve Risk Summary →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Visit -->
+    <div class="tab-pane" id="tab-visit">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+        <div>
+          <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-scrub-teal/8 border border-scrub-teal/20 mb-6">
+            <span class="text-xs font-bold uppercase tracking-widest text-scrub-tealdark">VISIT EXECUTION</span>
+            <span class="text-xs text-scrub-teal/80">Role-Ready Worksheets</span>
+          </div>
+          <h3 class="text-2xl sm:text-3xl font-bold text-ink mb-4">Every role. Every requirement. Day-of-visit ready.</h3>
+          <p class="text-slate-500 leading-relaxed mb-6">Visit planning today means coordinators copying protocol text into separate documents for each team member — by hand. PIQC auto-structures every visit requirement by phase, classification, and role, and exports a traceable PDF worksheet on demand.</p>
+          <ul class="space-y-4">
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-scrub-teal/15 flex items-center justify-center shrink-0 mt-0.5"><svg width="12" height="12" fill="none" stroke="#0e9488" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+              <div><p class="text-sm font-semibold text-ink mb-0.5">5 role-filtered views, one dataset</p><p class="text-sm text-slate-500">Coordinator, nurse, pharmacist, data manager — each sees only their requirements. No duplication, no reformatting.</p></div>
+            </li>
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-scrub-teal/15 flex items-center justify-center shrink-0 mt-0.5"><svg width="12" height="12" fill="none" stroke="#0e9488" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+              <div><p class="text-sm font-semibold text-ink mb-0.5">Gap and conditional mismatch detection</p><p class="text-sm text-slate-500">PIQC auto-surfaces missing requirements, orphaned rows, and conditional logic that doesn't resolve — before the visit day.</p></div>
+            </li>
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-scrub-teal/15 flex items-center justify-center shrink-0 mt-0.5"><svg width="12" height="12" fill="none" stroke="#0e9488" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+              <div><p class="text-sm font-semibold text-ink mb-0.5">PDF export with traceability appendix</p><p class="text-sm text-slate-500">DRAFT-watermarked, confidence-annotated PDF export with per-item source references — ready for day-of-visit use.</p></div>
+            </li>
+          </ul>
+        </div>
+        <div class="screenshot">
+          <div class="px-5 py-4 border-b border-white/6 flex items-center justify-between">
+            <div><p class="text-xs text-white/40 mb-0.5">Day 15 — Cycle 1 · Nurse view</p><p class="text-sm font-semibold text-white">Visit Requirements</p></div>
+            <span class="badge-high stage-pill">14 COMPLETE</span>
+          </div>
+          <div class="p-5 space-y-2">
+            <p class="text-[10px] font-semibold text-white/30 uppercase tracking-widest mb-3">Assessment Phase</p>
+            <div class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white/3 border border-white/6">
+              <div class="w-4 h-4 rounded border-2 border-green-500/50 flex items-center justify-center shrink-0 bg-green-500/10"><svg width="8" height="8" fill="none" stroke="#4ade80" stroke-width="2.5" viewBox="0 0 12 12"><polyline points="10 3 5 8 2 5"/></svg></div>
+              <div class="flex-1"><span class="text-xs text-white/80">Vital signs (BP, HR, temp)</span><span class="ml-2 text-[9px] font-bold px-1.5 py-0.5 rounded" style="background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.2)">REQUIRED</span></div>
+              <span class="badge-high stage-pill">HIGH</span>
+            </div>
+            <div class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white/3 border border-white/6">
+              <div class="w-4 h-4 rounded border-2 border-green-500/50 flex items-center justify-center shrink-0 bg-green-500/10"><svg width="8" height="8" fill="none" stroke="#4ade80" stroke-width="2.5" viewBox="0 0 12 12"><polyline points="10 3 5 8 2 5"/></svg></div>
+              <div class="flex-1"><span class="text-xs text-white/80">PK blood draw (pre-dose)</span><span class="ml-2 text-[9px] font-bold px-1.5 py-0.5 rounded badge-blue">PRIMARY ENDPOINT</span></div>
+              <span class="badge-high stage-pill">HIGH</span>
+            </div>
+            <div class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white/3 border border-white/6">
+              <div class="w-4 h-4 rounded border border-white/20 shrink-0"></div>
+              <div class="flex-1"><span class="text-xs text-white/80">Concomitant medication review</span><span class="ml-2 text-[9px] font-bold px-1.5 py-0.5 rounded" style="background:rgba(168,85,247,0.1);color:#c084fc;border:1px solid rgba(168,85,247,0.2)">CONDITIONAL</span></div>
+              <span class="badge-medium stage-pill">MED</span>
+            </div>
+            <div class="mt-4 flex items-center gap-2 px-1 text-[10px] text-white/30"><span class="text-scrub-teallight font-semibold">PIQC drafted</span><span>·</span><span>0 gaps detected · Export ready</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════ SECURITY ═══════════════════════════════════════ -->
+<section id="security" class="py-24 bg-[#f7fafc] border-y border-slate-100">
+  <div class="max-w-7xl mx-auto px-6">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+      <div>
+        <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200 mb-6">
+          <svg width="12" height="12" fill="none" stroke="#1568b8" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span class="text-xs font-bold uppercase tracking-widest grad-text">Security &amp; Compliance</span>
+        </div>
+        <h2 class="text-3xl sm:text-4xl font-bold text-ink mb-4">Built for regulated environments from the ground up.</h2>
+        <p class="text-slate-500 text-lg leading-relaxed mb-8">Clinical trial data demands more than a checkbox compliance posture. PIQC was architected with PHI isolation, audit-trail integrity, and role-boundary enforcement as non-negotiable constraints — not afterthoughts.</p>
+        <div class="space-y-5">
+          <div class="flex gap-4">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style="background:linear-gradient(135deg,rgba(30,127,212,0.12),rgba(20,184,166,0.12))"><svg width="18" height="18" fill="none" stroke="#1568b8" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+            <div><p class="font-semibold text-ink text-sm mb-1">Zero PHI architecture</p><p class="text-sm text-slate-500">PIQC ingests protocol documents, not patient data. PHI cannot be entered — by design, not by policy.</p></div>
+          </div>
+          <div class="flex gap-4">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style="background:linear-gradient(135deg,rgba(30,127,212,0.12),rgba(20,184,166,0.12))"><svg width="18" height="18" fill="none" stroke="#1568b8" stroke-width="1.8" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+            <div><p class="font-semibold text-ink text-sm mb-1">Row-level security, every query</p><p class="text-sm text-slate-500">Organization, study, and role boundaries are enforced at the database layer. No front-end-only access control.</p></div>
+          </div>
+          <div class="flex gap-4">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style="background:linear-gradient(135deg,rgba(30,127,212,0.12),rgba(20,184,166,0.12))"><svg width="18" height="18" fill="none" stroke="#1568b8" stroke-width="1.8" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+            <div><p class="font-semibold text-ink text-sm mb-1">21 CFR Part 11-aligned audit trail</p><p class="text-sm text-slate-500">Every edit, approval, and state transition is logged with actor identity, timestamp, and previous state — immutably.</p></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-6 text-center">Compliance Standards</p>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+          <div class="compliance-badge"><div class="compliance-badge-icon"><svg width="16" height="16" fill="none" stroke="#1568b8" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><span class="text-[10px] font-bold text-slate-500 uppercase tracking-wide">HIPAA</span></div>
+          <div class="compliance-badge"><div class="compliance-badge-icon"><svg width="16" height="16" fill="none" stroke="#1568b8" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg></div><span class="text-[10px] font-bold text-slate-500 uppercase tracking-wide">GDPR</span></div>
+          <div class="compliance-badge"><div class="compliance-badge-icon"><svg width="16" height="16" fill="none" stroke="#1568b8" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="9 12 11 14 15 10"/></svg></div><span class="text-[10px] font-bold text-slate-500 uppercase tracking-wide">SOC 2</span></div>
+          <div class="compliance-badge"><div class="compliance-badge-icon"><svg width="16" height="16" fill="none" stroke="#1568b8" stroke-width="1.8" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><span class="text-[10px] font-bold text-slate-500 uppercase tracking-wide">21 CFR 11</span></div>
+        </div>
+        <div class="card rounded-2xl p-6">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4">Security Architecture</p>
+          <div class="space-y-3">
+            <div class="flex items-center gap-3"><svg width="14" height="14" fill="none" stroke="#0e9488" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><span class="text-sm text-slate-600">End-to-end encryption in transit and at rest</span></div>
+            <div class="flex items-center gap-3"><svg width="14" height="14" fill="none" stroke="#0e9488" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><span class="text-sm text-slate-600">MFA enforced for all authenticated users</span></div>
+            <div class="flex items-center gap-3"><svg width="14" height="14" fill="none" stroke="#0e9488" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><span class="text-sm text-slate-600">Immutable audit log — no edit or delete</span></div>
+            <div class="flex items-center gap-3"><svg width="14" height="14" fill="none" stroke="#0e9488" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><span class="text-sm text-slate-600">Penetration-tested infrastructure</span></div>
+            <div class="flex items-center gap-3"><svg width="14" height="14" fill="none" stroke="#0e9488" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><span class="text-sm text-slate-600">Data residency controls for EU deployments</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════ LEAD CAPTURE ═══════════════════════════════════════ -->
+<section id="contact" class="py-24 relative overflow-hidden bg-white">
+  <div class="absolute inset-0 grad-soft pointer-events-none"></div>
+  <div class="relative max-w-2xl mx-auto px-6">
+    <div class="text-center mb-10">
+      <h2 class="text-3xl sm:text-4xl font-bold text-ink mb-4">See PIQClinical in action.</h2>
+      <p class="text-slate-500 text-lg">Request a 30-minute demo tailored to your team's clinical workflow. No commitment, no boilerplate — just the product.</p>
+    </div>
+
+    <div class="card rounded-2xl p-8 sm:p-10">
+      <form id="demo-form" novalidate>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2" for="name">Full Name <span class="text-scrub-teal">*</span></label>
+            <input id="name" name="name" type="text" autocomplete="name" required placeholder="Dr. Jane Smith" class="w-full px-4 py-3 rounded-lg border border-slate-200 bg-white text-ink text-sm placeholder-slate-300 transition-all" />
+            <p class="field-error hidden text-xs text-red-500 mt-1">Please enter your full name.</p>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2" for="org">Organization <span class="text-scrub-teal">*</span></label>
+            <input id="org" name="organization" type="text" autocomplete="organization" required placeholder="Acme Clinical Research" class="w-full px-4 py-3 rounded-lg border border-slate-200 bg-white text-ink text-sm placeholder-slate-300 transition-all" />
+            <p class="field-error hidden text-xs text-red-500 mt-1">Please enter your organization.</p>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2" for="role">Clinical Role <span class="text-scrub-teal">*</span></label>
+            <select id="role" name="role" required class="w-full px-4 py-3 rounded-lg border border-slate-200 bg-white text-ink text-sm transition-all appearance-none">
+              <option value="" disabled selected>Select your role</option>
+              <optgroup label="Site Operations">
+                <option value="site_coordinator">Site Coordinator</option>
+                <option value="principal_investigator">Principal Investigator</option>
+                <option value="sub_investigator">Sub-Investigator</option>
+                <option value="clinical_research_nurse">Clinical Research Nurse</option>
+                <option value="data_manager">Data Manager</option>
+              </optgroup>
+              <optgroup label="Sponsor / CRO">
+                <option value="clinical_operations_lead">Clinical Operations Lead</option>
+                <option value="regulatory_affairs">Regulatory Affairs</option>
+                <option value="qa_auditor">QA / Auditor</option>
+                <option value="project_manager">Project Manager</option>
+              </optgroup>
+              <optgroup label="Other"><option value="other">Other</option></optgroup>
+            </select>
+            <p class="field-error hidden text-xs text-red-500 mt-1">Please select your clinical role.</p>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2" for="email">Work Email <span class="text-scrub-teal">*</span></label>
+            <input id="email" name="email" type="email" autocomplete="email" required placeholder="jane@acmeclinical.com" class="w-full px-4 py-3 rounded-lg border border-slate-200 bg-white text-ink text-sm placeholder-slate-300 transition-all" />
+            <p class="field-error hidden text-xs text-red-500 mt-1">Please enter a valid work email.</p>
+          </div>
+        </div>
+        <div class="mb-6">
+          <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2" for="message">Anything specific you'd like us to cover? <span class="text-slate-300">(optional)</span></label>
+          <textarea id="message" name="message" rows="3" placeholder="e.g. vendor audit workflow, protocol extraction accuracy, GDPR requirements..." class="w-full px-4 py-3 rounded-lg border border-slate-200 bg-white text-ink text-sm placeholder-slate-300 transition-all resize-none"></textarea>
+        </div>
+        <button type="submit" class="btn-primary w-full py-4 rounded-xl text-base font-semibold text-white" id="submit-btn">Request a Demo</button>
+        <p class="text-center text-xs text-slate-400 mt-4">We respond within one business day. No spam, ever.</p>
+      </form>
+
+      <div id="form-success" class="hidden text-center py-8">
+        <div class="w-14 h-14 rounded-full grad-brand flex items-center justify-center mx-auto mb-4"><svg width="24" height="24" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <h3 class="text-xl font-bold text-ink mb-2">You're on the list.</h3>
+        <p class="text-slate-500">We'll reach out within one business day to schedule your demo.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════ FOOTER ═══════════════════════════════════════ -->
+<footer class="border-t border-slate-100 bg-[#f7fafc] py-12">
+  <div class="max-w-7xl mx-auto px-6">
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-8 mb-10">
+      <div>
+        <a href="#" class="flex items-center gap-2.5 mb-2">
+          <svg class="w-8 h-8" aria-hidden="true"><use href="#piqc-mark"/></svg>
+          <span class="text-xl font-bold tracking-tight"><span class="grad-text">PIQC</span><span class="text-ink font-light">linical</span></span>
+        </a>
+        <p class="text-sm text-slate-400 max-w-xs">Protocol intelligence for clinical trials. Every output traceable. Every decision logged.</p>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-x-12 gap-y-3 text-sm text-slate-500">
+        <a href="#features" class="hover:text-ink transition-colors">Features</a>
+        <a href="#workflow" class="hover:text-ink transition-colors">How it works</a>
+        <a href="#security" class="hover:text-ink transition-colors">Security</a>
+        <a href="#contact" class="hover:text-ink transition-colors">Request a Demo</a>
+        <a href="mailto:hello@piqclinical.com" class="hover:text-ink transition-colors">Contact</a>
+        <a href="#" class="hover:text-ink transition-colors">Privacy Policy</a>
+      </div>
+    </div>
+    <div class="border-t border-slate-200 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
+      <span>© 2026 PIQClinical. All rights reserved.</span>
+      <span>PIQClinical.com — Clinical Protocol Intelligence Platform</span>
+    </div>
+  </div>
+</footer>
+
+
+<script>
+  // Tabs
+  const tabBtns = document.querySelectorAll('.tab-btn');
+  const tabPanes = document.querySelectorAll('.tab-pane');
+  tabBtns.forEach(btn => btn.addEventListener('click', () => {
+    const t = btn.dataset.tab;
+    tabBtns.forEach(b => b.classList.remove('active'));
+    tabPanes.forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + t).classList.add('active');
+  }));
+
+  // Form validation
+  const form = document.getElementById('demo-form');
+  const success = document.getElementById('form-success');
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    let valid = true;
+    form.querySelectorAll('.field-error').forEach(el => el.classList.add('hidden'));
+    form.querySelectorAll('input, select').forEach(el => { el.style.borderColor = ''; });
+    const fields = [
+      { id: 'name',  check: v => v.trim().length >= 2 },
+      { id: 'org',   check: v => v.trim().length >= 2 },
+      { id: 'role',  check: v => v !== '' },
+      { id: 'email', check: v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) },
+    ];
+    fields.forEach(({ id, check }) => {
+      const el = document.getElementById(id);
+      const errEl = el.parentElement.querySelector('.field-error');
+      if (!check(el.value)) { valid = false; el.style.borderColor = '#ef4444'; if (errEl) errEl.classList.remove('hidden'); }
+    });
+    if (!valid) return;
+    // Wire to your backend / Formspree / HubSpot here:
+    // fetch('/api/demo-request', { method: 'POST', body: new FormData(form) })
+    form.classList.add('hidden');
+    success.classList.remove('hidden');
+  });
+</script>
+
+</body>
+</html>
