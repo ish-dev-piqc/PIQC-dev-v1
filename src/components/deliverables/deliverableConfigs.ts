@@ -5,6 +5,8 @@ import {
   MONITORING_SECTION_ORDER,
   RISK_SECTION_LABELS,
   RISK_SECTION_ORDER,
+  SITE_TRAINING_SECTION_LABELS,
+  SITE_TRAINING_SECTION_ORDER,
   SIV_SECTION_LABELS,
   SIV_SECTION_ORDER,
   type DeliverableArtifactType,
@@ -53,5 +55,13 @@ export const DELIVERABLE_CONFIGS: Record<DeliverableArtifactType, DeliverablePan
     sectionOrder: SIV_SECTION_ORDER,
     sectionLabels: SIV_SECTION_LABELS,
     exportEnabled: true,
+  },
+  site_training_priorities: {
+    sectionOrder: SITE_TRAINING_SECTION_ORDER,
+    sectionLabels: SITE_TRAINING_SECTION_LABELS,
+    // Read surface for v1 (like risk_overview + cra_monitoring_focus); a
+    // config-driven export builder is a separate slice — buildDeliverablePdf is
+    // still hardwired to MONITORING_SECTION_ORDER.
+    exportEnabled: false,
   },
 };

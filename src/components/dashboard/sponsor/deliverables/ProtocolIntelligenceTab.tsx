@@ -42,6 +42,7 @@ const ARTIFACT_PICKER_ORDER: readonly DeliverableArtifactType[] = [
   'risk_overview',
   'cra_monitoring_focus',
   'siv_package',
+  'site_training_priorities',
 ];
 
 export default function ProtocolIntelligenceTab() {
