@@ -7,6 +7,7 @@ import {
   Info,
   MessageSquare,
   MoreHorizontal,
+  Presentation,
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import {
@@ -176,6 +177,18 @@ export function DeliverableBlockRow({
         </button>
 
         <div className="flex-1 min-w-0">
+          {/* Speaker notes get a quiet label line — teaching prose reads as
+              teaching prose, with the same review machinery as every block. */}
+          {block.block_type === 'speaker_note' && (
+            <p
+              title="Teaching prose for the SIV deck notes band — review like any other block."
+              data-testid="deliverable-speaker-note-label"
+              className="flex items-center gap-1 text-fg-label text-[10px] uppercase tracking-wider font-semibold mb-1"
+            >
+              <Presentation size={10} aria-hidden />
+              Speaker note
+            </p>
+          )}
           <p className="text-fg-body text-sm font-medium leading-relaxed">
             {block.display_text}
           </p>

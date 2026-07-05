@@ -1,7 +1,7 @@
 ---
 owner: fable-dev-piqc
 feature: siv-package
-status: active
+status: in-review
 started: 2026-07-05
 target_pr:
 ---
@@ -137,9 +137,10 @@ None.
 
 ## Verification
 
-- [ ] typecheck / build green; new SIV spec + deck + dispatch suites
-  green; all prior suites unregressed; zero new full-suite failures.
-- [ ] Deck builder tests: landscape orientation, one slide per
+- [x] typecheck / build green; new SIV spec (21) + deck (9) + dispatch
+  suites green; all prior suites unregressed (283 deliverables total);
+  zero new full-suite failures vs baseline.
+- [x] Deck builder tests: landscape orientation, one slide per
   non-empty section, speaker-note band present, DRAFT + disclaimer +
   appendix, sponsor-name-free, checklist export byte-unchanged
   (dispatch regression).
@@ -147,9 +148,10 @@ None.
   with intro/facts/speaker-note blocks (distinct treatment) → review
   machinery works on speaker notes → Export produces the landscape
   deck → checklist export unchanged.
-- [ ] Speaker-note prose carries the sponsor-confirmation warning; no
-  lens prose duplication; no scores.
-- [ ] `piqc-review` clean.
+- [x] Speaker-note prose carries the sponsor-confirmation warning
+  (test-asserted on every note); no lens prose duplication
+  (two-direction prefix tests); no scores.
+- [x] `piqc-review` clean.
 
 ## Decisions encoded
 

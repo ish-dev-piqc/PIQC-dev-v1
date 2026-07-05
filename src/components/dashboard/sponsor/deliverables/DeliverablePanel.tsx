@@ -90,6 +90,14 @@ const DELIVERABLE_COPY: Record<
       'should go, every card traceable to its protocol source. Attention ' +
       'guidance in plain language; a draft that requires human review.',
   },
+  siv_package: {
+    noun: 'SIV package',
+    emptyBody:
+      'PIQC drafts a protocol-specific SIV knowledge-transfer outline from ' +
+      'extracted facts — every slide block evidence-linked where it can be, ' +
+      'every speaker note requiring sponsor confirmation, all of it a draft ' +
+      'for human review.',
+  },
 };
 
 interface Props {
@@ -98,7 +106,8 @@ interface Props {
   /** Artifact-specific section vocabulary, passed through to the block list. */
   sectionOrder: readonly string[];
   sectionLabels: Record<string, string>;
-  /** PDF export is checklist-only for now (plan Decision 4). */
+  /** Export ships for the checklist (PDF) and SIV package (deck);
+   *  risk/CRA stay export-disabled. */
   exportEnabled: boolean;
 }
 
