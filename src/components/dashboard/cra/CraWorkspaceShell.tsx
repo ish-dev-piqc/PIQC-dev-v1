@@ -66,6 +66,14 @@ export default function CraWorkspaceShell() {
   const accentFg = isLight ? CRA_ACCENT_FG_LIGHT : CRA_ACCENT_FG_DARK;
   const accentBg = isLight ? '#FDF3E7' : 'rgba(138, 75, 15, 0.2)';
 
+  // Selected picker chip — a saturated amber SURFACE with a contrasting label.
+  // Deliberately NOT accentFg (the icon foreground): in dark mode accentFg is a
+  // pale amber (#E8B27D), and white-on-pale fails WCAG contrast. So the chip
+  // pairs deep-amber + white in light mode (6.8:1) and pale-amber + dark ink in
+  // dark mode (~8:1) — both clear AA for the small bold label.
+  const chipSelectedBg = isLight ? '#8A4B0F' : '#E8B27D';
+  const chipSelectedFg = isLight ? '#FFFFFF' : '#3A1E05';
+
   // Full-screen spinner ONLY while there is nothing to show yet (the
   // ProtocolIntelligenceTab discipline: a background protocol reload must not
   // unmount the panel and destroy in-progress reviewer text).
@@ -210,9 +218,13 @@ export default function CraWorkspaceShell() {
                     onClick={() => setArtifactType(key)}
                     data-testid={`cra-deliverable-picker-${key}`}
                     className={`px-3 py-1.5 rounded-md text-xs font-semibold ${
-                      selected ? 'text-white' : 'text-fg-sub hover:text-fg-body'
+                      selected ? '' : 'text-fg-sub hover:text-fg-body'
                     }`}
-                    style={selected ? { backgroundColor: accentFg } : undefined}
+                    style={
+                      selected
+                        ? { backgroundColor: chipSelectedBg, color: chipSelectedFg }
+                        : undefined
+                    }
                   >
                     {ARTIFACT_TYPE_LABELS[key]}
                   </button>

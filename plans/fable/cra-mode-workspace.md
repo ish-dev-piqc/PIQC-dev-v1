@@ -1,7 +1,7 @@
 ---
 owner: fable-dev-piqc
 feature: cra-mode-workspace
-status: active
+status: in-review
 started: 2026-07-05
 target_pr:
 ---
@@ -99,11 +99,15 @@ None.
 
 ## Verification
 
-- [ ] typecheck / build green; new config + shell tests pass; zero new
-  full-suite failures vs the same-env baseline.
-- [ ] DeliverablePanel relocation is behavior-preserving: Protocol
-  IntelligenceTab renders identically; no test imported the old path
-  (verified pre-move).
+- [x] typecheck / build green; new config + shell tests pass (9/9); zero
+  new full-suite failures vs the same-env baseline (991 pass / 19
+  pre-existing / 1010 — exactly +9 over PR-A's 982/19/1001).
+- [x] DeliverablePanel relocation is behavior-preserving: git detects the
+  move as a rename (only the import block differs); ProtocolIntelligenceTab
+  passes identical props; no test imported the old path (verified pre-move).
+- [x] Adversarial review (4 verified lenses): 1 confirmed of 2 candidates
+  — dark-mode picker-chip contrast (white on pale amber, ~1.9:1). Fixed:
+  chip surface decoupled from icon accent → 6.8:1 light / ~8:1 dark.
 - [ ] Manual (enterprise sub): CRA rail → workspace renders; protocol
   picker + 2-chip deliverable picker (focus default); Generate drafts
   the monitoring focus; regenerate preserves edits; amendment banner
