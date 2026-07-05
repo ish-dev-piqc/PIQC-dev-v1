@@ -24,9 +24,10 @@ import {
 // won't typecheck until it is described here — the exhaustive-map discipline
 // the engine leans on (a hand-listed object would silently go stale).
 //
-// exportEnabled: the checklist (PDF) and the SIV package (deck) ship an
-// export; risk overview and CRA monitoring focus stay export-disabled (they
-// are read surfaces, not documents handed onward).
+// exportEnabled: all five deliverables export to a DRAFT PDF — the four
+// portrait types through the config-driven buildDeliverablePdf, the SIV package
+// through its own landscape deck builder. (Export vocabulary per type lives in
+// src/lib/deliverables/deliverableExportConfig.)
 // =============================================================================
 
 export interface DeliverablePanelConfig {
@@ -44,12 +45,12 @@ export const DELIVERABLE_CONFIGS: Record<DeliverableArtifactType, DeliverablePan
   risk_overview: {
     sectionOrder: RISK_SECTION_ORDER,
     sectionLabels: RISK_SECTION_LABELS,
-    exportEnabled: false,
+    exportEnabled: true,
   },
   cra_monitoring_focus: {
     sectionOrder: CRA_FOCUS_SECTION_ORDER,
     sectionLabels: CRA_FOCUS_SECTION_LABELS,
-    exportEnabled: false,
+    exportEnabled: true,
   },
   siv_package: {
     sectionOrder: SIV_SECTION_ORDER,
@@ -59,9 +60,6 @@ export const DELIVERABLE_CONFIGS: Record<DeliverableArtifactType, DeliverablePan
   site_training_priorities: {
     sectionOrder: SITE_TRAINING_SECTION_ORDER,
     sectionLabels: SITE_TRAINING_SECTION_LABELS,
-    // Read surface for v1 (like risk_overview + cra_monitoring_focus); a
-    // config-driven export builder is a separate slice — buildDeliverablePdf is
-    // still hardwired to MONITORING_SECTION_ORDER.
-    exportEnabled: false,
+    exportEnabled: true,
   },
 };

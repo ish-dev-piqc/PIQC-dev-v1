@@ -119,8 +119,9 @@ interface Props {
   /** Artifact-specific section vocabulary, passed through to the block list. */
   sectionOrder: readonly string[];
   sectionLabels: Record<string, string>;
-  /** Export ships for the checklist (PDF) and SIV package (deck);
-   *  risk/CRA stay export-disabled. */
+  /** Whether this artifact type ships an export. All five deliverables now
+   *  export a DRAFT PDF (the four portrait types via buildDeliverablePdf, the
+   *  SIV package via its own landscape deck). Sourced from deliverableConfigs. */
   exportEnabled: boolean;
 }
 
@@ -493,7 +494,11 @@ export default function DeliverablePanel({
               {generating ? 'Regenerating…' : 'Regenerate'}
             </button>
             {exportEnabled && (
-              <ExportChecklistButton deliverableId={packet.deliverable_id} isLight={isLight} />
+              <ExportChecklistButton
+                deliverableId={packet.deliverable_id}
+                isLight={isLight}
+                noun={copy.noun}
+              />
             )}
           </div>
         </div>
@@ -688,9 +693,12 @@ const SUCCESS_RESET_MS = 2000;
 function ExportChecklistButton({
   deliverableId,
   isLight,
+  noun,
 }: {
   deliverableId: string;
   isLight: boolean;
+  /** Artifact noun for the button's copy (e.g. 'checklist', 'risk overview'). */
+  noun: string;
 }) {
   const [state, setState] = useState<ExportButtonState>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -780,7 +788,7 @@ function ExportChecklistButton({
         type="button"
         onClick={() => void handleClick()}
         disabled={state === 'loading'}
-        aria-label="Export the draft checklist as PDF"
+        aria-label={`Export the draft ${noun} as PDF`}
         data-testid="monitoring-checklist-export"
         data-state={state}
         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
@@ -801,7 +809,7 @@ function ExportChecklistButton({
               : 'bg-[#4C0519] border-[#881337] text-[#FECDD3]'
           }`}
         >
-          Couldn't export the checklist: {errorMessage}. Try again or refresh the page.
+          Couldn't export the {noun}: {errorMessage}. Try again or refresh the page.
         </span>
       )}
 
@@ -814,7 +822,7 @@ function ExportChecklistButton({
               : 'bg-[#0F172A] border-white/10 text-[#CBD5E1]'
           }`}
         >
-          PIQC-drafted checklist (PDF) with DRAFT watermark and source
+          PIQC-drafted {noun} (PDF) with DRAFT watermark and source
           traceability appendix. Final verification happens outside PIQC.
         </span>
       )}

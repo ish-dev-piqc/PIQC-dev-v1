@@ -21,9 +21,12 @@ import {
   truncateForAppendixItem,
 } from '../deliverablesExportApi';
 import type {
+  DeliverableArtifactType,
   DeliverableExportPacket,
   DeliverablePacketBlock,
 } from '../../../types/deliverables';
+import { ARTIFACT_TYPE_LABELS } from '../../../types/deliverables';
+import { DELIVERABLE_EXPORT_CONFIGS } from '../deliverableExportConfig';
 
 // =============================================================================
 // deliverablesExportApi — three-layer split mirroring the VEW worksheet
@@ -601,5 +604,121 @@ describe('disclaimer + header label constants', () => {
   it('disclaimer and header label never use approval vocabulary (draft-only)', () => {
     expect(DELIVERABLE_EXPORT_DISCLAIMER.toLowerCase()).not.toContain('approv');
     expect(DELIVERABLE_EXPORT_HEADER_LABEL.toLowerCase()).not.toContain('approv');
+  });
+
+  it('the exported constants mirror the monitoring export config entry', () => {
+    expect(DELIVERABLE_EXPORT_DISCLAIMER).toBe(
+      DELIVERABLE_EXPORT_CONFIGS.monitoring_prep_checklist.disclaimer,
+    );
+    expect(DELIVERABLE_EXPORT_HEADER_LABEL).toBe(
+      DELIVERABLE_EXPORT_CONFIGS.monitoring_prep_checklist.headerLabel,
+    );
+  });
+});
+
+// ===========================================================================
+// Config-driven export — all five artifact types render through the shared
+// portrait builder (SIV also gets the shared filename; its deck body is built
+// elsewhere). Monitoring is covered byte-for-byte above; these pin the OTHER
+// types so a config regression can't silently mislabel an export.
+// ===========================================================================
+
+const ALL_TYPES = Object.keys(ARTIFACT_TYPE_LABELS) as DeliverableArtifactType[];
+
+describe('buildDeliverableFilename — per-artifact slug', () => {
+  it('uses each type\'s configured filename slug', () => {
+    for (const t of ALL_TYPES) {
+      const slug = DELIVERABLE_EXPORT_CONFIGS[t].filenameSlug;
+      const name = buildDeliverableFilename(makePacket({ artifact_type: t }));
+      expect(name, t).toBe(`onc-4021_${slug}_draft_2026-07-03.pdf`);
+    }
+  });
+});
+
+describe('buildDeliverablePdf — per-artifact header + disclaimer', () => {
+  it('stamps the artifact-specific header label, not the monitoring one', () => {
+    const text = docText(
+      buildDeliverablePdf(makePacket({ artifact_type: 'cra_monitoring_focus', title: 'CRA Focus' })),
+    );
+    expect(text).toContain('PIQC drafted · CRA monitoring focus · DRAFT');
+    expect(text).not.toContain('Monitoring preparation checklist');
+  });
+
+  it('renders the artifact-specific disclaimer token', () => {
+    const risk = docText(
+      buildDeliverablePdf(makePacket({ artifact_type: 'risk_overview', title: 'Risk Overview' })),
+    );
+    // "Risk interpretation" is unique to the risk disclaimer.
+    expect(risk).toContain('Risk interpretation');
+  });
+
+  it('renders section labels from the artifact\'s own vocabulary', () => {
+    // A risk-overview packet whose block sits in a RISK section key renders the
+    // RISK label — proof the builder uses config.sectionOrder/Labels, not the
+    // monitoring ones (which would hide this block as an unknown section).
+    const doc = buildDeliverablePdf(
+      makePacket({
+        artifact_type: 'risk_overview',
+        title: 'Risk Overview',
+        blocks: [
+          block({
+            id: 'r-1',
+            section_key: 'eligibility_complexity',
+            display_text: 'RISKFACTTOKEN complex eligibility criterion',
+            source_section: '5.1',
+            source_page_number: 3,
+            sort_order: 0,
+          }),
+        ],
+      }),
+    );
+    const text = docText(doc);
+    expect(text).toContain('Eligibility Complexity'); // RISK_SECTION_LABELS
+    expect(text).toContain('RISKFACTTOKEN');
+  });
+});
+
+describe('fetchDeliverableExportPacket — passthrough for all known types', () => {
+  it('preserves any known artifact_type (no longer degrades risk/CRA/training)', async () => {
+    for (const t of ALL_TYPES) {
+      rpcMock.mockResolvedValueOnce({
+        data: makePacket({ artifact_type: t }),
+        error: null,
+      });
+      const r = await fetchDeliverableExportPacket('d-1');
+      expect(r.ok).toBe(true);
+      if (r.ok) expect(r.data.artifact_type, t).toBe(t);
+    }
+  });
+
+  it('degrades an unknown artifact_type to the checklist rendering', async () => {
+    rpcMock.mockResolvedValueOnce({
+      data: { ...makePacket(), artifact_type: 'fragility_map' },
+      error: null,
+    });
+    const r = await fetchDeliverableExportPacket('d-1');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data.artifact_type).toBe('monitoring_prep_checklist');
+  });
+});
+
+describe('downloadDeliverable — per-artifact filename dispatch', () => {
+  it('routes a site_training_priorities packet to its own filename slug', async () => {
+    rpcMock.mockResolvedValueOnce({
+      data: makePacket({
+        artifact_type: 'site_training_priorities',
+        title: 'Site Training Priorities — Draft',
+      }),
+      error: null,
+    });
+    const triggered: string[] = [];
+    const r = await downloadDeliverable('d-stp', {
+      triggerDownload: (filename) => triggered.push(filename),
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data.filename).toBe('onc-4021_site_training_priorities_draft_2026-07-03.pdf');
+    }
+    expect(triggered).toHaveLength(1);
   });
 });
