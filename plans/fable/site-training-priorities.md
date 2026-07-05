@@ -1,7 +1,7 @@
 ---
 owner: fable-dev-piqc
 feature: site-training-priorities
-status: active
+status: in-review
 started: 2026-07-05
 target_pr:
 ---
@@ -98,11 +98,16 @@ None.
 
 ## Verification
 
-- [ ] typecheck / build green; new selection tests pass; zero new full-suite
-  failures vs the same-env baseline.
-- [ ] Migration: pglast parse_sql + parse_plpgsql clean; byte-diff proves the
-  four prior branches + match/apply/log stage are unchanged (only guard list,
-  v_title CASE, the new ELSIF, and the COMMENT differ).
+- [x] typecheck / build green; new selection tests pass (23); zero new
+  full-suite failures vs the same-env baseline (1014 pass / 19 pre-existing /
+  1033 — exactly +23 over PR-B's 991/19/1010).
+- [x] Migration: pglast parse_sql (3 stmts) + parse_plpgsql (1 fn) clean;
+  byte-diff proves the four prior branches + match/apply/log stage are unchanged
+  — exactly 3 hunks (guard list, v_title CASE, the +341-line ELSIF branch).
+- [x] Adversarial review (4 verified lenses, SQL↔TS parity focus): parity /
+  integration / clinical lenses clean; 1 confirmed low finding — the endpoint
+  gap block lacked a regression test (its 3 sibling gaps had one). Fixed:
+  added the symmetric completeness-doctrine test.
 - [ ] Manual (enterprise sub, Sponsor → Protocol Intelligence): 5th chip
   "Site Training Priorities"; Generate drafts training-voiced sections; every
   criterion/med/endpoint/visit/procedure/amendment card is evidence-linked;

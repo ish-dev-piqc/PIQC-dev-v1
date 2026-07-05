@@ -247,6 +247,13 @@ describe('selectSiteTrainingPrioritiesBlocks', () => {
     expect(facts.some((b) => /^Secondary endpoint — train/.test(b.derived_text))).toBe(true);
   });
 
+  it('endpoints: gap framing when no endpoints extracted (completeness doctrine)', () => {
+    const blocks = selectSiteTrainingPrioritiesBlocks(input([]));
+    const sec = bySection(blocks, 'endpoint_data_training');
+    expect(sec.every((b) => b.content_origin === 'derived_operational_framing')).toBe(true);
+    expect(sec.some((b) => /No endpoints were extracted/.test(b.derived_text))).toBe(true);
+  });
+
   // --- section 5: safety (always framing) -----------------------------------
 
   it('safety: always two framing training items regardless of facts', () => {
