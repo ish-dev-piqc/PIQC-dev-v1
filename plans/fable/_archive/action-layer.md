@@ -1,9 +1,10 @@
 ---
 owner: fable-dev-piqc
 feature: action-layer
-status: in-review
+status: merged
+merged: 2026-07-05
 started: 2026-07-04
-target_pr:
+target_pr: #416
 ---
 
 # Context-Aware Action Layer — ActionCards + Travel Bridge + activation runbook
