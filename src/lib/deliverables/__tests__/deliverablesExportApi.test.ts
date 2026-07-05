@@ -86,6 +86,7 @@ function block(
     review_state: 'draft',
     review_note: null,
     version: 1,
+    generation_seq: 1,
     ...overrides,
   };
 }

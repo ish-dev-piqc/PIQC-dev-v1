@@ -64,6 +64,7 @@ function block(overrides: Partial<DeliverablePacketBlock>): DeliverablePacketBlo
     review_note: null,
     version: 1,
     sort_order: blockId,
+    generation_seq: 1,
     ...overrides,
   };
 }

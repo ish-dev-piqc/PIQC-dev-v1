@@ -289,6 +289,9 @@ export interface DeliverableRecord {
   generated_by: string | null;
   generated_at: string;
   regenerated_at: string | null;
+  /** Incremented by every generate; blocks born in the latest run carry the
+   *  same value (the "new since previous generation" signal). */
+  generation_seq: number;
   created_at: string;
   updated_at: string;
 }
@@ -321,6 +324,9 @@ export interface DeliverableBlockRecord {
   sort_order: number;
   /** Starts at 1; bumped by edit_text. */
   version: number;
+  /** The deliverable generation this block was born in (matched blocks keep
+   *  their birth seq across regenerates). */
+  generation_seq: number;
   created_at: string;
   updated_at: string;
 }
@@ -364,6 +370,11 @@ export interface DeliverablePacketBlock {
   review_note: string | null;
   version: number;
   sort_order: number;
+  /** Birth generation. New-in-latest-run iff equal to the packet's
+   *  generation_seq (and that is > 1 — the first generation is birth, not
+   *  change). Degrades to 1 when the DB predates the amendment-refresh
+   *  migration. */
+  generation_seq: number;
 }
 
 export interface DeliverablePacket {
@@ -374,6 +385,9 @@ export interface DeliverablePacket {
   protocol_version: string | null;
   generated_at: string;
   regenerated_at: string | null;
+  /** Current generation number (see block-level generation_seq). Degrades
+   *  to 1 on pre-migration packets. */
+  generation_seq: number;
   /** Rejected blocks are EXCLUDED server-side — they exist only in the DB
    *  (and the edit log) so regeneration will not resurrect them. */
   blocks: DeliverablePacketBlock[];
@@ -393,6 +407,51 @@ export interface DeliverableExportPacket {
   /** Server-stamped at export-fetch time; used for the filename date. */
   generated_at: string;
   blocks: DeliverablePacketBlock[];
+}
+
+// -----------------------------------------------------------------------------
+// Amendment-aware refresh — generation log + change summary
+// (deliverable_generation_log + deliverable_get_change_summary)
+// -----------------------------------------------------------------------------
+
+/** Snapshot of a pristine draft block the regenerate deleted — the only
+ *  record it existed. Touched blocks are never deleted, so nothing
+ *  human-authored or human-reviewed lives only here. */
+export interface RemovedBlockSnapshot {
+  section_key: string;
+  block_type: DeliverableBlockType;
+  derived_text: string;
+}
+
+/** Mirror of deliverable_generation_log (append-only, one row per generate). */
+export interface DeliverableGenerationLog {
+  id: string;
+  deliverable_id: string;
+  generation_seq: number;
+  protocol_version: string | null;
+  generated_by: string | null;
+  generated_at: string;
+  blocks_created: number;
+  blocks_matched: number;
+  blocks_kept_flagged: number;
+  blocks_deleted: number;
+  removed_blocks: RemovedBlockSnapshot[];
+}
+
+/** One entry in the change summary's new/flagged lists. */
+export interface ChangeSummaryBlockRef {
+  id: string;
+  section_key: string;
+  display_text: string;
+}
+
+/** deliverable_get_change_summary result. log is null before the first
+ *  generate (no deliverable → the RPC itself returns null instead). */
+export interface DeliverableChangeSummary {
+  log: DeliverableGenerationLog | null;
+  new_blocks: ChangeSummaryBlockRef[];
+  flagged_blocks: ChangeSummaryBlockRef[];
+  removed_blocks: RemovedBlockSnapshot[];
 }
 
 // -----------------------------------------------------------------------------

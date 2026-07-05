@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Check,
+  ChevronDown,
+  ChevronRight,
   ClipboardList,
   Download,
   Loader2,
@@ -10,11 +12,13 @@ import {
 import { useTheme } from '../../../../context/ThemeContext';
 import type {
   DeliverableArtifactType,
+  DeliverableChangeSummary,
   DeliverablePacket,
   DeliverablePacketBlock,
   DeliverablesResult,
 } from '../../../../types/deliverables';
 import {
+  fetchChangeSummary,
   fetchDeliverablePacket,
   generateDeliverable,
 } from '../../../../lib/deliverables/deliverablesApi';
@@ -144,6 +148,13 @@ export default function DeliverablePanel({
   const [generating, setGenerating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  // What-changed story for the latest regeneration. Fetched alongside the
+  // packet ONLY when generation_seq > 1 (Decision 4: the first generation is
+  // birth, not change — no banner, no chips). Counts always visible; the
+  // three lists sit behind a chevron, collapsed by default.
+  const [changeSummary, setChangeSummary] = useState<DeliverableChangeSummary | null>(null);
+  const [changeListOpen, setChangeListOpen] = useState(false);
+
   const [textDrawerTarget, setTextDrawerTarget] = useState<TextDrawerTarget | null>(null);
   const [traceabilityBlock, setTraceabilityBlock] = useState<DeliverablePacketBlock | null>(
     null,
@@ -171,9 +182,21 @@ export default function DeliverablePanel({
     if (!result.ok) {
       setLoadError(result.error);
       setPacket(null);
+      setChangeSummary(null);
     } else {
       setLoadError(null);
       setPacket(result.data);
+      // Single fetch site for the change story: refresh() is the landing path
+      // for load, post-regenerate, AND post-mutation, so the summary (incl.
+      // the flagged list) stays in step with the packet it describes.
+      if (result.data !== null && result.data.generation_seq > 1) {
+        const summary = await fetchChangeSummary(result.data.deliverable_id);
+        if (token !== fetchTokenRef.current) return;
+        // A summary failure never blocks the draft — the banner just stays off.
+        setChangeSummary(summary.ok ? summary.data : null);
+      } else {
+        setChangeSummary(null);
+      }
     }
     setLoading(false);
   }, [protocolId, artifactType]);
@@ -188,6 +211,8 @@ export default function DeliverablePanel({
     setGenerating(false);
     setTextDrawerTarget(null);
     setTraceabilityBlock(null);
+    setChangeSummary(null);
+    setChangeListOpen(false);
     void refresh();
   }, [refresh]);
 
@@ -394,6 +419,15 @@ export default function DeliverablePanel({
   }
 
   // ---- Loaded packet --------------------------------------------------------
+  const newCount = changeSummary?.new_blocks.length ?? 0;
+  const removedCount = changeSummary?.removed_blocks.length ?? 0;
+  const flaggedCount = changeSummary?.flagged_blocks.length ?? 0;
+  const hasContentChanges = newCount + removedCount + flaggedCount > 0;
+  const changeCountParts: string[] = [];
+  if (newCount > 0) changeCountParts.push(`${newCount} new`);
+  if (removedCount > 0) changeCountParts.push(`${removedCount} removed`);
+  if (flaggedCount > 0) changeCountParts.push(`${flaggedCount} flagged for review`);
+
   return (
     <div data-testid="monitoring-checklist-panel" className="space-y-3">
       {/* Header card */}
@@ -456,6 +490,129 @@ export default function DeliverablePanel({
         </div>
       </div>
 
+      {/* What-changed banner — the amendment-context lens over the latest
+          regeneration. Only present when generation_seq > 1 AND the summary
+          fetched cleanly; counts always visible, lists behind the chevron. */}
+      {changeSummary !== null && (
+        <div
+          data-testid="deliverable-change-banner"
+          className={`rounded-xl border overflow-hidden ${cardChrome}`}
+        >
+          {hasContentChanges ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setChangeListOpen((prev) => !prev)}
+                aria-expanded={changeListOpen}
+                aria-controls="deliverable-change-lists"
+                className={`w-full flex items-center justify-between gap-3 px-4 py-3 text-left ${
+                  isLight ? 'hover:bg-[#F8FAFC]' : 'hover:bg-white/[0.02]'
+                }`}
+              >
+                <div className="min-w-0">
+                  <p className="text-fg-heading text-sm font-semibold">
+                    What changed in the latest regeneration
+                  </p>
+                  <p className="text-fg-sub text-xs mt-0.5">
+                    {changeCountParts.join(' · ')}
+                  </p>
+                </div>
+                {changeListOpen ? (
+                  <ChevronDown size={14} className="text-fg-sub flex-shrink-0" aria-hidden />
+                ) : (
+                  <ChevronRight size={14} className="text-fg-sub flex-shrink-0" aria-hidden />
+                )}
+              </button>
+
+              {changeListOpen && (
+                <div
+                  id="deliverable-change-lists"
+                  data-testid="deliverable-change-list"
+                  className={`border-t px-4 py-3 space-y-3 ${
+                    isLight ? 'border-[#F2F2F2]' : 'border-white/[0.04]'
+                  }`}
+                >
+                  {changeSummary.new_blocks.length > 0 && (
+                    <div>
+                      <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold mb-1">
+                        New
+                      </p>
+                      <ul className="space-y-1.5">
+                        {changeSummary.new_blocks.map((b) => (
+                          <li key={b.id} className="text-xs leading-relaxed">
+                            <span className="text-fg-muted">
+                              {sectionLabels[b.section_key] ?? b.section_key} —{' '}
+                            </span>
+                            <span className="text-fg-body">{b.display_text}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {changeSummary.removed_blocks.length > 0 && (
+                    <div>
+                      <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold mb-1">
+                        Removed
+                      </p>
+                      <ul className="space-y-1.5">
+                        {changeSummary.removed_blocks.map((b, i) => (
+                          <li
+                            key={`${b.section_key}-${i}`}
+                            className="text-xs leading-relaxed"
+                          >
+                            <span className="text-fg-muted">
+                              {sectionLabels[b.section_key] ?? b.section_key} —{' '}
+                              {b.derived_text}
+                            </span>{' '}
+                            <span
+                              className={`inline-flex items-center font-semibold uppercase tracking-wider rounded-md border text-[10px] px-1.5 py-0.5 align-middle ${
+                                isLight
+                                  ? 'text-fg-muted bg-[#F2F2F2] border-[#E2E8F0]'
+                                  : 'text-fg-muted bg-white/[0.05] border-white/10'
+                              }`}
+                            >
+                              Removed
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {changeSummary.flagged_blocks.length > 0 && (
+                    <div>
+                      <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold mb-1">
+                        Flagged for review
+                      </p>
+                      <ul className="space-y-1.5">
+                        {changeSummary.flagged_blocks.map((b) => (
+                          <li key={b.id} className="text-xs leading-relaxed">
+                            <span className="text-fg-muted">
+                              {sectionLabels[b.section_key] ?? b.section_key} —{' '}
+                            </span>
+                            <span className="text-fg-body">{b.display_text}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="px-4 py-3">
+              <p className="text-fg-heading text-sm font-semibold">
+                What changed in the latest regeneration
+              </p>
+              <p className="text-fg-sub text-xs mt-0.5">
+                No content changes — sources refreshed only.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Action-failure banner (row mutations / regenerate) */}
       {actionError && (
         <div
@@ -486,6 +643,7 @@ export default function DeliverablePanel({
         onShowSource={(b) => setTraceabilityBlock(b)}
         onDelete={(b) => void runRowAction(() => deleteBlock(b.id))}
         onAddBlock={(sectionKey) => setTextDrawerTarget({ mode: 'add', sectionKey })}
+        latestGenerationSeq={packet.generation_seq > 1 ? packet.generation_seq : undefined}
       />
 
       {/* Drawers */}

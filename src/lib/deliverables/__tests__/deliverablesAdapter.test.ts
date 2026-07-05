@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  adaptChangeSummary,
   adaptDeliverablePacket,
   adaptDeliverablePacketBlock,
 } from '../deliverablesAdapter';
@@ -29,6 +30,7 @@ const factBlock = {
   review_note: null,
   version: 1,
   sort_order: 1,
+  generation_seq: 2,
 };
 
 /** A framing block — no evidence, no confidence (never false provenance). */
@@ -49,6 +51,7 @@ const framingBlock = {
   review_note: null,
   version: 1,
   sort_order: 12,
+  generation_seq: 1,
 };
 
 const basePacket = {
@@ -59,6 +62,7 @@ const basePacket = {
   protocol_version: 'v2.0',
   generated_at: '2026-07-03T10:00:00+00:00',
   regenerated_at: null,
+  generation_seq: 2,
   blocks: [factBlock, framingBlock],
 };
 
@@ -74,6 +78,7 @@ describe('adaptDeliverablePacket — round trip', () => {
     expect(out.protocol_version).toBe('v2.0');
     expect(out.generated_at).toBe('2026-07-03T10:00:00+00:00');
     expect(out.regenerated_at).toBeNull();
+    expect(out.generation_seq).toBe(2);
     expect(out.blocks).toHaveLength(2);
     // Fact block keeps its full evidence passthrough.
     expect(out.blocks[0]).toEqual(factBlock as DeliverablePacketBlock);
@@ -167,6 +172,7 @@ describe('adaptDeliverablePacket — null / wrong-shape tolerance', () => {
       protocol_version: null,
       generated_at: '',
       regenerated_at: null,
+      generation_seq: 1,
       blocks: [],
     });
   });
@@ -237,6 +243,7 @@ describe('adaptDeliverablePacketBlock — field tolerance', () => {
       review_note: null,
       version: 1, // contract: versions start at 1
       sort_order: 0,
+      generation_seq: 1, // contract: pre-migration blocks are generation 1
     });
   });
 
@@ -301,5 +308,176 @@ describe('adaptDeliverablePacketBlock — field tolerance', () => {
     });
     expect(out?.version).toBe(1);
     expect(out?.sort_order).toBe(0);
+  });
+});
+
+describe('generation_seq — round trip + old-DB tolerance', () => {
+  it('round-trips generation_seq on packet and block', () => {
+    const out = adaptDeliverablePacket(basePacket);
+    expect(out?.generation_seq).toBe(2);
+    expect(out?.blocks[0].generation_seq).toBe(2); // born in the latest run
+    expect(out?.blocks[1].generation_seq).toBe(1); // survivor from generation 1
+  });
+
+  it('old-DB tolerance: a packet WITHOUT generation_seq still adapts, degrading to 1', () => {
+    // Dev DB not yet migrated ≠ broken UI — plan Verification requires this.
+    const { generation_seq: _seq, ...prePacket } = basePacket;
+    const preBlock = { ...factBlock };
+    delete (preBlock as Record<string, unknown>).generation_seq;
+    const out = adaptDeliverablePacket({ ...prePacket, blocks: [preBlock] });
+    expect(out).not.toBeNull();
+    expect(out?.generation_seq).toBe(1);
+    expect(out?.blocks[0].generation_seq).toBe(1);
+  });
+
+  it('degrades an invalid generation_seq to 1 on both levels', () => {
+    const out = adaptDeliverablePacket({
+      ...basePacket,
+      generation_seq: 'three',
+      blocks: [{ ...factBlock, generation_seq: Number.NaN }],
+    });
+    expect(out?.generation_seq).toBe(1);
+    expect(out?.blocks[0].generation_seq).toBe(1);
+  });
+});
+
+// =============================================================================
+// adaptChangeSummary — deliverable_get_change_summary JSON
+// =============================================================================
+
+const logRow = {
+  id: 'log-1',
+  deliverable_id: 'del-1',
+  generation_seq: 2,
+  protocol_version: 'v2.0',
+  generated_by: 'user-1',
+  generated_at: '2026-07-05T09:00:00+00:00',
+  blocks_created: 3,
+  blocks_matched: 24,
+  blocks_kept_flagged: 2,
+  blocks_deleted: 1,
+  removed_blocks: [
+    {
+      section_key: 'visit_window_verification',
+      block_type: 'checklist_item',
+      derived_text: 'Verify: Week 4 visit within ±3 days',
+    },
+  ],
+};
+
+const summaryPayload = {
+  log: logRow,
+  new_blocks: [
+    {
+      id: 'blk-9',
+      section_key: 'amendment_sensitive',
+      display_text: 'Verify: New washout period of 14 days',
+    },
+  ],
+  flagged_blocks: [
+    {
+      id: 'blk-4',
+      section_key: 'eligibility_verification',
+      display_text: 'Verify: Age 18-75 at screening',
+    },
+  ],
+  removed_blocks: [
+    {
+      section_key: 'visit_window_verification',
+      block_type: 'checklist_item',
+      derived_text: 'Verify: Week 4 visit within ±3 days',
+    },
+  ],
+};
+
+describe('adaptChangeSummary — round trip', () => {
+  it('adapts a well-formed summary field-for-field', () => {
+    const out = adaptChangeSummary(summaryPayload);
+    expect(out).toEqual(summaryPayload);
+  });
+
+  it('tolerates a degenerate log row (missing counters, seq, removed list)', () => {
+    const out = adaptChangeSummary({
+      ...summaryPayload,
+      log: { id: 'log-1', deliverable_id: 'del-1' },
+    });
+    expect(out?.log).toEqual({
+      id: 'log-1',
+      deliverable_id: 'del-1',
+      generation_seq: 1,
+      protocol_version: null,
+      generated_by: null,
+      generated_at: '',
+      blocks_created: 0,
+      blocks_matched: 0,
+      blocks_kept_flagged: 0,
+      blocks_deleted: 0,
+      removed_blocks: [],
+    });
+  });
+});
+
+describe('adaptChangeSummary — null / malformed tolerance', () => {
+  it('returns null for non-object raw', () => {
+    expect(adaptChangeSummary(null)).toBeNull();
+    expect(adaptChangeSummary(undefined)).toBeNull();
+    expect(adaptChangeSummary('nope')).toBeNull();
+    expect(adaptChangeSummary(7)).toBeNull();
+    expect(adaptChangeSummary([summaryPayload])).toBeNull();
+  });
+
+  it('degrades a malformed log sub-object to null instead of failing the summary', () => {
+    for (const badLog of [null, undefined, 'junk', { deliverable_id: 'del-1' }]) {
+      const out = adaptChangeSummary({ ...summaryPayload, log: badLog });
+      expect(out).not.toBeNull();
+      expect(out?.log).toBeNull();
+    }
+  });
+
+  it('degrades missing lists to empty arrays', () => {
+    const out = adaptChangeSummary({ log: logRow });
+    expect(out?.new_blocks).toEqual([]);
+    expect(out?.flagged_blocks).toEqual([]);
+    expect(out?.removed_blocks).toEqual([]);
+  });
+
+  it('skips malformed new/flagged entries but keeps valid siblings', () => {
+    const out = adaptChangeSummary({
+      ...summaryPayload,
+      new_blocks: [
+        null,
+        'junk',
+        { id: 'no-section', display_text: 'text' },
+        { id: 'blk-9', section_key: 'amendment_sensitive', display_text: 42 },
+        summaryPayload.new_blocks[0],
+      ],
+      flagged_blocks: [{ section_key: 'orphan' }, summaryPayload.flagged_blocks[0]],
+    });
+    expect(out?.new_blocks).toEqual(summaryPayload.new_blocks);
+    expect(out?.flagged_blocks).toEqual(summaryPayload.flagged_blocks);
+  });
+
+  it('skips removed_blocks entries missing required fields or outside the block_type enum', () => {
+    const out = adaptChangeSummary({
+      ...summaryPayload,
+      removed_blocks: [
+        { block_type: 'checklist_item', derived_text: 'no section' },
+        { section_key: 'source_doc_focus', block_type: 'checklist_item' },
+        { section_key: 'source_doc_focus', block_type: 'banner', derived_text: 'bad enum' },
+        summaryPayload.removed_blocks[0],
+      ],
+    });
+    expect(out?.removed_blocks).toEqual(summaryPayload.removed_blocks);
+  });
+
+  it('skips removed_blocks entries in the LOG the same way', () => {
+    const out = adaptChangeSummary({
+      ...summaryPayload,
+      log: {
+        ...logRow,
+        removed_blocks: [null, { section_key: 'x' }, logRow.removed_blocks[0]],
+      },
+    });
+    expect(out?.log?.removed_blocks).toEqual(logRow.removed_blocks);
   });
 });

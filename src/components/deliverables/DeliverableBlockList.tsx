@@ -41,6 +41,10 @@ interface Props {
   onShowSource: (block: DeliverablePacketBlock) => void;
   onDelete: (block: DeliverablePacketBlock) => void;
   onAddBlock: (sectionKey: string) => void;
+  /** The packet's current generation_seq, provided ONLY when the deliverable
+   *  has regenerated at least once (seq > 1 — the panel owns that rule).
+   *  Threaded to rows so blocks born in the latest run get a "New" chip. */
+  latestGenerationSeq?: number;
 }
 
 export function DeliverableBlockList({
@@ -56,6 +60,7 @@ export function DeliverableBlockList({
   onShowSource,
   onDelete,
   onAddBlock,
+  latestGenerationSeq,
 }: Props) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
@@ -161,6 +166,7 @@ export function DeliverableBlockList({
                       onAddNote={onAddNote}
                       onShowSource={onShowSource}
                       onDelete={onDelete}
+                      latestGenerationSeq={latestGenerationSeq}
                     />
                   ))}
                 </ul>

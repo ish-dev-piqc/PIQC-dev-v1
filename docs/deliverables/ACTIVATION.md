@@ -26,7 +26,9 @@ migrations apply in the same push — the dry run lists everything):
 | `20260709000200_deliverable_risk_overview.sql` | `risk_overview` enum value + generate v2 (per-type dispatch) | #409 |
 | `20260710000000_deliverable_prohibited_meds.sql` | generate v3 (checklist §2 consumes prohibited_med facts) | #412 |
 | `20260711000000_deliverable_cra_focus.sql` | `cra_monitoring_focus` enum value + generate v4 | #414 |
-| `20260712000000_protocol_action_cards.sql` | ActionCard table + sync/get/set_status | action-layer |
+| `20260712000000_protocol_action_cards.sql` | ActionCard table + sync/get/set_status | #416 |
+| `20260713000000_deliverable_siv_package.sql` | `siv_package` + `speaker_note` + generate v5 | siv-package PR |
+| `20260715000000_deliverable_amendment_refresh.sql` | generation_seq + generation log + generate v6 + packet v2 + change-summary RPC | amendment-refresh PR |
 
 Notes that matter when they run:
 - Each `CREATE OR REPLACE deliverable_generate` fully supersedes the
@@ -89,6 +91,18 @@ restrictions still shows the coverage-gap fallback block.
 overview now also shows "Restricted medication in eligibility scope"
 cards after its regenerate.
 
+**siv-package** — fourth chip: nine teaching sections, every emitted
+section ends with ONE speaker note whose text ends with the
+sponsor-confirmation sentence; Export produces the landscape deck with
+the notes band; checklist export unchanged.
+
+**amendment-refresh** — generate (seq 1: no banner, no New chips) →
+re-ingest an amended protocol → regenerate → "What changed" banner shows
+new/removed/flagged counts + lists; New chips on inserted blocks;
+human-edited blocks NEVER appear in the removed list (only pristine
+drafts are deleted — verify against deliverable_generation_log);
+`deliverable_get_change_summary` returns NULL for a non-member.
+
 **action-layer** — after any deliverable exists: the travel card renders
 under the panel with fact-derived rationale + "N protocol sources" +
 disclaimer; NO link-out (URL config intentionally absent — Decision 2);
@@ -107,3 +121,16 @@ Dismiss hides it; regenerating/re-syncing does NOT resurrect it;
   `derived_text`; see the match/apply block in the latest
   `deliverable_generate` before suspecting the UI.
 - Every slice's full design rationale: `plans/fable/_archive/`.
+
+## 7. Ingest-side enrichment tee-up (Roger's lane, optional)
+
+The amendment-refresh slice tells the change story at the DELIVERABLE
+level (what blocks appeared/vanished/were flagged). The richer story —
+"exclusion criterion 4's TEXT changed from X to Y at the source" —
+requires ingest-side fact diffing: on re-ingest, compare incoming
+extracted values against the existing protocol_extracted_items rows
+(the UNIQUE (document_id, field_path) upsert already pins identity) and
+record per-field old→new deltas. Design sketch lives in the handover's
+Phase-5 section; the deliverable-side machinery consumes it whenever it
+lands — no client changes required to benefit (fingerprints already
+key on derived_text).
