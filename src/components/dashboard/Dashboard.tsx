@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { MessageSquare, LayoutDashboard, Activity, FileText, Database, UserCircle2, Users, CalendarCheck, CreditCard, Bell, Loader2, CheckCircle2, AlertCircle, ClipboardList, SearchCheck, type LucideIcon } from 'lucide-react';
 import NotificationsSettings from './NotificationsSettings';
 import SponsorPage from './sponsor/SponsorPage';
-import CraWorkspacePlaceholder from './cra/CraWorkspacePlaceholder';
+import CraWorkspaceShell from './cra/CraWorkspaceShell';
 import DashboardChat from './DashboardChat';
 import KnowledgeBase from './KnowledgeBase';
 import TodayTab from './site/TodayTab';
@@ -848,8 +848,8 @@ export default function Dashboard({
   // owns its own navigation (StageNav). Settings is still reachable via the
   // Navbar user dropdown — when activeTab flips to 'settings' we render the
   // Settings tab inside the constrained panel instead of the shell.
-  // CRA Mode (plumbing PR-A): full-page placeholder surface; settings stays
-  // reachable via the Navbar dropdown — the same shape as the audit branch.
+  // CRA Mode: full-page monitoring workspace (CraWorkspaceShell); settings
+  // stays reachable via the Navbar dropdown — the same shape as the audit branch.
   if (mode === 'cra') {
     return (
       <div className={`h-screen ${pageBg} pt-16 flex flex-col overflow-hidden`}>
@@ -861,7 +861,7 @@ export default function Dashboard({
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto">
-            <CraWorkspacePlaceholder />
+            <CraWorkspaceShell />
           </div>
         )}
       </div>

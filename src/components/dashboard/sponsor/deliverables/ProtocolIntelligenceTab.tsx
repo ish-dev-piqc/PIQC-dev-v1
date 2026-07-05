@@ -6,17 +6,10 @@ import { useSubscription } from '../../../../hooks/useSubscription';
 import { canUseSponsorMode } from '../../../../lib/entitlements';
 import {
   ARTIFACT_TYPE_LABELS,
-  CRA_FOCUS_SECTION_LABELS,
-  CRA_FOCUS_SECTION_ORDER,
-  MONITORING_SECTION_LABELS,
-  MONITORING_SECTION_ORDER,
-  RISK_SECTION_LABELS,
-  RISK_SECTION_ORDER,
-  SIV_SECTION_LABELS,
-  SIV_SECTION_ORDER,
   type DeliverableArtifactType,
 } from '../../../../types/deliverables';
-import DeliverablePanel from './DeliverablePanel';
+import DeliverablePanel from '../../../deliverables/DeliverablePanel';
+import { DELIVERABLE_CONFIGS } from '../../../deliverables/deliverableConfigs';
 import { ActionCardRail } from '../../../actions/ActionCardRail';
 
 // =============================================================================
@@ -41,40 +34,9 @@ import { ActionCardRail } from '../../../actions/ActionCardRail';
 // Draft-only vocabulary throughout: PIQC drafts; humans review.
 // =============================================================================
 
-/** Per-artifact panel config: each artifact type owns its section
- *  vocabulary; export ships for the checklist (PDF) and the SIV package
- *  (deck) — risk/CRA stay export-disabled. */
-const DELIVERABLE_CONFIGS: Record<
-  DeliverableArtifactType,
-  {
-    sectionOrder: readonly string[];
-    sectionLabels: Record<string, string>;
-    exportEnabled: boolean;
-  }
-> = {
-  monitoring_prep_checklist: {
-    sectionOrder: MONITORING_SECTION_ORDER,
-    sectionLabels: MONITORING_SECTION_LABELS,
-    exportEnabled: true,
-  },
-  risk_overview: {
-    sectionOrder: RISK_SECTION_ORDER,
-    sectionLabels: RISK_SECTION_LABELS,
-    exportEnabled: false,
-  },
-  cra_monitoring_focus: {
-    sectionOrder: CRA_FOCUS_SECTION_ORDER,
-    sectionLabels: CRA_FOCUS_SECTION_LABELS,
-    exportEnabled: false,
-  },
-  siv_package: {
-    sectionOrder: SIV_SECTION_ORDER,
-    sectionLabels: SIV_SECTION_LABELS,
-    exportEnabled: true,
-  },
-};
-
-/** Chip order in the picker — checklist first (the default). */
+/** Chip order in the picker — checklist first (the default). The section
+ *  config for each type lives in the shared deliverableConfigs (also consumed
+ *  by the CRA Monitoring Workspace). */
 const ARTIFACT_PICKER_ORDER: readonly DeliverableArtifactType[] = [
   'monitoring_prep_checklist',
   'risk_overview',
