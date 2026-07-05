@@ -1,9 +1,10 @@
 ---
 owner: fable-dev-piqc
 feature: siv-package
-status: in-review
+status: merged
+merged: 2026-07-05
 started: 2026-07-05
-target_pr:
+target_pr: #419
 ---
 
 # SIV Knowledge Transfer Package — fourth artifact_type + deck export
