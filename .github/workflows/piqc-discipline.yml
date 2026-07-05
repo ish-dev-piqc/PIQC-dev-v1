@@ -199,7 +199,7 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           set -u
-          if ! printf '%s' "$PR_BODY" | grep -qE "plans/[a-z0-9_-]+/[a-z0-9_.-]+\.md"; then
+          if ! printf '%s' "$PR_BODY" | grep -qE "plans/[a-z0-9_-]+/(_archive/)?[a-z0-9_.-]+\.md"; then
             echo "::error::PR body must reference a plan MD (e.g. plans/ishika/draft-comments.md). See .github/pull_request_template.md."
             exit 1
           fi
