@@ -56,6 +56,20 @@ describe("parseStudyCohorts", () => {
     expect(parseStudyCohorts({ study_cohorts: "not an array" })).toEqual([]);
     expect(parseStudyCohorts(null)).toEqual([]);
   });
+
+  it("reads soa_aliases (trim, dedup, drop label-restatements); defaults to [] when absent", () => {
+    const fields = {
+      study_cohorts: [
+        { label: "CSF", soa_aliases: ["Cerebrospinal Fluid Cohort", " cerebrospinal fluid cohort ", "CSF"] },
+        { label: "S4", soa_aliases: "not an array" },
+        { label: "MAD" },
+      ],
+    };
+    const cohorts = parseStudyCohorts(fields);
+    expect(cohorts.find((c) => c.label === "CSF")!.soa_aliases).toEqual(["Cerebrospinal Fluid Cohort"]);
+    expect(cohorts.find((c) => c.label === "S4")!.soa_aliases).toEqual([]);
+    expect(cohorts.find((c) => c.label === "MAD")!.soa_aliases).toEqual([]);
+  });
 });
 
 describe("parseStatedCohortCount", () => {
@@ -76,7 +90,7 @@ describe("parseStatedCohortCount", () => {
 describe("reconcileCohorts — flag divergence, never hide", () => {
   const c = (label: string, has_evidence = true): ExtractedCohort => ({
     label, dose_regimen: null, description: null, source_page: has_evidence ? 1 : null,
-    source_quote: has_evidence ? "q" : null, has_evidence,
+    source_quote: has_evidence ? "q" : null, has_evidence, soa_aliases: [],
   });
   const SIX = ["S1", "S2", "S3", "S4", "S5", "S6"].map((l) => c(l));
 
@@ -104,5 +118,19 @@ describe("reconcileCohorts — flag divergence, never hide", () => {
     const r = reconcileCohorts([c("S1"), c("S2", false)], [], true, null);
     expect(r.consistent).toBe(false);
     expect(r.notes.join(" ")).toMatch(/1 cohort\(s\) lack a source citation/);
+  });
+
+  it("flags an ORPHAN schedule ref EVEN WITH a shared backbone (the false-pass fix)", () => {
+    // 'S4' is a real cohort; 'Sky' is a mis-bound/unknown scope. The old blanket
+    // shared-backbone shortcut set covered=all → consistent=true, silently hiding it.
+    const r = reconcileCohorts(SIX, ["S4", "Sky"], true, 6);
+    expect(r.consistent).toBe(false);
+    expect(r.notes.join(" ")).toMatch(/references 1 cohort scope\(s\) not in the extracted list: Sky/);
+  });
+
+  it("does NOT over-flag a clean shared design: backbone + all refs are real cohorts", () => {
+    const r = reconcileCohorts([c("A"), c("B"), c("C")], ["A"], true, 3);
+    expect(r.consistent).toBe(true);
+    expect(r.notes).toEqual([]);
   });
 });
