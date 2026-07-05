@@ -68,8 +68,10 @@ RPCs:
 - `src/components/actions/ActionCardRail.tsx` — takes protocolId,
   fetches via api, renders suggested cards, hides dismissed.
 - Mount: one insertion in `ProtocolIntelligenceTab.tsx` below the
-  deliverable panel; rail self-hides when empty. Sync fires after a
-  successful generate in the tab (callback prop) and on tab load.
+  deliverable panel; rail self-hides when empty. Sync fires on tab load,
+  protocol switch, and deliverable-chip switch (refreshKey) — no panel
+  callback, keeping DeliverablePanel out of scope; a just-generated
+  deliverable surfaces its card on the next chip/tab visit.
 
 ### Runbook — `docs/deliverables/ACTIVATION.md`
 
