@@ -1,7 +1,7 @@
 ---
 owner: fable-dev-piqc
 feature: review-filter-progress
-status: active
+status: in-review
 started: 2026-07-05
 target_pr:
 ---
@@ -64,7 +64,14 @@ None.
 
 ## Verification
 
-- [ ] typecheck / build green; new filter tests pass; zero new full-suite failures.
+- [x] typecheck / build green; 9 new filter tests pass; full suite 19 failed /
+  1050 passed — the same pre-existing baseline, zero new failures.
+- [x] Adversarial review (3 lenses): filter logic / integration / product clean
+  on substance; 2 confirmed low UX papercuts, both fixed — (a) empty-state copy
+  claimed "every item reviewed or edited" on a zero-item deliverable (now gated
+  on reviewCounts.all > 0 → "No items in this deliverable."); (b) adding a block
+  under a non-'all' filter created a human_added block that matched no filter and
+  vanished (now the filter drops back to 'all' on add so it stays visible).
 - [ ] Manual: header shows reviewed/total + progress bar + "N need review";
   filter chips narrow the list (Needs review / Reviewed / Edited) with counts;
   'all' shows everything; a filter with no matches shows the all-clear state;

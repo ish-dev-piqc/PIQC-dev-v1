@@ -292,6 +292,8 @@ export default function DeliverablePanel({
     // 'add' affordance only renders inside a loaded packet.
     if (!textDrawerTarget) return { ok: false, error: 'No drawer target' };
 
+    const wasAdd = textDrawerTarget.mode === 'add';
+
     let result: DeliverablesResult<unknown>;
     if (textDrawerTarget.mode === 'edit') {
       result = await editBlockText(textDrawerTarget.block.id, text, note);
@@ -304,6 +306,10 @@ export default function DeliverablePanel({
 
     if (result.ok) {
       setTextDrawerTarget(null);
+      // A newly added block is human_added, which no state filter matches — drop
+      // back to 'all' so the reviewer sees what they just added rather than it
+      // vanishing under an active filter.
+      if (wasAdd) setReviewFilter('all');
       if (protocolIdRef.current === protocolId && artifactTypeRef.current === artifactType) {
         await refresh();
         onMutated?.();
@@ -767,15 +773,17 @@ export default function DeliverablePanel({
           className={`rounded-xl border px-4 py-8 text-center ${cardChrome}`}
         >
           <p className="text-fg-body text-sm">
-            {reviewFilter === 'needs_review'
-              ? 'Nothing needs review — every item has been reviewed or edited.'
-              : reviewFilter === 'reviewed'
-                ? 'No items reviewed yet.'
-                : reviewFilter === 'edited'
-                  ? 'No edited items.'
-                  : 'No items in this deliverable.'}
+            {reviewCounts.all === 0
+              ? 'No items in this deliverable.'
+              : reviewFilter === 'needs_review'
+                ? 'Nothing needs review — every item has been reviewed or edited.'
+                : reviewFilter === 'reviewed'
+                  ? 'No items reviewed yet.'
+                  : reviewFilter === 'edited'
+                    ? 'No edited items.'
+                    : 'No items in this deliverable.'}
           </p>
-          {reviewFilter !== 'all' && (
+          {reviewFilter !== 'all' && reviewCounts.all > 0 && (
             <p className="text-fg-sub text-[11px] mt-1">
               Switch the filter above to see other items.
             </p>
