@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: site-mode-ux-gaps
-status: in-review
+status: merged
+merged: 2026-07-06
 started: 2026-07-05
-target_pr: TBD
+target_pr: #449
 ---
 
 # Site Mode login/upload/dashboard UX gap fixes (A1-A5, B1, B2, B5, B6, C1-C4)
