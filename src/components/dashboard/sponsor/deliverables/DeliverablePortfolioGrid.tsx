@@ -31,6 +31,10 @@ interface Props {
   protocols: ReadonlyArray<{ id: string; code: string | null; name: string }>;
   activeProtocolId: string | null;
   onSelect: (protocolId: string) => void;
+  /** Opaque change token — any change refetches the digest. The tab passes its
+   *  panel-mutation tick so generating/reviewing a protocol below refreshes its
+   *  card here. */
+  refreshKey?: string | number;
 }
 
 /** Total artifact types (denominator for "X/5 drafted"). Derived from the label
@@ -43,7 +47,12 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-export function DeliverablePortfolioGrid({ protocols, activeProtocolId, onSelect }: Props) {
+export function DeliverablePortfolioGrid({
+  protocols,
+  activeProtocolId,
+  onSelect,
+  refreshKey,
+}: Props) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
   const accentFg = isLight ? '#534AB7' : '#7F77DD';
@@ -69,7 +78,7 @@ export function DeliverablePortfolioGrid({ protocols, activeProtocolId, onSelect
   useEffect(() => {
     setStatus('loading');
     void load();
-  }, [load]);
+  }, [load, refreshKey]);
 
   const byProtocol = new Map<string, DeliverablePortfolioEntry>();
   for (const e of entries) byProtocol.set(e.protocol_id, e);
@@ -82,7 +91,7 @@ export function DeliverablePortfolioGrid({ protocols, activeProtocolId, onSelect
         Protocol
       </p>
       <div
-        role="tablist"
+        role="radiogroup"
         aria-label="Protocols"
         data-testid="protocol-intelligence-portfolio"
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2"
@@ -97,8 +106,8 @@ export function DeliverablePortfolioGrid({ protocols, activeProtocolId, onSelect
             <button
               key={p.id}
               type="button"
-              role="tab"
-              aria-selected={active}
+              role="radio"
+              aria-checked={active}
               onClick={() => onSelect(p.id)}
               data-testid={`portfolio-card-${p.id}`}
               className={`text-left rounded-xl border p-3 transition-colors focus:outline-none focus:ring-2 ${cardBase} ${

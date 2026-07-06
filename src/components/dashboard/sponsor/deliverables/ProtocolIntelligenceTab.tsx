@@ -173,6 +173,7 @@ export default function ProtocolIntelligenceTab() {
             protocols={protocols}
             activeProtocolId={selectedProtocol?.id ?? null}
             onSelect={setOverrideProtocolId}
+            refreshKey={refreshTick}
           />
 
           {selectedProtocol ? (

@@ -1,7 +1,7 @@
 ---
 owner: fable-dev-piqc
 feature: deliverable-portfolio
-status: active
+status: in-review
 started: 2026-07-05
 target_pr:
 ---
@@ -83,7 +83,19 @@ None.
 
 ## Verification
 
-- [ ] typecheck / build green; new adapter + API tests pass; zero new failures.
+- [x] typecheck / build green; 9 new adapter + API tests pass; full suite 19
+  failed / 1059 passed — the same pre-existing baseline, zero new failures.
+- [x] Migration pglast clean; SECURITY INVOKER; GROUP BY + CROSS JOIN LATERAL
+  aggregation verified correct (1:1 per deliverable, no double-count); RLS
+  no-leak (both SELECT policies gate on user_can_access_protocol).
+- [x] Adversarial review (4 lenses; product-design lens dropped on a transient
+  API error, self-covered — counts-only/no-branding/draft-only/denominator all
+  verified): RPC + adapter clean; 3 confirmed — (1+2) the grid's refreshKey was
+  never wired from the tab, so portfolio stats went stale after in-place
+  generate/review (fixed: pass refreshKey={refreshTick}, the same tick the board
+  uses); (3) the grid used role=tablist/tab for a single-select picker (a11y
+  mismatch, regression from the native <select>) — fixed to radiogroup/radio +
+  aria-checked.
 - [ ] Migration: pglast clean; SECURITY INVOKER; no writes; RLS-gated (empty
   array for a caller with no accessible protocols, no leak).
 - [ ] Manual (enterprise sub, multiple protocols): the tab shows a portfolio
