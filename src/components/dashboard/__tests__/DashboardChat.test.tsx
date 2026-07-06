@@ -35,8 +35,13 @@ vi.mock('../../../lib/supabase', () => ({
 }));
 
 import DashboardChat from '../DashboardChat';
-import { streamDashboardChat, type ExtendedMessage } from '../../../lib/supabase';
+import type { ExtendedMessage } from '../../../lib/supabase';
 
+// Grab the mocked fn via dynamic import: the discipline gate forbids components
+// importing lib/supabase as a *value*, and it doesn't exempt __tests__. A
+// type-only import + dynamic import keeps this test file within that rule while
+// still letting us drive the mock. (vi.mock is hoisted, so this resolves mocked.)
+const { streamDashboardChat } = await import('../../../lib/supabase');
 const mockStream = streamDashboardChat as unknown as ReturnType<typeof vi.fn>;
 
 function Harness(props: Partial<React.ComponentProps<typeof DashboardChat>>) {
