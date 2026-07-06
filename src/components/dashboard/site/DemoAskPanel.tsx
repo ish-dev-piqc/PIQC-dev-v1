@@ -18,8 +18,8 @@ import {
 
 // =============================================================================
 // DemoAskPanel — drop-in replacement for the Ask tab's DashboardChat in demo
-// mode. Lives inside AskRail (a 380px right-docked panel mounted globally in
-// Dashboard.tsx), so layout assumes narrow width.
+// mode. Rendered by AskTab inside the AskBubble floating panel (≈420px wide,
+// anchored bottom-right), so layout assumes narrow width.
 //
 // Why a separate component: DashboardChat is shared with audit mode and ties
 // into the live LLM/RAG plumbing. We don't want demo mode mutating that path

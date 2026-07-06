@@ -8,8 +8,8 @@ const corsHeaders = {
   "Access-Control-Expose-Headers": "X-Rag-Status, X-Rag-Error",
 };
 
-const GENERATION_MODEL = "gpt-4.1-mini";
-const RERANK_MODEL = "gpt-4o-mini";
+const GENERATION_MODEL = Deno.env.get("DASHBOARD_CHAT_MODEL") ?? "gpt-4.1-mini";
+const RERANK_MODEL = Deno.env.get("DASHBOARD_CHAT_RERANK_MODEL") ?? "gpt-4o-mini";
 const OPENAI_TIMEOUT_MS = 30_000;
 const MAX_BODY_BYTES = 100_000;
 const MAX_MESSAGE_CHARS = 3_000;
@@ -18,8 +18,16 @@ const MAX_HISTORY_ITEMS = 20;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 30;
 const MAX_SELECTED_DOC_IDS = 20;
+// Minimum cosine similarity (hybrid_search returns 1 - cosine_distance) for a
+// retrieved chunk to count as "relevant". Below this, matches are treated as
+// noise so the model answers from general knowledge instead of citing junk as
+// grounded. Conservative default; tune via env once the live distribution is known.
+const RAG_MIN_SIMILARITY = Number(Deno.env.get("RAG_MIN_SIMILARITY") ?? "0.2");
 
 // ─── Rate limiter ──────────────────────────────────────────────────────────
+// Best-effort only: per-isolate in-memory state, resets on cold start and is not
+// shared across concurrently-scaled instances. A durable store (Postgres/Redis)
+// is deliberately deferred — this is a guardrail, not a hard quota.
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 
 function checkRateLimit(ip: string): boolean {
@@ -372,6 +380,46 @@ async function validateDocIds(
   return docs.map((d) => d.id);
 }
 
+// Does this user have access to this protocol? Routes through the single
+// authorisation primitive (user_can_access_protocol) so the answer matches the
+// app's RLS everywhere: explicit member, accepted guest, or sponsor org.
+async function canAccessProtocol(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  userId: string,
+  protocolId: string
+): Promise<boolean> {
+  const res = await fetch(`${supabaseUrl}/rest/v1/rpc/user_can_access_protocol`, {
+    method: "POST",
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ uid: userId, pid: protocolId }),
+  });
+  if (!res.ok) return false;
+  return (await res.json()) === true;
+}
+
+// Ready documents tagged to a protocol. No user_id filter: the caller's access
+// to the protocol is validated up front via canAccessProtocol, and scoping by
+// protocol_id is what makes "grounded in this protocol" real (and lets
+// org-shared collaborators retrieve the protocol's docs, not just their own).
+async function fetchProtocolDocIds(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  protocolId: string
+): Promise<string[]> {
+  const url = `${supabaseUrl}/rest/v1/documents?protocol_id=eq.${protocolId}&status=eq.ready&select=id&limit=200`;
+  const res = await fetch(url, {
+    headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
+  });
+  if (!res.ok) return [];
+  const docs = (await res.json()) as Array<{ id: string }>;
+  return docs.map((d) => d.id);
+}
+
 async function fetchDocumentTitles(
   supabaseUrl: string,
   serviceRoleKey: string,
@@ -524,7 +572,8 @@ async function resolveSummaryDocumentId(
   serviceRoleKey: string,
   userId: string,
   message: string,
-  selectedDocIds: string[] | undefined
+  selectedDocIds: string[] | undefined,
+  protocolId: string | null
 ): Promise<string | null> {
   if (Array.isArray(selectedDocIds) && selectedDocIds.length === 1) {
     return selectedDocIds[0];
@@ -533,7 +582,12 @@ async function resolveSummaryDocumentId(
     return null;
   }
 
-  const url = `${supabaseUrl}/rest/v1/documents?user_id=eq.${userId}&select=id,title&order=created_at.desc&limit=50&status=eq.ready`;
+  // Scope the candidate list to the protocol when one is supplied (access is
+  // pre-validated), otherwise to the caller's own documents.
+  const scopeFilter = protocolId
+    ? `protocol_id=eq.${protocolId}`
+    : `user_id=eq.${userId}`;
+  const url = `${supabaseUrl}/rest/v1/documents?${scopeFilter}&select=id,title&order=created_at.desc&limit=50&status=eq.ready`;
   const res = await fetch(url, {
     headers: {
       apikey: serviceRoleKey,
@@ -610,7 +664,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    let parsed: { message?: unknown; history?: unknown; selectedDocIds?: unknown };
+    let parsed: { message?: unknown; history?: unknown; selectedDocIds?: unknown; protocolId?: unknown };
     try {
       parsed = JSON.parse(rawBody);
     } catch {
@@ -620,7 +674,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { message: rawMessage, history: rawHistory, selectedDocIds: rawDocIds } = parsed;
+    const { message: rawMessage, history: rawHistory, selectedDocIds: rawDocIds, protocolId: rawProtocolId } = parsed;
 
     if (!rawMessage || typeof rawMessage !== "string" || !rawMessage.trim()) {
       return new Response(
@@ -646,6 +700,39 @@ Deno.serve(async (req: Request) => {
       return new Response(
         JSON.stringify({ error: "Authentication required" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate protocolId (if supplied) and confirm the caller can access it.
+    // A present-but-inaccessible protocol is a 404 (don't confirm existence).
+    let protocolId: string | null = null;
+    if (rawProtocolId !== undefined && rawProtocolId !== null) {
+      if (typeof rawProtocolId !== "string" || !UUID_RE.test(rawProtocolId)) {
+        return new Response(
+          JSON.stringify({ error: "Invalid protocolId" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      const allowed = await canAccessProtocol(supabaseUrl, serviceRoleKey, userId, rawProtocolId);
+      if (!allowed) {
+        return new Response(
+          JSON.stringify({ error: "Protocol not found or access denied" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      protocolId = rawProtocolId;
+    }
+
+    // Reject client-supplied system turns outright — a forged system role is a
+    // tampering signal, not something to silently drop. Other malformed items
+    // are filtered below.
+    if (Array.isArray(rawHistory) &&
+        (rawHistory as Array<unknown>).some((m) =>
+          typeof m === "object" && m !== null &&
+          (m as Record<string, unknown>).role === "system")) {
+      return new Response(
+        JSON.stringify({ error: "Invalid history: system role not allowed" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -676,7 +763,7 @@ Deno.serve(async (req: Request) => {
       ? await validateDocIds(supabaseUrl, serviceRoleKey, userId, rawDocIdList)
       : [];
 
-    log("info", "dashboard-chat.request", { ip, messageLen: message.length, historyLen: safeHistory.length, docIds: selectedDocIds.length });
+    log("info", "dashboard-chat.request", { ip, messageLen: message.length, historyLen: safeHistory.length, docIds: selectedDocIds.length, scoped: protocolId ? "protocol" : "user" });
 
     const summaryMode = isSummaryQuery(message);
     let contextBlock = "";
@@ -696,7 +783,8 @@ Deno.serve(async (req: Request) => {
           serviceRoleKey,
           userId,
           message,
-          selectedDocIds
+          selectedDocIds,
+          protocolId
         );
         if (summaryDocId) {
           // Fetch the document title so we can label the context block
@@ -753,18 +841,27 @@ Deno.serve(async (req: Request) => {
         const queryEmbedding = await embedText(searchQuery, openaiKey);
         const hasDocFilter = Array.isArray(selectedDocIds) && selectedDocIds.length > 0;
 
-        // Resolve user's documents to scope retrieval — without this, the service-role
-        // RPC would return chunks from every user's documents.
-        let scopedDocIds: string[] = selectedDocIds;
-        if (!hasDocFilter) {
+        // Resolve which documents retrieval may search — without this, the
+        // service-role RPC would return chunks from every user's documents.
+        //   • protocolId present → the protocol's ready docs (access pre-validated),
+        //     intersected with any explicit selection.
+        //   • else → the explicit selection, or all of the caller's ready docs.
+        let scopedDocIds: string[];
+        if (protocolId) {
+          const protocolDocIds = await fetchProtocolDocIds(supabaseUrl, serviceRoleKey, protocolId);
+          scopedDocIds = hasDocFilter
+            ? protocolDocIds.filter((id) => selectedDocIds.includes(id))
+            : protocolDocIds;
+        } else if (hasDocFilter) {
+          scopedDocIds = selectedDocIds;
+        } else {
           const userDocsRes = await fetch(
             `${supabaseUrl}/rest/v1/documents?user_id=eq.${userId}&status=eq.ready&select=id`,
             { headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` } }
           );
-          if (userDocsRes.ok) {
-            const userDocs = (await userDocsRes.json()) as Array<{ id: string }>;
-            scopedDocIds = userDocs.map((d) => d.id);
-          }
+          scopedDocIds = userDocsRes.ok
+            ? ((await userDocsRes.json()) as Array<{ id: string }>).map((d) => d.id)
+            : [];
         }
 
         if (hasDocFilter) {
@@ -797,6 +894,17 @@ Deno.serve(async (req: Request) => {
 
           rawChunks = (await rpcRes.json()) as ChunkRow[];
         }
+      }
+
+      // Drop weak semantic matches so an off-topic question doesn't get answered
+      // from the least-irrelevant chunks and cited as if grounded. Summary mode
+      // is exempt — its structural header chunks intentionally carry similarity 0.
+      if (!summaryMode && rawChunks.length > 0) {
+        const kept = rawChunks.filter((c) => c.similarity >= RAG_MIN_SIMILARITY);
+        if (kept.length !== rawChunks.length) {
+          log("info", "dashboard-chat.relevance_floor", { ip, raw: rawChunks.length, kept: kept.length });
+        }
+        rawChunks = kept;
       }
 
       if (rawChunks && rawChunks.length > 0) {
@@ -834,7 +942,8 @@ Deno.serve(async (req: Request) => {
       const msg = ragErr instanceof Error ? ragErr.message : String(ragErr);
       log("error", "dashboard-chat.rag_failed", { ip, error: msg });
       ragStatus = "error";
-      ragErrorMessage = msg;
+      // Surface a stable code to the client, never the raw RPC/SQL text.
+      ragErrorMessage = "retrieval_error";
     }
 
     log("info", "dashboard-chat.rag_done", { ip, ragStatus, sources: sources.length });
@@ -875,9 +984,11 @@ Deno.serve(async (req: Request) => {
     if (!openaiRes.ok) {
       clearTimeout(timeoutId);
       const err = await openaiRes.text();
-      console.error("OpenAI error:", err);
+      // Log detail server-side; return a generic message so upstream error text
+      // (org ids, quota, internal messages) never reaches the browser.
+      log("error", "dashboard-chat.openai_error", { ip, status: openaiRes.status, detail: err.slice(0, 500) });
       return new Response(
-        JSON.stringify({ error: "AI service error", detail: err }),
+        JSON.stringify({ error: "AI service error" }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

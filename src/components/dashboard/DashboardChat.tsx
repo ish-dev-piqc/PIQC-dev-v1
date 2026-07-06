@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, StopCircle, BookOpen, Stethoscope, User, ChevronDown, Search, FileText, ChevronUp, X, Check, Sparkles, Activity, Shield, GitBranch, AlertTriangle, Database, HelpCircle, type LucideIcon } from 'lucide-react';
-import { streamDashboardChat, ChatMessage, RagStatus, SourceCitation, supabase } from '../../lib/supabase';
+import { Send, StopCircle, BookOpen, Stethoscope, User, ChevronDown, Search, FileText, ChevronUp, X, Check, Sparkles, Activity, Shield, GitBranch, AlertTriangle, Database, HelpCircle, RefreshCw, Copy, ArrowDown, type LucideIcon } from 'lucide-react';
+import { streamDashboardChat, ChatMessage, RagStatus, SourceCitation, ExtendedMessage, supabase } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
 
 interface Document {
@@ -9,14 +9,9 @@ interface Document {
   source: string;
 }
 
-type ExtendedMessage = ChatMessage & {
-  streaming?: boolean;
-  ragStatus?: RagStatus;
-  ragError?: string;
-  sources?: SourceCitation[];
-};
-
-const DOC_SUGGESTED_PROMPTS: Record<string, string[]> = {};
+// If the assistant produces no first byte within this window, abort and surface
+// a timeout error rather than hanging on the typing indicator indefinitely.
+const FIRST_BYTE_TIMEOUT_MS = 35_000;
 
 const GENERAL_SUGGESTIONS = [
   { icon: Activity, text: 'What are the key clinical protocols in the knowledge base?' },
@@ -72,8 +67,7 @@ function getDefaultSuggestionsForDoc(title: string): string[] {
 function getSuggestionsForDocs(docs: Document[]): string[] {
   if (docs.length === 0) return [];
   if (docs.length === 1) {
-    const doc = docs[0];
-    return DOC_SUGGESTED_PROMPTS[doc.id] ?? getDefaultSuggestionsForDoc(doc.title);
+    return getDefaultSuggestionsForDoc(docs[0].title);
   }
   const titles = docs.map(d => `"${d.title}"`).join(' and ');
   return [
@@ -188,7 +182,7 @@ function SourceDetailPanel({
   );
 }
 
-function RagStatusTag({ ragStatus, ragError, isLight }: { ragStatus: RagStatus; ragError?: string; isLight: boolean }) {
+function RagStatusTag({ ragStatus, isLight }: { ragStatus: RagStatus; isLight: boolean }) {
   if (ragStatus === 'found') {
     return (
       <div className={`flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full w-fit text-[10px] font-medium ${
@@ -219,7 +213,18 @@ function RagStatusTag({ ragStatus, ragError, isLight }: { ragStatus: RagStatus; 
           : 'text-red-400/80 bg-red-950/25 border-red-800/30'
       }`}>
         <AlertTriangle size={9} className="flex-shrink-0" />
-        <span>Document search failed — answer based on general knowledge{ragError ? `: ${ragError}` : ''}</span>
+        <span>Document search failed — answer based on general knowledge</span>
+      </div>
+    );
+  }
+
+  if (ragStatus === 'stopped') {
+    return (
+      <div className={`flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full w-fit text-[10px] font-medium ${
+        isLight ? 'text-[#334155]/50 bg-[#334155]/06' : 'text-[#94A3B8]/60 bg-white/[0.04]'
+      }`}>
+        <StopCircle size={9} />
+        <span>Response stopped</span>
       </div>
     );
   }
@@ -227,15 +232,28 @@ function RagStatusTag({ ragStatus, ragError, isLight }: { ragStatus: RagStatus; 
   return null;
 }
 
-function MessageBubble({ msg, isLight }: { msg: ExtendedMessage; isLight: boolean }) {
+function MessageBubble({ msg, isLight, onRetry }: { msg: ExtendedMessage; isLight: boolean; onRetry?: () => void }) {
   const isUser = msg.role === 'user';
   const [expandedSource, setExpandedSource] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const handleCitationClick = (n: number) => {
     setExpandedSource((prev) => (prev === n ? null : n));
   };
 
+  const handleCopy = () => {
+    navigator.clipboard
+      ?.writeText(msg.content)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => { /* clipboard unavailable */ });
+  };
+
   const expandedSourceData = msg.sources?.find((s) => s.n === expandedSource);
+  const showCopy = !isUser && !msg.streaming && !msg.error && msg.content.trim().length > 0;
+  const showBubble = msg.content.length > 0 || msg.streaming;
 
   return (
     <div className={`flex gap-3 group ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -253,47 +271,83 @@ function MessageBubble({ msg, isLight }: { msg: ExtendedMessage; isLight: boolea
       </div>
 
       <div className={`flex flex-col gap-1 max-w-[78%] ${isUser ? 'items-end' : 'items-start'}`}>
-        <span className={`text-[10px] font-medium tracking-wide uppercase px-1 ${
-          isUser
-            ? isLight ? 'text-[#334155]/40' : 'text-[#CBD5E1]/30'
-            : isLight ? 'text-[#334155]/40' : 'text-[#CBD5E1]/30'
-        }`}>
-          {isUser ? 'You' : 'Protocol Assistant'}
-        </span>
-        <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
-          isUser
-            ? 'bg-gradient-to-br from-brand-500 to-brand-600 text-white rounded-tr-sm'
-            : isLight
-            ? 'bg-white text-[#334155] rounded-tl-sm border border-[#E2E8F0] shadow-[0_1px_4px_rgba(0,0,0,0.06)]'
-            : 'bg-[#171f25] text-[#CBD5E1] rounded-tl-sm border border-white/[0.07] shadow-[0_1px_4px_rgba(0,0,0,0.3)]'
-        }`}>
-          {msg.content.split('\n').map((line, i) => {
-            const lineContent = line.startsWith('- ') ? line.slice(2) : line;
-            const rendered = renderLine(
-              lineContent,
-              msg.sources,
-              isUser ? undefined : handleCitationClick,
-              isLight,
-              isUser
-            );
-            if (line.startsWith('- ')) {
-              return (
-                <div key={i} className="flex gap-2 my-1">
-                  <span className={`mt-1.5 flex-shrink-0 w-1.5 h-1.5 rounded-full ${isUser ? 'bg-white/70' : 'bg-brand-600'}`} />
-                  <span>{rendered}</span>
-                </div>
-              );
-            }
-            return (
-              <p key={i} className={i > 0 && line !== '' ? 'mt-2' : ''}>
-                {rendered}
-              </p>
-            );
-          })}
-          {msg.streaming && (
-            <span className="inline-block w-0.5 h-4 ml-0.5 bg-brand-600 animate-pulse rounded-full align-middle" />
+        <div className={`flex items-center gap-1.5 px-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+          <span className={`text-[10px] font-medium tracking-wide uppercase ${
+            isLight ? 'text-[#334155]/40' : 'text-[#CBD5E1]/30'
+          }`}>
+            {isUser ? 'You' : 'Protocol Assistant'}
+          </span>
+          {showCopy && (
+            <button
+              onClick={handleCopy}
+              aria-label="Copy message"
+              title="Copy message"
+              className={`opacity-0 group-hover:opacity-100 transition-opacity ${
+                isLight ? 'text-[#334155]/40 hover:text-[#334155]/70' : 'text-[#CBD5E1]/30 hover:text-[#CBD5E1]/60'
+              }`}
+            >
+              {copied ? <Check size={11} /> : <Copy size={11} />}
+            </button>
           )}
         </div>
+
+        {showBubble && (
+          <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
+            isUser
+              ? 'bg-gradient-to-br from-brand-500 to-brand-600 text-white rounded-tr-sm'
+              : isLight
+              ? 'bg-white text-[#334155] rounded-tl-sm border border-[#E2E8F0] shadow-[0_1px_4px_rgba(0,0,0,0.06)]'
+              : 'bg-[#171f25] text-[#CBD5E1] rounded-tl-sm border border-white/[0.07] shadow-[0_1px_4px_rgba(0,0,0,0.3)]'
+          }`}>
+            {msg.content.split('\n').map((line, i) => {
+              const lineContent = line.startsWith('- ') ? line.slice(2) : line;
+              const rendered = renderLine(
+                lineContent,
+                msg.sources,
+                isUser ? undefined : handleCitationClick,
+                isLight,
+                isUser
+              );
+              if (line.startsWith('- ')) {
+                return (
+                  <div key={i} className="flex gap-2 my-1">
+                    <span className={`mt-1.5 flex-shrink-0 w-1.5 h-1.5 rounded-full ${isUser ? 'bg-white/70' : 'bg-brand-600'}`} />
+                    <span>{rendered}</span>
+                  </div>
+                );
+              }
+              return (
+                <p key={i} className={i > 0 && line !== '' ? 'mt-2' : ''}>
+                  {rendered}
+                </p>
+              );
+            })}
+            {msg.streaming && (
+              <span className="inline-block w-0.5 h-4 ml-0.5 bg-brand-600 animate-pulse rounded-full align-middle" />
+            )}
+          </div>
+        )}
+
+        {/* Failed send — inline error with retry, keeps the user's question in place */}
+        {msg.error && !msg.streaming && (
+          <div className={`flex items-center gap-2 mt-0.5 px-3 py-2 rounded-xl border text-xs ${
+            isLight ? 'bg-red-50 border-red-200/70 text-red-700' : 'bg-red-950/30 border-red-800/40 text-red-400'
+          }`}>
+            <AlertTriangle size={13} className="flex-shrink-0" />
+            <span className="min-w-0 break-words">{msg.error}</span>
+            {onRetry && (
+              <button
+                onClick={onRetry}
+                className={`ml-1 flex-shrink-0 inline-flex items-center gap-1 font-medium transition-opacity hover:opacity-80 ${
+                  isLight ? 'text-red-700' : 'text-red-300'
+                }`}
+              >
+                <RefreshCw size={11} />
+                Retry
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Citation expand panel */}
         {expandedSourceData && (
@@ -307,7 +361,7 @@ function MessageBubble({ msg, isLight }: { msg: ExtendedMessage; isLight: boolea
         )}
 
         {!isUser && !msg.streaming && msg.ragStatus && (
-          <RagStatusTag ragStatus={msg.ragStatus} ragError={msg.ragError} isLight={isLight} />
+          <RagStatusTag ragStatus={msg.ragStatus} isLight={isLight} />
         )}
       </div>
     </div>
@@ -499,8 +553,17 @@ interface ChatSuggestion {
 interface DashboardChatProps {
   messages: ExtendedMessage[];
   setMessages: React.Dispatch<React.SetStateAction<ExtendedMessage[]>>;
-  selectedDocIds: string[];
-  setSelectedDocIds: (ids: string[]) => void;
+  // Optional in protocol-scoped mode (Ask), where the server derives scope from
+  // protocolId and the document selector is hidden. Required for Audit Mode.
+  selectedDocIds?: string[];
+  setSelectedDocIds?: (ids: string[]) => void;
+  // When set, retrieval is scoped server-side to this protocol's documents; the
+  // document selector and its org-wide fetch are suppressed. Absent = Audit Mode.
+  protocolId?: string;
+  // When true, an in-flight stream is aborted on unmount. Ask sets this so
+  // collapsing/switching stops generation; Audit leaves it false so a stream
+  // completes in the background while the user is on another tab.
+  abortOnUnmount?: boolean;
   // Optional: override the default empty-state suggestion chips. Used by
   // AskTab to inject protocol-specific prompts when scoped to a study.
   customSuggestions?: ChatSuggestion[];
@@ -517,8 +580,10 @@ interface DashboardChatProps {
 export default function DashboardChat({
   messages,
   setMessages,
-  selectedDocIds,
+  selectedDocIds = [],
   setSelectedDocIds,
+  protocolId,
+  abortOnUnmount = false,
   customSuggestions,
   emptyHeading,
   emptySubtext,
@@ -528,16 +593,22 @@ export default function DashboardChat({
   const [loading, setLoading] = useState(false);
   const [retrieving, setRetrieving] = useState(false);
   const [allDocs, setAllDocs] = useState<Document[]>([]);
-  const [chatError, setChatError] = useState<string | null>(null);
+  const [showScrollButton, setShowScrollButton] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const nearBottomRef = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { theme } = useTheme();
   const isLight = theme === 'light';
 
   const showEmpty = messages.length === 0;
 
+  // Org-wide document list backs the selector + doc-scoped suggestions. In
+  // protocol-scoped mode the selector is hidden and scope is server-enforced,
+  // so skip the fetch entirely.
   useEffect(() => {
+    if (protocolId) return;
     supabase
       .from('documents')
       .select('id, title, source')
@@ -545,25 +616,50 @@ export default function DashboardChat({
       .order('created_at', { ascending: false })
       .limit(50)
       .then(({ data }) => setAllDocs(data ?? []));
-  }, []);
+  }, [protocolId]);
+
+  // Abort any in-flight stream on unmount when opted in (Ask). No-op for Audit.
+  useEffect(() => {
+    if (!abortOnUnmount) return;
+    return () => abortRef.current?.abort();
+  }, [abortOnUnmount]);
+
+  // Only auto-scroll if the user is already near the bottom; otherwise surface a
+  // "jump to latest" pill instead of yanking them down on every token.
+  const handleScroll = () => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    nearBottomRef.current = nearBottom;
+    setShowScrollButton(!nearBottom);
+  };
+
+  const scrollToBottom = () => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    nearBottomRef.current = true;
+    setShowScrollButton(false);
+  };
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (nearBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages, loading]);
 
   const selectedDocs = allDocs.filter(d => selectedDocIds.includes(d.id));
   const docSuggestions = getSuggestionsForDocs(selectedDocs);
 
-  const handleSend = useCallback(async (text?: string) => {
+  const handleSend = useCallback(async (text?: string, historyOverride?: ChatMessage[]) => {
     const content = (text ?? input).trim();
     if (!content || loading) return;
 
-    setChatError(null);
     setInput('');
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-    const history = messages.filter(m => !m.streaming);
+    const history: ChatMessage[] = historyOverride ?? messages
+      .filter(m => !m.streaming && !m.error)
+      .map(m => ({ role: m.role, content: m.content }));
     const userMsg: ExtendedMessage = { role: 'user', content };
     setMessages(prev => [...prev, userMsg]);
     setLoading(true);
@@ -579,18 +675,30 @@ export default function DashboardChat({
     };
 
     let firstToken = true;
-    let finalRagStatus: RagStatus = 'not_found';
+    let assistantAdded = false;
+    let finalRagStatus: RagStatus | undefined = undefined;
     let finalRagError = '';
     let collectedSources: SourceCitation[] = [];
+    let failMessage: string | null = null;
+    let stopped = false;
+    let timedOut = false;
+
+    // Abort if the assistant produces no first byte in time, so the UI never
+    // hangs on the typing indicator when the server stalls before responding.
+    const timeoutId = setTimeout(() => {
+      if (firstToken) { timedOut = true; ac.abort(); }
+    }, FIRST_BYTE_TIMEOUT_MS);
 
     try {
-      const result = await streamDashboardChat(
-        content,
+      const result = await streamDashboardChat({
+        message: content,
         history,
-        selectedDocIds,
-        (token) => {
+        selectedDocIds: protocolId ? [] : selectedDocIds,
+        protocolId: protocolId ?? null,
+        onChunk: (token) => {
           if (firstToken) {
             firstToken = false;
+            assistantAdded = true;
             setRetrieving(false);
             setMessages(prev => [...prev, assistantMsg]);
           }
@@ -603,32 +711,44 @@ export default function DashboardChat({
             return updated;
           });
         },
-        (sources) => { collectedSources = sources; },
-        ac.signal
-      );
+        onSources: (sources) => { collectedSources = sources; },
+        signal: ac.signal,
+      });
       finalRagStatus = result.ragStatus;
       finalRagError = result.ragError;
       if (result.sources.length > 0) collectedSources = result.sources;
+      // Stream resolved without ever producing a token → surface as an error
+      // instead of a silent no-op.
+      if (firstToken) {
+        failMessage = 'The assistant did not return a response. Please try again.';
+      }
     } catch (err: unknown) {
       const e = err as { name?: string; message?: string };
-      if (e.name !== 'AbortError') {
-        const errorMsg = e.message || 'Something went wrong. Please try again.';
-        setChatError(errorMsg);
-        setMessages(prev => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last?.role === 'assistant' && last.content === '') {
-            updated.pop();
-          }
-          return updated;
-        });
+      if (e.name === 'AbortError') {
+        if (timedOut) failMessage = 'No response within 35 seconds — the request was stopped.';
+        else stopped = true;
+      } else {
+        failMessage = e.message || 'Something went wrong. Please try again.';
       }
     } finally {
+      clearTimeout(timeoutId);
       setRetrieving(false);
       setMessages(prev => {
         const updated = [...prev];
         const last = updated[updated.length - 1];
-        if (last?.role === 'assistant') {
+        if (failMessage) {
+          if (assistantAdded && last?.role === 'assistant') {
+            updated[updated.length - 1] = { ...last, streaming: false, error: failMessage };
+          } else {
+            updated.push({ role: 'assistant', content: '', error: failMessage });
+          }
+        } else if (stopped) {
+          if (assistantAdded && last?.role === 'assistant') {
+            updated[updated.length - 1] = { ...last, streaming: false, ragStatus: 'stopped' };
+          } else {
+            updated.push({ role: 'assistant', content: '', error: 'Stopped before a response was received.' });
+          }
+        } else if (last?.role === 'assistant') {
           updated[updated.length - 1] = {
             ...last,
             streaming: false,
@@ -643,7 +763,24 @@ export default function DashboardChat({
       abortRef.current = null;
       textareaRef.current?.focus();
     }
-  }, [input, loading, messages, selectedDocIds, setMessages]);
+  }, [input, loading, messages, selectedDocIds, protocolId, setMessages]);
+
+  // Retry a failed send: drop the failed assistant bubble and its user turn,
+  // then re-ask with the history that preceded it.
+  const handleRetry = useCallback((failedIdx: number) => {
+    let userIdx = -1;
+    for (let i = failedIdx; i >= 0; i--) {
+      if (messages[i].role === 'user') { userIdx = i; break; }
+    }
+    if (userIdx === -1) return;
+    const userContent = messages[userIdx].content;
+    const priorHistory: ChatMessage[] = messages
+      .slice(0, userIdx)
+      .filter(m => !m.streaming && !m.error)
+      .map(m => ({ role: m.role, content: m.content }));
+    setMessages(prev => prev.slice(0, userIdx));
+    handleSend(userContent, priorHistory);
+  }, [messages, setMessages, handleSend]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -708,7 +845,7 @@ export default function DashboardChat({
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto scroll-smooth relative">
+      <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto scroll-smooth relative">
         <div className="px-5 py-5 space-y-5">
 
           {showEmpty && (
@@ -794,7 +931,12 @@ export default function DashboardChat({
           )}
 
           {messages.map((msg, i) => (
-            <MessageBubble key={i} msg={msg} isLight={isLight} />
+            <MessageBubble
+              key={i}
+              msg={msg}
+              isLight={isLight}
+              onRetry={msg.error ? () => handleRetry(i) : undefined}
+            />
           ))}
 
           {(retrieving || (loading && messages[messages.length - 1]?.role !== 'assistant')) && (
@@ -804,6 +946,22 @@ export default function DashboardChat({
           <div ref={bottomRef} />
         </div>
 
+        {/* Jump to latest — shown only when the user has scrolled up */}
+        {showScrollButton && (
+          <button
+            onClick={scrollToBottom}
+            aria-label="Scroll to latest message"
+            className={`sticky bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium shadow-lg transition-colors ${
+              isLight
+                ? 'bg-white border-[#E2E8F0] text-[#334155]/70 hover:text-[#334155]'
+                : 'bg-[#171f25] border-white/10 text-[#CBD5E1]/70 hover:text-[#CBD5E1]'
+            }`}
+          >
+            <ArrowDown size={12} />
+            New messages
+          </button>
+        )}
+
         {/* Scroll fade */}
         <div className={`sticky bottom-0 left-0 right-0 h-6 pointer-events-none ${
           isLight
@@ -811,27 +969,6 @@ export default function DashboardChat({
             : 'bg-gradient-to-t from-[#0c1118] to-transparent'
         }`} />
       </div>
-
-      {/* Error banner */}
-      {chatError && (
-        <div className={`flex-shrink-0 mx-4 mb-2 flex items-start gap-2.5 px-3.5 py-2.5 rounded-xl border text-xs ${
-          isLight
-            ? 'bg-red-50 border-red-200/70 text-red-700'
-            : 'bg-red-950/30 border-red-800/40 text-red-400'
-        }`}>
-          <AlertTriangle size={13} className="flex-shrink-0 mt-0.5" />
-          <div className="min-w-0">
-            <span className="font-semibold">Error: </span>
-            <span className="break-words">{chatError}</span>
-          </div>
-          <button
-            onClick={() => setChatError(null)}
-            className="ml-auto flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity"
-          >
-            <X size={12} />
-          </button>
-        </div>
-      )}
 
       {/* Input area */}
       <div className={`flex-shrink-0 px-4 pb-4 pt-3 border-t ${
@@ -849,6 +986,7 @@ export default function DashboardChat({
               value={input}
               onChange={handleTextareaChange}
               onKeyDown={handleKeyDown}
+              aria-label="Ask a question"
               placeholder="Ask about a protocol or workflow..."
               rows={1}
               className={`w-full bg-transparent text-sm resize-none focus:outline-none leading-relaxed ${
@@ -863,15 +1001,21 @@ export default function DashboardChat({
           <div className={`flex items-center gap-2 px-3 pb-2.5 pt-1 border-t ${
             isLight ? 'border-[#E2E8F0]' : 'border-white/[0.06]'
           }`}>
-            <DocumentSelector
-              selectedDocIds={selectedDocIds}
-              onSelectionChange={setSelectedDocIds}
-              isLight={isLight}
-            />
-            {selectedDocIds.length > 0 && (
-              <span className={`text-[11px] truncate max-w-[140px] ${isLight ? 'text-[#334155]/40' : 'text-[#94A3B8]/70'}`}>
-                Scoped to {selectedDocIds.length === 1 ? 'selected doc' : `${selectedDocIds.length} docs`}
-              </span>
+            {/* Protocol-scoped mode (Ask) hides the selector — scope is fixed to
+                the protocol and enforced server-side. Audit Mode keeps it. */}
+            {!protocolId && (
+              <>
+                <DocumentSelector
+                  selectedDocIds={selectedDocIds}
+                  onSelectionChange={setSelectedDocIds ?? (() => {})}
+                  isLight={isLight}
+                />
+                {selectedDocIds.length > 0 && (
+                  <span className={`text-[11px] truncate max-w-[140px] ${isLight ? 'text-[#334155]/40' : 'text-[#94A3B8]/70'}`}>
+                    Scoped to {selectedDocIds.length === 1 ? 'selected doc' : `${selectedDocIds.length} docs`}
+                  </span>
+                )}
+              </>
             )}
 
             <div className="ml-auto flex items-center gap-2">

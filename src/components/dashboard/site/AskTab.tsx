@@ -19,7 +19,7 @@ import DashboardChat from '../DashboardChat';
 import DemoAskPanel from './DemoAskPanel';
 import { deriveAskPrompts } from '../../../lib/site/askPrompts';
 import { fetchVisitTemplates } from '../../../lib/site/siteApi';
-import type { ChatMessage, RagStatus } from '../../../lib/supabase';
+import type { ExtendedMessage } from '../../../lib/supabase';
 
 const PROMPT_ICONS: Record<string, LucideIcon> = {
   Calendar,
@@ -50,21 +50,9 @@ const PROMPT_ICONS: Record<string, LucideIcon> = {
 // The chat engine itself is unchanged.
 // =============================================================================
 
-type ExtendedMessage = ChatMessage & {
-  streaming?: boolean;
-  ragStatus?: RagStatus;
-  ragError?: string;
-};
-
 interface AskTabProps {
   messages: ExtendedMessage[];
   setMessages: React.Dispatch<React.SetStateAction<ExtendedMessage[]>>;
-  // selectedDocIds + setter are accepted for prop-shape compatibility with
-  // Dashboard's switch case but intentionally NOT used by Site Mode's Ask.
-  // Site Ask derives its own scope from the active protocol's tagged docs so
-  // we don't pollute Audit-mode chat selection.
-  selectedDocIds?: string[];
-  setSelectedDocIds?: (ids: string[]) => void;
 }
 
 export default function AskTab({
@@ -94,14 +82,6 @@ export default function AskTab({
       cancelled = true;
     };
   }, [activeProtocol]);
-
-  // Local doc-id list scoped to this protocol's tagged documents. Recomputes
-  // when the documents array changes (including realtime updates). Held in
-  // local state so Audit-mode chat selection isn't affected by Site Ask.
-  const protocolDocIds = useMemo(() => documents.map((d) => d.id), [documents]);
-  const [_localOverride, _setLocalOverride] = useState<string[] | null>(null);
-  const localSelectedDocIds = _localOverride ?? protocolDocIds;
-  const setLocalSelectedDocIds = (ids: string[]) => _setLocalOverride(ids);
 
   // Rule-based dynamic prompts (D3a) — see src/lib/site/askPrompts.ts.
   // Derived from the active protocol's phase, the presence of an extracted
@@ -189,8 +169,8 @@ export default function AskTab({
           <DashboardChat
             messages={messages}
             setMessages={setMessages}
-            selectedDocIds={localSelectedDocIds}
-            setSelectedDocIds={setLocalSelectedDocIds}
+            protocolId={activeProtocol.id}
+            abortOnUnmount
             customSuggestions={protocolSuggestions}
             emptyHeading={`Ask about ${activeProtocol.code}`}
             emptySubtext={`Grounded in ${documents.length} document${documents.length === 1 ? '' : 's'} for ${activeProtocol.code}. Pick a starter or ask anything.`}
