@@ -1,6 +1,53 @@
 # Fable Build Brief — PIQClinical Website (Vision + Product)
 
-> **How to use this file:** Paste this entire document to Fable as the build prompt. Also attach your `sales-marketing-strategy.md`. Fable produces a static, multi-page site under `website/`. After the build, iterate with Claude Design (see §7).
+> **How to use this file:** This is a two-stage effort (see below). Paste this entire document to Fable as the build prompt, and attach your `sales-marketing-strategy.md`. Fable produces a static, multi-page site under `website/`. After the build, iterate with Claude Design (see §9).
+
+## Stages — keep these separate
+
+- **Stage A — Brief authoring (this work).** Create/update `website/FABLE-BRIEF.md` and the starter files explicitly requested here: `website/tokens.css`, `website/site.css`, `website/DESIGN.md`, `website/content.js`. **No product application source is modified in Stage A.**
+- **Stage B — Fable execution.** Fable reads this brief, performs the bounded read-only codebase review (Step 0), and builds the static marketing site inside `website/`.
+
+**This work is documentation-first. Do NOT build the site until the user explicitly asks Fable to execute Stage B.**
+
+---
+
+## Truth hierarchy — read before anything else
+
+Sources rank in this order. When they conflict, the higher rank wins; when release status is unclear, prefer restrained language.
+
+1. **Legal / privacy / security / compliance statements** require explicit documentary support. **Never infer these from code.**
+2. **The written product-facts section (§4)** is the baseline for customer-facing *availability* and *capability* claims.
+3. **`sales-marketing-strategy.md`** governs positioning, audience framing, messaging, tone, and prioritization.
+4. **The codebase** may validate terminology, workflows, labels, and implementation detail. **Code alone does not establish that a feature is generally available, approved for marketing, compliant, or production-ready.**
+5. **`landing.html`** is the canonical visual reference (brand, layout, type, color, cards, badges, mockup language).
+6. **When sources conflict or release status is unclear**, use restrained **"Platform direction"** language or flag the item for review — do not make a "Live today" claim.
+
+**Definitions (use exactly these):**
+```
+Live today:         Available to the intended customer audience now.
+Platform direction: Planned, expanding, gated, pilot, internal, or otherwise
+                    not confirmed as broadly available.
+```
+Do **not** infer broad Sponsor Mode availability merely because `canUseSponsorMode` exists in an entitlement gate.
+
+---
+
+## Step 0 — Bounded, read-only codebase review (before writing markup)
+
+Before writing any markup, perform a **bounded, read-only review** of the PIQClinical codebase to **validate product terminology and workflow concepts**. Skim labels, enums, types, API surfaces, and user-facing component names for product-story accuracy. This is calibration, not an implementation audit.
+
+**Review only these areas:**
+- **Site Mode:** `src/lib/site/`, `src/lib/visit-execution/`, `src/components/dashboard/visit-execution/`, `src/types/visit-execution/`
+- **Audit Mode:** `src/lib/audit/`, `src/components/dashboard/audit/`, `src/types/audit/`
+- **Sponsor / SOTR / Deliverables:** `src/lib/sotr/`, `src/lib/deliverables/`, `src/lib/sponsor/`, `src/components/sotr/`, `src/components/deliverables/`, `src/types/sotr/`, `src/types/deliverables/`, `src/types/sponsor/`
+- **Cross-cutting context:** `CLAUDE.md`, `src/lib/entitlements.ts`
+
+**Rules:**
+- Use code to **confirm vocabulary, workflow sequence, and product concepts.**
+- **Do not infer** broad availability, regulatory posture, security posture, customer outcomes, or feature maturity solely from implementation code.
+- When code indicates a feature may be **gated, new, incomplete, internal, or different** from the written baseline, **do not silently convert it into a customer-facing claim** — use "Platform direction" language or flag the discrepancy for approval.
+- The review is **read-only, efficient, and limited to the listed areas.**
+- If **repository access is unavailable**, use §4 as the baseline.
 
 ---
 
@@ -13,16 +60,27 @@ Build a **best-in-class website for PIQClinical** that does two jobs at once:
 **The one sentence a visitor must leave with:**
 > **PIQC is the missing intelligence layer between protocol complexity and clinical execution.**
 
-**Architecture of the site:**
-- **Home (`index.html`)** = the vision narrative (the editorial, single-scroll founder story with anchored nav). This is the emotional and category argument.
-- **`site.html` / `audit.html` / `sponsor.html`** = the "product proof" deep-dives for buyers who want to see it work.
-- **`security.html`** = the regulated-environment trust page.
+**Architecture of the site (clean routes — see §10):**
+- **Home (`/` → `index.html`)** = vision framing + the **three-act product story** (§1 spine): **Act 1 the core engine** (protocol → visual, review-ready visit drafts → speed) is the star; **Act 2 Ask, answered by the protocol** (intelligence beside the cited source) is the co-star; **Act 3 downstream** shows the same intelligence powering Audit & Sponsor. Lead with the engine.
+- **`/site` `/audit` `/sponsor`** = the mode deep-dives; **`/security`** = the regulated-environment trust page.
 
-**Stack:** zero-build static — one `.html` per page, **Tailwind via CDN + inline `tailwind.config`** (same as the existing `landing.html`), shared `tokens.css`, vanilla JS. No bundler. Deploys to **Cloudflare Pages** with no build step, intended for **piqclinical.com**.
+**Stack:** zero-build static — one page per route (directory-index structure, §10), a canonical **`tokens.css`** (design values) + **`site.css`** (components/layout) + **`animations.js`** (behavior), vanilla JS. No bundler. Deploys to **Cloudflare Pages** with no build step. **Tailwind via CDN is optional** — if used, pin the version and map its config to the same tokens; it must not become a second, conflicting token system.
 
 **Primary CTA everywhere:** **"Request a Demo."** Softer secondaries: "See the protocol journey," "Talk through your protocol workflow."
 
-**Truth constraint:** describe **only** what §4 marks **Live today**. Everything else is **Platform direction** and must be visibly labeled. Never invent metrics, certifications, customers, or partner logos.
+**Interactivity — build a LIVE, ready-to-go site (not static screenshots):** real working navigation across all routes; functional buttons/links; hover/focus/active states; scroll-reveal; working mobile menu; scroll-triggered hero animations; and the two hands-on demos (§7). The **product mockups are DOM/CSS (real elements)**. The **Request-a-Demo CTA must reach a real destination (§8) — never simulate a successful submission.**
+
+**Truth constraint:** present **only** §4 **Live today** items as current; everything else is **Platform direction** and visibly labeled. Never invent metrics, certifications, customers, or partner logos. Obey the **Truth hierarchy** above.
+
+**Inputs Fable consumes (build in ONE efficient pass — don't re-derive):**
+- **The PIQC codebase** — bounded read-only review (Step 0) to calibrate terminology only; per the Truth hierarchy, code validates vocabulary/workflow but does **not** establish availability or compliance.
+- `tokens.css` — canonical design values. `site.css` — reusable component/layout styles. Import as-is; never hardcode values.
+- `content.js` — all copy + mock data, already written in-voice. Pull strings from here; don't rewrite copy.
+- `../landing.html` — canonical visual reference to mine styles/logo/mockup patterns from.
+- This brief: §3.5 = build spec, §4 = product facts, §4.5 = claim verification, §5 = home sections, §7 = animations.
+- `WEB-DESIGN-SYSTEM.md` = optional deep rationale — not required to build; §3.5 is sufficient.
+
+**Efficient build order:** (1) `tokens.css` + `site.css` → (2) shared partials **once** (identical nav, footer, MockupFrame, CitationChip, demo form) → (3) compose each route from those + `content.js`. Reuse components; never regenerate one.
 
 ---
 
@@ -32,28 +90,35 @@ Build a **best-in-class website for PIQClinical** that does two jobs at once:
 > **PIQC transforms protocol complexity into context-aware understanding, then hands the user to the right tool at the right moment.**
 
 ### The core argument (the spine of the whole site)
-- Manual protocol interpretation is a **cognitive tax** on clinical trial execution. Teams read, cross-reference, and translate dense protocols into worksheets, monitoring priorities, audit scope, training, and site guidance — by hand, from working memory.
-- **This is a systems problem, not a people problem.** The system asks skilled professionals to absorb too much protocol logic manually. Never imply sites, CRAs, auditors, or sponsors are careless or noncompliant.
-- **The first failure happens upstream** — not at the first patient visit, but earlier, when a protocol requirement is manually translated into a workflow. PIQC reduces that interpretation burden *before* execution.
-- **Understanding first. Action second.** PIQC prepares the human, then **hands off to the systems the organization already trusts** (EDC, CTMS, eTMF, training, travel). It does not replace them. *"PIQC helps people arrive in those systems informed rather than overloaded."*
+- Manual protocol interpretation is a **cognitive tax** on clinical trial execution — teams translate dense protocols into worksheets, monitoring priorities, audit scope, training, and site guidance by hand, from working memory.
+- **This is a systems problem, not a people problem.** Never imply sites, CRAs, auditors, or sponsors are careless or noncompliant.
+- **The first failure happens upstream** — not at the first patient visit, but when a protocol requirement is manually translated into a workflow. PIQC reduces that interpretation burden *before* execution.
+- **Understanding first. Action second.** PIQC prepares the human, then **hands off to the systems the organization already trusts** (EDC, CTMS, eTMF, training, travel). It does not replace them.
 - **Parse once, generate many.** One source-traceable protocol intelligence backbone → many role-specific expressions. Humans remain responsible.
 
+### Product demonstration spine — lead with the engine (do NOT bury it)
+The *vision* is the WHY; this is the WHAT, in **three acts, in this order**. The core engine is the star — most space, strongest visual, earliest product moment. Audit and Sponsor are **downstream**, not co-equal.
+
+1. **Act 1 — The core engine (the star).** Protocol PDF → **visual, review-ready study-visit drafts, in minutes.** Site Mode's heart. The money shot: a dense protocol becomes a phased, source-cited visit checklist. Speed is the payoff.
+2. **Act 2 — Ask, answered by the protocol (the co-star).** The **Ask** copilot works **side by side with the source of truth**: a plain question returns a protocol-grounded answer with the **cited passage shown right next to it** (section + page).
+3. **Act 3 — Downstream: the same intelligence, extended (the payoff).** Because the protocol is parsed once into traceable logic, it flows downstream into **Audit Mode** and **Sponsor Mode**. Present these as *what the engine unlocks*, not separate products.
+
 ### Voice
-Confident, clear, calm, spacious, editorial. Respect the reader's expertise. Lead with the *systemic pain*, then the *proof*. Compliance-forward (HIPAA / 21 CFR Part 11). No hype, no fear tactics, no exclamation marks, no "revolutionary/magic/instant."
+Confident, clear, calm, spacious, editorial. Lead with the *systemic pain*, then the *proof*. No hype, no fear tactics, no exclamation marks, no "revolutionary/magic/instant."
 
-**Founder register (the whole site, and Section I especially):** it should read like an **experienced founder who has lived this problem and is certain of the build** — earned conviction, not a résumé. Authority is shown by **naming the problem more precisely than anyone else in the room**, not by listing tenure, titles, employers, or "X years of experience." **Never a LinkedIn/CV tone.** No credential-bragging, no "seasoned professional," no year-counts. The confidence is quiet and total: *this layer must exist, and here's exactly why.*
+**Founder register (whole site, and Founder Intent especially):** read like an **experienced founder who has lived this problem and is certain of the build** — earned conviction, not a résumé. Authority is shown by **naming the problem more precisely than anyone else**, not by tenure, titles, employers, or "X years of experience." **Never a LinkedIn/CV tone.**
 
-**Use these themes (don't repeat mechanically):** manual interpretation load · cognitive burden · structured protocol intelligence · **anytime mastery** · context-aware understanding · source-traceable materials · role-specific views · human review and responsibility · **understand first, act second** · **warm handoff** · *"protocols will remain complex; the human burden does not have to"* · *"PIQC prepares; people and systems govern."*
+**Use these themes:** manual interpretation load · cognitive burden · structured protocol intelligence · **anytime mastery** · context-aware understanding · source-traceable materials · role-specific views · human review and responsibility · **understand first, act second** · **warm handoff** · *"protocols will remain complex; the human burden does not have to"* · *"PIQC prepares; people and systems govern."*
 
-**Avoid:** "generic AI copilot" language · "magic / instant compliance" · claims PIQC **prevents deviations, improves safety, or guarantees inspection readiness** (only ever as explicitly-labeled future validation goals) · "protocol clarity" phrasing that implies protocols are badly written · talking down to clinical staff · implementation detail in customer-facing copy · huge text blocks · invented logos/testimonials/metrics/integrations/certifications · **résumé / LinkedIn / credential-bragging tone** (tenure counts, job titles, "seasoned expert") — especially in Founder Intent. Prefer *reduce, support, prepare, surface, help teams understand, enable review* over outcome promises.
+**Avoid:** "generic AI copilot" language · "magic / instant compliance" · claims PIQC **prevents deviations, improves safety, or guarantees inspection readiness** · "protocol clarity" phrasing (implies protocols are badly written) · talking down to clinical staff · implementation detail in customer copy · huge text blocks · invented logos/testimonials/metrics/integrations/certifications · **résumé / LinkedIn / credential-bragging tone**. Prefer *reduce, support, prepare, surface, help teams understand, enable review* over outcome promises.
 
 ### Hard guardrails
-1. **Accuracy + Live-vs-Direction.** Only present §4 **Live today** capabilities as current. Anything in **Platform direction** must carry a visible label ("Platform direction" / "Designed to extend"). Never blur the two.
-2. **Draft-aid positioning.** PIQC *drafts, flags, surfaces, prepares*; humans review and approve. Never "approves / certifies / signs / attests / mandates," never "system of record."
-3. **Boundary honesty.** PIQC is **not** an EDC, eSource, CTMS, eTMF, LMS, travel system, compliance tracker, generic AI assistant, or replacement for clinical judgment. Say so plainly (§5, Section H).
-4. **Messaging precedence.** The attached **`sales-marketing-strategy.md` wins on positioning/tone/claims**; **this brief wins on product facts.** Never let copy overstate the product.
-5. **No sponsor branding / third-party logos.** Mockups stay generic ("Acme BioPharma"); external systems shown as neutral labels ("EDC," "CTMS," "Travel System") — no real logos.
-6. **Zero PHI.** No real patient data; fake IDs like `P-0023`. All mock UI clearly illustrative.
+1. **Truth hierarchy governs everything** (see top). Only present §4 **Live today** items as current; **Platform direction** carries a visible label.
+2. **Draft-aid positioning.** PIQC *drafts, flags, surfaces, prepares*; humans review and approve. Never "approves / certifies / signs / attests / mandates," never "system of record." Mockups must never imply AI independently approves, certifies, signs, or replaces human review. Recurring rule: **"PIQC advises and drafts; humans review, decide, and approve."**
+3. **Boundary honesty.** PIQC is **not** an EDC, eSource, CTMS, eTMF, LMS, travel system, compliance tracker, generic AI assistant, or replacement for clinical judgment.
+4. **Messaging precedence.** `sales-marketing-strategy.md` wins on positioning/tone; §4 + Truth hierarchy win on product facts.
+5. **No sponsor branding / third-party logos.** Mockups generic ("Acme BioPharma"); external systems neutral labels ("EDC," "CTMS," "Travel System").
+6. **No PHI / study data anywhere** — mockups use fake IDs like `P-0023`; forms never request PHI, study data, or sensitive operational information.
 
 ---
 
@@ -61,8 +126,6 @@ Confident, clear, calm, spacious, editorial. Respect the reader's expertise. Lea
 
 **Primary (buyers):** site-network leadership, site managers, lead coordinators, clinical-operations leaders, sponsor study teams, CRAs/monitors, QA/audit leaders.
 **Secondary:** clinical-research investors, strategic advisors, future partners.
-
-Speak to all without clutter — the vision narrative lands for investors; the mode pages and demo CTA convert buyers. Each role should find its own question answered (see §5 Section E):
 
 | Audience | Question the site must answer |
 |---|---|
@@ -76,179 +139,280 @@ Speak to all without clutter — the vision narrative lands for investors; the m
 
 ## 3. Brand system — reuse from `landing.html` verbatim
 
-The repo root contains `landing.html`. **It is the canonical brand reference — mine its styles.** Exact tokens + logo SVG are in **Appendix A** and in the starter files `website/tokens.css` and `website/DESIGN.md`.
+`landing.html` is the canonical visual reference — mine its styles. Exact values + logo SVG are in **Appendix A** and in `website/tokens.css`.
 
 - **Palette (medical scrub):** `scrub-blue #1e7fd4 / bluelight #4a9fe0 / bluedark #1568b8`, `scrub-teal #14b8a6 / teallight #2dd4bf / tealdark #0e9488 / sage #a7c9bf`, `ink #0f2942`; dark-mockup navy scale `#070d1a…#1e3060`.
 - **Gradient:** `linear-gradient(135deg,#1e7fd4→#14b8a6)` → `.grad-brand`, `.grad-text`, `.grad-soft`, faint `.grid-pattern`.
-- **Type:** Inter 300–800. Big, tight headings; relaxed slate body; accent phrases in `.grad-text`.
-- **Logo:** inline `#piqc-mark` SVG (wing + crossing ribbon + 4-point sparkle + dot trail). Wordmark `PIQC`(grad)+`linical`(ink, light).
+- **Type:** Inter 300–800. **Logo:** inline `#piqc-mark` SVG. Wordmark `PIQC`(grad)+`linical`(ink, light).
 - **Surfaces:** light `.card`; dark `.screenshot`; `.btn-primary`/`.btn-ghost`; `.badge-*`, `.stage-pill`.
-- **Tokenization rule (load-bearing for Claude Design):** every color/radius/shadow/spacing/animation value lives in `tokens.css` + the Tailwind config. **No raw hex or magic numbers in markup.**
+
+**Canonical-values rule (load-bearing):** `tokens.css` is the single source of visual values — **no arbitrary hardcoded brand colors, spacing, radii, shadows, z-index, or animation timings in page markup.** Component/layout styles live in `site.css`. If Tailwind CDN is retained, pin the version and map its config to these same tokens; it must not introduce a second value system.
+
+### 3.5 Design system — build to this (rationale in `WEB-DESIGN-SYSTEM.md`)
+
+**Thesis — "clinical instrument, not SaaS brochure." Three moves carry the look:**
+1. **Dual-surface rhythm** — light editorial bands alternate with dark-navy `.screenshot` bands. Alternate `surface → surface-2 → surface`; **never two dark sections adjacent.**
+2. **Traceability as a primitive** — the `§ section · page` **CitationChip** and a **ProvenanceLine** ("PIQC draft · requirements surfaced for review") recur on every draft/requirement. The ownable motif.
+3. **Document → structure motif** — a protocol page resolving into clean, classified rows.
+
+**Build model:** values (`tokens.css`) → components/layout (`site.css`, built **once**) → section patterns → routes. Reuse; never regenerate a component. Copy from `content.js`.
+
+**Layout:** container `max-w-7xl`; **prose max ~65ch — never wider**; section rhythm `64px`→`96px` (hero larger); splits 2-col at `lg`; card/stat grids 3-col at `md`; left-align prose, center only heroes/intros.
+
+**Spacing:** 8-pt scale `4/8/12/16/24/32/48/64/96`. No one-off values.
+
+**Type (Inter):** H1 large/800/tight/`leading-[1.08]` · H2 700 · H3 700 · lead · body `leading-relaxed` · eyebrow small/600/`uppercase tracking-widest`. **One display per page.** Gradient text only on large accent words (fails AA at body size) — readable text stays solid `--fg-heading`/`--fg-body`.
+
+**Color:** consume semantic tokens (`--fg-heading/-body/-sub/-muted`, `--surface/-2/-dark`, `--border-hairline`, `--accent`). Confidence dots green/amber/slate; risk red/orange/amber/slate.
+
+**Elevation / radius:** 3 shadows only; radii `6` chips · `10–12` buttons/inputs · `16` cards · `20–24` mockup frames.
+
+**Components (build once):** Button · Card · **MockupFrame** (`.screenshot` + fake browser chrome) · **CitationChip ★** · **ProvenanceLine ★** · ConfidenceDot · Badge · StagePill · Nav (mobile disclosure) · Footer · Field · **DirectionTag** (on every non-live claim).
+**Section patterns:** Hero · SplitFeature · MockupShowcase (Act-1) · SplitAsk (Act-2) · Stepper (audit) · RoleLensGrid · BoundaryTable · Lifecycle · StatBand · CTABand · DemoForm.
+
+**Motion:** values in `tokens.css`; behavior in `animations.js`; animate **only `transform`/`opacity`**; one-time `fade-up` on scroll-in; **build the final state first, then animate to it**; reduced-motion → final state. Full rules in §7.
+
+**Responsive (mobile-first `sm640/md768/lg1024/xl1280`):** splits stack; **SplitAsk stacks question over source**; grids → 1–2 col; wide mockups get `overflow-x:auto` **inside the frame**; touch ≥44px.
 
 ---
 
 ## 4. Product facts — ground truth (Live today vs Platform direction)
 
-Write from this; don't exceed it. Bold terms are the product's real vocabulary.
+Write from this; don't exceed it (Truth hierarchy applies). Bold terms are the product's real vocabulary. Availability of any item is set by this section, **not** by the presence of code.
 
 ### The shared foundation — Protocol Intelligence (SOTR) · **Live today**
 Upload a protocol PDF → **structured, confidence-scored, source-cited, review-ready** data.
 - Extracts **endpoints, eligibility (inclusion/exclusion), visit schedules (Schedule of Assessments), dosing, prohibited medications, cohorts, amendments**.
-- Every item carries a **confidence state** (high/medium/low/needs-review) + score + reason.
-- Every item links to **source evidence**: quoted text, page number, **bounding box** (byte-level location), typed **primary/secondary/context/conflict**.
+- Every item carries a **confidence state** (high/medium/low/needs-review) + reason.
+- Every item links to **source evidence**: quoted text, page number, source location, typed **primary/secondary/context/conflict**.
 - **SOTR (Source-of-Truth Reviewer):** human **Accept for draft / Edit / Reject / Flag**, each logged with reviewer + timestamp + version. **AI extracts; humans own interpretation.**
 - **Amendment-aware:** version changes flag affected extractions for an adopt-or-dismiss decision.
-- Line: *"AI outputs are evidence-backed drafts, not black-box truth."*
 
 ### Site Mode — research sites (coordinators, nurses, investigators) · **Live today**
 - **Calendar / Visits / Participants** with realtime materialization of a participant's visit schedule on enrollment.
-- **Visit Execution Workspace (VEW):** per-visit snapshot + a checklist grouped into **7 phases** (Pre-Visit Prep, Check-In, Core Procedures, Dosing, Post-Dose, Safety/AE/Conmed, Closeout); each requirement has a **classification** (required / conditional / if-applicable / primary-endpoint / secondary-endpoint / safety-critical), a **confidence dot**, and a **§ traceability** link to the exact protocol source (SoA cell, section, page, amendment, verbatim quote).
+- **Visit Execution Workspace (VEW):** per-visit snapshot + a checklist grouped into **7 phases**; each requirement has a **classification** (required / conditional / if-applicable / primary-endpoint / secondary-endpoint / safety-critical), a **confidence signal**, and a **§ traceability** link to the exact protocol source.
 - **Completeness signals:** a second pass flags **"possibly-missing requirements"**; coordinator **adds** or **dismisses** — never auto-added.
-- **Role-filtered worksheets:** filter to **Coordinator / Nurse / Investigator / Lab / Pharmacy**; export a **draft PDF worksheet**. One dataset → five role-ready handoffs.
-- **Ask:** **protocol-grounded copilot** (RAG), phase/role-aware prompts, every answer cites section + page.
+- **Role-filtered worksheets:** filter to **Coordinator / Nurse / Investigator / Lab / Pharmacy**; export a **draft PDF worksheet**.
+- **Ask:** **protocol-grounded copilot**, phase/role-aware prompts, every answer cites section + page.
 
 ### Audit Mode — auditors, QA, sponsors · **Live today (vendor audit)**
 Gated **8-stage vendor audit**: **Intake → Vendor Enrichment → Questionnaire → Scope & Risk → Pre-Audit Drafting → Conduct → Report → Export** (advancement gated by approvals).
-- **Risk-scored findings:** CRITICAL/HIGH/MODERATE/LOW × **DATA_INTEGRITY / PATIENT_SAFETY**; each traces protocol requirement → vendor responsibility → evidence.
-- **Issue → CAPA** lifecycle (DRAFT → NEEDS_REVISION → ACCEPTED → EXPORTED), auto-prefilled from finding context.
+- **Risk-scored findings** across **DATA_INTEGRITY / PATIENT_SAFETY** impact surfaces; each traces protocol requirement → vendor responsibility → evidence.
+- **Issue → CAPA** lifecycle, auto-prefilled from finding context.
 - **AI-assisted report drafting** (exec summary + conclusions) with **earned write-back** — two explicit human confirmations before any AI text enters the report.
-- **Amendment alerts, traceability/lineage, immutable per-object history, evidence attachments.**
+- **Amendment alerts, traceability/lineage, per-object history, evidence attachments.**
 - **Platform direction:** the same workspace **extending to investigator / site audits** — label as expanding, not shipped.
 
 ### Sponsor Mode — pharma sponsors (enterprise tier) · **Live today (Deliverable Engine)**
+> Enterprise-gated. Do **not** imply broad availability from `canUseSponsorMode`. Frame as enterprise-tier.
+
 **Parse once, generate many** via the **Protocol Deliverable Engine**.
-- **Deliverables (live):** **Monitoring Preparation Checklist** (nine monitoring-priority sections) and **Risk Overview** (six plain-language operational-complexity sections; no opaque scores). Set is extensible.
-- **Content-origin honesty badges:** every block typed **Protocol Fact** (solid; evidence+confidence+quote) / **PIQC Framing** (outlined, Sparkles; no confidence, no protocol provenance) / **Human Note** (quiet; never overwritten). Prevents "borrowed authority."
-- **Byte-level provenance:** click a fact → source drawer (quote, page, section, confidence); **"View cited page"** opens the PDF to that spot.
-- **Regeneration preserves human work;** rejected items can't resurrect; full edit log. **Coverage-gap honesty** (e.g., emits a gap block when no prohibited-med list was extracted).
+- **Deliverables (live):** **Monitoring Preparation Checklist** and **Risk Overview** (plain-language operational-complexity sections; no opaque scores). Set is extensible.
+- **Content-origin honesty badges:** every block typed **Protocol Fact** / **PIQC Framing** / **Human Note**. Prevents "borrowed authority."
+- **Source provenance:** click a fact → source drawer (quote, page, section, confidence); **"View cited page."**
+- **Regeneration preserves human work;** rejected items can't resurrect; full edit log. **Coverage-gap honesty.**
 - **DRAFT-watermarked PDF exports** with a "requires human review" disclaimer + traceability appendix; sponsor-name-free.
 - **Portfolio intelligence:** read-only enrollment / visits / deviations across the sponsor's sites.
 - **Platform direction:** sponsor "**operational fragility view**," CRA-facing monitoring outputs as a distinct role surface.
 
 ### Living Protocol Knowledge Transfer · **Platform direction (label clearly)**
-The vision that one protocol-intelligence backbone re-expresses itself across the study lifecycle (startup → SIV → enrollment → conduct → amendment → monitoring/audit → closeout) — e.g., **SIV knowledge-transfer packages**, role quick-references, amendment-impact views. Present as *where the platform is going*, not current functionality. **Never imply LMS / training-record capability** — organizations own training approval, delivery, records, competency, signatures, storage.
+One backbone re-expressed across the study lifecycle (startup → SIV → enrollment → conduct → amendment → monitoring/audit → closeout) — e.g., **SIV knowledge-transfer packages**, amendment-impact views. Present as *where the platform is going.* **Never imply LMS / training-record capability** — organizations own training approval, delivery, records, competency, signatures, storage.
 
 ---
 
-## 5. Home page (`index.html`) — the vision narrative
+## 4.5 Product-claim verification (verify or soften before publishing)
 
-A focused, **editorial single-scroll** experience with anchored nav — **not** a repetitive SaaS feature scroll. Progressive disclosure, strong hierarchy, generous whitespace.
+**Copy rule:** product metrics, workflow labels, and capability statements must be traceable to the approved product baseline (§4) or confirmed release materials. **Do not use a number merely because it looks persuasive.**
 
-**Anchored nav:** Why PIQC · How It Works · Who It Serves · Product Boundary · Founder Intent · **Modes** (→ Site / Audit / Sponsor) · Security · **Request a Demo**.
+**Verify against the baseline (or soften) each of:** "8 stages" · "5 role views" · "4 evidence types" · "0 PHI" · "realtime sync" · "byte-level provenance" · "earned write-back" · "confidence-scored" · "gated advancement" · "regeneration that preserves human work" · "EU data residency" · "MFA" · "encryption" · "Protocol Deliverable Engine" · "Monitoring Prep Checklist" · "Risk Overview." Anything not confirmed → soften or move to Platform direction.
 
-**Section A — Hero: The Missing Layer.**
-Eyebrow "A better question for clinical trial execution." H1 **"From protocol complexity to context-aware understanding."** Sub: clinical systems manage data, documents, workflow, and oversight — *but they assume someone has already translated the protocol into usable understanding.* PIQC is that layer. CTAs: **Request a Demo** (primary) · **See the protocol journey** (secondary, scrolls to Section C/D).
-Hero visual (calm, deterministic — see §6): `Protocol PDF → structured protocol intelligence → context-aware understanding → role-specific output → warm handoff to existing system`, with role outputs (Site: Study Worksheet · CRA: Monitoring Checklist¹ · Sponsor: Fragility View¹ · QA: Audit Focus¹ · Study team: SIV Package¹) and neutral handoff destinations (EDC · CTMS · eTMF · Training). (¹ mark Platform-direction outputs.)
+**No completeness / zero-defect claims.** Replace **"PIQC drafted · 0 gaps detected"** with a non-guaranteed statement such as **"PIQC draft ready for review"** or **"Requirements surfaced for review."** Never imply guaranteed protocol coverage or zero errors.
 
-**Section B — The manual interpretation burden.** "The burden isn't reading the protocol. It's translating it into execution." Contrast **Before PIQC** (manual review → cross-referencing → local notes/spreadsheets → repeated questions → re-created deliverables → execution) vs **With PIQC** (structured intelligence → traceable role-specific understanding → editable deliverables → prepared action → existing system). Key line: **"Protocols will remain complex. The human burden does not have to."** No outcome claims.
-
-**Section C — The first failure happens upstream.** "Before a protocol can be executed, it must be operationalized." Timeline `Protocol received → interpretation → worksheets/workflows → site prep & SIV → activation → first patient visit`, highlighting the interpretation/operationalization phase as PIQC's focus. Language: *"where complexity deserves attention,"* never *"what humans get wrong."*
-
-**Section D — How it works: Parse once, generate many.** "One protocol intelligence backbone. Many moments of understanding." The **protocol-intelligence map**: Protocol → structured intelligence (visits & windows · procedures · eligibility/exclusion · prohibited meds · endpoints · safety/lab · cohort logic · vendor dependencies · amendments · source citations) → role-specific views. On select, reveal an illustrative artifact (not a dense table). Close: **"Parse once. Generate many. Humans remain responsible."**
-
-**Section E — Who it serves: different questions, shared intelligence.** Role cards (keyboard-accessible, not hover-only). Each: the role's *question* + an *illustrative output*. Site (What do I do next? → study worksheets/visit guidance — **Live**) · CRA (What deserves focused oversight? → monitoring-visit checklist/window reminders — **Direction**) · Sponsor/ClinOps (Where is the protocol operationally complex? → fragility map/amendment impact — Risk Overview is **Live**, fragility view is **Direction**) · QA/Audit (What should be validated? → protocol-aware audit scope/evidence-linked checklists — 8-stage audit is **Live**) · Study team (What must each role understand before execution? → SIV knowledge-transfer package — **Direction**). Label every Direction item.
-
-**Section F — Understanding first. Action second.** "PIQC prepares the next action. Your existing systems execute it." Action-layer visual: *monitoring visit needs prep → PIQC explains why it matters (endpoint-critical procedures, time-sensitive windows, amendment-affected requirements, eligibility/prohibited-med areas) → next action → open the org's preferred system (neutral labels).* Key line: **"PIQC informs. PIQC prepares. PIQC guides. Your systems execute."** (Do not build travel/CTMS flows or imply PIQC directs monitoring cadence.)
-
-**Section G — Living protocol knowledge transfer · Platform direction.** "Protocol understanding shouldn't expire after the SIV." Lifecycle strip (Startup → SIV → Enrollment → Conduct → Amendment → Monitoring/Audit → Closeout) with a concise example per stage. Boundary copy: *PIQC prepares knowledge-transfer materials; organizations remain responsible for training approval, delivery, records, competency, signatures, and controlled storage.* Section visibly framed as platform direction; **no LMS implication.**
-
-**Section H — What PIQC is / is not.** Calm two-column boundary table:
-
-| PIQC does | PIQC does not |
-|---|---|
-| Converts protocol content into structured, traceable understanding | Replace clinical judgment |
-| Prepares editable, role-specific draft materials | Become the system of record |
-| Helps teams locate protocol evidence in context | Execute regulated workflows |
-| Supports preparation, review, and human decision-making | Replace CTMS, EDC, eTMF, LMS, or travel tools |
-| Provides context-rich handoffs | Approve, attest, certify, or mandate decisions |
-
-Framing line: **"PIQC prepares. Your people and systems govern."**
-
-**Section I — Founder intent.** Write it in the **founder register** (see §1) — an experienced founder sounding out this problem with total conviction, **not** a bio. Headline: "Built from the belief that clinical teams deserve better support before execution begins." Copy: state the problem with earned precision — *the same pattern shows up on every study: skilled teams re-deriving a protocol's meaning by hand, from memory, under time pressure, before anyone has seen a patient.* Make clear it's a **systems failure, not a people failure**, and that this is why PIQC was built — to move that burden upstream while keeping human judgment, review, quality, and accountability at the center. Land on conviction about the build: *this intelligence layer must exist.* Statement: **"PIQC exists to replace manual interpretation overload with anytime mastery."**
-**Do NOT:** count years of experience, list job titles/employers, use LinkedIn/CV phrasing ("seasoned," "over a decade of…"), name unrelated employment, or call PIQC a side project. Authority comes from how well the problem is named — a first-person, plainspoken founder voice is welcome; a résumé is not. Optionally a single quiet credibility line (e.g., "built by people who have audited these trials from the inside") — but only if it reads as conviction, never as a credential.
-
-**Section J — Explore the product (bridge to proof).** Three cards (Site / Audit / Sponsor): icon, who-it's-for, 3 bullets, "Explore [Mode] →" to the deep-dive page. Stats band on the gradient: **8** gated audit stages · **5** role-filtered views · **4** evidence support types · **0** PHI stored.
-
-**Section K — Security teaser** → link to `security.html`. **Section L — Final CTA + demo form** ("The protocol should be a source of mastery, not a recurring cognitive burden.") → **Footer.**
+Security-adjacent terms ("0 PHI," "EU data residency," "MFA," "encryption") are governed by the **Security & compliance claim register (§6.5)** and must not appear until approved there.
 
 ---
 
-## 6. Mode & security pages (product proof)
+## 5. Home page (`/` → `index.html`) — vision framing + the three-act product story
 
-Each mode page opens with a one-line **boundary reassurance** ("Works alongside your EDC/CTMS — PIQC prepares, your systems execute") and clearly separates **Live today** from **Platform direction**. Reuse the shared nav/footer and the demo form.
+Editorial single-scroll with anchored nav — **not** a repetitive SaaS feature scroll. Vision beats (B, C) frame the problem fast; the product story runs as the three acts (D/E/F) with the most space and strongest visuals.
 
-- **`site.html` — Site Mode.** Hero (Site animation) → the interpretation burden for sites → Visit Execution Workspace (phases, classification, confidence, § traceability) → completeness signals → role-filtered worksheets → Ask copilot → realtime sync → CTA.
-- **`audit.html` — Audit Mode.** Hero (Audit animation) → the 8-stage gated pipeline (visual stepper) → risk-scored findings → Issue→CAPA → AI report drafting with earned write-back → amendment alerts/traceability → "expanding to investigator audits" (Direction) → CTA.
-- **`sponsor.html` — Sponsor Mode.** Hero (Sponsor animation) → parse-once-generate-many → Deliverable Engine (Monitoring Checklist + Risk Overview) → content-origin honesty badges → byte-level provenance → regeneration preserves human work → portfolio intelligence → "operational fragility view" (Direction) → enterprise-tier note → CTA.
-- **`security.html`.** Zero-PHI architecture ("PHI cannot be entered — by design, not policy") · row-level security at the DB layer · 21 CFR Part 11-aligned immutable audit trail · amendment version tracking · encryption in transit & at rest · MFA · EU data residency · compliance badges (HIPAA / GDPR / SOC 2 / 21 CFR 11 — label as target/alignment where not yet certified) → CTA.
+**Running order:** A Hero · B Burden · C First failure upstream · **D Core engine** · **E Ask, answered by the protocol** · **F Downstream (Audit & Sponsor + stats)** · G Who it serves · H Understanding first · I Living knowledge transfer *(Direction)* · J What PIQC is/is not · K Founder intent · L Security teaser · M Final CTA + demo.
 
-**Demo form (shared).** Name*, Organization*, Work Email*, Clinical Role* (grouped select: Site Operations / Sponsor·CRO / Other), optional message; client-side validation + success state (reuse `landing.html`'s JS). Backend left as `// wire to Formspree/HubSpot/Cloudflare endpoint here`.
+**Anchored nav:** Why PIQC · The Engine · Ask · Downstream · Product Boundary · Founder Intent · Security · **Request a Demo**.
+
+**Section A — Hero: the missing layer, shown as the engine.** Eyebrow "A better question for clinical trial execution." H1 **"From protocol complexity to context-aware understanding."** Sub: clinical systems manage data, documents, workflow, and oversight — *but they assume someone has already translated the protocol into usable understanding.* PIQC is that layer. CTAs: **Request a Demo** (§8) · **See the protocol journey** (→ D). **Hero visual = the core-engine money shot** (§7 `home-flow`).
+
+**Section B — The manual interpretation burden.** "The burden isn't reading the protocol. It's translating it into execution." Before/after contrast. Key line: **"Protocols will remain complex. The human burden does not have to."** No outcome claims.
+
+**Section C — The first failure happens upstream.** "Before a protocol can be executed, it must be operationalized." Timeline highlighting the interpretation phase. Language: *"where complexity deserves attention,"* never *"what humans get wrong."*
+
+**Section D — Act 1: The core engine (the star).** Headline: **"From protocol PDF to visual, review-ready visit drafts — in minutes."** PIQC drafts every study visit as a phased, visual checklist — each requirement **classified**, **confidence-scored**, **linked to the exact protocol source**. A completeness pass flags what might be missing; the coordinator adds or dismisses. **Give this the largest, most detailed product mockup on the site.** Close: **"Parse once. Draft the whole study. You review."** *(Live today — Site Mode / VEW.)*
+
+**Section E — Act 2: Ask, answered by the protocol (the co-star).** Headline: **"Ask in plain language. Answered by the protocol itself."** Answers show the **cited passage side by side** (section + page); if something isn't in the protocol, Ask says so. Split view (§7 `ask-source`). Line: **"Answers you can trace — because the source is right there."** *(Live today.)*
+
+**Section F — Act 3: Downstream — the same intelligence, extended.** Headline: **"Parse once. The whole trial benefits."** Flows into a gated **8-stage vendor audit** and **parse-once-generate-many sponsor deliverables** (every block labeled *fact vs framing*). Three cards → deep-dives: **Site Mode** ("the core engine, in depth") · **Audit Mode** · **Sponsor Mode**. Stats band (numbers **must clear §4.5**): gated audit stages · role-filtered views · evidence support types · protocol-only architecture (**PIQC works from protocol documents, not patient data** — final wording via §6.5). Close: **"Parse once. Generate many. Humans remain responsible."**
+
+**Section G — Who it serves.** Role cards (keyboard-accessible). Each: the role's *question* + an *illustrative output*, with **every Platform-direction item labelled** (CRA monitoring outputs, sponsor fragility view, SIV package = Direction; Site worksheets, 8-stage audit, Risk Overview = Live).
+
+**Section H — Understanding first. Action second.** "PIQC prepares the next action. Your existing systems execute it." Key line: **"PIQC informs. PIQC prepares. PIQC guides. Your systems execute."** (Do not build travel/CTMS flows or imply PIQC directs monitoring cadence.)
+
+**Section I — Living protocol knowledge transfer · Platform direction.** Lifecycle strip with a concise example per stage. Boundary copy about training ownership. Visibly framed as Platform direction; **no LMS implication.**
+
+**Section J — What PIQC is / is not.** Calm two-column boundary table (does / does not). Framing line: **"PIQC prepares. Your people and systems govern."**
+
+**Section K — Founder intent.** Founder register (§1) — conviction, not a bio. Headline: "Built from the belief that clinical teams deserve better support before execution begins." State the problem with earned precision; **systems failure, not people failure**; land on conviction that this layer must exist. Statement: **"PIQC exists to replace manual interpretation overload with anytime mastery."** **Do NOT** count years, list titles/employers, use LinkedIn/CV phrasing, or call PIQC a side project. Optional single quiet credibility line only if it reads as conviction.
+
+**Section L — Security teaser** → link to `/security` (restrained language only, §6.5). **Section M — Final CTA + demo form** ("The protocol should be a source of mastery, not a recurring cognitive burden.") → **Footer.**
+*(The "explore the modes" cards + stats band live in Section F, not a separate section.)*
+
+---
+
+## 6. Mode & security pages — one clear job each
+
+Each mode page opens with a one-line **boundary reassurance** ("Works alongside your EDC/CTMS — PIQC prepares, your systems execute") and separates **Live today** from **Platform direction**. Reuse the identical nav/footer and demo form.
+
+- **`/site` — Site Mode (the core engine, in depth).** *Job: show how site coordinators, nurses, investigators, labs, and pharmacy teams reduce manual protocol interpretation and repetitive workflow setup.* Hero (`site-checklist`) → the core engine (VEW: 7 phases, classification, confidence, **§ traceability**) → completeness signals → **Ask, answered by the protocol** (elevated split view) → role-filtered worksheets → realtime sync → CTA. Act 1 + Act 2 proven in full.
+- **`/audit` — Audit Mode.** *Job: show how audit and QA teams organize audit preparation, risk review, findings, CAPA workflow, reporting, and traceability.* Hero (`audit-pipeline`) → the 8-stage gated pipeline → risk-scored findings → Issue→CAPA → AI report drafting with earned write-back → amendment alerts/traceability → **investigator-site-audit workflow, labelled Platform direction** → CTA.
+- **`/sponsor` — Sponsor Mode.** *Job: show enterprise sponsors how one protocol supports multiple structured deliverables, reviewed content, provenance, and portfolio-level visibility.* Hero (`sponsor-fanout`) → parse-once-generate-many → Deliverable Engine (Monitoring Checklist + Risk Overview) → content-origin honesty badges → source provenance → regeneration preserves human work → portfolio intelligence → "operational fragility view" (Direction) → enterprise-tier note → CTA.
+- **`/security` — Security.** *Job: an accurate, restrained explanation of privacy, access-control, auditability, and data-handling posture.* **Publish nothing here until the claim register (§6.5) is filled.** No unsupported badges or guarantees.
+
+**Home job:** establish PIQClinical's central promise, introduce the three modes, explain the SOTR / Protocol Intelligence foundation, build trust, convert to demo requests.
+
+### 6.5 Security & compliance claim register (fill before publishing `/security`)
+
+Before publishing the Security page, complete this register. **No security/compliance claim ships without a filled row.**
+
+| Claim | Exact approved wording | Evidence source | Owner | Publication status |
+|---|---|---|---|---|
+
+**Rules:**
+- Do **not** use HIPAA, GDPR, SOC 2, 21 CFR Part 11, encryption, MFA, data residency, auditability, certification, or compliance badges **without documented approval.**
+- Do **not** imply formal certification, legal compliance, validation status, or regulatory approval unless explicitly supported.
+- Do **not** treat HIPAA, GDPR, SOC 2, and 21 CFR Part 11 as interchangeable badges.
+- Do **not** use "zero PHI" unless it has a documented definition and is approved for public marketing.
+- **Codebase implementation details are not proof of a public security or compliance claim.**
+
+**Until claims are approved, use restrained language:**
+> "Designed with privacy, controlled access, and auditability in mind."
+
+**Avoid categorical claims:** "fully compliant," "certified," "immutable," "zero PHI," "secure by design," "audit-ready by default."
 
 ---
 
 ## 7. Animation & visual direction — calm, not flashy
 
-The mockups must feel **clinically credible and editorial**, not like a generic AI startup. **Avoid** glowing orbs, robot imagery, vague futuristic gradients, glass-card pileups, and noisy animated backgrounds. Motion is **restrained and purposeful**, dramatizing *protocol → intelligence → action*, and **every animation must read correctly as a still frame** (for reduced-motion, OG capture, and print). Respect `prefers-reduced-motion: reduce` (fallback = final static state; see `tokens.css`). No autoplay video. Use `data-anim` hooks so Claude Design can retune timing centrally.
+Mockups feel **clinically credible and editorial**, not like a generic AI startup. **Avoid** glowing orbs, robot imagery, vague futuristic gradients, glass-card pileups, noisy backgrounds.
 
-- **Home hero (`home-flow`):** a protocol page resolves, left-to-right, into structured intelligence, then into role outputs, then a soft "handoff" to neutral system labels. Gentle, one pass, then a slow idle. Tagline: *"One protocol. Every role, prepared."*
-- **Site (`site-checklist`):** requirement rows populate a phased checklist; confidence dots settle; footer types "PIQC drafted · 14 requirements · 0 gaps detected"; role chips animate a filter.
-- **Audit (`audit-pipeline`):** the 8 stage pills light left→right; a gate unlocks with a soft pulse; a CRITICAL · Data Integrity finding slides in; the risk tally counts up.
-- **Sponsor (`sponsor-fanout`):** one protocol node fans into two deliverable cards; blocks fill, each stamped Protocol Fact / PIQC Framing; a source-trace drawer slides in showing "…RECIST 1.1… §7.1.1 · p.42."
-- **Security (`security-shield`, subtle):** a shield with a "0 PHI" counter; compliance badges settle in.
+**Guardrails (all animations):**
+- Communicate **one workflow story**; remain understandable in a **static final state**.
+- Respect `prefers-reduced-motion: reduce` (fallback = final state).
+- **Start only when the mockup is visible;** avoid aggressive or continuous motion; provide a **settled end state** and an **optional pause control** where motion is persistent.
+- **Generic fictional content only** — no real sponsor branding, patient information, proprietary protocols, or recognizable study data.
+- **Mockups must not imply AI independently approves, certifies, signs, or replaces human review.** Recurring rule: *"PIQC advises and drafts; humans review, decide, and approve."*
+- Use `data-anim` hooks so Claude Design can retune timing centrally. No autoplay video.
 
-Prefer bespoke, deterministic illustrative product UI (visit card with source citations · monitoring-focus card with rationale · fragility card with explainable factors · SIV outline · warm-handoff action card) over stock imagery. All mock content clearly illustrative, PHI-free.
+**Named animations:**
+- **Home hero (`home-flow`) — THE core-engine money shot:** a protocol PDF page resolves into a **visual, phased visit draft** — rows populate under phase headers, each gaining a **classification tag**, **confidence signal**, and **§ source chip**; footer types **"PIQC draft · 14 requirements surfaced for review."** Convey *speed* (days → minutes). One pass, then a settled state.
+- **Ask (`ask-source`) — the co-star:** split view; the **cited protocol passage** slides in *as* the answer resolves — they arrive together, stamped "§6.2.1 · p.34."
+- **Site (`site-checklist`):** rows populate a phased checklist; confidence signals settle; footer reads **"PIQC draft · 14 requirements surfaced for review"**; role chips animate a filter.
+- **Audit (`audit-pipeline`):** the 8 stage pills light left→right; a gate unlocks with a soft pulse; a finding card slides in; the risk tally counts up.
+- **Sponsor (`sponsor-fanout`):** one protocol node fans into two deliverable cards; blocks fill, each stamped Protocol Fact / PIQC Framing; a source-trace drawer slides in.
+- **Security (`security-shield`, subtle):** a restrained shield motif. **No compliance-badge or "0 PHI" claims** unless approved via §6.5.
+
+Prefer bespoke, deterministic illustrative product UI over stock imagery. All mock content clearly illustrative, PHI-free.
+
+### Interactive demos (hands-on — the two signature moments) `§ interactive demo`
+Make the **two star moments genuinely clickable** — lightweight vanilla JS (`animations.js`), state in `data-*`, data from `content.js`. Both **degrade gracefully**: JS off / reduced-motion → fully-populated default state.
+
+1. **Role-filter on the core-engine visit draft** (Home Act 1 + `/site`). Role chips (`content.js coreEngine.mock.roleChips`) are **real buttons**; clicking filters visible rows to that role, updates the count, swaps the export label. Default `All`; keyboard-accessible.
+2. **Clickable Ask** (Home Act 2 + `/site`). 2–3 **preset question chips** (`content.js askSourceOfTruth.examples`); each swaps the answer and **slides in the matching cited-source card**. Include a **disabled** free-text input labelled "Ask anything — live in the product." Keyboard-accessible.
+
+Keep both calm and instant — the visitor *feels* the traceability.
 
 ---
 
-## 8. Claude Design compatibility (required)
+## 8. Conversion — the "Request a Demo" path (must be real)
 
-1. **Single token source** — all design values in `tokens.css` + the Tailwind config; no inline hex/magic numbers.
+The primary CTA **must lead to a real, configured destination** — one approved path:
+- an existing **scheduling link** (e.g., Calendly), or
+- an existing **lead-capture provider**, or
+- an **approved form endpoint**, or
+- an **approved contact email** as a temporary fallback.
+
+**Default for v1 (until the user supplies a scheduling/form endpoint):** the CTA opens `mailto:hello@piqclinical.com?subject=PIQClinical%20demo%20request`. **Do not simulate a successful submission** without a functioning integration.
+
+**If a form is used:** include loading, success, error, validation, spam-protection, privacy-notice, and consent behavior appropriate to the configured service. **The form must not request PHI, study data, or sensitive operational information.** If no endpoint is available, build the form UI with a **clearly-commented integration point** (`// wire to <provider> endpoint here`) and **do not claim submissions are live** (e.g., button links to the mailto fallback).
+
+---
+
+## 9. Claude Design compatibility & shared conventions
+
+1. **Single value source** — all design values in `tokens.css`; component/layout in `site.css`. No inline hex/magic numbers. Tailwind (if used) pinned and mapped to the same tokens.
 2. **Semantic, composable sections** — each `<section id data-section>` with a naming comment; consistent component classes.
-3. **Centralize copy** — put long-form copy and the role/lifecycle/module data in one **`content.js`** object (or clearly-marked per-section blocks) so wording can change without touching layout. (This mirrors a typed content config without forcing a framework.)
-4. **Shared nav/footer** documented in `DESIGN.md` as the canonical partial.
-5. **One-command preview** — `cd website && python3 -m http.server 8000`; all links relative and working when served static.
-6. **`website/DESIGN.md`** — token list, component classes, spacing scale, `data-anim` hooks + timings, per-page section anatomy.
-7. **Accessibility baseline** — semantic headings/landmarks, keyboard-accessible controls (no hover-only interactions), AA contrast, screen-reader labels on diagrams/interactive visuals, visible focus, responsive desktop/tablet/mobile, `prefers-reduced-motion`.
+3. **Centralize copy** — long-form copy + role/lifecycle data in `content.js`.
+4. **Identical nav & footer across every route.** Store the canonical markup in a documented partial source or a clear maintenance convention in `DESIGN.md`. **Before handoff, verify nav links, CTA labels, footer links, logo treatment, and legal links are consistent across every route.** No dead footer links, placeholder legal pages, or fake social links in production — **missing legal/policy destinations are release blockers.**
+5. **One-command preview** — `cd website && python3 -m http.server 8000`; links work when served static.
+6. **`website/DESIGN.md`** — value list, component classes, spacing scale, `data-anim` hooks, per-route section anatomy, nav/footer convention.
+
+**Accessibility (AA — required):** semantic headings in logical hierarchy · landmarks (`header`/`nav`/`main`/`footer`) · visible keyboard focus · keyboard-operable navigation and forms · accessible labels and error messages · descriptive alt text for meaningful imagery · decorative visuals marked appropriately · adequate color contrast · **no information conveyed by color alone** · reduced-motion support · mobile-appropriate touch targets · **no auto-playing motion that prevents comprehension.** Run a **final accessibility review across mobile, tablet, and desktop.**
+
+**No new dependencies:** do not introduce a framework migration, CMS, database, analytics platform, authentication system, external service, or paid dependency unless explicitly approved. Preserve the static architecture; keep the marketing site isolated from the app SPA.
 
 ---
 
-## 9. Deployment & SEO (Cloudflare Pages)
+## 10. Routes, deployment & SEO (Cloudflare Pages)
+
+**File structure → clean routes:**
+```
+website/
+  index.html            → /
+  site/index.html       → /site
+  audit/index.html      → /audit
+  sponsor/index.html    → /sponsor
+  security/index.html   → /security
+  404.html
+  tokens.css  site.css  animations.js
+  content.js  DESIGN.md  FABLE-BRIEF.md
+  sitemap.xml  robots.txt
+  favicon.svg  (branded, from #piqc-mark)  og-card.png (branded fallback)
+```
 
 - **Static output only** — deploy by pointing Cloudflare Pages at `website/`; no build command.
-- Per-page `<title>` / meta description / canonical / OG + Twitter card (reuse `landing.html` patterns).
-- **JSON-LD:** reuse the `Organization` + `WebSite` + `SoftwareApplication` schema; keep `featureList` accurate to §4 Live-today items only.
-- `favicon.svg`, `apple-touch-icon.png`, `og-card.png` — TODO slots (don't fabricate).
-- `sitemap.xml` + `robots.txt` (allow marketing pages; note the app SPA stays `noindex` on its own subdomain).
-- Intended domain **piqclinical.com**; keep links relative so a staging subdomain works first.
+- **Per-route** unique `<title>`, meta description, canonical, Open Graph + Twitter card, social preview asset.
+- **Canonical URLs** use the approved production domain only once confirmed:
+  `https://piqclinical.com/` · `/site` · `/audit` · `/sponsor` · `/security`.
+- **JSON-LD:** reuse `landing.html`'s `Organization` / `WebSite` / `SoftwareApplication` schema **only after verifying each field is still accurate**; do not publish stale or misleading `featureList` entries.
+- **Real branded favicon** (generate `favicon.svg` from `#piqc-mark`) and a **branded OG fallback** — no obvious TODO placeholders in production.
+- Include `sitemap.xml`, `robots.txt`, `404.html`.
+- **Staging deployments must be `noindex`.** Production is indexable only after approval.
 
 ---
 
-## 10. Build sequence & acceptance
+## 11. Quality gates & final handoff report
 
-**Phase 1 — Narrative MVP:** Home hero + Sections B, C, D, E, H, I, L, plus the three mode heroes. Must stand alone as a complete, credible site.
-**Phase 2 — Interactive layer:** the protocol-intelligence map (D), role selector (E), lifecycle strip (G), action-layer visual (F) — add interaction only where it reduces cognitive load.
-**Phase 3 — Product proof:** flesh out mode pages + security; wire the demo form endpoint.
+Complete before handoff.
 
-**Acceptance test — a first-time visitor can explain, in their own words:**
-1. PIQC is **not** an EDC, CTMS, LMS, travel system, or generic AI assistant.
-2. PIQC addresses **manual protocol interpretation before execution begins**.
-3. PIQC turns protocol complexity into **structured, context-aware understanding**.
-4. PIQC serves **different roles through different views of the same protocol intelligence**.
-5. PIQC **prepares the next action and hands off to existing systems** rather than replacing them.
-6. PIQC is a **living knowledge-transfer layer** across the study lifecycle (framed as direction).
-7. **Human judgment, review, approval, and regulated execution remain outside PIQC.**
+**Functional:** all five routes load · all nav links work · the primary CTA reaches the approved demo path (§8) · no console errors · no broken images / dead links / placeholder text · **no app source files modified** · works under a simple static server.
+**Responsive:** reviewed at mobile, tablet, desktop widths.
+**Motion:** animations have readable static fallbacks · `prefers-reduced-motion` respected · no animation implies autonomous approval or compliance.
+**Content:** product claims match §4 and pass §4.5 · security claims appear only if supported by the §6.5 register · Platform-direction items clearly distinguished from Live today · no sponsor/patient/real-study branding in mockups.
 
-Durable impression to leave: *"Every clinical system assumes the human already understands the protocol. PIQC makes that understanding available when and where it's needed."*
+**Final handoff report (Fable returns):**
+1. Files added/changed. 2. Routes created. 3. Shared styles/reusable patterns created. 4. Commands run + results. 5. Product/security/compliance claims requiring approval. 6. Any discrepancy found between code and written product facts. 7. Exact Cloudflare Pages deployment configuration. 8. Staging and production release steps. 9. Recommended next Claude Design iterations.
 
-**Final instruction:** do not reduce this to a feature list. Build a clear, visual, clinically-grounded argument for a new category — **the intelligence layer between protocol complexity and clinical execution** — that strengthens, never replaces, the systems and professionals already responsible for execution.
+---
+
+## 12. Preserve these strengths (do not remove)
+
+Buyer-first positioning (sponsors, CROs, sites) · primary CTA "Request a Demo" · Home + `/site` `/audit` `/sponsor` `/security` · the `landing.html` design system · scrub-blue→teal palette, Inter, PIQC logo language, airy marketing chrome, dark-navy product mockups · stylized in-code mockups (no real screenshots for v1) · the Site / Audit / Sponsor model · **SOTR as shared foundation, not a fourth mode** · strict avoidance of sponsor branding in mockups · Claude Design compatibility (stable section hooks, documented tokens, simple local preview) · the **three-act product spine** and the **two interactive demos.**
 
 ---
 
 ## Appendix A — paste-ready brand tokens & logo
 
-> Extracted from `landing.html`. Also in `website/tokens.css`. Use these exact values.
+> Extracted from `landing.html`. Also in `website/tokens.css` (values) + `website/site.css` (components). Use these exact values.
 
-**Tailwind inline config (in each page `<head>`):**
+**Tailwind config (OPTIONAL — only if Tailwind CDN is used; pin the version, and mirror these tokens so there is no second value system):**
 
 ```js
 tailwind.config = {
@@ -260,13 +424,11 @@ tailwind.config = {
       navy: { 900:'#070d1a', 850:'#0a1020', 800:'#0d1528', 750:'#111c33', 700:'#162240', 600:'#1e3060' },
     },
     fontFamily: { sans: ['Inter','system-ui','sans-serif'] },
-    keyframes: { 'fade-up': { '0%':{opacity:'0',transform:'translateY(16px)'}, '100%':{opacity:'1',transform:'translateY(0)'} } },
-    animation: { 'fade-up': 'fade-up 0.5s ease-out both' },
   } },
 };
 ```
 
-**Signature CSS:** reuse `.grad-brand / .grad-text / .grad-soft / .grid-pattern / .card / .screenshot / .btn-primary / .btn-ghost / .badge-* / .stage-pill` — copy the rule bodies from `landing.html` (≈ lines 132–214) into `tokens.css`.
+**Signature CSS:** `.grad-brand / .grad-text / .grad-soft / .grid-pattern / .card / .screenshot / .btn-primary / .btn-ghost / .badge-* / .stage-pill` — rule bodies live in `tokens.css` (values) + `site.css` (components), extracted from `landing.html`.
 
 **Logo SVG symbol (drop once per page, hidden; then `<use href="#piqc-mark"/>`):**
 
@@ -297,7 +459,7 @@ tailwind.config = {
 ## Appendix B — copy seeds (refine against the strategy doc)
 
 - **Home eyebrow / H1:** "A better question for clinical trial execution." / **"From protocol complexity to context-aware understanding."**
-- **Category line (use prominently):** **"PIQC is the missing intelligence layer between protocol complexity and clinical execution."**
+- **Category line:** **"PIQC is the missing intelligence layer between protocol complexity and clinical execution."**
 - **Recurring proof line:** **"AI drafts. Humans decide. Everything is traceable."**
 - **Burden line:** "Protocols will remain complex. The human burden does not have to."
 - **Boundary line:** "PIQC prepares. Your people and systems govern."
@@ -305,4 +467,4 @@ tailwind.config = {
 - **Site H1:** "Every role. Every requirement. Day-of-visit ready."
 - **Audit H1:** "An 8-stage vendor audit that enforces itself."
 - **Sponsor H1:** "Parse the protocol once. Generate every deliverable."
-- **Security H1:** "Built for regulated environments from the ground up."
+- **Security H1 (restrained):** "Designed with privacy, controlled access, and auditability in mind."
