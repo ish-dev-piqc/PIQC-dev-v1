@@ -449,6 +449,27 @@ export interface DeliverableExportPacket {
 }
 
 // -----------------------------------------------------------------------------
+// Deliverables overview — protocol-level status board
+// (deliverable_list_summary: one entry per EXISTING deliverable)
+// -----------------------------------------------------------------------------
+
+/** One row of the protocol's deliverable status board. Counts exclude rejected
+ *  blocks and mirror the PDF title-block stats: needs_review = open work
+ *  (draft + needs_review). */
+export interface DeliverableSummary {
+  deliverable_id: string;
+  artifact_type: DeliverableArtifactType;
+  title: string;
+  protocol_version: string | null;
+  generated_at: string;
+  regenerated_at: string | null;
+  generation_seq: number;
+  total_blocks: number;
+  reviewed_blocks: number;
+  needs_review_blocks: number;
+}
+
+// -----------------------------------------------------------------------------
 // Amendment-aware refresh — generation log + change summary
 // (deliverable_generation_log + deliverable_get_change_summary)
 // -----------------------------------------------------------------------------
