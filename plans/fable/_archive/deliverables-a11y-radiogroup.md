@@ -1,9 +1,10 @@
 ---
 owner: fable-dev-piqc
 feature: deliverables-a11y-radiogroup
-status: in-review
+status: merged
+merged: 2026-07-06
 started: 2026-07-05
-target_pr:
+target_pr: #447
 ---
 
 # A11y: single-select pickers → radiogroup (consistency with the portfolio fix)
