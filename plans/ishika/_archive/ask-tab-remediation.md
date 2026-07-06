@@ -1,9 +1,10 @@
 ---
 owner: ish-dev-piqc
 feature: ask-tab-remediation
-status: in-review
+status: merged
+merged: 2026-07-06
 started: 2026-07-05
-target_pr: 441
+target_pr: #441
 ---
 
 # Ask tab remediation
