@@ -19,12 +19,14 @@ import type {
   DeliverableChangeSummary,
   DeliverableGenerateResult,
   DeliverablePacket,
+  DeliverablePortfolioEntry,
   DeliverableSummary,
   DeliverablesResult,
 } from '../../types/deliverables';
 import {
   adaptChangeSummary,
   adaptDeliverablePacket,
+  adaptDeliverablePortfolio,
   adaptDeliverableSummaries,
 } from './deliverablesAdapter';
 
@@ -131,4 +133,21 @@ export async function fetchDeliverableSummaries(
   // The RPC always returns a JSON array (COALESCE to '[]'); null/undefined
   // only on an unexpected shape — the adapter degrades either to [].
   return { ok: true, data: adaptDeliverableSummaries(data) };
+}
+
+/**
+ * Fetch the cross-protocol portfolio digest (one entry per protocol the caller
+ * can access that has deliverables). No arg — RLS scopes the result. A caller
+ * with no accessible deliverables gets ok:true with an empty array.
+ */
+export async function fetchDeliverablePortfolio(): Promise<
+  DeliverablesResult<DeliverablePortfolioEntry[]>
+> {
+  const { data, error } = await supabase.rpc('deliverable_portfolio_summary');
+
+  if (error) return { ok: false, error: error.message };
+
+  // Always a JSON array (COALESCE to '[]'); the adapter degrades any other
+  // shape to [].
+  return { ok: true, data: adaptDeliverablePortfolio(data) };
 }

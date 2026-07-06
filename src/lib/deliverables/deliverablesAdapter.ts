@@ -24,6 +24,7 @@ import {
   type DeliverableGenerationLog,
   type DeliverablePacket,
   type DeliverablePacketBlock,
+  type DeliverablePortfolioEntry,
   type DeliverableReviewState,
   type DeliverableSummary,
   type RemovedBlockSnapshot,
@@ -330,6 +331,39 @@ export function adaptDeliverableSummaries(raw: unknown): DeliverableSummary[] {
       total_blocks: asFiniteNumber(e.total_blocks) ?? 0,
       reviewed_blocks: asFiniteNumber(e.reviewed_blocks) ?? 0,
       needs_review_blocks: asFiniteNumber(e.needs_review_blocks) ?? 0,
+    });
+  }
+  return out;
+}
+
+// -----------------------------------------------------------------------------
+// Portfolio adapter — deliverable_portfolio_summary → DeliverablePortfolioEntry[]
+// -----------------------------------------------------------------------------
+
+/**
+ * Adapt the portfolio digest array (one entry per protocol with deliverables).
+ * A non-array payload adapts to []. Each entry is dropped when it lacks a
+ * protocol_id; counts default to 0, deliverable_count to 0, last_generated_at to
+ * null — a partially-shaped row still renders rather than sinking the grid.
+ */
+export function adaptDeliverablePortfolio(raw: unknown): DeliverablePortfolioEntry[] {
+  if (!Array.isArray(raw)) return [];
+
+  const out: DeliverablePortfolioEntry[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue;
+    const e = entry as Record<string, unknown>;
+
+    const protocolId = asString(e.protocol_id);
+    if (!protocolId) continue;
+
+    out.push({
+      protocol_id: protocolId,
+      deliverable_count: asFiniteNumber(e.deliverable_count) ?? 0,
+      total_blocks: asFiniteNumber(e.total_blocks) ?? 0,
+      reviewed_blocks: asFiniteNumber(e.reviewed_blocks) ?? 0,
+      needs_review_blocks: asFiniteNumber(e.needs_review_blocks) ?? 0,
+      last_generated_at: asString(e.last_generated_at),
     });
   }
   return out;

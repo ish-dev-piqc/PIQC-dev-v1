@@ -12,6 +12,7 @@ import DeliverablePanel from '../../../deliverables/DeliverablePanel';
 import { DeliverablesOverview } from '../../../deliverables/DeliverablesOverview';
 import { DELIVERABLE_CONFIGS } from '../../../deliverables/deliverableConfigs';
 import { ActionCardRail } from '../../../actions/ActionCardRail';
+import { DeliverablePortfolioGrid } from './DeliverablePortfolioGrid';
 
 // =============================================================================
 // ProtocolIntelligenceTab — the Sponsor page's "Protocol Intelligence" sub-tab
@@ -165,34 +166,15 @@ export default function ProtocolIntelligenceTab() {
         </div>
       ) : (
         <>
-          <div className="flex items-center gap-2">
-            <label
-              htmlFor="protocol-intelligence-protocol"
-              className="text-fg-label text-[10px] uppercase tracking-wider font-semibold flex-shrink-0"
-            >
-              Protocol
-            </label>
-            <select
-              id="protocol-intelligence-protocol"
-              data-testid="protocol-intelligence-protocol-select"
-              value={selectedProtocol?.id ?? ''}
-              onChange={(e) =>
-                setOverrideProtocolId(e.target.value === '' ? null : e.target.value)
-              }
-              className={`max-w-md w-full px-3 py-1.5 rounded-md border text-sm focus:outline-none focus:ring-2 ${
-                isLight
-                  ? 'bg-white border-[#CBD5E1] text-fg-body focus:ring-[#94A3B8]'
-                  : 'bg-[#1a2029] border-white/10 text-fg-body focus:ring-white/20'
-              }`}
-            >
-              {!selectedProtocol && <option value="">Select a protocol…</option>}
-              {protocols.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.code ? `${p.code} — ${p.name}` : p.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Portfolio grid = the protocol picker, upgraded with per-protocol
+              deliverable status. Selecting a card drives the same
+              overrideProtocolId the old <select> did. */}
+          <DeliverablePortfolioGrid
+            protocols={protocols}
+            activeProtocolId={selectedProtocol?.id ?? null}
+            onSelect={setOverrideProtocolId}
+            refreshKey={refreshTick}
+          />
 
           {selectedProtocol ? (
             <>
