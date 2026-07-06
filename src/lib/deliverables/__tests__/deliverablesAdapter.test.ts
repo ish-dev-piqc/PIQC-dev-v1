@@ -3,6 +3,7 @@ import {
   adaptChangeSummary,
   adaptDeliverablePacket,
   adaptDeliverablePacketBlock,
+  adaptDeliverablePortfolio,
   adaptDeliverableSummaries,
 } from '../deliverablesAdapter';
 import type { DeliverablePacketBlock } from '../../../types/deliverables';
@@ -538,6 +539,53 @@ describe('adaptDeliverableSummaries', () => {
       generation_seq: 1,
       title: '',
       protocol_version: null,
+    });
+  });
+});
+
+describe('adaptDeliverablePortfolio', () => {
+  const row = {
+    protocol_id: 'prot-1',
+    deliverable_count: 3,
+    total_blocks: 30,
+    reviewed_blocks: 12,
+    needs_review_blocks: 15,
+    last_generated_at: '2026-07-04T09:00:00Z',
+  };
+
+  it('maps a valid portfolio array', () => {
+    const out = adaptDeliverablePortfolio([row]);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toEqual({
+      protocol_id: 'prot-1',
+      deliverable_count: 3,
+      total_blocks: 30,
+      reviewed_blocks: 12,
+      needs_review_blocks: 15,
+      last_generated_at: '2026-07-04T09:00:00Z',
+    });
+  });
+
+  it('returns [] for a non-array payload', () => {
+    expect(adaptDeliverablePortfolio(null)).toEqual([]);
+    expect(adaptDeliverablePortfolio({})).toEqual([]);
+    expect(adaptDeliverablePortfolio('x')).toEqual([]);
+  });
+
+  it('drops rows without a protocol_id; keeps the valid siblings', () => {
+    const out = adaptDeliverablePortfolio([{ ...row, protocol_id: null }, null, row]);
+    expect(out.map((e) => e.protocol_id)).toEqual(['prot-1']);
+  });
+
+  it('defaults counts to 0 and last_generated_at to null', () => {
+    const out = adaptDeliverablePortfolio([{ protocol_id: 'p' }]);
+    expect(out[0]).toEqual({
+      protocol_id: 'p',
+      deliverable_count: 0,
+      total_blocks: 0,
+      reviewed_blocks: 0,
+      needs_review_blocks: 0,
+      last_generated_at: null,
     });
   });
 });

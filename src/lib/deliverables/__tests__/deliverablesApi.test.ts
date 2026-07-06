@@ -12,6 +12,7 @@ import {
   fetchDeliverablePacket,
   fetchChangeSummary,
   fetchDeliverableSummaries,
+  fetchDeliverablePortfolio,
 } from '../deliverablesApi';
 
 // =============================================================================
@@ -276,5 +277,54 @@ describe('fetchDeliverableSummaries', () => {
     const r = await fetchDeliverableSummaries('prot-1');
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('permission denied');
+  });
+});
+
+describe('fetchDeliverablePortfolio', () => {
+  const row = {
+    protocol_id: 'prot-1',
+    deliverable_count: 2,
+    total_blocks: 20,
+    reviewed_blocks: 8,
+    needs_review_blocks: 9,
+    last_generated_at: '2026-07-04T09:00:00Z',
+  };
+
+  it('calls deliverable_portfolio_summary with no args', async () => {
+    rpcMock.mockResolvedValueOnce({ data: [], error: null });
+    await fetchDeliverablePortfolio();
+    expect(rpcMock).toHaveBeenCalledWith('deliverable_portfolio_summary');
+  });
+
+  it('adapts the portfolio array on success', async () => {
+    rpcMock.mockResolvedValueOnce({ data: [row], error: null });
+    const r = await fetchDeliverablePortfolio();
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data).toHaveLength(1);
+      expect(r.data[0].deliverable_count).toBe(2);
+      expect(r.data[0].needs_review_blocks).toBe(9);
+    }
+  });
+
+  it('returns an empty array for a caller with no accessible deliverables', async () => {
+    rpcMock.mockResolvedValueOnce({ data: [], error: null });
+    const r = await fetchDeliverablePortfolio();
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data).toEqual([]);
+  });
+
+  it('degrades a null/malformed payload to an empty array', async () => {
+    rpcMock.mockResolvedValueOnce({ data: null, error: null });
+    const r = await fetchDeliverablePortfolio();
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data).toEqual([]);
+  });
+
+  it('surfaces RPC errors as ok:false', async () => {
+    rpcMock.mockResolvedValueOnce({ data: null, error: { message: 'nope' } });
+    const r = await fetchDeliverablePortfolio();
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('nope');
   });
 });
