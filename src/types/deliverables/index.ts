@@ -469,6 +469,21 @@ export interface DeliverableSummary {
   needs_review_blocks: number;
 }
 
+/** One row of the cross-protocol portfolio digest (deliverable_portfolio_summary):
+ *  aggregate deliverable status for one protocol. Only protocols with at least
+ *  one deliverable are returned; the client overlays these onto its full
+ *  protocol list. Counts exclude rejected; needs_review = open work. */
+export interface DeliverablePortfolioEntry {
+  protocol_id: string;
+  /** Number of artifact types generated for this protocol (0–5, always ≥1 here). */
+  deliverable_count: number;
+  total_blocks: number;
+  reviewed_blocks: number;
+  needs_review_blocks: number;
+  /** Most recent generate/regenerate across the protocol's deliverables. */
+  last_generated_at: string | null;
+}
+
 // -----------------------------------------------------------------------------
 // Amendment-aware refresh — generation log + change summary
 // (deliverable_generation_log + deliverable_get_change_summary)
