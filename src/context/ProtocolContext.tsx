@@ -20,6 +20,10 @@ interface ProtocolContextValue {
   // null = Home (cross-protocol scope). Non-null = scoped to this protocol.
   activeProtocol: Protocol | null;
   setActiveProtocol: (protocol: Protocol | null) => void;
+  // Explicit refetch for callers that just mutated a protocol and can't wait
+  // on the postgres_changes channel — same rationale as SiteDataContext's
+  // refresh(): realtime has been intermittently unreliable for INSERTs.
+  refresh: () => void;
 }
 
 const PROTOCOL_STORAGE_KEY = 'piq-protocol-v1';
@@ -37,6 +41,7 @@ const ProtocolContext = createContext<ProtocolContextValue>({
   isLoading: false,
   activeProtocol: null,
   setActiveProtocol: () => {},
+  refresh: () => {},
 });
 
 export function ProtocolProvider({ children }: { children: React.ReactNode }) {
@@ -67,6 +72,7 @@ export function ProtocolProvider({ children }: { children: React.ReactNode }) {
   // resolve AFTER the demo fetch (fast in-memory) and overwrite the demo list.
   // A monotonic token means only the latest load() applies its result.
   const fetchTokenRef = useRef(0);
+  const loadRef = useRef<() => void>(() => {});
 
   // Load protocols via the active SiteRepo (Supabase in real mode, demo store
   // in demo mode). Re-fetch on repo swap so flipping the demo toggle swaps
@@ -87,6 +93,7 @@ export function ProtocolProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
     }
 
+    loadRef.current = load;
     load();
     const unsubRepoSwap = subscribeSiteRepo(load);
 
@@ -119,8 +126,10 @@ export function ProtocolProvider({ children }: { children: React.ReactNode }) {
     setActiveId(protocol ? protocol.id : HOME_SENTINEL);
   };
 
+  const refresh = () => loadRef.current();
+
   return (
-    <ProtocolContext.Provider value={{ protocols, isLoading, activeProtocol, setActiveProtocol }}>
+    <ProtocolContext.Provider value={{ protocols, isLoading, activeProtocol, setActiveProtocol, refresh }}>
       {children}
     </ProtocolContext.Provider>
   );
