@@ -39,6 +39,12 @@ import {
   type DeliverableTextDrawerSubject,
 } from './DeliverableTextDrawer';
 import { DeliverableTraceabilityDrawer } from './DeliverableTraceabilityDrawer';
+import {
+  REVIEW_FILTERS,
+  filterBlocks,
+  reviewFilterCounts,
+  type ReviewFilter,
+} from './blockReviewFilter';
 
 // =============================================================================
 // DeliverablePanel — the orchestrator for one protocol's deliverable of a
@@ -176,6 +182,11 @@ export default function DeliverablePanel({
     null,
   );
 
+  // Client-side review focus — which review state the block list shows.
+  // Deliberately NOT reset on protocol/artifact switch: a reviewer's focus is
+  // theirs to hold across deliverables.
+  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>('all');
+
   // Monotonic token: only the latest fetch applies its result (copied from
   // SiteDataContext — protects against rapid protocol/artifact switches).
   const fetchTokenRef = useRef(0);
@@ -281,6 +292,8 @@ export default function DeliverablePanel({
     // 'add' affordance only renders inside a loaded packet.
     if (!textDrawerTarget) return { ok: false, error: 'No drawer target' };
 
+    const wasAdd = textDrawerTarget.mode === 'add';
+
     let result: DeliverablesResult<unknown>;
     if (textDrawerTarget.mode === 'edit') {
       result = await editBlockText(textDrawerTarget.block.id, text, note);
@@ -293,6 +306,10 @@ export default function DeliverablePanel({
 
     if (result.ok) {
       setTextDrawerTarget(null);
+      // A newly added block is human_added, which no state filter matches — drop
+      // back to 'all' so the reviewer sees what they just added rather than it
+      // vanishing under an active filter.
+      if (wasAdd) setReviewFilter('all');
       if (protocolIdRef.current === protocolId && artifactTypeRef.current === artifactType) {
         await refresh();
         onMutated?.();
@@ -447,6 +464,13 @@ export default function DeliverablePanel({
   if (removedCount > 0) changeCountParts.push(`${removedCount} removed`);
   if (flaggedCount > 0) changeCountParts.push(`${flaggedCount} flagged for review`);
 
+  // Review focus: counts over the whole deliverable (progress) + the visible
+  // subset for the current filter (empty sections drop out downstream).
+  const reviewCounts = reviewFilterCounts(packet.blocks);
+  const visibleBlocks = filterBlocks(packet.blocks, reviewFilter);
+  const reviewedPct =
+    reviewCounts.all > 0 ? Math.round((reviewCounts.reviewed / reviewCounts.all) * 100) : 0;
+
   return (
     <div data-testid="monitoring-checklist-panel" className="space-y-3">
       {/* Header card */}
@@ -478,6 +502,40 @@ export default function DeliverablePanel({
                 ? ` · Regenerated ${formatTimestamp(packet.regenerated_at)}`
                 : ''}
             </p>
+
+            {/* Review progress — reviewed/total over the whole deliverable
+                (needs-review = open work, matching the overview board). */}
+            <div className="mt-2 max-w-xs" data-testid="deliverable-review-progress">
+              <div className="flex items-center justify-between gap-3 mb-1">
+                <span className="text-fg-sub text-[11px]">
+                  {reviewCounts.reviewed} of {reviewCounts.all} reviewed
+                </span>
+                {reviewCounts.needs_review > 0 && (
+                  <span
+                    className={`text-[11px] font-medium ${
+                      isLight ? 'text-amber-700' : 'text-amber-400'
+                    }`}
+                  >
+                    {reviewCounts.needs_review} need review
+                  </span>
+                )}
+              </div>
+              <div
+                className={`h-1.5 w-full rounded-full overflow-hidden ${
+                  isLight ? 'bg-[#E2E8F0]' : 'bg-white/10'
+                }`}
+                role="progressbar"
+                aria-valuenow={reviewedPct}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label={`${reviewCounts.reviewed} of ${reviewCounts.all} reviewed`}
+              >
+                <div
+                  className={`h-full rounded-full ${isLight ? 'bg-emerald-600' : 'bg-emerald-500'}`}
+                  style={{ width: `${reviewedPct}%` }}
+                />
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -652,22 +710,86 @@ export default function DeliverablePanel({
         </div>
       )}
 
-      {/* Sectioned block list — pure component; every mutation round-trips */}
-      <DeliverableBlockList
-        blocks={packet.blocks}
-        sectionOrder={sectionOrder}
-        sectionLabels={sectionLabels}
-        onMarkReviewed={(b) => void runRowAction(() => markBlockReviewed(b.id))}
-        onUnmarkReviewed={(b) => void runRowAction(() => unmarkBlockReviewed(b.id))}
-        onFlag={(b) => void runRowAction(() => flagBlock(b.id))}
-        onReject={(b) => void runRowAction(() => rejectBlock(b.id))}
-        onEdit={(b) => setTextDrawerTarget({ mode: 'edit', block: b })}
-        onAddNote={(b) => setTextDrawerTarget({ mode: 'note', block: b })}
-        onShowSource={(b) => setTraceabilityBlock(b)}
-        onDelete={(b) => void runRowAction(() => deleteBlock(b.id))}
-        onAddBlock={(sectionKey) => setTextDrawerTarget({ mode: 'add', sectionKey })}
-        latestGenerationSeq={packet.generation_seq > 1 ? packet.generation_seq : undefined}
-      />
+      {/* Review filter — client-side focus by review state. Chip counts come
+          from the whole deliverable; the block list below sees only the
+          matching subset (empty sections drop out via groupBlocksBySection). */}
+      <div
+        role="tablist"
+        aria-label="Filter by review state"
+        data-testid="deliverable-review-filter"
+        className={`inline-flex flex-wrap items-center gap-1 rounded-lg border p-1 ${
+          isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/10'
+        }`}
+      >
+        {REVIEW_FILTERS.map(({ key, label }) => {
+          const selected = reviewFilter === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => setReviewFilter(key)}
+              data-testid={`deliverable-review-filter-${key}`}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold ${
+                selected
+                  ? isLight
+                    ? 'bg-[#1E293B] text-white'
+                    : 'bg-white text-[#020617]'
+                  : 'text-fg-sub hover:text-fg-body'
+              }`}
+            >
+              {label}{' '}
+              <span className={selected ? 'opacity-70' : 'text-fg-muted'}>
+                {reviewCounts[key]}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Sectioned block list — pure component; every mutation round-trips.
+          Blocks are pre-filtered here, so an empty filter shows an all-clear
+          state instead of an empty list. */}
+      {visibleBlocks.length > 0 ? (
+        <DeliverableBlockList
+          blocks={visibleBlocks}
+          sectionOrder={sectionOrder}
+          sectionLabels={sectionLabels}
+          onMarkReviewed={(b) => void runRowAction(() => markBlockReviewed(b.id))}
+          onUnmarkReviewed={(b) => void runRowAction(() => unmarkBlockReviewed(b.id))}
+          onFlag={(b) => void runRowAction(() => flagBlock(b.id))}
+          onReject={(b) => void runRowAction(() => rejectBlock(b.id))}
+          onEdit={(b) => setTextDrawerTarget({ mode: 'edit', block: b })}
+          onAddNote={(b) => setTextDrawerTarget({ mode: 'note', block: b })}
+          onShowSource={(b) => setTraceabilityBlock(b)}
+          onDelete={(b) => void runRowAction(() => deleteBlock(b.id))}
+          onAddBlock={(sectionKey) => setTextDrawerTarget({ mode: 'add', sectionKey })}
+          latestGenerationSeq={packet.generation_seq > 1 ? packet.generation_seq : undefined}
+        />
+      ) : (
+        <div
+          data-testid="deliverable-review-filter-empty"
+          className={`rounded-xl border px-4 py-8 text-center ${cardChrome}`}
+        >
+          <p className="text-fg-body text-sm">
+            {reviewCounts.all === 0
+              ? 'No items in this deliverable.'
+              : reviewFilter === 'needs_review'
+                ? 'Nothing needs review — every item has been reviewed or edited.'
+                : reviewFilter === 'reviewed'
+                  ? 'No items reviewed yet.'
+                  : reviewFilter === 'edited'
+                    ? 'No edited items.'
+                    : 'No items in this deliverable.'}
+          </p>
+          {reviewFilter !== 'all' && reviewCounts.all > 0 && (
+            <p className="text-fg-sub text-[11px] mt-1">
+              Switch the filter above to see other items.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Drawers */}
       <DeliverableTextDrawer
