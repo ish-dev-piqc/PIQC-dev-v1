@@ -1,9 +1,10 @@
 ---
 owner: fable-dev-piqc
 feature: deliverable-portfolio
-status: in-review
+status: merged
+merged: 2026-07-06
 started: 2026-07-05
-target_pr:
+target_pr: #443
 ---
 
 # Portfolio digest — cross-protocol deliverable status
