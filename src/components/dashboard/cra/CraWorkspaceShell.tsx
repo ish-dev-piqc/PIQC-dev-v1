@@ -9,6 +9,7 @@ import {
   type DeliverableArtifactType,
 } from '../../../types/deliverables';
 import DeliverablePanel from '../../deliverables/DeliverablePanel';
+import { DeliverablesOverview } from '../../deliverables/DeliverablesOverview';
 import { DELIVERABLE_CONFIGS } from '../../deliverables/deliverableConfigs';
 import { ActionCardRail } from '../../actions/ActionCardRail';
 import { CRA_ARTIFACT_ORDER } from './craDeliverables';
@@ -63,16 +64,12 @@ export default function CraWorkspaceShell() {
     'cra_monitoring_focus',
   );
 
+  // Bumped on any panel mutation so the overview board re-syncs its counts even
+  // when the active type never changes (generate-then-work-in-place).
+  const [refreshTick, setRefreshTick] = useState(0);
+
   const accentFg = isLight ? CRA_ACCENT_FG_LIGHT : CRA_ACCENT_FG_DARK;
   const accentBg = isLight ? '#FDF3E7' : 'rgba(138, 75, 15, 0.2)';
-
-  // Selected picker chip — a saturated amber SURFACE with a contrasting label.
-  // Deliberately NOT accentFg (the icon foreground): in dark mode accentFg is a
-  // pale amber (#E8B27D), and white-on-pale fails WCAG contrast. So the chip
-  // pairs deep-amber + white in light mode (6.8:1) and pale-amber + dark ink in
-  // dark mode (~8:1) — both clear AA for the small bold label.
-  const chipSelectedBg = isLight ? '#8A4B0F' : '#E8B27D';
-  const chipSelectedFg = isLight ? '#FFFFFF' : '#3A1E05';
 
   // Full-screen spinner ONLY while there is nothing to show yet (the
   // ProtocolIntelligenceTab discipline: a background protocol reload must not
@@ -197,49 +194,27 @@ export default function CraWorkspaceShell() {
               </select>
             </div>
 
-            {/* Deliverable picker — the monitor's operational pair, focus
-                first. Artifact choice is protocol-independent. */}
-            <div
-              role="tablist"
-              aria-label="Deliverable type"
-              data-testid="cra-workspace-deliverable-picker"
-              className={`inline-flex flex-wrap items-center gap-1 rounded-lg border p-1 ${
-                isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/10'
-              }`}
-            >
-              {CRA_ARTIFACT_ORDER.map((key) => {
-                const selected = artifactType === key;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    role="tab"
-                    aria-selected={selected}
-                    onClick={() => setArtifactType(key)}
-                    data-testid={`cra-deliverable-picker-${key}`}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold ${
-                      selected ? '' : 'text-fg-sub hover:text-fg-body'
-                    }`}
-                    style={
-                      selected
-                        ? { backgroundColor: chipSelectedBg, color: chipSelectedFg }
-                        : undefined
-                    }
-                  >
-                    {ARTIFACT_TYPE_LABELS[key]}
-                  </button>
-                );
-              })}
-            </div>
-
             {selectedProtocol ? (
               <>
+                {/* Status board = the monitor's deliverable selector: focus +
+                    checklist cards with review progress; clicking selects one.
+                    refreshKey is the active type, so generate-then-switch
+                    re-syncs the counts. */}
+                <DeliverablesOverview
+                  protocolId={selectedProtocol.id}
+                  artifactTypes={CRA_ARTIFACT_ORDER}
+                  activeType={artifactType}
+                  onSelectType={setArtifactType}
+                  accentFg={accentFg}
+                  refreshKey={`${artifactType}:${refreshTick}`}
+                />
                 <DeliverablePanel
                   protocolId={selectedProtocol.id}
                   artifactType={artifactType}
                   sectionOrder={DELIVERABLE_CONFIGS[artifactType].sectionOrder}
                   sectionLabels={DELIVERABLE_CONFIGS[artifactType].sectionLabels}
                   exportEnabled={DELIVERABLE_CONFIGS[artifactType].exportEnabled}
+                  onMutated={() => setRefreshTick((t) => t + 1)}
                 />
                 {/* Warm-handoff rail — self-hiding when the protocol has no
                     suggested cards. refreshKey re-syncs on chip switches so a

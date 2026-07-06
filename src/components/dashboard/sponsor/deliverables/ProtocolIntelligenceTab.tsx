@@ -9,6 +9,7 @@ import {
   type DeliverableArtifactType,
 } from '../../../../types/deliverables';
 import DeliverablePanel from '../../../deliverables/DeliverablePanel';
+import { DeliverablesOverview } from '../../../deliverables/DeliverablesOverview';
 import { DELIVERABLE_CONFIGS } from '../../../deliverables/deliverableConfigs';
 import { ActionCardRail } from '../../../actions/ActionCardRail';
 
@@ -62,6 +63,11 @@ export default function ProtocolIntelligenceTab() {
   const [artifactType, setArtifactType] = useState<DeliverableArtifactType>(
     'monitoring_prep_checklist',
   );
+
+  // Bumped whenever the panel mutates (generate / review / edit) so the
+  // overview board re-syncs its counts even when the active type never changes
+  // (the dominant generate-then-work-in-place path).
+  const [refreshTick, setRefreshTick] = useState(0);
 
   // Full-screen spinner ONLY while there is nothing to show yet. Protocol
   // realtime events re-run ProtocolContext's load() (isLoading flips true)
@@ -188,45 +194,27 @@ export default function ProtocolIntelligenceTab() {
             </select>
           </div>
 
-          {/* Deliverable picker — chip strip mirroring the SponsorPage
-              sub-tab pattern. Artifact choice is protocol-independent. */}
-          <div
-            role="tablist"
-            aria-label="Deliverable type"
-            data-testid="protocol-intelligence-deliverable-picker"
-            className={`inline-flex flex-wrap items-center gap-1 rounded-lg border p-1 ${
-              isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/10'
-            }`}
-          >
-            {ARTIFACT_PICKER_ORDER.map((key) => (
-              <button
-                key={key}
-                type="button"
-                role="tab"
-                aria-selected={artifactType === key}
-                onClick={() => setArtifactType(key)}
-                data-testid={`deliverable-picker-${key}`}
-                className={`px-3 py-1.5 rounded-md text-xs font-semibold ${
-                  artifactType === key
-                    ? isLight
-                      ? 'bg-[#534AB7] text-white'
-                      : 'bg-[#7F77DD] text-white'
-                    : 'text-fg-sub hover:text-fg-body'
-                }`}
-              >
-                {ARTIFACT_TYPE_LABELS[key]}
-              </button>
-            ))}
-          </div>
-
           {selectedProtocol ? (
             <>
+              {/* Status board = the deliverable selector: one card per type,
+                  showing generated state + review progress; clicking selects
+                  it. refreshKey is the active type, so a generate-then-switch
+                  re-syncs the counts. */}
+              <DeliverablesOverview
+                protocolId={selectedProtocol.id}
+                artifactTypes={ARTIFACT_PICKER_ORDER}
+                activeType={artifactType}
+                onSelectType={setArtifactType}
+                accentFg={isLight ? '#534AB7' : '#7F77DD'}
+                refreshKey={`${artifactType}:${refreshTick}`}
+              />
               <DeliverablePanel
                 protocolId={selectedProtocol.id}
                 artifactType={artifactType}
                 sectionOrder={DELIVERABLE_CONFIGS[artifactType].sectionOrder}
                 sectionLabels={DELIVERABLE_CONFIGS[artifactType].sectionLabels}
                 exportEnabled={DELIVERABLE_CONFIGS[artifactType].exportEnabled}
+                onMutated={() => setRefreshTick((t) => t + 1)}
               />
               {/* Warm-handoff rail — self-hiding when the protocol has no
                   suggested cards. refreshKey re-syncs on chip switches so a

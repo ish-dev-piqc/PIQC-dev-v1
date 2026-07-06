@@ -19,9 +19,14 @@ import type {
   DeliverableChangeSummary,
   DeliverableGenerateResult,
   DeliverablePacket,
+  DeliverableSummary,
   DeliverablesResult,
 } from '../../types/deliverables';
-import { adaptChangeSummary, adaptDeliverablePacket } from './deliverablesAdapter';
+import {
+  adaptChangeSummary,
+  adaptDeliverablePacket,
+  adaptDeliverableSummaries,
+} from './deliverablesAdapter';
 
 /**
  * Generate (or regenerate) a deliverable for a protocol. Regeneration
@@ -106,4 +111,24 @@ export async function fetchChangeSummary(
   if (summary === null) return { ok: false, error: 'malformed RPC response' };
 
   return { ok: true, data: summary };
+}
+
+/**
+ * Fetch the protocol's deliverable status board (one entry per existing
+ * deliverable). An empty protocol — or one the caller can't access — returns
+ * ok:true with an empty array (the RPC yields '[]', no existence leak). The
+ * adapter runs here so the component only ever sees typed summaries.
+ */
+export async function fetchDeliverableSummaries(
+  protocolId: string,
+): Promise<DeliverablesResult<DeliverableSummary[]>> {
+  const { data, error } = await supabase.rpc('deliverable_list_summary', {
+    p_protocol_id: protocolId,
+  });
+
+  if (error) return { ok: false, error: error.message };
+
+  // The RPC always returns a JSON array (COALESCE to '[]'); null/undefined
+  // only on an unexpected shape — the adapter degrades either to [].
+  return { ok: true, data: adaptDeliverableSummaries(data) };
 }

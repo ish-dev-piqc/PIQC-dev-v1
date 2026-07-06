@@ -3,6 +3,7 @@ import {
   adaptChangeSummary,
   adaptDeliverablePacket,
   adaptDeliverablePacketBlock,
+  adaptDeliverableSummaries,
 } from '../deliverablesAdapter';
 import type { DeliverablePacketBlock } from '../../../types/deliverables';
 
@@ -479,5 +480,64 @@ describe('adaptChangeSummary — null / malformed tolerance', () => {
       },
     });
     expect(out?.log?.removed_blocks).toEqual(logRow.removed_blocks);
+  });
+});
+
+describe('adaptDeliverableSummaries', () => {
+  const row = {
+    deliverable_id: 'del-1',
+    artifact_type: 'monitoring_prep_checklist',
+    title: 'Monitoring Preparation Checklist',
+    protocol_version: 'v1',
+    generated_at: '2026-07-03T12:00:00Z',
+    regenerated_at: null,
+    generation_seq: 1,
+    total_blocks: 8,
+    reviewed_blocks: 3,
+    needs_review_blocks: 4,
+  };
+
+  it('maps a valid summary array', () => {
+    const out = adaptDeliverableSummaries([row]);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({
+      deliverable_id: 'del-1',
+      artifact_type: 'monitoring_prep_checklist',
+      total_blocks: 8,
+      reviewed_blocks: 3,
+      needs_review_blocks: 4,
+    });
+  });
+
+  it('returns [] for a non-array payload', () => {
+    expect(adaptDeliverableSummaries(null)).toEqual([]);
+    expect(adaptDeliverableSummaries({})).toEqual([]);
+    expect(adaptDeliverableSummaries('x')).toEqual([]);
+  });
+
+  it('drops rows missing id / generated_at, or with an unknown artifact_type', () => {
+    const out = adaptDeliverableSummaries([
+      { ...row, deliverable_id: null },
+      { ...row, generated_at: null },
+      { ...row, artifact_type: 'fragility_map' }, // not a real type
+      null,
+      row,
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].deliverable_id).toBe('del-1');
+  });
+
+  it('defaults missing counts to 0, generation_seq to 1, title to empty', () => {
+    const out = adaptDeliverableSummaries([
+      { deliverable_id: 'd', artifact_type: 'siv_package', generated_at: '2026-07-03T12:00:00Z' },
+    ]);
+    expect(out[0]).toMatchObject({
+      total_blocks: 0,
+      reviewed_blocks: 0,
+      needs_review_blocks: 0,
+      generation_seq: 1,
+      title: '',
+      protocol_version: null,
+    });
   });
 });

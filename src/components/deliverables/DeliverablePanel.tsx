@@ -123,6 +123,11 @@ interface Props {
    *  export a DRAFT PDF (the four portrait types via buildDeliverablePdf, the
    *  SIV package via its own landscape deck). Sourced from deliverableConfigs. */
   exportEnabled: boolean;
+  /** Fired after any successful server mutation (generate/regenerate, a row
+   *  review action, or a text edit/note/add). Lets a parent re-sync sibling
+   *  views — e.g. the DeliverablesOverview board's counts — without the panel
+   *  knowing about them. Optional: older callers pass nothing and nothing fires. */
+  onMutated?: () => void;
 }
 
 /** Which text-input flow the DeliverableTextDrawer is currently serving. */
@@ -147,6 +152,7 @@ export default function DeliverablePanel({
   sectionOrder,
   sectionLabels,
   exportEnabled,
+  onMutated,
 }: Props) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
@@ -240,8 +246,9 @@ export default function DeliverablePanel({
         return;
       }
       await refresh();
+      onMutated?.();
     },
-    [protocolId, artifactType, refresh],
+    [protocolId, artifactType, refresh, onMutated],
   );
 
   const handleGenerate = async () => {
@@ -259,6 +266,7 @@ export default function DeliverablePanel({
       return;
     }
     await refresh();
+    onMutated?.();
     setGenerating(false);
   };
 
@@ -287,6 +295,7 @@ export default function DeliverablePanel({
       setTextDrawerTarget(null);
       if (protocolIdRef.current === protocolId && artifactTypeRef.current === artifactType) {
         await refresh();
+        onMutated?.();
       }
     }
     return result;
