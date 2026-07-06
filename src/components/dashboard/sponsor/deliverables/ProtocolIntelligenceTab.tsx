@@ -64,6 +64,11 @@ export default function ProtocolIntelligenceTab() {
     'monitoring_prep_checklist',
   );
 
+  // Bumped whenever the panel mutates (generate / review / edit) so the
+  // overview board re-syncs its counts even when the active type never changes
+  // (the dominant generate-then-work-in-place path).
+  const [refreshTick, setRefreshTick] = useState(0);
+
   // Full-screen spinner ONLY while there is nothing to show yet. Protocol
   // realtime events re-run ProtocolContext's load() (isLoading flips true)
   // — swapping to a spinner then would unmount the panel and any open
@@ -201,7 +206,7 @@ export default function ProtocolIntelligenceTab() {
                 activeType={artifactType}
                 onSelectType={setArtifactType}
                 accentFg={isLight ? '#534AB7' : '#7F77DD'}
-                refreshKey={artifactType}
+                refreshKey={`${artifactType}:${refreshTick}`}
               />
               <DeliverablePanel
                 protocolId={selectedProtocol.id}
@@ -209,6 +214,7 @@ export default function ProtocolIntelligenceTab() {
                 sectionOrder={DELIVERABLE_CONFIGS[artifactType].sectionOrder}
                 sectionLabels={DELIVERABLE_CONFIGS[artifactType].sectionLabels}
                 exportEnabled={DELIVERABLE_CONFIGS[artifactType].exportEnabled}
+                onMutated={() => setRefreshTick((t) => t + 1)}
               />
               {/* Warm-handoff rail — self-hiding when the protocol has no
                   suggested cards. refreshKey re-syncs on chip switches so a

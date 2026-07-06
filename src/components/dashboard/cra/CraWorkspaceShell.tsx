@@ -64,6 +64,10 @@ export default function CraWorkspaceShell() {
     'cra_monitoring_focus',
   );
 
+  // Bumped on any panel mutation so the overview board re-syncs its counts even
+  // when the active type never changes (generate-then-work-in-place).
+  const [refreshTick, setRefreshTick] = useState(0);
+
   const accentFg = isLight ? CRA_ACCENT_FG_LIGHT : CRA_ACCENT_FG_DARK;
   const accentBg = isLight ? '#FDF3E7' : 'rgba(138, 75, 15, 0.2)';
 
@@ -202,7 +206,7 @@ export default function CraWorkspaceShell() {
                   activeType={artifactType}
                   onSelectType={setArtifactType}
                   accentFg={accentFg}
-                  refreshKey={artifactType}
+                  refreshKey={`${artifactType}:${refreshTick}`}
                 />
                 <DeliverablePanel
                   protocolId={selectedProtocol.id}
@@ -210,6 +214,7 @@ export default function CraWorkspaceShell() {
                   sectionOrder={DELIVERABLE_CONFIGS[artifactType].sectionOrder}
                   sectionLabels={DELIVERABLE_CONFIGS[artifactType].sectionLabels}
                   exportEnabled={DELIVERABLE_CONFIGS[artifactType].exportEnabled}
+                  onMutated={() => setRefreshTick((t) => t + 1)}
                 />
                 {/* Warm-handoff rail — self-hiding when the protocol has no
                     suggested cards. refreshKey re-syncs on chip switches so a

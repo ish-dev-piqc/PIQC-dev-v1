@@ -1,7 +1,7 @@
 ---
 owner: fable-dev-piqc
 feature: deliverables-overview
-status: active
+status: in-review
 started: 2026-07-05
 target_pr:
 ---
@@ -59,8 +59,9 @@ there is one navigation surface, not two.
 - `src/lib/deliverables/deliverablesApi.ts` — fetchDeliverableSummaries.
 - `src/lib/deliverables/__tests__/deliverablesApi.test.ts` — extend.
 - `src/components/deliverables/DeliverablesOverview.tsx` — NEW.
-- `src/components/dashboard/sponsor/deliverables/ProtocolIntelligenceTab.tsx` — mount (replace chips).
-- `src/components/dashboard/cra/CraWorkspaceShell.tsx` — mount (replace chips).
+- `src/components/deliverables/DeliverablePanel.tsx` — optional `onMutated` callback (review fix).
+- `src/components/dashboard/sponsor/deliverables/ProtocolIntelligenceTab.tsx` — mount (replace chips) + refresh-on-mutate.
+- `src/components/dashboard/cra/CraWorkspaceShell.tsx` — mount (replace chips) + refresh-on-mutate.
 
 ## Out of scope (files forbidden)
 
@@ -87,8 +88,17 @@ None.
 
 ## Verification
 
-- [ ] typecheck / build green; new adapter + API tests pass; zero new full-suite
-  failures vs baseline.
+- [x] typecheck / build green; 9 new adapter + API tests pass; full suite 19
+  failed / 1041 passed — the same pre-existing baseline, zero new failures.
+- [x] Migration pglast parse_sql (3 stmts) + parse_plpgsql clean; SECURITY
+  INVOKER; both RLS SELECT policies gate on user_can_access_protocol, so the
+  LATERAL count filters identically to the deliverable select (no leak, complete counts).
+- [x] Adversarial review (4 lenses; 1 lens dropped on a transient API error):
+  RPC / adapter / component lenses otherwise clean; 1 confirmed medium — the
+  board's counts went stale on generate-then-work-in-place (refreshKey was only
+  the type, which doesn't change when you mutate the active deliverable). Fixed:
+  DeliverablePanel gained an optional onMutated callback; each mount bumps a tick
+  folded into refreshKey, so any generate/review/edit re-syncs the board.
 - [ ] Migration: pglast parse_sql + parse_plpgsql clean; SECURITY INVOKER; no
   writes; empty-array (not error) for an inaccessible protocol.
 - [ ] Manual (enterprise sub): Sponsor + CRA show the board; generated types show
