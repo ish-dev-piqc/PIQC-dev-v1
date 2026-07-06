@@ -11,6 +11,7 @@ import {
   generateDeliverable,
   fetchDeliverablePacket,
   fetchChangeSummary,
+  fetchDeliverableSummaries,
 } from '../deliverablesApi';
 
 // =============================================================================
@@ -220,5 +221,60 @@ describe('fetchChangeSummary', () => {
     const r = await fetchChangeSummary('del-1');
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('malformed RPC response');
+  });
+});
+
+describe('fetchDeliverableSummaries', () => {
+  const summaryRow = {
+    deliverable_id: 'del-1',
+    artifact_type: 'risk_overview',
+    title: 'Protocol Risk Overview',
+    protocol_version: 'v2.0',
+    generated_at: '2026-07-03T12:00:00Z',
+    regenerated_at: null,
+    generation_seq: 2,
+    total_blocks: 10,
+    reviewed_blocks: 4,
+    needs_review_blocks: 5,
+  };
+
+  it('calls deliverable_list_summary with p_protocol_id', async () => {
+    rpcMock.mockResolvedValueOnce({ data: [], error: null });
+    await fetchDeliverableSummaries('prot-1');
+    expect(rpcMock).toHaveBeenCalledWith('deliverable_list_summary', {
+      p_protocol_id: 'prot-1',
+    });
+  });
+
+  it('adapts the summary array on success', async () => {
+    rpcMock.mockResolvedValueOnce({ data: [summaryRow], error: null });
+    const r = await fetchDeliverableSummaries('prot-1');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data).toHaveLength(1);
+      expect(r.data[0].artifact_type).toBe('risk_overview');
+      expect(r.data[0].needs_review_blocks).toBe(5);
+    }
+  });
+
+  it('returns an empty array for an empty protocol (ok:true, not an error)', async () => {
+    rpcMock.mockResolvedValueOnce({ data: [], error: null });
+    const r = await fetchDeliverableSummaries('prot-empty');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data).toEqual([]);
+  });
+
+  it('degrades a null/malformed payload to an empty array', async () => {
+    rpcMock.mockResolvedValueOnce({ data: null, error: null });
+    const r = await fetchDeliverableSummaries('prot-1');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data).toEqual([]);
+  });
+
+  it('surfaces RPC errors as ok:false', async () => {
+    rpcMock.mockResolvedValueOnce({ data: null, error: { message: 'permission denied' } });
+    const r = await fetchDeliverableSummaries('prot-1');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('permission denied');
   });
 });

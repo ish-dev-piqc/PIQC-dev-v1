@@ -25,6 +25,7 @@ import {
   type DeliverablePacket,
   type DeliverablePacketBlock,
   type DeliverableReviewState,
+  type DeliverableSummary,
   type RemovedBlockSnapshot,
 } from '../../types/deliverables';
 import { displayTextForBlock } from '../../types/deliverables';
@@ -289,4 +290,47 @@ export function adaptChangeSummary(raw: unknown): DeliverableChangeSummary | nul
     flagged_blocks: flaggedBlocks,
     removed_blocks: removedBlocks,
   };
+}
+
+// -----------------------------------------------------------------------------
+// Overview adapter — deliverable_list_summary → DeliverableSummary[]
+// -----------------------------------------------------------------------------
+
+/**
+ * Adapt the deliverable_list_summary array (one entry per existing deliverable).
+ * A non-array payload adapts to [] (the empty-board case). Each entry is dropped
+ * — not defaulted — when it lacks a usable id, generated_at, or a recognized
+ * artifact_type (ARTIFACT_TYPES is the whitelist-from-labels set; an unknown
+ * type must never render as a mislabeled card). Counts default to 0, generation
+ * seq to 1, so a partially-shaped row still summarizes rather than sinking the
+ * whole board.
+ */
+export function adaptDeliverableSummaries(raw: unknown): DeliverableSummary[] {
+  if (!Array.isArray(raw)) return [];
+
+  const out: DeliverableSummary[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue;
+    const e = entry as Record<string, unknown>;
+
+    const deliverableId = asString(e.deliverable_id);
+    const artifactType = asString(e.artifact_type);
+    const generatedAt = asString(e.generated_at);
+    if (!deliverableId || !generatedAt) continue;
+    if (artifactType === null || !ARTIFACT_TYPES.has(artifactType)) continue;
+
+    out.push({
+      deliverable_id: deliverableId,
+      artifact_type: artifactType as DeliverableArtifactType,
+      title: asString(e.title) ?? '',
+      protocol_version: asString(e.protocol_version),
+      generated_at: generatedAt,
+      regenerated_at: asString(e.regenerated_at),
+      generation_seq: asFiniteNumber(e.generation_seq) ?? 1,
+      total_blocks: asFiniteNumber(e.total_blocks) ?? 0,
+      reviewed_blocks: asFiniteNumber(e.reviewed_blocks) ?? 0,
+      needs_review_blocks: asFiniteNumber(e.needs_review_blocks) ?? 0,
+    });
+  }
+  return out;
 }
