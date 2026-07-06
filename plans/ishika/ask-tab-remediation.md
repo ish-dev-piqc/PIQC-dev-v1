@@ -1,7 +1,7 @@
 ---
 owner: ish-dev-piqc
 feature: ask-tab-remediation
-status: active
+status: in-review
 started: 2026-07-05
 target_pr:
 ---
