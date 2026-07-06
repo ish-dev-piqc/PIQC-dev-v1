@@ -9,6 +9,7 @@ import {
   type DeliverableArtifactType,
 } from '../../../../types/deliverables';
 import DeliverablePanel from '../../../deliverables/DeliverablePanel';
+import { DeliverablesOverview } from '../../../deliverables/DeliverablesOverview';
 import { DELIVERABLE_CONFIGS } from '../../../deliverables/deliverableConfigs';
 import { ActionCardRail } from '../../../actions/ActionCardRail';
 
@@ -188,39 +189,20 @@ export default function ProtocolIntelligenceTab() {
             </select>
           </div>
 
-          {/* Deliverable picker — chip strip mirroring the SponsorPage
-              sub-tab pattern. Artifact choice is protocol-independent. */}
-          <div
-            role="tablist"
-            aria-label="Deliverable type"
-            data-testid="protocol-intelligence-deliverable-picker"
-            className={`inline-flex flex-wrap items-center gap-1 rounded-lg border p-1 ${
-              isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/10'
-            }`}
-          >
-            {ARTIFACT_PICKER_ORDER.map((key) => (
-              <button
-                key={key}
-                type="button"
-                role="tab"
-                aria-selected={artifactType === key}
-                onClick={() => setArtifactType(key)}
-                data-testid={`deliverable-picker-${key}`}
-                className={`px-3 py-1.5 rounded-md text-xs font-semibold ${
-                  artifactType === key
-                    ? isLight
-                      ? 'bg-[#534AB7] text-white'
-                      : 'bg-[#7F77DD] text-white'
-                    : 'text-fg-sub hover:text-fg-body'
-                }`}
-              >
-                {ARTIFACT_TYPE_LABELS[key]}
-              </button>
-            ))}
-          </div>
-
           {selectedProtocol ? (
             <>
+              {/* Status board = the deliverable selector: one card per type,
+                  showing generated state + review progress; clicking selects
+                  it. refreshKey is the active type, so a generate-then-switch
+                  re-syncs the counts. */}
+              <DeliverablesOverview
+                protocolId={selectedProtocol.id}
+                artifactTypes={ARTIFACT_PICKER_ORDER}
+                activeType={artifactType}
+                onSelectType={setArtifactType}
+                accentFg={isLight ? '#534AB7' : '#7F77DD'}
+                refreshKey={artifactType}
+              />
               <DeliverablePanel
                 protocolId={selectedProtocol.id}
                 artifactType={artifactType}
