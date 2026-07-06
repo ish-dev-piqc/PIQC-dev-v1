@@ -26,7 +26,9 @@ export interface ChatMessage {
   content: string;
 }
 
-export type RagStatus = 'found' | 'not_found' | 'error';
+// 'stopped' is assigned client-side when a stream is aborted (user Stop, panel
+// collapse, protocol switch). The server never sends it.
+export type RagStatus = 'found' | 'not_found' | 'error' | 'stopped';
 
 export interface SourceCitation {
   n: number;
@@ -38,10 +40,33 @@ export interface SourceCitation {
   chunk_preview: string;
 }
 
+// The chat message shape the UI actually renders. Lives here (not in a
+// component) so the site lib and the shared DashboardChat engine share one
+// definition. `error` marks a failed send on an assistant bubble to drive Retry
+// and is never persisted; `streaming` is transient too.
+export interface ExtendedMessage extends ChatMessage {
+  streaming?: boolean;
+  ragStatus?: RagStatus;
+  ragError?: string;
+  sources?: SourceCitation[];
+  error?: string;
+}
+
 export interface StreamDashboardChatResult {
   ragStatus: RagStatus;
   ragError: string;
   sources: SourceCitation[];
+}
+
+export interface StreamDashboardChatOptions {
+  message: string;
+  history: ChatMessage[];
+  selectedDocIds: string[];
+  /** When set, the server scopes retrieval to this protocol's documents. */
+  protocolId?: string | null;
+  onChunk: (token: string) => void;
+  onSources?: (sources: SourceCitation[]) => void;
+  signal?: AbortSignal;
 }
 
 async function getAuthToken(): Promise<string> {
@@ -50,13 +75,9 @@ async function getAuthToken(): Promise<string> {
 }
 
 export async function streamDashboardChat(
-  message: string,
-  history: ChatMessage[],
-  selectedDocIds: string[],
-  onChunk: (token: string) => void,
-  onSources?: (sources: SourceCitation[]) => void,
-  signal?: AbortSignal
+  opts: StreamDashboardChatOptions
 ): Promise<StreamDashboardChatResult> {
+  const { message, history, selectedDocIds, protocolId, onChunk, onSources, signal } = opts;
   const token = await getAuthToken();
   const response = await fetch(`${supabaseUrl}/functions/v1/dashboard-chat`, {
     method: 'POST',
@@ -64,7 +85,12 @@ export async function streamDashboardChat(
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ message, history, selectedDocIds }),
+    body: JSON.stringify({
+      message,
+      history,
+      selectedDocIds,
+      ...(protocolId ? { protocolId } : {}),
+    }),
     signal,
   });
 
@@ -72,7 +98,7 @@ export async function streamDashboardChat(
     let detail = '';
     try {
       const body = await response.clone().json();
-      detail = body?.detail || body?.error || '';
+      detail = body?.error || body?.detail || '';
     } catch {
       detail = await response.text().catch(() => '');
     }

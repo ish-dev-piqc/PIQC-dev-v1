@@ -19,7 +19,7 @@ import AuditWorkspaceShell from './audit/AuditWorkspaceShell';
 import { useTheme } from '../../context/ThemeContext';
 import { useMode } from '../../context/ModeContext';
 import { useProtocol } from '../../context/ProtocolContext';
-import { supabase, type ChatMessage, type RagStatus } from '../../lib/supabase';
+import { supabase, type ExtendedMessage } from '../../lib/supabase';
 import { TIMEZONE_OPTIONS } from '../../lib/timezones';
 import { useAuth } from '../../context/AuthContext';
 import { useSubscription } from '../../hooks/useSubscription';
@@ -29,8 +29,6 @@ import { useCheckoutRedirect } from '../../context/CheckoutRedirectContext';
 import { findProductByKind } from '../../stripe-config';
 import { pilotStatus, pilotDaysRemaining } from '../../lib/entitlements';
 import PilotCountdownBanner from '../billing/PilotCountdownBanner';
-
-type ExtendedMessage = ChatMessage & { streaming?: boolean; ragStatus?: RagStatus; ragError?: string };
 
 export type DashboardTab =
   // Audit Mode tabs (current; will be redesigned later)
