@@ -103,7 +103,7 @@ export function DeliverablesOverview({
 
   return (
     <div
-      role="tablist"
+      role="radiogroup"
       aria-label="Deliverables"
       data-testid="deliverables-overview"
       className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2"
@@ -120,8 +120,8 @@ export function DeliverablesOverview({
           <button
             key={type}
             type="button"
-            role="tab"
-            aria-selected={active}
+            role="radio"
+            aria-checked={active}
             onClick={() => onSelectType(type)}
             data-testid={`deliverables-overview-card-${type}`}
             className={`text-left rounded-xl border p-3 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 ${cardBase} ${

@@ -714,7 +714,7 @@ export default function DeliverablePanel({
           from the whole deliverable; the block list below sees only the
           matching subset (empty sections drop out via groupBlocksBySection). */}
       <div
-        role="tablist"
+        role="radiogroup"
         aria-label="Filter by review state"
         data-testid="deliverable-review-filter"
         className={`inline-flex flex-wrap items-center gap-1 rounded-lg border p-1 ${
@@ -727,8 +727,8 @@ export default function DeliverablePanel({
             <button
               key={key}
               type="button"
-              role="tab"
-              aria-selected={selected}
+              role="radio"
+              aria-checked={selected}
               onClick={() => setReviewFilter(key)}
               data-testid={`deliverable-review-filter-${key}`}
               className={`px-2.5 py-1 rounded-md text-xs font-semibold ${
