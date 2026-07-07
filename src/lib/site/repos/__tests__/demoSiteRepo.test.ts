@@ -174,6 +174,36 @@ describe('demoSiteRepo — visits + protocols', () => {
     expect(result.ok).toBe(false);
   });
 
+  it('fetchVisitsForProtocol populates confidenceState from the matching template (parity with realSiteRepo)', async () => {
+    const visits = await demoSiteRepo.fetchVisitsForProtocol(BRIGHTEN);
+    if (!visits.ok) throw new Error(visits.error);
+
+    // Every visit whose name matches a template inherits that template's
+    // confidence_state, mirroring realSiteRepo.rowToVisit — so the chip is no
+    // longer permanently silent in Demo Mode. Regression guard for SIT-11.
+    const byName = (name: string) => visits.data.find((v) => v.visitName === name);
+
+    expect(byName('Cycle 8 Day 1')?.confidenceState).toBe('high');
+    expect(byName('Cycle 1 Day 1 (mFOLFOX6 + PledOx)')?.confidenceState).toBe('medium');
+    expect(byName('Cycle 4 Day 1 + CIPN assessment')?.confidenceState).toBe('low');
+    expect(byName('Cycle 2 Day 1')?.confidenceState).toBe('needs_review');
+
+    // At least one visit actually carries a confidence chip — the pre-fix
+    // behaviour left this array empty.
+    expect(visits.data.some((v) => v.confidenceState !== undefined)).toBe(true);
+  });
+
+  it('fetchVisitsForProtocol leaves confidenceState undefined when no template matches the visit name', async () => {
+    const visits = await demoSiteRepo.fetchVisitsForProtocol(BRIGHTEN);
+    if (!visits.ok) throw new Error(visits.error);
+
+    // "Cycle 3 — CIPN assessment" is a scheduled visit with no template of
+    // that exact name, so there is no confidence to inherit.
+    const noTemplateMatch = visits.data.find((v) => v.visitName === 'Cycle 3 — CIPN assessment');
+    expect(noTemplateMatch).toBeTruthy();
+    expect(noTemplateMatch?.confidenceState).toBeUndefined();
+  });
+
   it('setAnchorDate updates the protocol row', async () => {
     const result = await demoSiteRepo.setAnchorDate(BRIGHTEN, '2026-01-01');
     expect(result.ok).toBe(true);

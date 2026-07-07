@@ -106,6 +106,73 @@ describe('parseRoleHint — unscoped (returns empty)', () => {
   });
 });
 
+describe('parseRoleHint — short-keyword word-boundary (no false positives)', () => {
+  // 'pi' (investigator) and 'lab' are common English substrings. Under bare
+  // includes() they wrongly tagged unrelated parser output. They now require a
+  // word boundary, so they must NOT fire inside larger words.
+
+  it('does NOT tag investigator for "pi" inside "Sampling" (sam-pi-ling)', () => {
+    expect(parseRoleHint('Sampling')).toEqual([]);
+  });
+
+  it('does NOT tag investigator for "pi" inside "Capillary sample" (ca-pi-llary)', () => {
+    expect(parseRoleHint('Capillary sample')).toEqual([]);
+  });
+
+  it('does NOT tag investigator for "pi" inside "Expiration date check" (ex-pi-ration)', () => {
+    expect(parseRoleHint('Expiration date check')).toEqual([]);
+  });
+
+  it('does NOT tag investigator for "pi" inside "Pilot dosing" (pi-lot)', () => {
+    expect(parseRoleHint('Pilot dosing')).toEqual([]);
+  });
+
+  it('does NOT tag investigator for "pi" inside "Hospital pharmacist" — pharmacy only', () => {
+    // "hospital" contains hos-pi-tal; previously mis-tagged as investigator too.
+    expect(parseRoleHint('Hospital pharmacist')).toEqual(['pharmacy']);
+  });
+
+  it('does NOT tag lab for "lab" inside "Label medication" (la-bel)', () => {
+    expect(parseRoleHint('Label medication')).toEqual([]);
+  });
+
+  it('does NOT tag lab for "lab" inside "Collaborating nurse" — nurse only', () => {
+    // "collaborating" contains col-lab-orating; previously mis-tagged as lab too.
+    expect(parseRoleHint('Collaborating nurse')).toEqual(['nurse']);
+  });
+
+  it('does NOT tag lab for "lab" inside "Available kit" (avai-lab-le)', () => {
+    expect(parseRoleHint('Available kit')).toEqual([]);
+  });
+
+  // True positives still work — the standalone keyword must still tag.
+
+  it('still tags investigator for standalone "PI"', () => {
+    expect(parseRoleHint('PI')).toEqual(['investigator']);
+  });
+
+  it('still tags investigator for "PI review" (PI as a word among others)', () => {
+    expect(parseRoleHint('PI review')).toEqual(['investigator']);
+  });
+
+  it('still tags lab for standalone "Lab"', () => {
+    expect(parseRoleHint('Lab')).toEqual(['lab']);
+  });
+
+  it('still tags lab for "Lab draw" (lab as leading word)', () => {
+    expect(parseRoleHint('Lab draw')).toEqual(['lab']);
+  });
+
+  it('still tags lab for "Lab tech" and "Nurse and Lab tech"', () => {
+    expect(parseRoleHint('Lab tech')).toEqual(['lab']);
+    expect(parseRoleHint('Nurse and Lab tech')).toEqual(['nurse', 'lab']);
+  });
+
+  it('still tags investigator for full word "Investigator" (long keyword unaffected)', () => {
+    expect(parseRoleHint('Investigator')).toEqual(['investigator']);
+  });
+});
+
 describe('parseRoleHint — determinism', () => {
   it('produces the same output for the same input across multiple calls', () => {
     const input = 'Pharmacist + Coordinator + Nurse';

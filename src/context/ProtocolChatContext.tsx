@@ -74,6 +74,13 @@ export function ProtocolChatProvider({ children }: { children: React.ReactNode }
     setError(null);
     const res = await listProtocolMessages(protocolId);
     setLoading(false);
+    // Stale-response guard: a fast channel switch (A → B) can resolve this
+    // fetch after the active channel already moved on. Only the response for
+    // the still-active channel may touch shared messages/error state, or
+    // channel A's data lands on channel B (cross-channel leak / stale
+    // overwrite). loading is cleared above regardless so an early return can't
+    // wedge the spinner.
+    if (activeIdRef.current !== protocolId) return;
     if (!res.ok) {
       setError(res.error);
       return;
@@ -153,14 +160,23 @@ export function ProtocolChatProvider({ children }: { children: React.ReactNode }
       const protocolId = activeIdRef.current;
       if (!protocolId) return { ok: false, error: 'No active protocol channel.' };
       const res = await postProtocolMessage(protocolId, body);
+      // Stale-response guard: if the user switched channels while this send
+      // was in flight, protocolId is no longer active. Skip the SHARED-state
+      // mutation (setError / optimistic setMessages append) so channel A's
+      // message never lands on channel B — the realtime INSERT will still add
+      // it to channel A when that channel is next active. We STILL return the
+      // true result so ChatTab's own local UI feedback (its toast) works.
+      const stillActive = activeIdRef.current === protocolId;
       if (!res.ok) {
-        setError(res.error);
+        if (stillActive) setError(res.error);
         return { ok: false, error: res.error };
       }
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === res.data.id)) return prev;
-        return [...prev, res.data];
-      });
+      if (stillActive) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === res.data.id)) return prev;
+          return [...prev, res.data];
+        });
+      }
       return { ok: true, data: res.data };
     },
     [],

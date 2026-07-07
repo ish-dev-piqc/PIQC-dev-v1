@@ -47,7 +47,7 @@ import { fetchRiskSummary } from '../../../../lib/audit/riskSummaryApi';
 
 export default function ScopeReviewWorkspace() {
   const { theme } = useTheme();
-  const { activeAudit, advanceStage } = useAudit();
+  const { activeAudit, advanceStage, advanceStageError } = useAudit();
   const data = useAuditData();
   const isLight = theme === 'light';
 
@@ -373,6 +373,20 @@ export default function ScopeReviewWorkspace() {
             <ArrowRight size={14} />
           </button>
         </div>
+        {/* Server-side gate rejection surfaced from AuditContext.advanceStage.
+            Without this the click is silently lost (AUD-301 class). */}
+        {advanceStageError && (
+          <div
+            role="alert"
+            className={`text-xs px-3 py-2 mt-4 rounded-md border ${
+              isLight
+                ? 'bg-red-50 border-red-200 text-red-700'
+                : 'bg-red-500/15 border-red-500/30 text-red-300'
+            }`}
+          >
+            Couldn’t advance the stage: {advanceStageError}
+          </div>
+        )}
       </div>
     </div>
   );
