@@ -63,6 +63,36 @@ const STATUS_FILTERS: StatusFilter[] = [
   'cancelled',
 ];
 
+// Deep-link handoff — chat chips stamp `{ id, ts }` JSON into this key
+// (App.tsx handleNavigateToVisit); payloads older than the TTL are dropped
+// so a stale handoff never auto-opens a drawer out of context.
+const PENDING_VISIT_KEY = 'piq-pending-visit-v1';
+const TTL_MS = 5 * 60 * 1000;
+
+/** Parse a pending deep-link payload — `{ id, ts }` JSON, or a legacy
+ *  bare-id string from a pre-upgrade session. Returns null when stale. */
+function readPendingId(raw: string): string | null {
+  let id: string | null = null;
+  let ts: number | null = null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      typeof (parsed as { id?: unknown }).id === 'string'
+    ) {
+      id = (parsed as { id: string }).id;
+      const t = (parsed as { ts?: unknown }).ts;
+      if (typeof t === 'number') ts = t;
+    }
+  } catch {
+    /* legacy raw-string shape — fall through */
+  }
+  if (id === null) id = raw;
+  if (ts !== null && Date.now() - ts > TTL_MS) return null;
+  return id;
+}
+
 export default function VisitsTab() {
   const { theme } = useTheme();
   const { activeProtocol, protocols } = useProtocol();
@@ -79,26 +109,25 @@ export default function VisitsTab() {
   const [openVisit, setOpenVisit] = useState<SiteVisit | null>(null);
   const [scheduleFormOpen, setScheduleFormOpen] = useState(false);
 
-  // Deep-link pickup — chat reference chips can drop a visit UUID into
+  // Deep-link pickup — chat reference chips drop a visit payload into
   // `piq-pending-visit-v1` then navigate the user here. Once the visits
-  // list is loaded, find the visit (if it belongs to the active protocol
-  // and is loaded) and auto-open its detail drawer.
+  // list is loaded, consume the key exactly once (removed before any
+  // match attempt so a non-matching id can't linger and fire days later),
+  // then auto-open the detail drawer on a fresh match.
   useEffect(() => {
     if (loading || !visits.length) return;
-    let pending: string | null = null;
+    let raw: string | null = null;
     try {
-      pending = localStorage.getItem('piq-pending-visit-v1');
+      raw = localStorage.getItem(PENDING_VISIT_KEY);
+      if (raw !== null) localStorage.removeItem(PENDING_VISIT_KEY);
     } catch {
       /* ignore */
     }
+    if (!raw) return;
+    const pending = readPendingId(raw);
     if (!pending) return;
     const target = visits.find((v) => v.id === pending);
     if (!target) return;
-    try {
-      localStorage.removeItem('piq-pending-visit-v1');
-    } catch {
-      /* ignore */
-    }
     setOpenVisit(target);
   }, [loading, visits]);
   // Surfaced briefly after a manual "Schedule visit" so the new row doesn't

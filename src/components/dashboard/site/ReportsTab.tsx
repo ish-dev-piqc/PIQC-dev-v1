@@ -17,6 +17,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useSiteData } from '../../../context/SiteDataContext';
 import { getProtocolColors } from '../../../lib/site/protocolColors';
+import { formatYmd } from '../../../lib/site/dateUtils';
 import { buildReportWorkbook } from '../../../lib/site/reportsExport';
 import { buildVisitIcsBlob } from '../../../lib/site/calendarExport';
 import type { SiteVisit } from '../../../lib/site/types';
@@ -37,7 +38,9 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
   const { visits: allSiteVisits, participants: allSiteParticipants, error } = useSiteData();
   const isLight = theme === 'light';
   const today = useMemo(() => new Date(), []);
-  const todayStr = useMemo(() => today.toISOString().slice(0, 10), [today]);
+  // Local-timezone yyyy-mm-dd — visit dates are timezone-less local dates, so
+  // deriving "today" from toISOString (UTC) would shift the boundary near midnight.
+  const todayStr = useMemo(() => formatYmd(today), [today]);
   const [selectedVisit, setSelectedVisit] = useState<SiteVisit | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
@@ -63,6 +66,11 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
   }, [activeProtocol, allSiteParticipants]);
 
   const stats = useMemo(() => {
+    // Every non-cancelled VisitStatus lands in exactly one bucket:
+    // concluded = completed | missed | deviation; upcoming (open/pending) =
+    // scheduled | closing_soon (from today onward) plus overdue (any date —
+    // an overdue visit is past-dated but still open). Cancelled visits count
+    // in neither bucket, so they never enter the compliance denominator.
     const concluded = scopedVisits.filter((v) =>
       ['completed', 'missed', 'deviation'].includes(v.status),
     );
@@ -81,7 +89,9 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
         ? Math.round((completed / concluded.length) * 100)
         : null;
     const upcoming = scopedVisits.filter(
-      (v) => v.status === 'scheduled' && v.date >= todayStr,
+      (v) =>
+        (['scheduled', 'closing_soon'].includes(v.status) && v.date >= todayStr) ||
+        v.status === 'overdue',
     ).length;
     return {
       completed,
@@ -99,6 +109,9 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
     () =>
       protocols.map((p) => {
         const pv = allSiteVisits.filter((v) => v.protocolId === p.id);
+        // Same concluded definition as the headline stats above — open visits
+        // (scheduled / closing_soon / overdue) and cancelled ones stay out of
+        // the compliance denominator here too.
         const concluded = pv.filter((v) =>
           ['completed', 'missed', 'deviation'].includes(v.status),
         );
@@ -142,8 +155,14 @@ export default function ReportsTab({ onNavigateToVisits }: { onNavigateToVisits?
       .sort((a, b) => b.date.localeCompare(a.date))
       .map((v) => {
         const protocol = protocols.find((p) => p.id === v.protocolId);
+        // OWASP CSV-injection mitigation: prefix a leading apostrophe when a
+        // cell starts with = + - @ so spreadsheet apps don't treat it as a formula.
+        const sanitize = (cell: string | number) => {
+          const s = String(cell);
+          return /^[=+\-@]/.test(s) ? `'${s}` : s;
+        };
         return [v.date, v.participantId, protocol?.code ?? '', v.visitName, v.status, v.deviationReason ?? '', v.priorNote ?? '']
-          .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
+          .map((cell) => `"${sanitize(cell).replace(/"/g, '""')}"`)
           .join(',');
       });
     const csv = [headers.map((h) => `"${h}"`).join(','), ...rows].join('\n');

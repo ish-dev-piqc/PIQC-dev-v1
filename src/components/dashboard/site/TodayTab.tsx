@@ -155,7 +155,7 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
   const { theme } = useTheme();
   const { activeProtocol, protocols, isLoading: protocolsLoading } = useProtocol();
   const { demoActive } = useDemoMode();
-  const { visits: allSiteVisits, participants: allSiteParticipants, teamMembers: allSiteTeam, documents, refresh } = useSiteData();
+  const { visits: allSiteVisits, participants: allSiteParticipants, teamMembers: allSiteTeam, documents, loading, refresh } = useSiteData();
   const { user } = useAuth();
   const isLight = theme === 'light';
   const isHome = activeProtocol === null;
@@ -168,6 +168,23 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
   const [openVisit, setOpenVisit] = useState<SiteVisit | null>(null);
   const [openDay, setOpenDay] = useState<Date | null>(null);
   const [filterPanelOpen, setFilterPanelOpen] = useState<boolean>(true);
+
+  // Keep the open drawer in sync with realtime refreshes — the click handler
+  // captures the visit object as it was at click time, but SiteDataContext
+  // rebuilds the visits array on every refresh. Look the row back up by id:
+  // replace the snapshot when the reference changed (refresh only fires on
+  // real events, and once replaced `fresh === openVisit`, so this can't
+  // loop), and close the drawer when the visit disappeared (deleted or
+  // cancelled elsewhere).
+  useEffect(() => {
+    if (!openVisit) return;
+    const fresh = allSiteVisits.find((v) => v.id === openVisit.id);
+    if (!fresh) {
+      setOpenVisit(null);
+    } else if (fresh !== openVisit) {
+      setOpenVisit(fresh);
+    }
+  }, [allSiteVisits, openVisit]);
 
   // --- Freshness banner ---------------------------------------------------
   // Snapshot the ID set of currently-loaded visits + participants on first
@@ -631,7 +648,7 @@ export default function TodayTab({ onNavigateToVisits, onNavigateToTeam }: Today
             week/month structure; surface empty/filtered states as a compact
             banner above it instead of replacing the calendar. */}
         <div className={`flex-1 min-w-0 ${cardBg} border rounded-xl overflow-hidden flex flex-col`}>
-          {isEmptyRange && (
+          {isEmptyRange && !loading && (
             <CalendarEmptyBanner
               isLight={isLight}
               view={view}
