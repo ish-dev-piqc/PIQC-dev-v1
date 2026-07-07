@@ -525,6 +525,59 @@ describe('mapReductoExtractToSotr', () => {
   // T9 — dedupeVisitArray unit tests (pure function, direct invocation)
   // -------------------------------------------------------------------------
   describe('dedupeVisitArray (direct unit tests)', () => {
+    // -----------------------------------------------------------------------
+    // SOT-301 — cross-cycle over-collapse. normalizeVisitName strips the
+    // "(Cycle N Day M)" parenthetical, so cycle-differing visits collide at
+    // the name key; the adapter must split a name-group that spans ≥2
+    // distinct cycles, or evidence gets paired to the wrong cycle's visit.
+    // -----------------------------------------------------------------------
+    it('SOT-301: keeps visits that differ only by cycle number as distinct winners', () => {
+      const result = dedupeVisitArray([
+        { visit_name: 'Visit 2 (Cycle 1 Day 8)', study_day: 8 },
+        { visit_name: 'Visit 2 (Cycle 2 Day 8)', study_day: 8 },
+        { visit_name: 'Visit 2 (Cycle 3 Day 8)', study_day: 8 },
+      ]);
+      // Three distinct cycles → three winners, no cross-cycle evidence merge.
+      expect(result.winningIndices).toEqual([0, 1, 2]);
+      expect(result.extraEvidenceFor.size).toBe(0);
+    });
+
+    it('SOT-301: still collapses a duplicate source within the SAME cycle', () => {
+      const result = dedupeVisitArray([
+        // SOA table copy (window=0) and inline-section copy (window>0), same cycle.
+        { visit_name: 'Visit 2 (Cycle 1 Day 8)', window_minus_days: 0, window_plus_days: 0 },
+        { visit_name: 'Visit 2 (Cycle 1 Day 8)', window_minus_days: 2, window_plus_days: 2 },
+        // A different cycle keeps its own winner.
+        { visit_name: 'Visit 2 (Cycle 2 Day 8)', window_minus_days: 2, window_plus_days: 2 },
+      ]);
+      expect(result.winningIndices).toEqual([1, 2]);
+      expect(result.extraEvidenceFor.get(1)?.[0].sourceIndex).toBe(0);
+    });
+
+    it('SOT-301: preserves the legitimate restatement collapse when only one cycle exists', () => {
+      // "(Cycle 1 Day 1)" here is a pure restatement of the same visit — the
+      // classic Reducto duplicate. With only ONE distinct cycle in the group,
+      // the cycle-less copy still collapses into it (pre-fix behavior kept).
+      const result = dedupeVisitArray([
+        { visit_name: 'Treatment Visit 1', window_minus_days: 0, window_plus_days: 0 },
+        { visit_name: 'Treatment Visit 1 (Cycle 1 Day 1)', window_minus_days: 1, window_plus_days: 1 },
+      ]);
+      expect(result.winningIndices).toEqual([1]);
+      expect(result.extraEvidenceFor.get(1)?.[0].sourceIndex).toBe(0);
+    });
+
+    it('SOT-301: a cycle-less entry becomes its own group when cycles diverge (never guessed onto a cycle)', () => {
+      const result = dedupeVisitArray([
+        { visit_name: 'Visit 2 (Cycle 1 Day 8)' },
+        { visit_name: 'Visit 2 (Cycle 2 Day 8)' },
+        { visit_name: 'Visit 2' },
+      ]);
+      // Two distinct cycles + one bare name → three winners; the bare entry
+      // is not merged into either cycle (under-collapse over over-collapse).
+      expect(result.winningIndices).toEqual([0, 1, 2]);
+      expect(result.extraEvidenceFor.size).toBe(0);
+    });
+
     it('returns all indices when the array has no duplicates', () => {
       const result = dedupeVisitArray([
         { visit_name: 'A' },
