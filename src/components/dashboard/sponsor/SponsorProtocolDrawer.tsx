@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -10,6 +10,8 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
+import { useOverlay } from '../../../hooks/useOverlay';
+import { useSwipeDismiss } from '../../../hooks/useSwipeDismiss';
 import { getSponsorProtocolDetail } from '../../../lib/sponsor/sponsorApi';
 import type {
   SponsorEnrollment,
@@ -39,6 +41,13 @@ export default function SponsorProtocolDrawer({ entry, onClose }: SponsorProtoco
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Shared overlay contract — Esc (stack-aware), body-scroll lock, focus trap,
+  // focus restore to the triggering "View details" button — plus swipe-dismiss.
+  // The component stays mounted with entry=null, so isOpen keys off entry.
+  const panelRef = useRef<HTMLElement>(null);
+  useOverlay({ isOpen: entry !== null, onClose, containerRef: panelRef });
+  const swipe = useSwipeDismiss({ onClose });
+
   useEffect(() => {
     setDetail(null);
     setError(null);
@@ -56,15 +65,6 @@ export default function SponsorProtocolDrawer({ entry, onClose }: SponsorProtoco
     };
   }, [entry]);
 
-  useEffect(() => {
-    if (!entry) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [entry, onClose]);
-
   if (!entry) return null;
 
   const paneBg = isLight ? 'bg-white' : 'bg-[#0F172A]';
@@ -80,9 +80,11 @@ export default function SponsorProtocolDrawer({ entry, onClose }: SponsorProtoco
         aria-hidden="true"
       />
       <aside
+        ref={panelRef}
         role="dialog"
         aria-label="Protocol detail"
         className={`fixed top-0 right-0 z-50 h-full w-full sm:w-[480px] ${paneBg} border-l ${paneBorder} shadow-xl flex flex-col`}
+        {...swipe}
       >
         {/* Header */}
         <div className={`flex items-start gap-2 px-4 py-3 border-b ${paneBorder}`}>
