@@ -21,12 +21,23 @@ interface UseOverlayOptions {
 const FOCUSABLE =
   'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
+// Overlays can stack (e.g. ParticipantProfileDrawer opens above VisitDetailDrawer).
+// Each open instance registers here in open order; only the TOPMOST instance
+// handles keydown. Without this, every mounted instance's document-level Escape
+// listener fires on one keypress, closing every layer at once — and a parent's
+// Tab focus-trap can fight the stacked child's.
+const overlayStack: symbol[] = [];
+
 export function useOverlay({ isOpen, onClose, containerRef }: UseOverlayOptions) {
   // Remember what had focus before the overlay opened so we can restore it.
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
+
+    // Register this instance as the current topmost overlay.
+    const stackId = Symbol('overlay');
+    overlayStack.push(stackId);
 
     // Capture trigger so we can restore focus on close.
     previousFocusRef.current = document.activeElement as HTMLElement | null;
@@ -43,6 +54,9 @@ export function useOverlay({ isOpen, onClose, containerRef }: UseOverlayOptions)
     }
 
     function handleKeyDown(e: KeyboardEvent) {
+      // Only the topmost open overlay responds to keyboard dismiss/trap.
+      if (overlayStack[overlayStack.length - 1] !== stackId) return;
+
       if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
@@ -76,6 +90,8 @@ export function useOverlay({ isOpen, onClose, containerRef }: UseOverlayOptions)
     document.addEventListener('keydown', handleKeyDown);
 
     return () => {
+      const idx = overlayStack.indexOf(stackId);
+      if (idx !== -1) overlayStack.splice(idx, 1);
       document.body.style.overflow = original;
       document.removeEventListener('keydown', handleKeyDown);
       // Restore focus to whatever opened the overlay.
