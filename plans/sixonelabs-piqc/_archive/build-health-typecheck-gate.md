@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: build-health-typecheck-gate
-status: active
+status: merged
+merged: 2026-07-07
 started: 2026-07-06
-target_pr:
+target_pr: #456
 ---
 
 # Build health — typecheck + test CI gate, suite green
