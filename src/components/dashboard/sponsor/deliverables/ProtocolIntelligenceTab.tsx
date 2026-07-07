@@ -13,6 +13,7 @@ import { DeliverablesOverview } from '../../../deliverables/DeliverablesOverview
 import { DELIVERABLE_CONFIGS } from '../../../deliverables/deliverableConfigs';
 import { ActionCardRail } from '../../../actions/ActionCardRail';
 import { DeliverablePortfolioGrid } from './DeliverablePortfolioGrid';
+import SponsorAskPanel from './SponsorAskPanel';
 
 // =============================================================================
 // ProtocolIntelligenceTab — the Sponsor page's "Protocol Intelligence" sub-tab
@@ -203,6 +204,10 @@ export default function ProtocolIntelligenceTab() {
                   freshly generated deliverable surfaces its card without a
                   panel callback (DeliverablePanel stays out of scope). */}
               <ActionCardRail protocolId={selectedProtocol.id} refreshKey={artifactType} />
+              {/* Protocol-grounded Ask (the AskTab pattern: DashboardChat WITH
+                  protocolId — never the org chat's unscoped doc-picker mode).
+                  Inherits this tab's enterprise gate + protocol selection. */}
+              <SponsorAskPanel protocol={selectedProtocol} />
             </>
           ) : (
             <div
