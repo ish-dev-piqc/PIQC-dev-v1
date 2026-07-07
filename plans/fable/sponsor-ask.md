@@ -32,6 +32,22 @@ is a thin Fable-owned wrapper with **no new backend and no new chat component**.
 
 ## Design
 
+> **CRITICAL — which "Ask" this is.** There are TWO `DashboardChat` mounts, and
+> this plan targets ONLY the protocol-grounded one:
+> - ✅ **TARGET — the protocol Ask** (`src/components/dashboard/site/AskTab.tsx:169`):
+>   `<DashboardChat protocolId={activeProtocol.id} emptyHeading="Ask about {code}"
+>   emptySubtext="Grounded in N documents for {code}…" … />`. Passing `protocolId`
+>   makes the `dashboard-chat` edge fn scope retrieval to **that protocol's parsed
+>   documents** (doc selector hidden). This is the button the sponsor needs —
+>   answers pulled from the parsed protocol.
+> - ❌ **NOT this — the org-tab chat** (`src/components/dashboard/Dashboard.tsx:745`,
+>   `case 'chat'`): `<DashboardChat selectedDocIds={…} setSelectedDocIds={…} />`
+>   with **no `protocolId`** — a manual, org-wide document picker with NO protocol
+>   scope. The Sponsor Ask must NOT reuse this pattern.
+>
+> Build rule of thumb: if `protocolId` isn't set on the `DashboardChat` you
+> render, it's the wrong one.
+
 - **Mount:** an "Ask about this protocol" surface inside the **Sponsor Protocol
   Intelligence tab** (`src/components/dashboard/sponsor/deliverables/`,
   Fable-owned), scoped to the tab's already-selected protocol
