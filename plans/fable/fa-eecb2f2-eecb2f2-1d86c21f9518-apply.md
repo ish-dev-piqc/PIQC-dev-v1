@@ -1,9 +1,9 @@
 ---
 owner: fable
 feature: FA-eecb2f2-eecb2f2-1d86c21f9518-apply
-status: active
+status: merged
 started: 2026-07-06
-target_pr:
+target_pr: "#453"
 ---
 
 # Fable apply — FA-eecb2f2-eecb2f2-1d86c21f9518

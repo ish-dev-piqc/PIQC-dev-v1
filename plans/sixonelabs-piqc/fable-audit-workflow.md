@@ -1,9 +1,9 @@
 ---
 owner: sixonelabs-piqc
 feature: fable-audit-workflow
-status: active
+status: merged
 started: 2026-07-06
-target_pr:
+target_pr: "#451"
 ---
 
 # Fable Audit Workflow — Phase A tooling
