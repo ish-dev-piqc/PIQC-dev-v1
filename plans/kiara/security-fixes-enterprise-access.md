@@ -62,7 +62,17 @@ None.
 |---|---|---|
 | ORG-1 | `accept_org_invite` bind to invited email | done (`20260720000000_accept_org_invite_bind_email.sql`) |
 | ORG-2 | `accept_protocol_guest_invite` bind to invited_email | done (`20260720000100_accept_protocol_guest_invite_bind_email.sql`) |
-| RLS-1 | kill free-text org self-join | in progress |
-| ENT-1 / MAC-1 | server-side tier/capacity checks on deliverable RPCs | in progress |
-| PAY-1 | allowlist `price_id` in stripe-checkout | pending |
+| RLS-1 | kill free-text org self-join | done (`20260720000200_kill_freetext_org_self_join.sql`) |
+| ENT-1 | server-side entitlement gate on deliverable RPCs | done — see "ENT-1/MAC-1 design decision" below |
+| MAC-1 (tier half) | same gate closes the "any tier can call enterprise RPCs" hole | done, same migrations as ENT-1 |
+| MAC-1 (capacity-cap half) | uncapped seat/protocol/guest provisioning past plan limits | **not done** — follow-up, see note below |
+| PAY-1 | allowlist `price_id` + mode + addon-only `append_to_subscription` in stripe-checkout | done (`supabase/functions/stripe-checkout/index.ts`) |
 | MAC-2 | not exploitable yet — tracked, no code change until addon fields land | tracked only |
+
+### ENT-1/MAC-1 design decision (2026-07-07)
+
+`subscription.kind` can never actually equal `'enterprise'` today — it has no Stripe price (`priceId: ''`, `mode: 'none'` in `src/stripe-config.ts`, sales-led by design) and no other DB column represents it, so `canUseSponsorMode`/`canUseCraMode` block 100% of real users in the UI already. The RPCs underneath didn't check tier at all, so any protocol member on any plan could call `deliverable_generate` and friends directly and bypass that block. Fix mirrors the existing `sponsor_relationships` precedent exactly: new `org_entitlements` table (org_id, capability), ships empty, no RLS policies, `org_has_entitlement()` / `user_can_access_deliverable_engine()` SECURITY DEFINER helpers. `deliverable_generate` (the one SECURITY DEFINER RPC in this family) got its authz line swapped directly; every other deliverable RPC is SECURITY INVOKER and was already gated purely by RLS on `protocol_deliverables`/`protocol_deliverable_blocks`/`deliverable_block_edits`, so swapping those policies' check function closed all of them in one migration with zero function-body edits.
+
+Per Kiara: ship empty/deny-all now, real provisioning flow is a coming feature — when a real enterprise deal closes, granting it is one INSERT: `INSERT INTO org_entitlements (org_id, capability, granted_by) VALUES (<org_id>, 'deliverable_engine', <admin_user_id>);`
+
+**Follow-up not done in this pass:** the capacity-cap half of MAC-1 (seat/protocol/guest counts past plan limits — `create_org_invite`/`accept_org_invite`/add-protocol RPCs never reject the Nth-over-cap row) hits the same root problem as ENT-1 did — plan limits (`includedUsers`, `includedProtocols`, addon counts) exist only in the frontend `stripe-config.ts` catalog, no server mirror. Needs its own design pass rather than a guessed implementation; tracked here, not shipped in this branch.
