@@ -187,7 +187,8 @@ describe('ReportDraftingWorkspace — LLM auto-fire guards (PR #69)', () => {
       executive_summary: 'AI-refined narrative.',
       executive_summary_source: 'llm',
     });
-    mockUpsert.mockResolvedValueOnce(refinedDraft);
+    // AUD-301: upsertReportDraft now returns a discriminated result.
+    mockUpsert.mockResolvedValueOnce({ ok: true, data: refinedDraft });
 
     render(<ReportDraftingWorkspace />);
 
@@ -494,7 +495,8 @@ describe('ReportDraftingWorkspace — Conclusions LLM auto-fire guards', () => {
       conclusions: 'AI-refined conclusions.',
       conclusions_source: 'llm',
     });
-    mockUpsert.mockResolvedValueOnce(refinedDraft);
+    // AUD-301: upsertReportDraft now returns a discriminated result.
+    mockUpsert.mockResolvedValueOnce({ ok: true, data: refinedDraft });
 
     render(<ReportDraftingWorkspace />);
 
