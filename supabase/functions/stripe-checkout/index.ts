@@ -11,6 +11,32 @@ const stripe = new Stripe(stripeSecret, {
   },
 });
 
+// =============================================================================
+// Server-side price catalog (SEC-ebc361e PAY-1)
+//
+// Mirrors src/stripe-config.ts's self-serve entries. That file lives in the
+// Vite frontend bundle and was never consulted here — this function accepted
+// ANY price_id that existed in the Stripe account, so a caller could hit
+// this edge function directly with an off-catalog price (legacy/test/wrong-
+// flow price) and get a Checkout Session or a live subscription-item
+// append for it. Enterprise/guest-seats/viewer-seats are intentionally
+// absent (no self-serve priceId exists for them yet — see stripe-config.ts).
+//
+// Deno edge functions run in a separate deploy/runtime boundary from the
+// Vite `src/` tree, so this is a duplicated, not shared, source of truth.
+// If you add/change a self-serve product in src/stripe-config.ts, mirror it
+// here too.
+// =============================================================================
+type CatalogEntry = { mode: 'payment' | 'subscription'; isAddon: boolean };
+
+const PRICE_CATALOG: Record<string, CatalogEntry> = {
+  'price_1TcARbHd6djFjQOn4R1Hjbxg': { mode: 'payment', isAddon: false },      // pilot
+  'price_1TcASbHd6djFjQOnJK3XkDp8': { mode: 'subscription', isAddon: false }, // workspace_monthly
+  'price_1TcAT9Hd6djFjQOnlnqlhW3y': { mode: 'subscription', isAddon: false }, // workspace_annual
+  'price_1TcATwHd6djFjQOnXBm8XI8o': { mode: 'subscription', isAddon: true },  // addon_protocol
+  'price_1TcAUgHd6djFjQOnNGvAaUSu': { mode: 'subscription', isAddon: true },  // addon_seats
+};
+
 // Helper function to create responses with CORS headers
 function corsResponse(body: string | object | null, status = 200) {
   const headers = {
@@ -68,6 +94,25 @@ Deno.serve(async (req) => {
 
     if (error) {
       return corsResponse({ error }, 400);
+    }
+
+    // Reject any price_id not in our self-serve catalog before doing
+    // anything with Stripe or the caller's subscription (SEC-ebc361e PAY-1).
+    const catalogEntry = PRICE_CATALOG[price_id];
+    if (!catalogEntry) {
+      return corsResponse({ error: 'Unknown or unsupported price_id' }, 400);
+    }
+    if (catalogEntry.mode !== mode) {
+      return corsResponse(
+        { error: `price_id ${price_id} does not support mode '${mode}'` },
+        400,
+      );
+    }
+    if (append_to_subscription && !catalogEntry.isAddon) {
+      return corsResponse(
+        { error: 'append_to_subscription is only supported for add-on prices' },
+        400,
+      );
     }
 
     const authHeader = req.headers.get('Authorization')!;
