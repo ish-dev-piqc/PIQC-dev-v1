@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- HEAD:BEGIN -->
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PIQClinical — Site Mode</title>
+<meta name="description" content="Site Mode: the core engine in depth — 7-phase visit checklists with classification, confidence, and § source traceability, completeness signals a coordinator reviews, protocol-grounded Ask, and role-filtered worksheets." />
+<link rel="canonical" href="https://piqclinical.com/site" />
+<!-- theme-color = --scrub-blue in tokens.css (meta tags cannot consume CSS custom properties) -->
+<meta name="theme-color" content="#1e7fd4" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="PIQClinical" />
+<meta property="og:title" content="PIQClinical — Site Mode" />
+<meta property="og:description" content="Site Mode: the core engine in depth — 7-phase visit checklists with classification, confidence, and § source traceability, completeness signals a coordinator reviews, protocol-grounded Ask, and role-filtered worksheets." />
+<meta property="og:url" content="https://piqclinical.com/site" />
+<meta property="og:image" content="https://piqclinical.com/og-card.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="PIQClinical — the intelligence layer between protocol complexity and clinical execution" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="PIQClinical — Site Mode" />
+<meta name="twitter:description" content="Site Mode: the core engine in depth — 7-phase visit checklists with classification, confidence, and § source traceability, completeness signals a coordinator reviews, protocol-grounded Ask, and role-filtered worksheets." />
+<meta name="twitter:image" content="https://piqclinical.com/og-card.png" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/tokens.css" />
+<link rel="stylesheet" href="/site.css" />
+<script>
+  // Staging guard: Cloudflare Pages previews (*.pages.dev) must never be indexed.
+  if (location.hostname.endsWith('.pages.dev')) {
+    var piqcNoindex = document.createElement('meta');
+    piqcNoindex.name = 'robots';
+    piqcNoindex.content = 'noindex';
+    document.head.appendChild(piqcNoindex);
+  }
+</script>
+<!-- HEAD:END -->
+</head>
+<body>
+<!-- SKIP:BEGIN -->
+<a class="skip-link" href="#main">Skip to main content</a>
+<!-- SKIP:END -->
+<!-- LOGO:BEGIN -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <linearGradient id="ribbonGrad" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#2b8fd9"/><stop offset="55%" stop-color="#1e9fc0"/><stop offset="100%" stop-color="#14b8a6"/>
+  </linearGradient>
+  <linearGradient id="wingGrad" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#c6e0d8"/><stop offset="100%" stop-color="#a0c8bc"/>
+  </linearGradient>
+  <symbol id="piqc-mark" viewBox="0 0 64 64">
+    <path d="M6 24 C 14 14, 30 14, 33 38 C 20 40, 8 34, 6 24 Z" fill="url(#wingGrad)" opacity="0.6"/>
+    <path d="M12 30 C 18 24, 28 24, 31 39 C 22 40, 14 37, 12 30 Z" fill="url(#wingGrad)" opacity="0.5"/>
+    <path d="M28 58 C 20 46, 46 39, 39 24 C 35 15, 43 11, 47 8" fill="none" stroke="url(#ribbonGrad)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M33 58 C 45 47, 23 40, 31 25 C 36 16, 33 12, 41 7" fill="none" stroke="url(#ribbonGrad)" stroke-width="2.2" stroke-linecap="round" opacity="0.85"/>
+    <path d="M47 3 L48.7 8.3 L54 10 L48.7 11.7 L47 17 L45.3 11.7 L40 10 L45.3 8.3 Z" fill="#2b8fd9"/>
+    <circle cx="40" cy="15" r="1.3" fill="#2b8fd9"/><circle cx="37" cy="19" r="1.05" fill="#2b8fd9"/><circle cx="35" cy="23" r="0.85" fill="#2b8fd9"/>
+    <circle cx="45" cy="31" r="1.3" fill="#1e9fc0"/><circle cx="47" cy="36" r="1.05" fill="#14b8a6"/><circle cx="46" cy="41" r="0.85" fill="#14b8a6"/>
+  </symbol>
+</defs></svg>
+<!-- LOGO:END -->
+<!-- NAV:BEGIN -->
+<header class="site-nav">
+  <div class="container nav-inner">
+    <a href="/" class="nav-brand">
+      <svg class="nav-logo" aria-hidden="true" focusable="false"><use href="#piqc-mark"/></svg>
+      <span class="wordmark"><span class="grad-text">PIQC</span><span class="wordmark-linical">linical</span></span>
+    </a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-menu">
+      <svg aria-hidden="true" focusable="false" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+      <span class="visually-hidden">Menu</span>
+    </button>
+    <nav class="nav-links" id="site-menu" aria-label="Primary">
+      <a class="nav-link" href="/#why">Why PIQC</a>
+      <a class="nav-link" href="/#engine">The engine</a>
+      <a class="nav-link" href="/#ask">Ask</a>
+      <a class="nav-link" href="/#downstream">Downstream</a>
+      <a class="nav-link" href="/#boundary">Product boundary</a>
+      <a class="nav-link" href="/#founder">Founder intent</a>
+      <a class="nav-link" href="/security">Security</a>
+      <div class="nav-modes" role="group" aria-label="Modes">
+        <span class="nav-group-label" aria-hidden="true">Modes</span>
+        <a class="nav-link" href="/site">Site Mode</a>
+        <a class="nav-link" href="/audit">Audit Mode</a>
+        <a class="nav-link" href="/sponsor">Sponsor Mode</a>
+      </div>
+      <a class="btn-primary nav-cta" href="mailto:hello@piqclinical.com?subject=PIQClinical%20demo%20request">Request a demo</a>
+    </nav>
+  </div>
+</header>
+<!-- NAV:END -->
+<main id="main">
+
+<!-- SECTION: site-hero — boundary reassurance, hero copy, site-checklist mockup -->
+<section id="hero" data-section="site-hero" class="hero">
+  <div class="hero-bg grad-soft grid-pattern" aria-hidden="true"></div>
+  <div class="container">
+    <div class="hero-intro">
+      <p class="provenance-line">Works alongside your EDC and CTMS — PIQC prepares the visit; your systems capture the data.</p>
+      <span class="eyebrow">Site Mode · the core engine, in depth</span>
+      <h1 class="h-display">Every role. Every requirement. Day-of-visit ready.</h1>
+      <p class="lead">PIQC turns the protocol into a visit-by-visit execution workspace — phased checklists, confidence signals, and a source link on every requirement — then exports the worksheet each role needs.</p>
+      <div class="hero-ctas">
+        <a class="btn-primary" href="mailto:hello@piqclinical.com?subject=PIQClinical%20demo%20request">Request a demo</a>
+        <a class="btn-ghost" href="#vew">See the visit workspace</a>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="screenshot" data-anim="site-checklist">
+        <div class="mockup-chrome">
+          <span class="mockup-dot mockup-dot--r" aria-hidden="true"></span>
+          <span class="mockup-dot mockup-dot--y" aria-hidden="true"></span>
+          <span class="mockup-dot mockup-dot--g" aria-hidden="true"></span>
+          <span class="mockup-label">PIQC · Site Mode — Visit Execution Workspace</span>
+          <span class="mockup-chrome-badges"><span class="stage-pill badge-blue">Day 1 — Screening</span></span>
+        </div>
+        <div class="mockup-body">
+          <p class="mockup-phase" data-step>Subject Arrival / Check-In</p>
+          <div class="mockup-row" data-step>
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">Informed Consent
+                <span class="mockup-tag mockup-tag--required">Required</span>
+                <span class="mockup-tag mockup-tag--safety">Safety-Critical</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--high" aria-hidden="true"></span><span class="visually-hidden">High confidence</span>
+                <span class="mockup-source">§4.8 ICH E6(R2)</span>
+              </span>
+            </div>
+          </div>
+          <p class="mockup-phase" data-step>Core Visit Procedures</p>
+          <div class="mockup-row" data-step>
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">Vital signs (BP, HR, temp)
+                <span class="mockup-tag mockup-tag--required">Required</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--high" aria-hidden="true"></span><span class="visually-hidden">High confidence</span>
+                <span class="mockup-source">§7.2.1 · p.31</span>
+              </span>
+            </div>
+          </div>
+          <div class="mockup-row" data-step>
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">12-Lead ECG (triplicate, pre-dose)
+                <span class="mockup-tag mockup-tag--endpoint">Primary Endpoint</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--high" aria-hidden="true"></span><span class="visually-hidden">High confidence</span>
+                <span class="mockup-source">§6.2.1 · p.34</span>
+              </span>
+            </div>
+          </div>
+          <div class="mockup-row" data-step>
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">ECOG Performance Status
+                <span class="mockup-tag mockup-tag--eligibility">Eligibility</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--medium" aria-hidden="true"></span><span class="visually-hidden">Medium confidence</span>
+                <span class="mockup-source">§5.1 · p.22</span>
+              </span>
+            </div>
+          </div>
+          <p class="mockup-phase" data-step>Dosing / IMP Administration</p>
+          <div class="mockup-row" data-step>
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">PK blood draw (pre-dose)
+                <span class="mockup-tag mockup-tag--endpoint">Primary Endpoint</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--high" aria-hidden="true"></span><span class="visually-hidden">High confidence</span>
+                <span class="mockup-source">§6.3 · p.36</span>
+              </span>
+            </div>
+          </div>
+          <div class="mockup-row" data-step>
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">IP accountability check
+                <span class="mockup-tag mockup-tag--conditional">Conditional</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--medium" aria-hidden="true"></span><span class="visually-hidden">Medium confidence</span>
+                <span class="mockup-source">§8.4 · p.44</span>
+              </span>
+            </div>
+          </div>
+          <div class="mockup-footer" data-step>
+            <span class="provenance-line"><span class="accent">PIQC draft</span> · 14 requirements surfaced for review</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION: site-burden — the interpretation burden for sites (brief) -->
+<section id="burden" data-section="site-burden" class="section section--alt">
+  <div class="container">
+    <div class="prose" data-reveal>
+      <span class="eyebrow">The interpretation burden</span>
+      <h2 class="h-section">One protocol lands. Five roles start translating it by hand.</h2>
+      <p>The coordinator turns the Schedule of Assessments into visit worksheets. The nurse pulls out vitals timing and observation rules. The investigator re-reads eligibility criteria. The lab traces sample-handling instructions. The pharmacy reconstructs dosing and accountability requirements. Same document, five parallel manual translations — carried in working memory and local notes, redone at every site.</p>
+      <p><strong>Protocols will remain complex. The human burden does not have to.</strong> Site Mode does the translation once, keeps every line traceable to its source, and hands each role a view it can review — not re-derive.</p>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION: site-vew — Visit Execution Workspace deep-dive (7 phases, classification, confidence, § traceability) -->
+<section id="vew" data-section="site-vew" class="section">
+  <div class="container">
+    <div class="prose" data-reveal>
+      <span class="eyebrow">Visit Execution Workspace</span>
+      <h2 class="h-section">One visit. Seven phases. Every requirement traceable.</h2>
+      <p class="lead">PIQC drafts every study visit as a phased, visual checklist that follows the day as it actually unfolds — from Pre-Visit Preparation through Subject Arrival / Check-In, Core Visit Procedures, Dosing / IMP Administration, Post-Dose Observation, and Safety / AE / Conmed Review, to Visit Closeout &amp; Next-Visit Planning. On visits without dosing, the dosing phases adapt to pre- and post-procedure requirements.</p>
+      <ul>
+        <li>Every requirement classified — required, conditional, endpoint-critical, safety-critical</li>
+        <li>A confidence signal on every line</li>
+        <li>A § source link to the exact section, page, and quote</li>
+        <li>A completeness pass that flags possibly-missing requirements — you add or dismiss</li>
+      </ul>
+      <p>Classifications use the protocol’s own logic — Required, Conditional, If Applicable, Primary Endpoint, Secondary Endpoint, Safety Critical — and every confidence signal (high, medium, low, needs review) says why, so a coordinator knows exactly which lines deserve a second look before the visit starts.</p>
+    </div>
+    <div class="hero-visual" data-reveal>
+      <div class="screenshot">
+        <div class="mockup-chrome">
+          <span class="mockup-dot mockup-dot--r" aria-hidden="true"></span>
+          <span class="mockup-dot mockup-dot--y" aria-hidden="true"></span>
+          <span class="mockup-dot mockup-dot--g" aria-hidden="true"></span>
+          <span class="mockup-label">PIQC · Visit Execution Workspace — Day 29 · P-0023 · Acme BioPharma (illustrative)</span>
+          <span class="mockup-chrome-badges"><span class="stage-pill badge-high">PIQC draft</span></span>
+        </div>
+        <div class="mockup-body mockup-scroll">
+          <p class="mockup-phase">Pre-Visit Preparation</p>
+          <div class="mockup-row">
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">Confirm visit window — Day 29 ±3 days
+                <span class="mockup-tag mockup-tag--required">Required</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--high" aria-hidden="true"></span><span class="visually-hidden">High confidence</span>
+                <span class="mockup-source">§7.1 · p.30</span>
+              </span>
+            </div>
+          </div>
+          <div class="mockup-row">
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">Fasting reminder — 8 h before PK draw
+                <span class="mockup-tag mockup-tag--conditional">Conditional</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--medium" aria-hidden="true"></span><span class="visually-hidden">Medium confidence</span>
+                <span class="mockup-source">§6.3 · p.36</span>
+              </span>
+            </div>
+          </div>
+          <p class="mockup-phase">Subject Arrival / Check-In</p>
+          <div class="mockup-row">
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">Confirm informed consent is current
+                <span class="mockup-tag mockup-tag--required">Required</span>
+                <span class="mockup-tag mockup-tag--safety">⚠ Safety Critical</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--high" aria-hidden="true"></span><span class="visually-hidden">High confidence</span>
+                <span class="mockup-source">§4.8 · p.18</span>
+              </span>
+            </div>
+          </div>
+          <p class="mockup-phase">Core Visit Procedures</p>
+          <div class="mockup-row">
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">12-Lead ECG (triplicate, pre-dose)
+                <span class="mockup-tag mockup-tag--endpoint">Primary Endpoint</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--high" aria-hidden="true"></span><span class="visually-hidden">High confidence</span>
+                <span class="mockup-source">§6.2.1 · p.34</span>
+              </span>
+            </div>
+          </div>
+          <div class="mockup-row">
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">Plasma biomarker sample
+                <span class="mockup-tag mockup-tag--endpoint">Secondary Endpoint</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--medium" aria-hidden="true"></span><span class="visually-hidden">Medium confidence</span>
+                <span class="mockup-source">§6.4 · p.37</span>
+              </span>
+            </div>
+          </div>
+          <p class="mockup-phase">Dosing / IMP Administration</p>
+          <div class="mockup-row">
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">IMP administration + accountability log
+                <span class="mockup-tag mockup-tag--required">Required</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--high" aria-hidden="true"></span><span class="visually-hidden">High confidence</span>
+                <span class="mockup-source">§8.4 · p.44</span>
+              </span>
+            </div>
+          </div>
+          <p class="mockup-phase">Post-Dose Observation</p>
+          <div class="mockup-row">
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">Post-dose vitals — 30 and 60 min
+                <span class="mockup-tag mockup-tag--safety">⚠ Safety Critical</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--high" aria-hidden="true"></span><span class="visually-hidden">High confidence</span>
+                <span class="mockup-source">§7.2.2 · p.32</span>
+              </span>
+            </div>
+          </div>
+          <p class="mockup-phase">Safety / AE / Conmed Review</p>
+          <div class="mockup-row">
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">AE review since last visit
+                <span class="mockup-tag mockup-tag--required">Required</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--high" aria-hidden="true"></span><span class="visually-hidden">High confidence</span>
+                <span class="mockup-source">§9.1 · p.48</span>
+              </span>
+            </div>
+          </div>
+          <div class="mockup-row">
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">Prohibited-medication check
+                <span class="mockup-tag mockup-tag--conditional">If Applicable</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--low" aria-hidden="true"></span><span class="visually-hidden">Low confidence</span>
+                <span class="mockup-source">§5.3 · p.29</span>
+              </span>
+            </div>
+          </div>
+          <p class="mockup-phase">Visit Closeout &amp; Next-Visit Planning</p>
+          <div class="mockup-row">
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">Schedule next visit inside its window
+                <span class="mockup-tag mockup-tag--required">Required</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--medium" aria-hidden="true"></span><span class="visually-hidden">Medium confidence</span>
+                <span class="mockup-source">§7.1 · p.30</span>
+              </span>
+            </div>
+          </div>
+          <div class="mockup-footer">
+            <span class="provenance-line"><span class="accent">PIQC draft</span> · requirements surfaced for review</span>
+            <span class="mockup-footer-action">Open § source</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION: site-completeness — completeness signals (adds/dismisses, never auto-added) -->
+<section id="completeness" data-section="site-completeness" class="section section--alt">
+  <div class="container split">
+    <div class="prose" data-reveal>
+      <span class="eyebrow">Completeness signals</span>
+      <h2 class="h-section">A second pass that flags what might be missing.</h2>
+      <p>After the checklist is drafted, PIQC runs a completeness pass against the protocol and flags possibly-missing requirements — items that look protocol-mandated for this visit but were not detected in the parsed checklist. Each signal shows its reasoning and its protocol source.</p>
+      <p>Then the decision is human: the coordinator reviews each signal and chooses <strong>Add as requirement</strong> or <strong>Dismiss</strong>. Nothing is ever added to the checklist automatically. PIQC advises and drafts; humans review, decide, and approve.</p>
+    </div>
+    <div data-reveal>
+      <div class="screenshot">
+        <div class="mockup-chrome">
+          <span class="mockup-dot mockup-dot--r" aria-hidden="true"></span>
+          <span class="mockup-dot mockup-dot--y" aria-hidden="true"></span>
+          <span class="mockup-dot mockup-dot--g" aria-hidden="true"></span>
+          <span class="mockup-label">PIQC · Completeness signals — Day 29 visit</span>
+        </div>
+        <div class="mockup-body">
+          <p class="mockup-phase">2 possibly-missing requirements</p>
+          <div class="mockup-answer">PIQC’s completeness pass flagged the items below as protocol-mandated for this visit but not detected in the parsed checklist.</div>
+          <div class="mockup-row">
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">Urine pregnancy test — participants of childbearing potential
+                <span class="mockup-tag mockup-tag--conditional">If Applicable</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="mockup-source">§7.2.3 · p.33</span>
+                <span class="mockup-footer-action">Add as requirement</span>
+                <span class="mockup-footer-action">Dismiss</span>
+              </span>
+            </div>
+          </div>
+          <div class="mockup-row">
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">Serum chemistry panel — fasting
+                <span class="mockup-tag mockup-tag--required">Required</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="mockup-source">§7.3 · p.35</span>
+                <span class="mockup-footer-action">Add as requirement</span>
+                <span class="mockup-footer-action">Dismiss</span>
+              </span>
+            </div>
+          </div>
+          <div class="mockup-footer">
+            <span class="provenance-line"><span class="accent">Never added automatically</span> · a coordinator decides each one</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION: site-ask — Ask, answered by the protocol (elevated SplitAsk + interactive demo) -->
+<section id="ask" data-section="site-ask" class="section">
+  <div class="container split">
+    <div class="prose" data-reveal>
+      <span class="eyebrow">Ask · protocol-grounded</span>
+      <h2 class="h-section">Ask in plain language. Answered by the protocol itself.</h2>
+      <p>Ask works shoulder to shoulder with the source of truth. Ask a plain question and PIQC answers from this protocol — with the exact cited passage shown right beside the answer. It won’t invent clinical guidance; if something isn’t in the protocol, Ask says so. Prompts adapt to the study’s phase and the site’s team.</p>
+      <p><strong>Answers you can trace — because the source is right there.</strong></p>
+    </div>
+    <div data-reveal>
+      <div class="screenshot" data-demo="ask">
+        <div class="mockup-chrome">
+          <span class="mockup-dot mockup-dot--r" aria-hidden="true"></span>
+          <span class="mockup-dot mockup-dot--y" aria-hidden="true"></span>
+          <span class="mockup-dot mockup-dot--g" aria-hidden="true"></span>
+          <span class="mockup-label">PIQC · Ask — answered by the protocol</span>
+        </div>
+        <div class="mockup-body">
+          <div class="chip-row" role="group" aria-label="Example questions">
+            <button class="chip is-active" type="button" data-example-idx="0" aria-pressed="true">Which visits require a 12-lead ECG, and in what window?</button>
+            <button class="chip" type="button" data-example-idx="1" aria-pressed="false">What are the key exclusion criteria?</button>
+            <button class="chip" type="button" data-example-idx="2" aria-pressed="false">Is there a washout period before dosing?</button>
+          </div>
+          <div class="mockup-ask mt-4" aria-live="polite">
+            <div class="mockup-answer" data-ask-answer>A 12-lead ECG is required at Screening and at Day 29 — in triplicate, pre-dose, within ±15 minutes of the scheduled time.</div>
+            <div class="mockup-citation" data-ask-citation>
+              <p class="mockup-citation-quote" data-ask-quote>A 12-lead ECG will be performed in triplicate, pre-dose…</p>
+              <span class="mockup-citation-ref" data-ask-ref>§6.2.1 · p.34</span>
+            </div>
+          </div>
+          <div class="field mt-4">
+            <label class="visually-hidden" for="ask-input">Ask anything — live in the product</label>
+            <input id="ask-input" type="text" data-ask-input disabled placeholder="Ask anything — live in the product" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION: site-worksheets — role-filtered worksheets (interactive role-filter demo) -->
+<section id="worksheets" data-section="site-worksheets" class="section section--alt">
+  <div class="container split split--reverse">
+    <div class="prose" data-reveal>
+      <span class="eyebrow">Role-filtered worksheets</span>
+      <h2 class="h-section">One workspace, five views.</h2>
+      <p>Coordinator, Nurse, Investigator, Lab, Pharmacy — every role works from the same parsed protocol, filtered to the requirements that belong to it. No parallel spreadsheets, no re-typed checklists, no version drift between the coordinator’s binder and the pharmacy’s notes.</p>
+      <p>When the visit plan is reviewed, each role exports a draft PDF worksheet of its own view — same source, same § traceability, different lens. Try it: filter the rows below by role.</p>
+    </div>
+    <div data-reveal>
+      <div class="screenshot" data-demo="role-filter">
+        <div class="mockup-chrome">
+          <span class="mockup-dot mockup-dot--r" aria-hidden="true"></span>
+          <span class="mockup-dot mockup-dot--y" aria-hidden="true"></span>
+          <span class="mockup-dot mockup-dot--g" aria-hidden="true"></span>
+          <span class="mockup-label">PIQC · Worksheet export — Day 1 — Screening</span>
+        </div>
+        <div class="mockup-body">
+          <div class="chip-row" role="group" aria-label="Filter requirements by role">
+            <button class="chip is-active" type="button" data-role="all" aria-pressed="true">All</button>
+            <button class="chip" type="button" data-role="coordinator" aria-pressed="false">Coordinator</button>
+            <button class="chip" type="button" data-role="nurse" aria-pressed="false">Nurse</button>
+            <button class="chip" type="button" data-role="investigator" aria-pressed="false">Investigator</button>
+            <button class="chip" type="button" data-role="lab" aria-pressed="false">Lab</button>
+            <button class="chip" type="button" data-role="pharmacy" aria-pressed="false">Pharmacy</button>
+          </div>
+          <div class="mockup-scroll mt-4">
+            <div class="mockup-row" data-row data-roles="coordinator investigator">
+              <span class="mockup-check" aria-hidden="true"></span>
+              <div class="mockup-row-main">
+                <span class="mockup-row-title">Informed Consent
+                  <span class="mockup-tag mockup-tag--required">Required</span>
+                  <span class="mockup-tag mockup-tag--safety">Safety-Critical</span>
+                </span>
+                <span class="mockup-row-meta">
+                  <span class="dot dot--high" aria-hidden="true"></span><span class="visually-hidden">High confidence</span>
+                  <span class="mockup-source">§4.8 ICH E6(R2)</span>
+                </span>
+              </div>
+            </div>
+            <div class="mockup-row" data-row data-roles="nurse">
+              <span class="mockup-check" aria-hidden="true"></span>
+              <div class="mockup-row-main">
+                <span class="mockup-row-title">Vital signs (BP, HR, temp)
+                  <span class="mockup-tag mockup-tag--required">Required</span>
+                </span>
+                <span class="mockup-row-meta">
+                  <span class="dot dot--high" aria-hidden="true"></span><span class="visually-hidden">High confidence</span>
+                  <span class="mockup-source">§7.2.1 · p.31</span>
+                </span>
+              </div>
+            </div>
+            <div class="mockup-row" data-row data-roles="nurse">
+              <span class="mockup-check" aria-hidden="true"></span>
+              <div class="mockup-row-main">
+                <span class="mockup-row-title">12-Lead ECG (triplicate, pre-dose)
+                  <span class="mockup-tag mockup-tag--endpoint">Primary Endpoint</span>
+                </span>
+                <span class="mockup-row-meta">
+                  <span class="dot dot--high" aria-hidden="true"></span><span class="visually-hidden">High confidence</span>
+                  <span class="mockup-source">§6.2.1 · p.34</span>
+                </span>
+              </div>
+            </div>
+            <div class="mockup-row" data-row data-roles="lab">
+              <span class="mockup-check" aria-hidden="true"></span>
+              <div class="mockup-row-main">
+                <span class="mockup-row-title">PK blood draw (pre-dose)
+                  <span class="mockup-tag mockup-tag--endpoint">Primary Endpoint</span>
+                </span>
+                <span class="mockup-row-meta">
+                  <span class="dot dot--high" aria-hidden="true"></span><span class="visually-hidden">High confidence</span>
+                  <span class="mockup-source">§6.3 · p.36</span>
+                </span>
+              </div>
+            </div>
+            <div class="mockup-row" data-row data-roles="investigator">
+              <span class="mockup-check" aria-hidden="true"></span>
+              <div class="mockup-row-main">
+                <span class="mockup-row-title">ECOG Performance Status
+                  <span class="mockup-tag mockup-tag--eligibility">Eligibility</span>
+                </span>
+                <span class="mockup-row-meta">
+                  <span class="dot dot--medium" aria-hidden="true"></span><span class="visually-hidden">Medium confidence</span>
+                  <span class="mockup-source">§5.1 · p.22</span>
+                </span>
+              </div>
+            </div>
+            <div class="mockup-row" data-row data-roles="pharmacy">
+              <span class="mockup-check" aria-hidden="true"></span>
+              <div class="mockup-row-main">
+                <span class="mockup-row-title">IP accountability check
+                  <span class="mockup-tag mockup-tag--conditional">Conditional</span>
+                </span>
+                <span class="mockup-row-meta">
+                  <span class="dot dot--medium" aria-hidden="true"></span><span class="visually-hidden">Medium confidence</span>
+                  <span class="mockup-source">§8.4 · p.44</span>
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="mockup-footer">
+            <span aria-live="polite"><span data-count>6</span> requirements shown · <span class="accent">PIQC draft</span></span>
+            <span class="mockup-footer-action" data-export-label>Export full worksheet</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION: site-realtime — realtime sync (enrollment materializes the schedule) -->
+<section id="realtime" data-section="site-realtime" class="section">
+  <div class="container split">
+    <div class="prose" data-reveal>
+      <span class="eyebrow">Realtime sync</span>
+      <h2 class="h-section">Enroll a participant. The schedule materializes.</h2>
+      <p>Calendar, Visits, and Participants stay in step in realtime. The moment a participant is enrolled, their full visit schedule materializes from the parsed Schedule of Assessments — every visit, every window, already on the calendar the whole team shares.</p>
+      <p>No re-keying visit dates from the protocol, no reconciling one coordinator’s calendar against another’s. The schedule comes from the same parsed source as the checklists — so what the team sees is what the protocol says.</p>
+    </div>
+    <div data-reveal>
+      <div class="screenshot">
+        <div class="mockup-chrome">
+          <span class="mockup-dot mockup-dot--r" aria-hidden="true"></span>
+          <span class="mockup-dot mockup-dot--y" aria-hidden="true"></span>
+          <span class="mockup-dot mockup-dot--g" aria-hidden="true"></span>
+          <span class="mockup-label">PIQC · Participants — realtime</span>
+        </div>
+        <div class="mockup-body">
+          <div class="mockup-row">
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">P-0023 enrolled — Cohort B</span>
+              <span class="mockup-row-meta"><span class="mockup-source">just now</span></span>
+            </div>
+          </div>
+          <p class="mockup-phase">Visit schedule — materialized</p>
+          <div class="mockup-row">
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">Day 1 — Screening</span>
+              <span class="mockup-row-meta">scheduled <span class="mockup-source">§7.1 · p.30</span></span>
+            </div>
+          </div>
+          <div class="mockup-row">
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">Day 15 — Follow-up</span>
+              <span class="mockup-row-meta">window ±2 days <span class="mockup-source">§7.1 · p.30</span></span>
+            </div>
+          </div>
+          <div class="mockup-row">
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">Day 29 — Treatment visit</span>
+              <span class="mockup-row-meta">window ±3 days <span class="mockup-source">§7.1 · p.30</span></span>
+            </div>
+          </div>
+          <div class="mockup-footer">
+            <span class="provenance-line"><span class="accent">Materialized in realtime</span> · from the parsed Schedule of Assessments</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DEMO-CTA:BEGIN -->
+<section id="request-demo" data-section="final-cta" class="section section--dark cta-band">
+  <div class="container cta-band-inner">
+    <h2 class="cta-band-title">The protocol should be a source of mastery, not a recurring cognitive burden.</h2>
+    <p class="cta-band-body">See what PIQC surfaces from your own protocol workflow.</p>
+    <div class="cta-band-actions">
+      <a class="btn-primary" href="mailto:hello@piqclinical.com?subject=PIQClinical%20demo%20request">Request a demo</a>
+      <a class="btn-ghost btn-ghost--dark" href="mailto:hello@piqclinical.com?subject=PIQClinical%20protocol%20workflow%20conversation">Talk through your protocol workflow</a>
+    </div>
+    <!-- FUTURE FORM INTEGRATION POINT (FABLE-BRIEF §8):
+         When an approved scheduling link or form endpoint exists, replace the
+         mailto CTAs above with the real form / scheduler and update
+         content.js demo.{mode,endpoint,ctaHref}. Until then the mailto is the
+         only approved destination — do NOT simulate a successful submission.
+         Any future form must never request PHI, study data, or sensitive
+         operational information. -->
+  </div>
+</section>
+<!-- DEMO-CTA:END -->
+
+</main>
+<!-- FOOTER:BEGIN -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="/" class="nav-brand">
+          <svg class="nav-logo" aria-hidden="true" focusable="false"><use href="#piqc-mark"/></svg>
+          <span class="wordmark"><span class="grad-text">PIQC</span><span class="wordmark-linical">linical</span></span>
+        </a>
+        <p class="footer-tagline">The intelligence layer between protocol complexity and clinical execution.</p>
+      </div>
+      <nav class="footer-col" aria-label="Product">
+        <p class="footer-heading">Product</p>
+        <ul class="footer-list">
+          <li><a class="footer-link" href="/site">Site Mode</a></li>
+          <li><a class="footer-link" href="/audit">Audit Mode</a></li>
+          <li><a class="footer-link" href="/sponsor">Sponsor Mode</a></li>
+          <li><a class="footer-link" href="/security">Security</a></li>
+        </ul>
+      </nav>
+      <nav class="footer-col" aria-label="Company">
+        <p class="footer-heading">Company</p>
+        <ul class="footer-list">
+          <li><a class="footer-link" href="/#why">Why PIQC</a></li>
+          <li><a class="footer-link" href="/#founder">Founder intent</a></li>
+          <li><a class="footer-link" href="/#request-demo">Request a demo</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="footer-legal">
+      <p>© 2026 PIQClinical. All rights reserved.</p>
+    </div>
+  </div>
+</footer>
+<!-- FOOTER:END -->
+<script type="module" src="/content.js"></script>
+<script type="module" src="/animations.js"></script>
+</body>
+</html>
