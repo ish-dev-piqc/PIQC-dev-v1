@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Ban,
@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useSiteData } from '../../../context/SiteDataContext';
+import { useOverlay } from '../../../hooks/useOverlay';
+import { useSwipeDismiss } from '../../../hooks/useSwipeDismiss';
 import { listChannelAttachments } from '../../../lib/orgs/orgsApi';
 import type { ChatAttachment } from '../../../types/orgs';
 import type { SiteVisit, VisitStatus } from '../../../lib/site/types';
@@ -69,18 +71,11 @@ export default function ProtocolDetailDrawer({
   const { theme } = useTheme();
   const isLight = theme === 'light';
   const { visits, participants } = useSiteData();
+  const panelRef = useRef<HTMLElement>(null);
+  useOverlay({ isOpen: protocolId !== null, onClose, containerRef: panelRef });
+  const swipe = useSwipeDismiss({ onClose });
 
   const [pinned, setPinned] = useState<ChatAttachment[]>([]);
-
-  // Esc-to-close
-  useEffect(() => {
-    if (!protocolId) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [protocolId, onClose]);
 
   // Load pinned attachments for the protocol channel.
   useEffect(() => {
@@ -218,9 +213,11 @@ export default function ProtocolDetailDrawer({
         aria-hidden="true"
       />
       <aside
+        ref={panelRef}
         role="dialog"
         aria-label="Protocol details"
         className={`fixed top-0 right-0 z-50 h-full w-full sm:w-[520px] ${paneBg} border-l ${paneBorder} shadow-xl flex flex-col`}
+        {...swipe}
       >
         {/* Header */}
         <div className={`flex items-start gap-2 px-4 py-3 border-b ${paneBorder}`}>

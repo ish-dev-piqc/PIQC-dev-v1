@@ -10,11 +10,18 @@ interface ProtocolRequiredGateProps {
 
 export default function ProtocolRequiredGate({ label, description, children }: ProtocolRequiredGateProps) {
   const { theme } = useTheme();
-  const { activeProtocol } = useProtocol();
+  const { activeProtocol, isLoading } = useProtocol();
   const isLight = theme === 'light';
 
   if (activeProtocol) {
     return <>{children}</>;
+  }
+
+  // While protocols are still loading we don't know whether the persisted
+  // activeId will resolve to a protocol, so render nothing rather than flash
+  // the "select a protocol" prompt at returning users on every reload.
+  if (isLoading) {
+    return null;
   }
 
   const headingColor = 'text-fg-heading';

@@ -32,6 +32,24 @@ function fail<T>(label: string, error: unknown): Result<T> {
   return { ok: false, error: msg };
 }
 
+const PAGE_SIZE = 1000;
+
+// PostgREST silently caps a single response at its default max-rows (1000, no
+// override configured in supabase/), so an unpaged .select() truncates with no
+// error. Page with .range() until a short page proves we have everything.
+async function fetchAllRows<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await page(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    const batch = data ?? [];
+    rows.push(...batch);
+    if (batch.length < PAGE_SIZE) return rows;
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Protocols
 // -----------------------------------------------------------------------------
@@ -75,14 +93,16 @@ function rowToProtocol(row: ProtocolRow): Protocol {
 
 async function fetchProtocols(): Promise<Result<Protocol[]>> {
   try {
-    const { data, error } = await supabase
-      .from('protocols')
-      .select(
-        'id, study_number, title, sponsor, demo_anchor_date, timezone, protocol_versions(clinical_trial_phase, status)',
-      )
-      .order('created_at', { ascending: true });
-    if (error) throw error;
-    return { ok: true, data: (data as unknown as ProtocolRow[]).map(rowToProtocol) };
+    const rows = await fetchAllRows((from, to) =>
+      supabase
+        .from('protocols')
+        .select(
+          'id, study_number, title, sponsor, demo_anchor_date, timezone, protocol_versions(clinical_trial_phase, status)',
+        )
+        .order('created_at', { ascending: true })
+        .range(from, to),
+    );
+    return { ok: true, data: (rows as unknown as ProtocolRow[]).map(rowToProtocol) };
   } catch (e) {
     return fail('fetchProtocols', e);
   }
@@ -127,13 +147,15 @@ function rowToParticipant(row: ParticipantRow): SiteParticipant {
 
 async function fetchParticipants(protocolId: string): Promise<Result<SiteParticipant[]>> {
   try {
-    const { data, error } = await supabase
-      .from('site_participants')
-      .select(PARTICIPANT_COLUMNS)
-      .eq('protocol_id', protocolId)
-      .order('participant_code', { ascending: true });
-    if (error) throw error;
-    return { ok: true, data: (data ?? []).map(rowToParticipant) };
+    const rows = await fetchAllRows((from, to) =>
+      supabase
+        .from('site_participants')
+        .select(PARTICIPANT_COLUMNS)
+        .eq('protocol_id', protocolId)
+        .order('participant_code', { ascending: true })
+        .range(from, to),
+    );
+    return { ok: true, data: rows.map(rowToParticipant) };
   } catch (e) {
     return fail('fetchParticipants', e);
   }
@@ -264,13 +286,15 @@ function rowToVisit(row: VisitRow): SiteVisit {
 
 async function fetchVisitsForProtocol(protocolId: string): Promise<Result<SiteVisit[]>> {
   try {
-    const { data, error } = await supabase
-      .from('site_visits')
-      .select(VISIT_COLUMNS)
-      .eq('protocol_id', protocolId)
-      .order('date', { ascending: true });
-    if (error) throw error;
-    return { ok: true, data: (data as unknown as VisitRow[]).map(rowToVisit) };
+    const rows = await fetchAllRows((from, to) =>
+      supabase
+        .from('site_visits')
+        .select(VISIT_COLUMNS)
+        .eq('protocol_id', protocolId)
+        .order('date', { ascending: true })
+        .range(from, to),
+    );
+    return { ok: true, data: (rows as unknown as VisitRow[]).map(rowToVisit) };
   } catch (e) {
     return fail('fetchVisitsForProtocol', e);
   }
@@ -418,15 +442,17 @@ async function createVisit(input: NewVisitInput): Promise<Result<SiteVisit>> {
 
 async function fetchTeamMembers(protocolId: string): Promise<Result<SiteTeamMember[]>> {
   try {
-    const { data, error } = await supabase
-      .from('site_team_members')
-      .select(
-        'id, protocol_id, name, role, email, delegated_tasks, certified_through, added_at, status, notes',
-      )
-      .eq('protocol_id', protocolId)
-      .order('added_at', { ascending: true });
-    if (error) throw error;
-    return { ok: true, data: (data ?? []).map(rowToTeam) };
+    const rows = await fetchAllRows((from, to) =>
+      supabase
+        .from('site_team_members')
+        .select(
+          'id, protocol_id, name, role, email, delegated_tasks, certified_through, added_at, status, notes',
+        )
+        .eq('protocol_id', protocolId)
+        .order('added_at', { ascending: true })
+        .range(from, to),
+    );
+    return { ok: true, data: rows.map(rowToTeam) };
   } catch (e) {
     return fail('fetchTeamMembers', e);
   }
@@ -438,13 +464,15 @@ async function fetchTeamMembers(protocolId: string): Promise<Result<SiteTeamMemb
 
 async function fetchProtocolDocuments(protocolId: string): Promise<Result<ProtocolDocument[]>> {
   try {
-    const { data, error } = await supabase
-      .from('documents')
-      .select('id, title, source, filename, created_at, status, error_message, extracted_fields')
-      .eq('protocol_id', protocolId)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return { ok: true, data: (data ?? []) as ProtocolDocument[] };
+    const rows = await fetchAllRows((from, to) =>
+      supabase
+        .from('documents')
+        .select('id, title, source, filename, created_at, status, error_message, extracted_fields')
+        .eq('protocol_id', protocolId)
+        .order('created_at', { ascending: false })
+        .range(from, to),
+    );
+    return { ok: true, data: rows as ProtocolDocument[] };
   } catch (e) {
     return fail('fetchProtocolDocuments', e);
   }
@@ -458,15 +486,17 @@ async function fetchVisitTemplates(
   protocolId: string,
 ): Promise<Result<ProtocolVisitTemplate[]>> {
   try {
-    const { data, error } = await supabase
-      .from('protocol_visit_templates')
-      .select(
-        'id, protocol_id, visit_name, study_day, window_minus_days, window_plus_days, procedures, source_document_id, cross_references',
-      )
-      .eq('protocol_id', protocolId)
-      .order('study_day', { ascending: true });
-    if (error) throw error;
-    return { ok: true, data: (data ?? []) as ProtocolVisitTemplate[] };
+    const rows = await fetchAllRows((from, to) =>
+      supabase
+        .from('protocol_visit_templates')
+        .select(
+          'id, protocol_id, visit_name, study_day, window_minus_days, window_plus_days, procedures, source_document_id, cross_references',
+        )
+        .eq('protocol_id', protocolId)
+        .order('study_day', { ascending: true })
+        .range(from, to),
+    );
+    return { ok: true, data: rows as ProtocolVisitTemplate[] };
   } catch (e) {
     return fail('fetchVisitTemplates', e);
   }
