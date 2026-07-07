@@ -3,6 +3,7 @@ import { X, Calendar, AlertTriangle, Info } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useOverlay } from '../../../hooks/useOverlay';
 import { setAnchorDate, materializeVisits } from '../../../lib/site/siteApi';
+import { formatYmd } from '../../../lib/site/dateUtils';
 import { TIMEZONE_OPTIONS } from '../../../lib/timezones';
 
 // =============================================================================
@@ -41,7 +42,10 @@ export default function AnchorDateModal({
   // same idiom as VisitDetailDrawer.
   useOverlay({ isOpen: true, onClose, containerRef: panelRef });
 
-  const [date, setDate] = useState<string>(initialDate ?? new Date().toISOString().slice(0, 10));
+  // Default to the LOCAL calendar date — anchoring Day 0 off a UTC-shifted
+  // date would displace the entire materialized visit calendar by a day
+  // (audit finding 902's idiom).
+  const [date, setDate] = useState<string>(initialDate ?? formatYmd(new Date()));
   const [timezone, setTimezone] = useState<string>(initialTimezone ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);

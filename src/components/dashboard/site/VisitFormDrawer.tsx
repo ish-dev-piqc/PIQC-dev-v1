@@ -8,6 +8,7 @@ import { useSiteData } from '../../../context/SiteDataContext';
 import { useDirty } from '../../../context/DirtyStateContext';
 import { createVisit } from '../../../lib/site/siteApi';
 import { fetchVisitTemplates } from '../../../lib/site/siteApi';
+import { formatYmd } from '../../../lib/site/dateUtils';
 
 // =============================================================================
 // VisitFormDrawer — manually schedule a single visit.
@@ -48,8 +49,10 @@ export default function VisitFormDrawer({ protocolId, defaultParticipantUuid, on
     defaultParticipantUuid ?? eligibleParticipants[0]?.uuid ?? '',
   );
   // Default the date to today (YYYY-MM-DD in local TZ) so the most common
-  // case — scheduling a visit for "soon" — needs minimal typing.
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  // case — scheduling a visit for "soon" — needs minimal typing. formatYmd,
+  // not toISOString: the comment above always promised local TZ, but the UTC
+  // read pre-filled tomorrow for evening coordinators (audit finding 902).
+  const [date, setDate] = useState(() => formatYmd(new Date()));
   const [time, setTime] = useState('');
   const [visitName, setVisitName] = useState('');
   const [selectedProcedures, setSelectedProcedures] = useState<Set<string>>(new Set());
