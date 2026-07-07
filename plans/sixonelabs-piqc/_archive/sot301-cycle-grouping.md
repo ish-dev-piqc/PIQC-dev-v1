@@ -1,9 +1,9 @@
 ---
 owner: sixonelabs-piqc
 feature: sot301-cycle-grouping
-status: active
+status: merged
 started: 2026-07-06
-target_pr:
+target_pr: "#460"
 ---
 
 # SOT-301 — cycle-aware visit grouping in the SOTR adapter
