@@ -98,6 +98,8 @@ export default function AuditConductWorkspace() {
   const [form, setForm] = useState<EntryFormState>(EMPTY_FORM);
   const [historyTarget, setHistoryTarget] = useState<{ objectId: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  // AUD-301: surface a save failure instead of silently swallowing the null.
+  const [saveError, setSaveError] = useState<string | null>(null);
   // B2 picker state — drawers render at workspace level (z-40/z-50) so they
   // stack correctly over the inline form. Form just emits pick/clear events.
   const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
@@ -197,7 +199,7 @@ export default function AuditConductWorkspace() {
     const checkpointInput = form.checkpoint_ref.trim();
 
     if (mode === 'add') {
-      const created = await createWorkspaceEntry(auditId, {
+      const result = await createWorkspaceEntry(auditId, {
         vendorDomain: form.vendor_domain.trim(),
         observationText: form.observation_text.trim(),
         provisionalImpact: form.provisional_impact,
@@ -206,12 +208,15 @@ export default function AuditConductWorkspace() {
         protocolRiskId: form.protocol_risk_id || null,
         sourceExtractedItemId: form.source_extracted_item_id,
       });
-      if (created) {
+      if (result.ok) {
+        setSaveError(null);
         setEntriesByAudit((prev) => ({
           ...prev,
-          [auditId]: [...(prev[auditId] ?? []), created],
+          [auditId]: [...(prev[auditId] ?? []), result.data],
         }));
         cancel();
+      } else {
+        setSaveError(result.error);
       }
     } else if (mode === 'edit' && editingId) {
       const previous = (entriesByAudit[auditId] ?? []).find((e) => e.id === editingId);
@@ -315,6 +320,18 @@ export default function AuditConductWorkspace() {
           <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold mb-4`}>
             {mode === 'add' ? 'New observation' : 'Edit observation'}
           </p>
+          {saveError && (
+            <div
+              role="alert"
+              className={`text-xs px-3 py-2 mb-4 rounded-md border ${
+                isLight
+                  ? 'bg-red-50 border-red-200 text-red-700'
+                  : 'bg-red-500/15 border-red-500/30 text-red-300'
+              }`}
+            >
+              Couldn’t save this entry: {saveError}
+            </div>
+          )}
           <EntryForm
             form={form}
             onChange={setForm}
