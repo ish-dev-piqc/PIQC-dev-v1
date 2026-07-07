@@ -79,22 +79,16 @@ describe('normalizeVisitName — dedup/grouping key', () => {
 // conservative rule that separates them without a guess, and over-collapse
 // (merging two real cycles) is the worse clinical failure.
 //
-// REAL FIX (out of this file's scope): fold study_day/cycle into the grouping
-// key in sourceEvidenceAdapter.dedupeVisitArray (SOT-301 fix option b), so
-// entries with differing cycle/day numbers never land in the same group even
-// when their names canonicalize identically. Un-skip this block once that key
-// change lands, to prove the two cycles no longer collide.
-//
-// NEEDS PRODUCT DECISION: what, at the string level, distinguishes a strippable
-// time/cycle RESTATEMENT from a DISTINGUISHING cycle discriminator — if the
-// answer is "nothing, without the sibling/record context," the fix must live in
-// the adapter's grouping key, not in this pure function.
+// RESOLVED at the adapter layer (SOT-301 fix option b): dedupeVisitArray now
+// splits a name-group that spans ≥2 distinct cycle numbers parsed from the
+// RAW names (see sourceEvidenceAdapter.test.ts, SOT-301 block). The normalizer
+// itself intentionally still collides on cycle-only differences — that IS its
+// restatement contract, locked above — so the division of labor is:
+// normalizer collapses variants; adapter refuses to merge distinct cycles.
 // =============================================================================
-describe.skip('SOT-301 cross-cycle over-collapse (needs adapter-side fix)', () => {
-  it('should keep two cycles of the same visit as DISTINCT grouping keys', () => {
-    // Fails today: both canonicalize to "visit 2" (collision). Cannot be fixed
-    // in this pure function — see the block comment above.
-    expect(normalizeVisitName('Visit 2 (Cycle 1 Day 8)')).not.toBe(
+describe('SOT-301 division of labor (adapter splits cycles, normalizer does not)', () => {
+  it('normalizer intentionally collides on cycle-only differences (adapter handles the split)', () => {
+    expect(normalizeVisitName('Visit 2 (Cycle 1 Day 8)')).toBe(
       normalizeVisitName('Visit 2 (Cycle 2 Day 8)'),
     );
   });
