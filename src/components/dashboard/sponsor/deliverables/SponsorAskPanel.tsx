@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ClipboardList,
   FileText,
@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
+import type { ExtendedMessage } from '../../../../lib/supabase';
 import DashboardChat from '../../DashboardChat';
 import { useSponsorAskThread } from './useSponsorAskThread';
 
@@ -70,10 +71,62 @@ export default function SponsorAskPanel({ protocol }: SponsorAskPanelProps) {
 
   const [messages, setMessages, clearThread] = useSponsorAskThread(protocol.id);
 
+  // New-chat-mid-stream guard: clearing + remounting aborts the stream, but the
+  // aborted send's finally still writes its "Stopped before a response was
+  // received." bubble through this (same-protocol, still-valid) setter — which
+  // would land as the sole message of the freshly cleared thread, with a Retry
+  // that can't work (no user turn to retry). A legitimate thread always starts
+  // with the user's turn, so an update that leaves NO user message but carries
+  // an assistant error can only be that straggler: drop it.
+  const guardedSetMessages = useCallback<
+    React.Dispatch<React.SetStateAction<ExtendedMessage[]>>
+  >(
+    (value) => {
+      setMessages((prev) => {
+        const next =
+          typeof value === 'function'
+            ? (value as (m: ExtendedMessage[]) => ExtendedMessage[])(prev)
+            : value;
+        const orphanedError =
+          prev.length === 0 &&
+          next.length > 0 &&
+          !next.some((m) => m.role === 'user') &&
+          next.some((m) => m.error);
+        return orphanedError ? prev : next;
+      });
+    },
+    [setMessages],
+  );
+
   const handleNewChat = () => {
     clearThread();
     setEpoch((e) => e + 1);
   };
+
+  // Focus management (AskBubble pattern): into the panel on expand, back to the
+  // collapsed row on collapse — but not on the initial mount, which would steal
+  // focus on page load.
+  const panelRef = useRef<HTMLDivElement>(null);
+  const openBtnRef = useRef<HTMLButtonElement>(null);
+  const firstFocusRun = useRef(true);
+  useEffect(() => {
+    if (firstFocusRun.current) {
+      firstFocusRun.current = false;
+      return;
+    }
+    if (open) panelRef.current?.focus();
+    else openBtnRef.current?.focus();
+  }, [open]);
+
+  // Escape collapses the expanded panel.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
 
   const cardChrome = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const accentFg = isLight ? '#534AB7' : '#7F77DD';
@@ -81,10 +134,11 @@ export default function SponsorAskPanel({ protocol }: SponsorAskPanelProps) {
   if (!open) {
     return (
       <button
+        ref={openBtnRef}
         type="button"
         onClick={() => setOpen(true)}
         data-testid="sponsor-ask-open"
-        aria-expanded={false}
+        aria-label={`Open Ask — questions about ${protocol.code} answered from its parsed protocol`}
         className={`w-full flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${cardChrome} ${
           isLight ? 'hover:bg-[#F8FAFC]' : 'hover:bg-white/[0.03]'
         }`}
@@ -112,8 +166,12 @@ export default function SponsorAskPanel({ protocol }: SponsorAskPanelProps) {
 
   return (
     <div
+      ref={panelRef}
+      role="region"
+      aria-label={`Ask about ${protocol.code}`}
+      tabIndex={-1}
       data-testid="sponsor-ask-panel"
-      className={`rounded-xl border overflow-hidden flex flex-col ${cardChrome}`}
+      className={`rounded-xl border overflow-hidden flex flex-col focus:outline-none ${cardChrome}`}
     >
       {/* Header row: title + new-chat + collapse */}
       <div
@@ -171,12 +229,12 @@ export default function SponsorAskPanel({ protocol }: SponsorAskPanelProps) {
         <DashboardChat
           key={`${protocol.id}:${epoch}`}
           messages={messages}
-          setMessages={setMessages}
+          setMessages={guardedSetMessages}
           protocolId={protocol.id}
           abortOnUnmount
           customSuggestions={SPONSOR_SUGGESTIONS}
           emptyHeading={`Ask about ${protocol.code}`}
-          emptySubtext={`Answers come from ${protocol.code}'s parsed protocol documents, with section and page citations. Pick a starter or ask anything.`}
+          emptySubtext={`Answers come from ${protocol.code}'s parsed protocol documents, with citations. Pick a starter or ask anything.`}
           hideHeader
         />
       </div>

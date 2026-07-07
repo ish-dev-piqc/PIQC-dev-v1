@@ -133,6 +133,19 @@ not need one — real `dashboard-chat` or nothing).
 - [x] Built exactly the protocol-grounded Ask: `<DashboardChat protocolId=…/>`
   keyed `${protocol.id}:${epoch}` with abortOnUnmount (AskBubble remount trick),
   NOT the org chat's unscoped selectedDocIds mode.
+- [x] Adversarial review (3 lenses + blind verify; hook-mirror lens clean —
+  the copy is faithful): 3 confirmed, all fixed — (1, medium) New-chat-mid-stream
+  left an orphaned "Stopped…" error bubble as the sole message of the cleared
+  thread → guardedSetMessages drops an error-only write that lands on an empty
+  thread with no user turn (an impossible state for a legitimate thread). NOTE:
+  the site AskBubble has the same hole (inherited pattern) — flagged to the
+  site lane as a follow-up chip, not fixed here (Kiara's files). (2, medium)
+  Focus stranding on expand/collapse → full AskBubble focus pattern adopted
+  (panelRef role=region tabIndex=-1, focus-into on open / back-to-trigger on
+  close with a first-mount guard, Escape collapses). (3, low) Empty-state copy
+  promised "section and page citations" which citations only sometimes carry →
+  softened to "with citations".
+- [x] Post-fix re-verify: typecheck 0, build clean, suite 1359/1359.
 - [ ] Manual (enterprise sponsor, a protocol with ingested docs — needs the
   backend live, same gate as the deliverables): open Protocol Intelligence →
   Ask about this protocol → a question returns a streamed, cited answer scoped
