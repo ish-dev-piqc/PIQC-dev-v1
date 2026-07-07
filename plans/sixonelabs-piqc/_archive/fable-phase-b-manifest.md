@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: fable-phase-b-manifest
-status: active
+status: merged
+merged: 2026-07-07
 started: 2026-07-06
-target_pr:
+target_pr: #462
 ---
 
 # Fable audit Phase B — deterministic manifest + gates inventory
