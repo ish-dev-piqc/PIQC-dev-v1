@@ -45,7 +45,20 @@ Base defaults to `main`. Empty delta and no `full` → report "no delta" and sto
 
 ## Phase 0 — Preflight & run identity (deterministic, before any agent)
 
-Read-only git only:
+**Preferred (Phase B): run the deterministic manifest script** — it computes everything below
+plus a real TS-AST consumer graph, changed-export detection, owners, gates inventory, and the
+risk tier, failing closed on unresolvable identity:
+
+```
+npm run fable:audit:manifest -- --base <ref> --pretty     # scripts/fable-audit-manifest.mjs
+npm run fable:audit:gates                                  # scripts/fable-audit-gates.mjs
+```
+
+(No node on PATH → scratchpad-node workaround, or fall back to the manual steps below.) Pass the
+emitted JSON manifest to every worker instead of re-deriving scope by hand. Exit 2 = T3 with
+unresolved edges touching the delta — cannot Approve until resolved.
+
+Manual fallback (read-only git only):
 - `base_sha=$(git merge-base HEAD <base>)` · `head_sha=$(git rev-parse HEAD)` ·
   dirty check `git status --porcelain`.
 - Delta = `git diff <base>...HEAD --name-only` ∩ baseline globs in `surfaces.md` (these include

@@ -13,6 +13,8 @@ export default defineConfig({
       // pure Web-Crypto code that runs equally well in vitest. Co-locating
       // the test next to the helper keeps discovery + import paths simple.
       'supabase/functions/_shared/__tests__/*.test.ts',
+      // fable-audit Phase B tooling (pure .mjs core + gates inventory).
+      'scripts/__tests__/*.test.ts',
     ],
     exclude: [
       '**/node_modules/**',
