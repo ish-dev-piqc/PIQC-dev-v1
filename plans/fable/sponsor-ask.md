@@ -1,7 +1,7 @@
 ---
 owner: fable-dev-piqc
 feature: sponsor-ask
-status: active
+status: in-review
 started: 2026-07-07
 target_pr:
 ---
@@ -123,7 +123,16 @@ not need one — real `dashboard-chat` or nothing).
 
 ## Verification
 
-- [ ] typecheck / build green; thread-hook tests pass; zero new suite failures.
+- [x] typecheck / build green; 11 thread-hook tests pass (incl. the
+  namespace-isolation case vs the Site Ask key); full suite **1359 passed / 0
+  failed** (the old 19-failure env baseline was fixed on main by the
+  build-health work — fully green).
+- [x] Discipline sweep: no Site context/lib import in the sponsor files
+  (AskTab's useSiteData document gate deliberately NOT copied — the edge fn's
+  own no-context rule covers the no-docs case); no raw grays; no `any`.
+- [x] Built exactly the protocol-grounded Ask: `<DashboardChat protocolId=…/>`
+  keyed `${protocol.id}:${epoch}` with abortOnUnmount (AskBubble remount trick),
+  NOT the org chat's unscoped selectedDocIds mode.
 - [ ] Manual (enterprise sponsor, a protocol with ingested docs — needs the
   backend live, same gate as the deliverables): open Protocol Intelligence →
   Ask about this protocol → a question returns a streamed, cited answer scoped
