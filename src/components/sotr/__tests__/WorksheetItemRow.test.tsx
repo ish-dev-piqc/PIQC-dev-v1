@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import WorksheetItemRow, { formatExtractedValue } from '../WorksheetItemRow';
+import WorksheetItemRow, { formatExtractedValue, formatVisit } from '../WorksheetItemRow';
 import type { ExtractedItemRecord } from '../../../types/sotr';
 
 function makeItem(overrides: Partial<ExtractedItemRecord> = {}): ExtractedItemRecord {
@@ -81,5 +81,57 @@ describe('formatExtractedValue', () => {
   it('JSON-stringifies objects/arrays', () => {
     expect(formatExtractedValue({ visit: 'V1', day: 14 }))
       .toBe('{"visit":"V1","day":14}');
+  });
+});
+
+describe('formatVisit — visit window rendering', () => {
+  it('renders an ASYMMETRIC window (-5/+1) with both sides distinctly and NOT as a symmetric ±', () => {
+    const label = formatVisit({
+      visit_name: 'Follow-up',
+      study_day: 28,
+      window_minus_days: 5,
+      window_plus_days: 1,
+    });
+    // The bug: this used to collapse to "±5d", overstating the +side by 4 days.
+    expect(label).not.toContain('±5d');
+    expect(label).not.toContain('±');
+    // The true window must show both sides.
+    expect(label).toContain('-5/+1d');
+    expect(label).toBe('Follow-up — Day 28 (-5/+1d)');
+  });
+
+  it('keeps the ±Nd shorthand for a SYMMETRIC window', () => {
+    const label = formatVisit({
+      visit_name: 'Randomization',
+      study_day: 0,
+      window_minus_days: 3,
+      window_plus_days: 3,
+    });
+    expect(label).toContain('±3d');
+    expect(label).toBe('Randomization — Day 0 (±3d)');
+  });
+
+  it('renders a one-sided window without a redundant zero side', () => {
+    expect(formatVisit({
+      visit_name: 'Screening',
+      study_day: -14,
+      window_minus_days: 0,
+      window_plus_days: 3,
+    })).toBe('Screening — Day -14 (+3d)');
+    expect(formatVisit({
+      visit_name: 'Screening',
+      study_day: -14,
+      window_minus_days: 2,
+      window_plus_days: 0,
+    })).toBe('Screening — Day -14 (-2d)');
+  });
+
+  it('omits the window entirely when both sides are zero', () => {
+    expect(formatVisit({
+      visit_name: 'Baseline',
+      study_day: 1,
+      window_minus_days: 0,
+      window_plus_days: 0,
+    })).toBe('Baseline — Day 1');
   });
 });

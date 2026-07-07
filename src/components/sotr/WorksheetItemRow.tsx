@@ -84,6 +84,20 @@ export function getItemDisplayLabel(item: ExtractedItemRecord): string {
   return formatExtractedValue(item.extracted_value);
 }
 
+// Formats a visit window from its two non-negative day magnitudes.
+//   symmetric  (minus === plus)   -> "±Nd"        e.g. ±3d
+//   asymmetric (minus !== plus)   -> "-M/+Pd"     e.g. -5/+1d
+//   one-sided  (a side is 0)      -> just that side, e.g. "+3d" / "-2d"
+//   no window  (both 0)           -> null (caller omits it)
+// Exported so the label logic can be unit-tested directly.
+export function formatWindow(minus: number, plus: number): string | null {
+  if (minus === 0 && plus === 0) return null;
+  if (minus === plus) return `±${minus}d`;
+  if (minus === 0) return `+${plus}d`;
+  if (plus === 0) return `-${minus}d`;
+  return `-${minus}/+${plus}d`;
+}
+
 // Best-effort label for the JSONB extracted_value. Strings + numbers render
 // as-is; objects/arrays fall back to JSON. Truncated upstream by CSS only —
 // readers want to see the full value in this list.
@@ -104,6 +118,7 @@ export function formatExtractedValue(value: unknown): string {
 // window_plus_days, procedures, cross_references, schedule_variant }.
 // Produces something like:
 //   "Randomization — Day 0 (±0d) · 2 procedures"
+// Asymmetric windows render both sides distinctly, e.g. "-5/+1d".
 // Falls back to JSON.stringify when the shape doesn't match.
 export function formatVisit(value: unknown): string {
   if (value === null || value === undefined) return '—';
@@ -125,9 +140,12 @@ export function formatVisit(value: unknown): string {
   const parts: string[] = [];
   if (name) parts.push(name);
   if (day !== null) parts.push(`Day ${day}`);
-  const window = minus !== 0 || plus !== 0
-    ? `±${Math.max(Math.abs(minus), plus)}d`
-    : null;
+  // Render the TRUE window. A symmetric window (minus === plus) keeps the
+  // compact "±Nd" shorthand; an asymmetric one (e.g. -5/+1) must show both
+  // sides distinctly so a reviewer never reads it as symmetric and overstates
+  // the more permissive side. `minus`/`plus` are stored as non-negative day
+  // counts (magnitudes of each side), so we sign them here.
+  const window = formatWindow(minus, plus);
   const tail: string[] = [];
   if (window) tail.push(window);
   if (procs > 0) tail.push(`${procs} procedure${procs === 1 ? '' : 's'}`);
