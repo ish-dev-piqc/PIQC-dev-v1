@@ -28,11 +28,11 @@ interface NavbarProps {
    *  the previous `onOpenMentionsInbox` after the standalone MentionsInbox
    *  panel was folded into the chat overlay's Mentions channel. */
   onOpenChatOverlayMentions?: () => void;
-  /** Mobile-only rail nav. Mirrors the LeftRail's five entries
-   *  (workspace / site / audit / sponsor / chat) for phone viewports
+  /** Mobile-only rail nav. Mirrors the LeftRail's entries
+   *  (workspace / site / audit / cra / sponsor / chat) for phone viewports
    *  where the rail is hidden. App.tsx routes each key to the same state
-   *  changes the rail would. */
-  onMobileWorkspaceNavigate?: (key: 'workspace' | 'site' | 'audit' | 'sponsor' | 'chat') => void;
+   *  changes the rail would. Keep in sync with LeftRail's RailKey. */
+  onMobileWorkspaceNavigate?: (key: 'workspace' | 'site' | 'audit' | 'cra' | 'sponsor' | 'chat') => void;
 }
 
 export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSettingsSection, onOpenOrganization, onOpenChatOverlayMentions, onMobileWorkspaceNavigate }: NavbarProps) {

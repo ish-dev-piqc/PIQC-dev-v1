@@ -4,7 +4,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-vi.mock('../../../lib/sotr/sourceEvidenceApi', () => ({
+// Partial mock: stub only the network call; keep the real pure helpers
+// (isAwaitingReview etc.) so the mock never drifts when the component adds
+// an import. Safe to importOriginal — vitest.config injects dummy supabase
+// env, so module init doesn't throw. (Do NOT apply this pattern to
+// lib/sotr/exportApi — mocking that module deadlocks the vitest worker;
+// mock the ../../supabase seam there instead.)
+vi.mock('../../../lib/sotr/sourceEvidenceApi', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../lib/sotr/sourceEvidenceApi')>()),
   listWorksheetItemsForStudy: vi.fn(),
 }));
 

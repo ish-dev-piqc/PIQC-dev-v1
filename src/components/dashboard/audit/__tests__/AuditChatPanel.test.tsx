@@ -18,6 +18,7 @@
 // Mock surface: only chatApi. The panel's local state, focus, scroll, and
 // keyboard handlers are exercised through RTL.
 
+import { useState } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -50,21 +51,28 @@ function setup(
   const onMessagesChange = vi.fn();
   const onClose = vi.fn();
   let messages = initial;
-  const Wrapper = () => (
-    <AuditChatPanel
-      auditId="audit-1"
-      messages={messages}
-      onMessagesChange={(next) => {
-        messages = next;
-        onMessagesChange(next);
-      }}
-      onClose={onClose}
-      viewedStage={viewedStage}
-      signals={signals}
-      onSignalAction={onSignalAction}
-      onAssistantWriteback={onAssistantWriteback}
-    />
-  );
+  // Stateful wrapper — the panel is controlled, so DOM assertions on turns
+  // only work if the parent actually re-renders with the updated array. A
+  // plain closure `let` never triggers a re-render.
+  const Wrapper = () => {
+    const [thread, setThread] = useState(initial);
+    return (
+      <AuditChatPanel
+        auditId="audit-1"
+        messages={thread}
+        onMessagesChange={(next) => {
+          messages = next;
+          setThread(next);
+          onMessagesChange(next);
+        }}
+        onClose={onClose}
+        viewedStage={viewedStage}
+        signals={signals}
+        onSignalAction={onSignalAction}
+        onAssistantWriteback={onAssistantWriteback}
+      />
+    );
+  };
   const utils = render(<Wrapper />);
   return { ...utils, onMessagesChange, onClose, getMessages: () => messages };
 }
@@ -111,9 +119,10 @@ describe('AuditChatPanel — sending a turn', () => {
       { role: 'assistant', content: 'Counts look light for a Stage 6 closeout.' },
     ]);
     // chatApi receives the thread tail, not the empty starting state.
+    // Third arg is viewedStage — undefined here since setup() passed none.
     expect(mockChat).toHaveBeenCalledWith('audit-1', [
       { role: 'user', content: 'Did I miss anything?' },
-    ]);
+    ], undefined);
     expect(getMessages()).toHaveLength(2);
   });
 

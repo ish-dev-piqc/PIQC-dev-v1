@@ -370,6 +370,7 @@ function AppContent() {
     reports: 'Reports',
     'visit-execution': 'Visit execution',
     'audit-overview': 'Audit overview',
+    'cra-workspace': 'CRA workspace',
     chat: 'Chat',
     knowledge: 'Knowledge base',
     workflows: 'Workflows',

@@ -100,7 +100,9 @@ describe('DashboardChat', () => {
 
     await send('hello');
     await waitFor(() => expect(mockStream).toHaveBeenCalled());
-    const arg = mockStream.mock.calls.at(-1)![0];
+    // Indexed access instead of .at(): tsconfig.app targets a lib without
+    // Array.prototype.at typings, and tests are typechecked with the app.
+    const arg = mockStream.mock.calls[mockStream.mock.calls.length - 1][0];
     expect(arg.protocolId).toBe('proto-1');
     expect(arg.selectedDocIds).toEqual([]);
   });

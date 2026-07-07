@@ -98,14 +98,20 @@ function setupContext(draft: MockReportDraft | null) {
   };
 }
 
-class MockLlmError extends Error {
-  status: number;
-  constructor(message: string, status: number) {
-    super(message);
-    this.name = 'LlmExecutiveSummaryError';
-    this.status = status;
+// vi.mock factories are hoisted above top-level declarations, so the factory
+// below would hit the class's temporal dead zone if this were a plain
+// `class` statement. vi.hoisted() lifts the declaration alongside the mocks.
+const { MockLlmError } = vi.hoisted(() => {
+  class MockLlmError extends Error {
+    status: number;
+    constructor(message: string, status: number) {
+      super(message);
+      this.name = 'LlmExecutiveSummaryError';
+      this.status = status;
+    }
   }
-}
+  return { MockLlmError };
+});
 
 vi.mock('../../../../../lib/audit/reportApi', () => ({
   fetchReportDraft: vi.fn(),
