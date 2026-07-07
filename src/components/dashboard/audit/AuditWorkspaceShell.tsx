@@ -570,9 +570,9 @@ export default function AuditWorkspaceShell() {
                 'llm',
               );
             }
-            if (!result) {
+            if (!result.ok) {
               throw new Error(
-                'Could not save to Stage 7. Try again, or copy the text manually.',
+                `Could not save to Stage 7: ${result.error} Try again, or copy the text manually.`,
               );
             }
             // Set the landing-notice BEFORE flipping viewedStage so Stage 7's

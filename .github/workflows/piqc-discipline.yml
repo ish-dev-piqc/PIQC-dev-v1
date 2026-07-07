@@ -203,3 +203,30 @@ jobs:
             echo "::error::PR body must reference a plan MD (e.g. plans/ishika/draft-comments.md). See .github/pull_request_template.md."
             exit 1
           fi
+
+      # ------------------------------------------------------------------
+      # Build health — the greps above are cheap and fail fast; only when
+      # they pass do we pay for node + typecheck + tests. These live in
+      # THIS job (not a new one) so they inherit the required
+      # `mechanical-checks` status context — no branch-protection settings
+      # change needed, and bot archive/* PRs still post the check.
+      #
+      # Motivation: vite build skips type errors and nothing ran vitest, so
+      # type-broken code merged to main twice (CRA tab union, 2026-07) and a
+      # test-cleanup regression went unnoticed. tsc + vitest close that hole.
+      # Vitest needs no secrets: vitest.config.ts injects dummy supabase env.
+      # ------------------------------------------------------------------
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck (tsc --noEmit)
+        run: npm run typecheck
+
+      - name: Tests (vitest)
+        run: npm run test

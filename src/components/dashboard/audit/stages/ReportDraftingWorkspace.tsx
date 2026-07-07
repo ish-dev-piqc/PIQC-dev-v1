@@ -85,6 +85,10 @@ export default function ReportDraftingWorkspace({
   //                templated text intact (silent-with-signal degradation)
   const [llmRefining, setLlmRefining] = useState(false);
   const [llmFallback, setLlmFallback] = useState<string | null>(null);
+  // AUD-301: surface failures of user-initiated saves (stub / summary /
+  // conclusions). The auto-refine paths keep the sanctioned silent-with-signal
+  // fallback (llmFallback) since they are background, not user-initiated.
+  const [saveError, setSaveError] = useState<string | null>(null);
   // Independent in-flight + fallback state for the conclusions section. The
   // two refinements run in parallel from the same useEffect but each has its
   // own UI surface — the chip, body dim, Edit-disabled, and dismissable
@@ -186,8 +190,8 @@ export default function ReportDraftingWorkspace({
                 'Executive summary refined by LLM',
                 'llm',
               );
-              if (refined) {
-                setReports((prev) => ({ ...prev, [id]: refined }));
+              if (refined.ok) {
+                setReports((prev) => ({ ...prev, [id]: refined.data }));
               }
             } catch (err) {
               const message =
@@ -233,8 +237,8 @@ export default function ReportDraftingWorkspace({
                 undefined,
                 'llm',
               );
-              if (refined) {
-                setReports((prev) => ({ ...prev, [id]: refined }));
+              if (refined.ok) {
+                setReports((prev) => ({ ...prev, [id]: refined.data }));
               }
             } catch (err) {
               const message =
@@ -288,16 +292,20 @@ export default function ReportDraftingWorkspace({
   // ---------------------------------------------------------------------------
   const generateStub = async () => {
     if (!auditId) return;
-    const stub = await upsertReportDraft(
+    const result = await upsertReportDraft(
       auditId,
       '[Stub] This audit reviewed the contracted vendor service against the protocol-defined risk scope. Findings, observations, and OFIs are summarised below. Edit this paragraph down to your judgement.',
       '[Stub] Auditor conclusions go here.',
       'Report stub generated',
     );
-    if (stub) {
+    if (result.ok) {
+      setSaveError(null);
+      const stub = result.data;
       setReports((prev) => ({ ...prev, [auditId]: stub }));
       setDraftSummary(stub.executive_summary);
       setDraftConclusions(stub.conclusions);
+    } else {
+      setSaveError(result.error);
     }
   };
 
@@ -325,16 +333,19 @@ export default function ReportDraftingWorkspace({
       ? 'llm'
       : 'auditor_edited';
 
-    const updated = await upsertReportDraft(
+    const result = await upsertReportDraft(
       auditId,
       trimmed,
       report.conclusions,
       undefined,
       newSource,
     );
-    if (updated) {
-      setReports((prev) => ({ ...prev, [auditId]: updated }));
+    if (result.ok) {
+      setSaveError(null);
+      setReports((prev) => ({ ...prev, [auditId]: result.data }));
       setEditing(null);
+    } else {
+      setSaveError(result.error);
     }
   };
 
@@ -350,7 +361,7 @@ export default function ReportDraftingWorkspace({
       report.conclusions_source === 'llm' && trimmed === report.conclusions;
     const newSource: 'llm' | 'auditor_edited' = llmDraftAcceptedAsIs ? 'llm' : 'auditor_edited';
 
-    const updated = await upsertReportDraft(
+    const result = await upsertReportDraft(
       auditId,
       report.executive_summary,
       trimmed,
@@ -358,9 +369,12 @@ export default function ReportDraftingWorkspace({
       undefined,
       newSource,
     );
-    if (updated) {
-      setReports((prev) => ({ ...prev, [auditId]: updated }));
+    if (result.ok) {
+      setSaveError(null);
+      setReports((prev) => ({ ...prev, [auditId]: result.data }));
       setEditing(null);
+    } else {
+      setSaveError(result.error);
     }
   };
 
@@ -542,6 +556,25 @@ export default function ReportDraftingWorkspace({
             PrefillAgentNote) — amber + AlertTriangle would contradict the
             invitational copy by signalling "warning." The console.warn
             upstream carries the "AI failed" signal for the dev team. */}
+        {saveError && (
+          <div
+            role="alert"
+            className={`flex items-start gap-2 px-3 py-2 mb-3 rounded-md border ${
+              isLight ? 'bg-red-50 border-red-200 text-red-700' : 'bg-red-500/15 border-red-500/30 text-red-300'
+            }`}
+          >
+            <AlertTriangle size={12} className="flex-shrink-0 mt-0.5" />
+            <p className="text-[11px] leading-relaxed flex-1">Couldn’t save your changes: {saveError}</p>
+            <button
+              type="button"
+              onClick={() => setSaveError(null)}
+              aria-label="Dismiss"
+              className="inline-flex items-center justify-center w-5 h-5 rounded opacity-70 hover:opacity-100"
+            >
+              <XIcon size={11} />
+            </button>
+          </div>
+        )}
         {llmFallback && report.executive_summary_source === 'templated' && (
           <div
             data-testid="exec-summary-llm-fallback"

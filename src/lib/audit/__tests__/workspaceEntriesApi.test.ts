@@ -113,8 +113,12 @@ describe('createWorkspaceEntry — sourceExtractedItemId forwarding', () => {
         p_source_extracted_item_id: 'extracted-abc',
       }),
     );
-    // Row → client mapping contract.
-    expect(result?.source_extracted_item_id).toBe('extracted-abc');
+    // Row → client mapping contract (createWorkspaceEntry now returns a
+    // discriminated result — AUD-301).
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.source_extracted_item_id).toBe('extracted-abc');
+    }
   });
 
   it('forwards null when sourceExtractedItemId is explicitly null', async () => {

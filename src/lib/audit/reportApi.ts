@@ -91,6 +91,10 @@ export async function fetchReportDraft(auditId: string): Promise<MockReportDraft
 // Stage 7 mutations
 // ============================================================================
 
+export type SaveReportDraftResult =
+  | { ok: true; data: MockReportDraft }
+  | { ok: false; error: string };
+
 export async function upsertReportDraft(
   auditId: string,
   executiveSummary: string,
@@ -103,7 +107,7 @@ export async function upsertReportDraft(
   /** Optional. Symmetric with executiveSummarySource — server preserves the
    *  existing conclusions provenance when omitted. */
   conclusionsSource?: 'templated' | 'llm' | 'auditor_edited',
-): Promise<MockReportDraft | null> {
+): Promise<SaveReportDraftResult> {
   const { data, error } = await supabase.rpc('audit_mode_upsert_report_draft', {
     p_audit_id: auditId,
     p_executive_summary: executiveSummary,
@@ -114,10 +118,12 @@ export async function upsertReportDraft(
   });
   if (error) {
     console.error('[reportApi] upsertReportDraft error:', error);
-    return null;
+    return { ok: false, error: error.message };
   }
-  if (!data) return null;
-  return flattenRow(data as ReportDraftRow);
+  if (!data) {
+    return { ok: false, error: 'Save did not return the updated draft.' };
+  }
+  return { ok: true, data: await flattenRow(data as ReportDraftRow) };
 }
 
 // ============================================================================

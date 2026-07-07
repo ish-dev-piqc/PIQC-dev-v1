@@ -61,6 +61,13 @@ vi.mock('../../../../../hooks/useOverlay', () => ({
 vi.mock('../../../../../lib/audit/auditCreationApi', () => ({
   listVendors: vi.fn(),
   createVendor: vi.fn(),
+  // Added with the investigator-site-audit workflow: the drawer's bootstrap
+  // effect now Promise.all's listVendors + listSites + listAuditorProtocolLibrary.
+  // Omitting listSites here makes the bootstrap throw (undefined is not a
+  // function), which both hides the vendor options AND leaks an unhandled
+  // rejection out of the void'd async IIFE.
+  listSites: vi.fn(),
+  createSite: vi.fn(),
   listAuditorProtocolLibrary: vi.fn(),
   uploadProtocolPdf: vi.fn(),
   createProtocolFromDocument: vi.fn(),
@@ -71,6 +78,7 @@ vi.mock('../../../../../lib/audit/auditCreationApi', () => ({
 import NewAuditDrawer from '../NewAuditDrawer';
 import {
   listVendors,
+  listSites,
   listAuditorProtocolLibrary,
   uploadProtocolPdf,
   createProtocolFromDocument,
@@ -78,6 +86,7 @@ import {
 } from '../../../../../lib/audit/auditCreationApi';
 
 const mockListVendors = listVendors as ReturnType<typeof vi.fn>;
+const mockListSites = listSites as ReturnType<typeof vi.fn>;
 const mockListLibrary = listAuditorProtocolLibrary as ReturnType<typeof vi.fn>;
 const mockUploadPdf = uploadProtocolPdf as ReturnType<typeof vi.fn>;
 const mockCreateProtocol = createProtocolFromDocument as ReturnType<typeof vi.fn>;
@@ -96,6 +105,16 @@ function makePdfFile(name = 'protocol.pdf'): File {
 }
 
 async function fillRequiredFieldsForUploadFlow(user: ReturnType<typeof userEvent.setup>) {
+  // Audit workflow — the drawer now opens with a workflow-type chooser
+  // (Vendor audit vs Investigator site audit) above the auditee field.
+  // VENDOR_AUDIT is the default, so the vendor select renders without a
+  // click; assert the default here so a flipped default (which would swap
+  // the vendor field for the site field) fails loudly instead of as a
+  // mysterious missing-option timeout.
+  expect(
+    screen.getByRole('button', { name: /vendor audit/i }),
+  ).toHaveAttribute('aria-pressed', 'true');
+
   // Audit name
   await user.type(
     screen.getByPlaceholderText(/Q2 2026 ePRO platform audit/i),
@@ -146,9 +165,11 @@ describe('NewAuditDrawer — orphan-document retry (PR #61)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Bootstrap effect reads vendors + library. Library empty → drawer
+    // Bootstrap effect reads vendors + sites + library. Sites empty (these
+    // tests exercise the VENDOR_AUDIT workflow); library empty → drawer
     // defaults to upload mode, which is the path we're testing.
     mockListVendors.mockResolvedValue(VENDORS);
+    mockListSites.mockResolvedValue([]);
     mockListLibrary.mockResolvedValue([]);
     // Suppress the expected '[NewAuditDrawer] submit error:' logs in the
     // failure-path tests. The drawer logs every caught error; we don't

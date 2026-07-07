@@ -73,6 +73,12 @@ export function OrgChatProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     const res = await listOrgMessages(orgId);
     setLoading(false);
+    // Stale-response guard: a multi-org user can switch active orgs (A → B)
+    // while this fetch is in flight. Only the response for the still-active
+    // org may touch shared messages/error state, or org A's data lands on
+    // org B (cross-channel leak / stale overwrite). loading is cleared above
+    // regardless so an early return can't wedge the spinner.
+    if (orgIdRef.current !== orgId) return;
     if (!res.ok) {
       setError(res.error);
       return;
@@ -161,14 +167,23 @@ export function OrgChatProvider({ children }: { children: React.ReactNode }) {
       const orgId = orgIdRef.current;
       if (!orgId) return { ok: false, error: 'No active organization.' };
       const res = await postOrgMessage(orgId, body);
+      // Stale-response guard: if the user switched active orgs while this send
+      // was in flight, orgId is no longer active. Skip the SHARED-state
+      // mutation (setError / optimistic setMessages append) so org A's message
+      // never lands on org B — the realtime INSERT will still add it to org A
+      // when that channel is next active. We STILL return the true result so
+      // ChatTab's own local UI feedback (its toast) works.
+      const stillActive = orgIdRef.current === orgId;
       if (!res.ok) {
-        setError(res.error);
+        if (stillActive) setError(res.error);
         return { ok: false, error: res.error };
       }
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === res.data.id)) return prev;
-        return [...prev, res.data];
-      });
+      if (stillActive) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === res.data.id)) return prev;
+          return [...prev, res.data];
+        });
+      }
       return { ok: true, data: res.data };
     },
     [],

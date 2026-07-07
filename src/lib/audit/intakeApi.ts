@@ -112,10 +112,14 @@ export interface CreateProtocolRiskInput {
   sourceExtractedItemId?: string | null;
 }
 
+export type CreateProtocolRiskResult =
+  | { ok: true; data: TaggedSection }
+  | { ok: false; error: string };
+
 export async function createProtocolRisk(
   protocolVersionId: string,
   input: CreateProtocolRiskInput,
-): Promise<TaggedSection | null> {
+): Promise<CreateProtocolRiskResult> {
   const { data, error } = await supabase.rpc('audit_mode_create_protocol_risk', {
     p_protocol_version_id: protocolVersionId,
     p_section_identifier: input.sectionIdentifier,
@@ -132,10 +136,10 @@ export async function createProtocolRisk(
 
   if (error) {
     console.error('[intakeApi] createProtocolRisk error:', error);
-    return null;
+    return { ok: false, error: error.message };
   }
 
-  return flattenRisk(data as ProtocolRiskRow);
+  return { ok: true, data: flattenRisk(data as ProtocolRiskRow) };
 }
 
 export interface UpdateProtocolRiskInput {

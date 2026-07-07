@@ -127,6 +127,10 @@ export interface ProtocolVisitTemplate {
   procedures: string[];
   source_document_id: string | null;
   cross_references: VisitCrossReference[];
+  // Reducto/SOTR extraction confidence for this template, inherited onto the
+  // materialized SiteVisit. Optional: null/absent when the source row carried
+  // no confidence (matches realSiteRepo's `?? undefined` read in rowToVisit).
+  confidence_state?: SiteVisitConfidence | null;
 }
 
 export interface MaterializeResult {

@@ -118,10 +118,14 @@ export interface CreateWorkspaceEntryInput {
   sourceExtractedItemId?: string | null;
 }
 
+export type CreateWorkspaceEntryResult =
+  | { ok: true; data: MockWorkspaceEntry }
+  | { ok: false; error: string };
+
 export async function createWorkspaceEntry(
   auditId: string,
   input: CreateWorkspaceEntryInput,
-): Promise<MockWorkspaceEntry | null> {
+): Promise<CreateWorkspaceEntryResult> {
   const { data, error } = await supabase.rpc('audit_mode_create_workspace_entry', {
     p_audit_id: auditId,
     p_vendor_domain: input.vendorDomain,
@@ -138,10 +142,10 @@ export async function createWorkspaceEntry(
 
   if (error) {
     console.error('[workspaceEntriesApi] createWorkspaceEntry error:', error);
-    return null;
+    return { ok: false, error: error.message };
   }
 
-  return flattenEntry(data as WorkspaceEntryRow);
+  return { ok: true, data: await flattenEntry(data as WorkspaceEntryRow) };
 }
 
 export interface UpdateWorkspaceEntryInput {

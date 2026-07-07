@@ -49,7 +49,7 @@ const STEPS = [
 export default function ProtocolOnboarding({ onTabChange }: ProtocolOnboardingProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
-  const { protocols } = useProtocol();
+  const { protocols, refresh } = useProtocol();
 
   // SOTR routing — fires exactly once when a new protocol appears (length 0 → 1)
   // during the user's onboarding session. We watch via a ref so a refresh or
@@ -133,10 +133,14 @@ export default function ProtocolOnboarding({ onTabChange }: ProtocolOnboardingPr
             <UploadForm
               isLight={isLight}
               onSuccess={() => {
-                // No-op — the routing decision lives in the useEffect above,
-                // which fires when ProtocolContext realtime brings the new
-                // protocols row into view. The UploadForm itself transitions
-                // to its own 'parsing' state on 202.
+                // The routing decision lives in the useEffect above, keyed on
+                // protocols.length. Explicit refresh rather than trusting the
+                // protocols-changes realtime channel alone — it's the same
+                // "intermittently misses INSERTs" risk documented elsewhere
+                // in this codebase, and here a missed event doesn't just
+                // delay a list update, it strands a brand-new user on this
+                // wall until they notice the manual reload button below.
+                refresh();
               }}
             />
           </div>

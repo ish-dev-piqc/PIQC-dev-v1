@@ -48,9 +48,14 @@ interface AuditContextValue {
   error: string | null;
   activeAudit: AuditWithContext | null;
   setActiveAudit: (audit: AuditWithContext | null) => void;
-  // Currently in-session only. Phase 4 replaces with a Supabase RPC that
-  // updates audits.current_stage with server-side gating.
+  // advanceStage drives the real audit_mode_advance_audit_stage RPC (via
+  // advanceAuditStage). The server-side gate can reject the transition
+  // (GATE_QUESTIONNAIRE_NOT_APPROVED etc.); when it does, the message lands in
+  // advanceStageError so the calling workspace can render an inline note
+  // instead of the failure being lost to console. Null = no pending error.
+  // Cleared on the next attempt and on success.
   advanceStage: (toStage: AuditStage) => void;
+  advanceStageError: string | null;
   refresh: () => Promise<void>;
 }
 
@@ -63,6 +68,7 @@ const AuditContext = createContext<AuditContextValue>({
   activeAudit: null,
   setActiveAudit: () => {},
   advanceStage: () => {},
+  advanceStageError: null,
   refresh: async () => {},
 });
 
@@ -121,6 +127,7 @@ export function AuditProvider({ children }: { children: React.ReactNode }) {
   const [audits, setAudits] = useState<AuditWithContext[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [advanceStageError, setAdvanceStageError] = useState<string | null>(null);
 
   const [activeId, setActiveId] = useState<string | null>(() => {
     try {
@@ -192,6 +199,8 @@ export function AuditProvider({ children }: { children: React.ReactNode }) {
 
   const advanceStage = async (toStage: AuditStage) => {
     if (!activeId) return;
+    // Clear any prior failure at the start of a fresh attempt.
+    setAdvanceStageError(null);
     const result = await advanceAuditStage(activeId, toStage);
     if (result.ok && result.currentStage) {
       setAudits((prev) =>
@@ -201,6 +210,13 @@ export function AuditProvider({ children }: { children: React.ReactNode }) {
       );
     } else {
       // Server-side gate / validation message bubbled up. Stage stays as-is.
+      // Surface it to the calling workspace instead of only logging — the
+      // advance button gives no other signal, so a swallowed error reads as a
+      // dead click (AUD-301 class).
+      const message = result.errorMessage ?? 'Stage advancement failed.';
+      setAdvanceStageError(
+        result.errorHint ? `${message} (${result.errorHint})` : message,
+      );
       console.error(
         '[AuditContext] Stage advancement failed:',
         result.errorHint ?? '',
@@ -218,6 +234,7 @@ export function AuditProvider({ children }: { children: React.ReactNode }) {
         activeAudit,
         setActiveAudit,
         advanceStage,
+        advanceStageError,
         refresh: fetchAudits,
       }}
     >

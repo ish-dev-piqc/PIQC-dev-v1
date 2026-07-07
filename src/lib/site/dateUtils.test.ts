@@ -164,6 +164,39 @@ describe('addMonths', () => {
     expect(d.getFullYear()).toBe(2027);
     expect(d.getMonth()).toBe(1); // February
   });
+
+  // SIT-201: from a day-of-month that doesn't exist in the target month, clamp
+  // to the last valid day instead of overflowing into the following month.
+  it('clamps Jan 31 + 1 month to the last day of Feb (not March)', () => {
+    const d = addMonths(new Date(2026, 0, 31), 1); // 2026 is not a leap year
+    expect(d.getMonth()).toBe(1); // February, not March
+    expect(d.getDate()).toBe(28); // Feb 2026 has 28 days
+  });
+
+  it('clamps into a leap-year February (Feb 29)', () => {
+    const d = addMonths(new Date(2028, 0, 31), 1); // 2028 is a leap year
+    expect(d.getMonth()).toBe(1); // February
+    expect(d.getDate()).toBe(29); // Feb 2028 has 29 days
+  });
+
+  it('clamps a negative delta the same way (Mar 31 − 1 month → Feb)', () => {
+    const d = addMonths(new Date(2026, 2, 31), -1);
+    expect(d.getMonth()).toBe(1); // February
+    expect(d.getDate()).toBe(28);
+  });
+
+  it('does not clamp when the target day exists (May 31 + 2 months → Jul 31)', () => {
+    const d = addMonths(new Date(2026, 4, 31), 2);
+    expect(d.getMonth()).toBe(6); // July
+    expect(d.getDate()).toBe(31);
+  });
+
+  it('does not mutate the input', () => {
+    const original = new Date(2026, 0, 31);
+    addMonths(original, 1);
+    expect(original.getMonth()).toBe(0);
+    expect(original.getDate()).toBe(31);
+  });
 });
 
 describe('isSameDay', () => {
@@ -270,6 +303,28 @@ describe('cert-expiry helpers', () => {
 
   it('daysUntilCertExpiry is negative for past dates', () => {
     expect(daysUntilCertExpiry('2026-05-09')).toBeLessThan(0);
+  });
+
+  // SIT-202: an empty/absent certified_through must fail CLOSED — treated as
+  // expired / needs attention, never silently "not expired".
+  it('isCertExpired is true for an empty cert date (fail closed)', () => {
+    expect(isCertExpired('')).toBe(true);
+  });
+
+  it('isCertExpired is true for an unparseable cert date (fail closed)', () => {
+    expect(isCertExpired('not-a-date')).toBe(true);
+  });
+
+  it('isCertExpiringSoon is false for an empty cert date (already expired)', () => {
+    expect(isCertExpiringSoon('')).toBe(false);
+  });
+
+  it('isCertExpiringSoon is false for an unparseable cert date', () => {
+    expect(isCertExpiringSoon('not-a-date')).toBe(false);
+  });
+
+  it('daysUntilCertExpiry sorts an empty cert date as maximally overdue', () => {
+    expect(daysUntilCertExpiry('')).toBe(-Infinity);
   });
 });
 

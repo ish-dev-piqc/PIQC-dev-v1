@@ -52,6 +52,8 @@ export default function IntakeWorkspace() {
   const [editTarget, setEditTarget] = useState<TaggedSection | null>(null);
   const [loading, setLoading] = useState(false);
   const [historyTarget, setHistoryTarget] = useState<{ objectId: string; title: string } | null>(null);
+  // AUD-301: surface a save failure instead of silently swallowing the null.
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Load protocol risks from Supabase when the active audit changes
   useEffect(() => {
@@ -86,7 +88,7 @@ export default function IntakeWorkspace() {
   // ---------------------------------------------------------------------------
   const handleAdd = async (values: RiskTagFormValues) => {
     setLoading(true);
-    const created = await createProtocolRisk(activeAudit.protocol_version_id, {
+    const result = await createProtocolRisk(activeAudit.protocol_version_id, {
       sectionIdentifier: values.section_identifier,
       sectionTitle: values.section_title,
       endpointTier: values.endpoint_tier,
@@ -97,13 +99,17 @@ export default function IntakeWorkspace() {
       versionChangeType: 'ADDED',
       sourceExtractedItemId: values.source_extracted_item_id,
     });
-    if (created) {
+    if (result.ok) {
+      setSaveError(null);
       setSectionsByAudit((prev) => ({
         ...prev,
-        [activeAudit.id]: [...(prev[activeAudit.id] ?? []), created],
+        [activeAudit.id]: [...(prev[activeAudit.id] ?? []), result.data],
       }));
+      setMode('list');
+    } else {
+      // Keep the form open so the auditor can retry without re-entering the tag.
+      setSaveError(result.error);
     }
-    setMode('list');
     setLoading(false);
   };
 
@@ -240,11 +246,33 @@ export default function IntakeWorkspace() {
             protocolId={activeAudit.protocol_id}
             protocolCode={activeAudit.protocol_code}
           />
+          {saveError && (
+            <div
+              role="alert"
+              className={`text-xs px-3 py-2 mt-4 rounded-md border ${
+                isLight
+                  ? 'bg-red-50 border-red-200 text-red-700'
+                  : 'bg-red-500/15 border-red-500/30 text-red-300'
+              }`}
+            >
+              Couldn’t save this section: {saveError}
+            </div>
+          )}
         </div>
       )}
 
       {/* List */}
-      {!inForm && sections.length === 0 && (
+      {/* Loading: show a skeleton while the initial fetch is in flight so the
+          empty-state copy below never flashes before data arrives (AUD-401). */}
+      {!inForm && loading && sections.length === 0 && (
+        <div
+          className={`border border-dashed rounded-xl px-6 py-10 text-center ${emptyBg}`}
+        >
+          <p className={`${subColor} text-sm`}>Loading sections…</p>
+        </div>
+      )}
+
+      {!inForm && !loading && sections.length === 0 && (
         <div
           className={`border border-dashed rounded-xl px-6 py-10 text-center ${emptyBg}`}
         >
