@@ -1,9 +1,10 @@
 ---
 owner: fable
 feature: fa-38bbb03-38bbb03-23e5de6f8d9d-apply
-status: active
+status: merged
+merged: 2026-07-07
 started: 2026-07-07
-target_pr:
+target_pr: #469
 ---
 
 # Fable apply — FA-38bbb03-38bbb03-23e5de6f8d9d (Site Mode war-game audit)
