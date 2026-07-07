@@ -162,8 +162,10 @@ export default function ParticipantProfileDrawer({ participantId, protocols, onC
     const r = await deleteParticipant(participant.uuid);
     setDeleting(false);
     if (!r.ok) {
+      // Keep the confirm panel mounted on failure so deleteError renders
+      // where the user is already looking (mirrors VisitDetailDrawer's
+      // handleCancelVisit — collapse the panel only on success).
       setDeleteError(r.error);
-      setConfirmingDelete(false);
       return;
     }
     onClose();

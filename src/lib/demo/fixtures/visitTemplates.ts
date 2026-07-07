@@ -17,6 +17,7 @@ export function getDemoVisitTemplates(): ProtocolVisitTemplate[] {
       procedures: ['Informed consent', 'Eligibility review', 'Medical history', 'CBC + chemistry', 'Baseline CIPN assessment (FACT/GOG-Ntx)'],
       source_document_id: 'demo-doc-001',
       cross_references: [],
+      confidence_state: 'high',
     },
     {
       id: 'demo-tpl-b-002',
@@ -43,6 +44,7 @@ export function getDemoVisitTemplates(): ProtocolVisitTemplate[] {
           document_id: 'demo-doc-001-pharm',
         },
       ],
+      confidence_state: 'medium',
     },
     {
       id: 'demo-tpl-b-003',
@@ -62,6 +64,7 @@ export function getDemoVisitTemplates(): ProtocolVisitTemplate[] {
           document_id: 'demo-doc-001-lab',
         },
       ],
+      confidence_state: 'needs_review',
     },
     {
       id: 'demo-tpl-b-004',
@@ -73,6 +76,7 @@ export function getDemoVisitTemplates(): ProtocolVisitTemplate[] {
       procedures: ['Vitals', 'PledOx/placebo IV infusion', 'mFOLFOX6 administration', 'CIPN assessment (FACT/GOG-Ntx)', 'AE check'],
       source_document_id: 'demo-doc-001',
       cross_references: [],
+      confidence_state: 'low',
     },
     {
       id: 'demo-tpl-b-005',
@@ -84,6 +88,7 @@ export function getDemoVisitTemplates(): ProtocolVisitTemplate[] {
       procedures: ['Vitals', 'PledOx/placebo IV infusion', 'mFOLFOX6 administration', 'CBC + chemistry', 'AE check'],
       source_document_id: 'demo-doc-001',
       cross_references: [],
+      confidence_state: 'high',
     },
     {
       id: 'demo-tpl-b-006',
@@ -95,6 +100,7 @@ export function getDemoVisitTemplates(): ProtocolVisitTemplate[] {
       procedures: ['Final vitals', 'CIPN assessment (FACT/GOG-Ntx)', 'AE/SAE review', 'Survival / DFS status'],
       source_document_id: 'demo-doc-001',
       cross_references: [],
+      confidence_state: 'medium',
     },
 
     // CLR_18_06 (K0706 / early Parkinson's) — oral once-daily, MDS-UPDRS schedule
@@ -108,6 +114,7 @@ export function getDemoVisitTemplates(): ProtocolVisitTemplate[] {
       procedures: ['Informed consent', 'Eligibility review', 'MDS-UPDRS Parts 1–3', 'Baseline labs', 'ECG'],
       source_document_id: 'demo-doc-002',
       cross_references: [],
+      confidence_state: 'needs_review',
     },
     {
       id: 'demo-tpl-c-002',
@@ -119,6 +126,7 @@ export function getDemoVisitTemplates(): ProtocolVisitTemplate[] {
       procedures: ['Vitals', 'MDS-UPDRS Parts 1–3', 'EQ-5D-5L', 'Randomization', 'Study drug dispensation', 'PK sample'],
       source_document_id: 'demo-doc-002',
       cross_references: [],
+      confidence_state: 'high',
     },
     {
       id: 'demo-tpl-c-003',
@@ -130,6 +138,7 @@ export function getDemoVisitTemplates(): ProtocolVisitTemplate[] {
       procedures: ['MDS-UPDRS Parts 2 & 3', 'Vitals', 'Study drug accountability', 'AE check'],
       source_document_id: 'demo-doc-002',
       cross_references: [],
+      confidence_state: 'high',
     },
     {
       id: 'demo-tpl-c-004',
@@ -141,6 +150,7 @@ export function getDemoVisitTemplates(): ProtocolVisitTemplate[] {
       procedures: ['MDS-UPDRS Parts 1–3', 'CGI-S', 'SCOPA-AUT', 'Study drug accountability', 'PK sample'],
       source_document_id: 'demo-doc-002',
       cross_references: [],
+      confidence_state: 'low',
     },
     {
       id: 'demo-tpl-c-005',
@@ -152,6 +162,7 @@ export function getDemoVisitTemplates(): ProtocolVisitTemplate[] {
       procedures: ['MDS-UPDRS Parts 2+3 (primary)', 'EQ-5D-5L', 'CGI-S', 'SCOPA-AUT', 'Final labs', 'CSF PK (optional sub-study)'],
       source_document_id: 'demo-doc-002',
       cross_references: [],
+      confidence_state: 'medium',
     },
 
     // ND-L02-s0201-005 (IPF) — IV Q2W × 24wk, FVC/spirometry schedule
@@ -165,6 +176,7 @@ export function getDemoVisitTemplates(): ProtocolVisitTemplate[] {
       procedures: ['Informed consent', 'Eligibility review', 'HRCT review', 'Spirometry (FVC)', 'DLCO'],
       source_document_id: 'demo-doc-003',
       cross_references: [],
+      confidence_state: 'high',
     },
     {
       id: 'demo-tpl-i-002',
@@ -176,6 +188,7 @@ export function getDemoVisitTemplates(): ProtocolVisitTemplate[] {
       procedures: ['Pre-infusion vitals', 'ND-L02-s0201 IV infusion', 'Post-infusion observation', 'Spirometry (FVC)'],
       source_document_id: 'demo-doc-003',
       cross_references: [],
+      confidence_state: 'medium',
     },
     {
       id: 'demo-tpl-i-003',
@@ -187,6 +200,7 @@ export function getDemoVisitTemplates(): ProtocolVisitTemplate[] {
       procedures: ['Vitals', 'ND-L02-s0201 IV infusion', 'AE/SAE review', 'Blood draw'],
       source_document_id: 'demo-doc-003',
       cross_references: [],
+      confidence_state: 'needs_review',
     },
     {
       id: 'demo-tpl-i-004',
@@ -198,6 +212,7 @@ export function getDemoVisitTemplates(): ProtocolVisitTemplate[] {
       procedures: ['Vitals', 'ND-L02-s0201 IV infusion', 'Spirometry (FVC)', 'DLCO', 'AE check'],
       source_document_id: 'demo-doc-003',
       cross_references: [],
+      confidence_state: 'low',
     },
     {
       id: 'demo-tpl-i-005',
@@ -209,6 +224,7 @@ export function getDemoVisitTemplates(): ProtocolVisitTemplate[] {
       procedures: ['Final vitals', 'Spirometry (FVC)', 'DLCO', 'AE/SAE review', 'End-of-treatment assessments'],
       source_document_id: 'demo-doc-003',
       cross_references: [],
+      confidence_state: 'high',
     },
   ];
 }

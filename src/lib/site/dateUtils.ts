@@ -50,8 +50,18 @@ export function addDays(d: Date, days: number): Date {
 
 /** Return a new Date that is `months` months after (or before, if negative) `d`. */
 export function addMonths(d: Date, months: number): Date {
+  // Compute the target year/month first, then clamp the day-of-month to the
+  // last valid day of that month. Using Date.setMonth directly on the source
+  // day-of-month overflows for days 29–31 (e.g. Jan 31 + 1 → Mar 3, skipping
+  // Feb), which corrupts calendar "next/prev month" navigation.
+  const targetMonthIndex = d.getMonth() + months;
+  const targetYear = d.getFullYear() + Math.floor(targetMonthIndex / 12);
+  const targetMonth = ((targetMonthIndex % 12) + 12) % 12;
+  // Day 0 of the following month gives the last day of the target month.
+  const daysInTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+  const day = Math.min(d.getDate(), daysInTargetMonth);
   const copy = new Date(d);
-  copy.setMonth(copy.getMonth() + months);
+  copy.setFullYear(targetYear, targetMonth, day);
   return copy;
 }
 
@@ -97,17 +107,37 @@ function parseCertDate(iso: string): Date {
   return new Date(iso + (iso.length === 10 ? 'T12:00:00' : ''));
 }
 
+/**
+ * True when `iso` is empty or does not parse to a real date. An empty/absent
+ * `certified_through` (e.g. a NULL coerced to '' by realSiteRepo) must fail
+ * CLOSED: a clinical-role member with no cert on file is a compliance gap that
+ * should surface as "needs attention", never be indistinguishable from a
+ * far-future cert. Without this guard, `NaN` comparisons silently evaluate to
+ * "not expired" / "not expiring".
+ */
+function isMissingCertDate(iso: string): boolean {
+  return iso === '' || Number.isNaN(parseCertDate(iso).getTime());
+}
+
 export function isCertExpired(iso: string): boolean {
+  // Fail closed: a missing/invalid cert date is treated as expired.
+  if (isMissingCertDate(iso)) return true;
   return parseCertDate(iso).getTime() < Date.now();
 }
 
 export function isCertExpiringSoon(iso: string, windowDays = 30): boolean {
+  // A missing/invalid cert date is already surfaced as expired (fail closed),
+  // so it is not additionally "expiring soon" — callers render the two states
+  // as mutually exclusive.
+  if (isMissingCertDate(iso)) return false;
   const t = parseCertDate(iso).getTime();
   const now = Date.now();
   return t > now && t < now + windowDays * 24 * 60 * 60 * 1000;
 }
 
 export function daysUntilCertExpiry(iso: string): number {
+  // Missing/invalid cert date sorts as maximally overdue.
+  if (isMissingCertDate(iso)) return -Infinity;
   const diffMs = parseCertDate(iso).getTime() - Date.now();
   return Math.ceil(diffMs / (24 * 60 * 60 * 1000));
 }

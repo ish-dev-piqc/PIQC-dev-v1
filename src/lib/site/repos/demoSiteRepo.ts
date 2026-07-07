@@ -150,9 +150,12 @@ async function deleteParticipant(uuid: string): Promise<Result<void>> {
 async function fetchVisitsForProtocol(protocolId: string): Promise<Result<SiteVisit[]>> {
   const state = getDemoStore().getState();
 
-  // Join cross-references from visit templates by matching on visit name —
-  // demo visits don't carry a template_id, but visit_name is unique enough
-  // within a protocol's schedule for the demo to feel right.
+  // Join cross-references + extraction confidence from visit templates by
+  // matching on visit name — demo visits don't carry a template_id, but
+  // visit_name is unique enough within a protocol's schedule for the demo to
+  // feel right. Mirrors realSiteRepo.rowToVisit, which pulls both
+  // cross_references and confidence_state from the protocol_visit_templates
+  // join onto every visit.
   const templatesByName = new Map<string, ProtocolVisitTemplate>();
   for (const t of state.visitTemplates) {
     if (t.protocol_id === protocolId) templatesByName.set(t.visit_name, t);
@@ -162,8 +165,14 @@ async function fetchVisitsForProtocol(protocolId: string): Promise<Result<SiteVi
     .filter((v) => v.protocolId === protocolId)
     .map((v) => {
       const tpl = templatesByName.get(v.visitName);
-      if (!tpl || tpl.cross_references.length === 0) return v;
-      return { ...v, crossReferences: tpl.cross_references };
+      if (!tpl) return v;
+      const crossReferences =
+        tpl.cross_references.length > 0 ? tpl.cross_references : v.crossReferences;
+      return {
+        ...v,
+        crossReferences,
+        confidenceState: tpl.confidence_state ?? v.confidenceState,
+      };
     })
     .sort((a, b) => a.date.localeCompare(b.date));
   return ok(list);
