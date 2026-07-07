@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: fable-bugfix-fb-af47638
-status: active
+status: merged
+merged: 2026-07-07
 started: 2026-07-06
-target_pr:
+target_pr: #458
 ---
 
 # Fable bug-hunt apply — FB-af47638-d7231d0354a2
