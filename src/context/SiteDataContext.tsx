@@ -115,6 +115,12 @@ export function SiteDataProvider({ children }: { children: React.ReactNode }) {
         const allVisits: SiteVisit[] = [];
         const allTeam: SiteTeamMember[] = [];
         const allDocs: ProtocolDocument[] = [];
+        // A protocol whose fetches partially fail must not silently vanish
+        // from the merged view — that renders indistinguishable from "this
+        // protocol has no visits". Track failures and surface an aggregate
+        // error alongside the partial data (the single-protocol branch below
+        // already throws → setError; this keeps the two branches honest).
+        let failedProtocols = 0;
         // Read live protocols via ref — see protocolsRef note above.
         for (const p of protocolsRef.current) {
           const [pr, vr, tr, dr] = await Promise.all([
@@ -127,12 +133,18 @@ export function SiteDataProvider({ children }: { children: React.ReactNode }) {
           if (vr.ok) allVisits.push(...vr.data);
           if (tr.ok) allTeam.push(...tr.data);
           if (dr.ok) allDocs.push(...dr.data);
+          if (!pr.ok || !vr.ok || !tr.ok || !dr.ok) failedProtocols++;
         }
         if (token !== fetchTokenRef.current) return;
         setParticipants(allParticipants);
         setVisits(enrichCrossRefs(allVisits, allDocs));
         setTeamMembers(allTeam);
         setDocuments(allDocs);
+        if (failedProtocols > 0) {
+          setError(
+            `${failedProtocols} of ${protocolsRef.current.length} protocols failed to load — data shown may be incomplete`,
+          );
+        }
         return;
       }
 
@@ -186,39 +198,52 @@ export function SiteDataProvider({ children }: { children: React.ReactNode }) {
     const channel = supabase.channel(`site-data-${activeProtocol?.id ?? 'all'}`);
     const pid = activeProtocol?.id ?? null;
 
+    // Coalesce bursts of realtime events into one refresh. A bulk write
+    // (CSV import, batch visit materialization) emits one event per row;
+    // without a debounce each event fires a full refetch cycle — in
+    // cross-protocol scope that's 4×protocols queries per event. The
+    // fetchTokenRef guard already prevents stale state writes; this stops
+    // the redundant network fan-out itself.
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedRefresh = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => refresh(), 300);
+    };
+
     if (pid) {
       channel
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'site_participants', filter: `protocol_id=eq.${pid}` },
-          () => refresh(),
+          debouncedRefresh,
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'site_visits', filter: `protocol_id=eq.${pid}` },
-          () => refresh(),
+          debouncedRefresh,
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'site_team_members', filter: `protocol_id=eq.${pid}` },
-          () => refresh(),
+          debouncedRefresh,
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'documents', filter: `protocol_id=eq.${pid}` },
-          () => refresh(),
+          debouncedRefresh,
         );
     } else {
       // Cross-protocol scope — subscribe without filter; refresh fans out.
       channel
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'site_participants' }, () => refresh())
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'site_visits' }, () => refresh())
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'site_team_members' }, () => refresh())
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'documents' }, () => refresh());
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'site_participants' }, debouncedRefresh)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'site_visits' }, debouncedRefresh)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'site_team_members' }, debouncedRefresh)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'documents' }, debouncedRefresh);
     }
 
     channel.subscribe();
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       supabase.removeChannel(channel);
     };
   }, [activeProtocol?.id, refresh, demoActive]);
