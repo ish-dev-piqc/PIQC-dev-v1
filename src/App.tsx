@@ -311,7 +311,10 @@ function AppContent() {
    *  auto-opens the detail drawer. */
   const handleNavigateToVisit = (visitId: string) => {
     try {
-      localStorage.setItem('piq-pending-visit-v1', visitId);
+      localStorage.setItem(
+        'piq-pending-visit-v1',
+        JSON.stringify({ id: visitId, ts: Date.now() }),
+      );
     } catch {
       /* ignore */
     }
@@ -325,7 +328,10 @@ function AppContent() {
    *  `piq-pending-participant-v1` on mount and auto-opens the profile. */
   const handleNavigateToParticipant = (participantCode: string) => {
     try {
-      localStorage.setItem('piq-pending-participant-v1', participantCode);
+      localStorage.setItem(
+        'piq-pending-participant-v1',
+        JSON.stringify({ id: participantCode, ts: Date.now() }),
+      );
     } catch {
       /* ignore */
     }

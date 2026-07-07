@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { X, Calendar, AlertTriangle, Info } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
+import { useOverlay } from '../../../hooks/useOverlay';
 import { setAnchorDate, materializeVisits } from '../../../lib/site/siteApi';
 import { TIMEZONE_OPTIONS } from '../../../lib/timezones';
 
@@ -35,6 +36,10 @@ export default function AnchorDateModal({
 }: Props) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
+  const panelRef = useRef<HTMLDivElement>(null);
+  // Parents mount this modal only while it's open, so isOpen is always true —
+  // same idiom as VisitDetailDrawer.
+  useOverlay({ isOpen: true, onClose, containerRef: panelRef });
 
   const [date, setDate] = useState<string>(initialDate ?? new Date().toISOString().slice(0, 10));
   const [timezone, setTimezone] = useState<string>(initialTimezone ?? '');
@@ -99,7 +104,10 @@ export default function AnchorDateModal({
       }}
       className="fixed inset-0 z-[80] bg-black/40 flex items-center justify-center px-4 animate-fade-in"
     >
-      <div className={`w-full max-w-md ${bg} border ${border} rounded-xl shadow-xl flex flex-col`}>
+      <div
+        ref={panelRef}
+        className={`w-full max-w-md ${bg} border ${border} rounded-xl shadow-xl flex flex-col`}
+      >
         {/* Header */}
         <div className={`flex items-center justify-between px-5 py-4 border-b ${border}`}>
           <div className="flex items-center gap-2.5">
