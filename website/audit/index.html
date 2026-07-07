@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- HEAD:BEGIN -->
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PIQClinical — Audit Mode</title>
+<meta name="description" content="Audit Mode: a gated 8-stage vendor audit workflow — risk-scored findings, an Issue-to-CAPA lifecycle, AI-drafted reports the auditor confirms, and end-to-end traceability." />
+<link rel="canonical" href="https://piqclinical.com/audit" />
+<!-- theme-color = --scrub-blue in tokens.css (meta tags cannot consume CSS custom properties) -->
+<meta name="theme-color" content="#1e7fd4" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="PIQClinical" />
+<meta property="og:title" content="PIQClinical — Audit Mode" />
+<meta property="og:description" content="Audit Mode: a gated 8-stage vendor audit workflow — risk-scored findings, an Issue-to-CAPA lifecycle, AI-drafted reports the auditor confirms, and end-to-end traceability." />
+<meta property="og:url" content="https://piqclinical.com/audit" />
+<meta property="og:image" content="https://piqclinical.com/og-card.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="PIQClinical — the intelligence layer between protocol complexity and clinical execution" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="PIQClinical — Audit Mode" />
+<meta name="twitter:description" content="Audit Mode: a gated 8-stage vendor audit workflow — risk-scored findings, an Issue-to-CAPA lifecycle, AI-drafted reports the auditor confirms, and end-to-end traceability." />
+<meta name="twitter:image" content="https://piqclinical.com/og-card.png" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/tokens.css" />
+<link rel="stylesheet" href="/site.css" />
+<script>
+  // Staging guard: Cloudflare Pages previews (*.pages.dev) must never be indexed.
+  if (location.hostname.endsWith('.pages.dev')) {
+    var piqcNoindex = document.createElement('meta');
+    piqcNoindex.name = 'robots';
+    piqcNoindex.content = 'noindex';
+    document.head.appendChild(piqcNoindex);
+  }
+</script>
+<!-- HEAD:END -->
+</head>
+<body>
+<!-- SKIP:BEGIN -->
+<a class="skip-link" href="#main">Skip to main content</a>
+<!-- SKIP:END -->
+<!-- LOGO:BEGIN -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <linearGradient id="ribbonGrad" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#2b8fd9"/><stop offset="55%" stop-color="#1e9fc0"/><stop offset="100%" stop-color="#14b8a6"/>
+  </linearGradient>
+  <linearGradient id="wingGrad" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#c6e0d8"/><stop offset="100%" stop-color="#a0c8bc"/>
+  </linearGradient>
+  <symbol id="piqc-mark" viewBox="0 0 64 64">
+    <path d="M6 24 C 14 14, 30 14, 33 38 C 20 40, 8 34, 6 24 Z" fill="url(#wingGrad)" opacity="0.6"/>
+    <path d="M12 30 C 18 24, 28 24, 31 39 C 22 40, 14 37, 12 30 Z" fill="url(#wingGrad)" opacity="0.5"/>
+    <path d="M28 58 C 20 46, 46 39, 39 24 C 35 15, 43 11, 47 8" fill="none" stroke="url(#ribbonGrad)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M33 58 C 45 47, 23 40, 31 25 C 36 16, 33 12, 41 7" fill="none" stroke="url(#ribbonGrad)" stroke-width="2.2" stroke-linecap="round" opacity="0.85"/>
+    <path d="M47 3 L48.7 8.3 L54 10 L48.7 11.7 L47 17 L45.3 11.7 L40 10 L45.3 8.3 Z" fill="#2b8fd9"/>
+    <circle cx="40" cy="15" r="1.3" fill="#2b8fd9"/><circle cx="37" cy="19" r="1.05" fill="#2b8fd9"/><circle cx="35" cy="23" r="0.85" fill="#2b8fd9"/>
+    <circle cx="45" cy="31" r="1.3" fill="#1e9fc0"/><circle cx="47" cy="36" r="1.05" fill="#14b8a6"/><circle cx="46" cy="41" r="0.85" fill="#14b8a6"/>
+  </symbol>
+</defs></svg>
+<!-- LOGO:END -->
+<!-- NAV:BEGIN -->
+<header class="site-nav">
+  <div class="container nav-inner">
+    <a href="/" class="nav-brand">
+      <svg class="nav-logo" aria-hidden="true" focusable="false"><use href="#piqc-mark"/></svg>
+      <span class="wordmark"><span class="grad-text">PIQC</span><span class="wordmark-linical">linical</span></span>
+    </a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-menu">
+      <svg aria-hidden="true" focusable="false" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+      <span class="visually-hidden">Menu</span>
+    </button>
+    <nav class="nav-links" id="site-menu" aria-label="Primary">
+      <a class="nav-link" href="/#why">Why PIQC</a>
+      <a class="nav-link" href="/#engine">The engine</a>
+      <a class="nav-link" href="/#ask">Ask</a>
+      <a class="nav-link" href="/#downstream">Downstream</a>
+      <a class="nav-link" href="/#boundary">Product boundary</a>
+      <a class="nav-link" href="/#founder">Founder intent</a>
+      <a class="nav-link" href="/security">Security</a>
+      <div class="nav-modes" role="group" aria-label="Modes">
+        <span class="nav-group-label" aria-hidden="true">Modes</span>
+        <a class="nav-link" href="/site">Site Mode</a>
+        <a class="nav-link" href="/audit">Audit Mode</a>
+        <a class="nav-link" href="/sponsor">Sponsor Mode</a>
+      </div>
+      <a class="btn-primary nav-cta" href="mailto:hello@piqclinical.com?subject=PIQClinical%20demo%20request">Request a demo</a>
+    </nav>
+  </div>
+</header>
+<!-- NAV:END -->
+<main id="main">
+
+  <!-- SECTION: audit-hero — Audit Mode hero + boundary reassurance + audit-pipeline mockup -->
+  <section id="hero" data-section="audit-hero" class="hero">
+    <div class="hero-bg grad-soft grid-pattern" aria-hidden="true"></div>
+    <div class="container">
+      <div class="hero-intro">
+        <p class="eyebrow">Audit Mode · Downstream of the protocol engine</p>
+        <h1 class="h-display">An 8-stage vendor audit that enforces itself.</h1>
+        <p class="lead">From intake to export, nothing advances until the right approvals are in place. Findings are risk-scored and traceable, and PIQC drafts the report for the auditor to review.</p>
+        <p class="provenance-line"><span class="accent">Boundary:</span> A structured workflow, not a system of record — the auditor approves every gate; PIQC drafts and traces.</p>
+        <div class="hero-ctas">
+          <a class="btn-primary" href="mailto:hello@piqclinical.com?subject=PIQClinical%20demo%20request">Request a demo</a>
+          <a class="btn-ghost" href="#pipeline">See the 8-stage pipeline</a>
+        </div>
+      </div>
+      <div class="hero-visual" data-reveal>
+        <div class="screenshot" data-anim="audit-pipeline">
+          <div class="mockup-chrome">
+            <span class="mockup-dot mockup-dot--r" aria-hidden="true"></span>
+            <span class="mockup-dot mockup-dot--y" aria-hidden="true"></span>
+            <span class="mockup-dot mockup-dot--g" aria-hidden="true"></span>
+            <span class="mockup-label">app.piqclinical.com — Vendor audit · Acme BioPharma central lab</span>
+            <div class="mockup-chrome-badges">
+              <span class="stage-pill badge-blue">Stage 5 of 8</span>
+            </div>
+          </div>
+          <div class="mockup-body">
+            <div class="mockup-scroll">
+              <ol class="stepper" aria-label="Audit pipeline stages">
+                <li data-step><span class="stage-pill">Intake</span></li>
+                <li data-step><span class="stage-pill">Vendor enrichment</span></li>
+                <li data-step><span class="stage-pill">Questionnaire review</span></li>
+                <li data-step><span class="stage-pill">Scope &amp; risk review</span></li>
+                <li data-step><span class="stage-pill">Pre-audit drafting</span></li>
+                <li data-step><span class="stage-pill">Audit conduct</span></li>
+                <li data-step><span class="stage-pill">Report drafting</span></li>
+                <li data-step><span class="stage-pill">Final review &amp; export</span></li>
+              </ol>
+            </div>
+            <div class="mockup-row" data-step>
+              <span class="mockup-check" aria-hidden="true"></span>
+              <div class="mockup-row-main">
+                <span class="mockup-row-title">Gate passed — Scope &amp; risk review approved by the lead auditor <span class="mockup-tag mockup-tag--eligibility">Unlocked</span></span>
+                <span class="mockup-row-meta">Pre-audit drafting is now open · approval logged with reviewer and timestamp</span>
+              </div>
+            </div>
+            <div class="mockup-row" data-step>
+              <span class="mockup-check" aria-hidden="true"></span>
+              <div class="mockup-row-main">
+                <span class="mockup-row-title">Finding F-012 — Sample chain-of-custody SOP does not reference the pre-dose PK handling window <span class="mockup-tag mockup-tag--endpoint">Data integrity</span></span>
+                <span class="mockup-row-meta"><span class="mockup-source">§6.3 · p.36</span> Severity: Major — assigned by the auditor · linked to vendor responsibility: PK sample handling</span>
+              </div>
+            </div>
+            <div class="mockup-footer" data-step>
+              <span>PIQC draft · findings traced for auditor review</span>
+              <span class="accent">Findings 3 · 1 Major · 2 Minor</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: pipeline — the 8-stage gated pipeline -->
+  <section id="pipeline" data-section="pipeline" class="section section--alt">
+    <div class="container">
+      <div class="prose" data-reveal>
+        <p class="eyebrow">Live today · Gated advancement</p>
+        <h2 class="h-section">Eight stages. Nothing advances without an approval.</h2>
+        <p class="lead">The vendor audit runs as a single gated pipeline. Each stage unlocks only when the required human approvals are in place — so the audit trail of who advanced what, and when, writes itself as the work happens.</p>
+      </div>
+      <div data-reveal>
+        <ol class="stepper mt-8" aria-label="The eight audit stages">
+          <li><span class="stage-pill">Intake</span></li>
+          <li><span class="stage-pill">Vendor enrichment</span></li>
+          <li><span class="stage-pill">Questionnaire review</span></li>
+          <li><span class="stage-pill">Scope &amp; risk review</span></li>
+          <li><span class="stage-pill">Pre-audit drafting</span></li>
+          <li><span class="stage-pill">Audit conduct</span></li>
+          <li><span class="stage-pill">Report drafting</span></li>
+          <li><span class="stage-pill">Final review &amp; export</span></li>
+        </ol>
+      </div>
+      <div class="cards-3 mt-12" data-reveal>
+        <div class="card card--padded">
+          <h3>Structured from the first day</h3>
+          <p>Intake, vendor enrichment, and questionnaire review build the vendor picture — criticality and trust posture — before scope is set.</p>
+        </div>
+        <div class="card card--padded">
+          <h3>Scoped by risk, not habit</h3>
+          <p>Scope &amp; risk review and pre-audit drafting turn protocol-derived requirements into a focused, evidence-backed audit plan.</p>
+        </div>
+        <div class="card card--padded">
+          <h3>Reviewed before it leaves</h3>
+          <p>Audit conduct, report drafting, and final review &amp; export keep the auditor in control of every conclusion that ships.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: findings — risk-scored findings across two impact surfaces -->
+  <section id="findings" data-section="findings" class="section">
+    <div class="container split">
+      <div class="prose" data-reveal>
+        <p class="eyebrow">Live today · Findings</p>
+        <h2 class="h-section">Findings that are risk-scored and traceable — end to end.</h2>
+        <p class="lead">Every finding traces the same chain: the protocol requirement, the vendor responsibility it maps to, and the evidence reviewed. Findings are scored across two impact surfaces — data integrity and patient safety.</p>
+        <ul>
+          <li>Severity — Critical, Major, Minor, or Observation — is assigned by the auditor, never proposed autonomously by the AI.</li>
+          <li>Each finding links back to its protocol source with section and page.</li>
+          <li>Evidence attachments stay connected to the finding they support.</li>
+        </ul>
+        <p class="provenance-line"><span class="accent">AI drafts. Humans decide.</span> Everything is traceable.</p>
+      </div>
+      <div data-reveal>
+        <div class="screenshot">
+          <div class="mockup-chrome">
+            <span class="mockup-dot mockup-dot--r" aria-hidden="true"></span>
+            <span class="mockup-dot mockup-dot--y" aria-hidden="true"></span>
+            <span class="mockup-dot mockup-dot--g" aria-hidden="true"></span>
+            <span class="mockup-label">Findings — Acme BioPharma central lab</span>
+          </div>
+          <div class="mockup-body">
+            <p class="mockup-phase">Risk-scored findings</p>
+            <div class="mockup-row">
+              <span class="mockup-check" aria-hidden="true"></span>
+              <div class="mockup-row-main">
+                <span class="mockup-row-title">F-012 · Chain-of-custody SOP omits the pre-dose PK handling window <span class="mockup-tag mockup-tag--endpoint">Data integrity</span></span>
+                <span class="mockup-row-meta"><span class="mockup-source">§6.3 · p.36</span> Severity: Major (auditor-assigned) · responsibility: PK sample handling · evidence: SOP-114</span>
+              </div>
+            </div>
+            <div class="mockup-row">
+              <span class="mockup-check" aria-hidden="true"></span>
+              <div class="mockup-row-main">
+                <span class="mockup-row-title">F-013 · Temperature-excursion escalation path not documented for dosing-day shipments <span class="mockup-tag mockup-tag--safety">Patient safety</span></span>
+                <span class="mockup-row-meta"><span class="mockup-source">§8.4 · p.44</span> Severity: Minor (auditor-assigned) · responsibility: IP logistics · evidence: shipping log excerpt</span>
+              </div>
+            </div>
+            <div class="mockup-row">
+              <span class="mockup-check" aria-hidden="true"></span>
+              <div class="mockup-row-main">
+                <span class="mockup-row-title">F-014 · Analyst training record predates the current assay version <span class="mockup-tag mockup-tag--endpoint">Data integrity</span></span>
+                <span class="mockup-row-meta"><span class="mockup-source">§7.2.1 · p.31</span> Severity: Minor (auditor-assigned) · responsibility: assay operations · evidence: training matrix</span>
+              </div>
+            </div>
+            <div class="mockup-footer">
+              <span>Requirement → responsibility → evidence, on every row</span>
+              <span class="accent">3 findings · auditor-owned</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: capa — Issue → CAPA lifecycle -->
+  <section id="capa" data-section="capa" class="section section--alt">
+    <div class="container">
+      <div class="prose" data-reveal>
+        <p class="eyebrow">Live today · Issue → CAPA</p>
+        <h2 class="h-section">From finding to Issue to CAPA — without re-typing the context.</h2>
+        <p class="lead">Raise an Issue from a finding and the CAPA arrives pre-filled from the finding&rsquo;s context — requirement, responsibility, and evidence carried forward instead of transcribed. The issue&rsquo;s state follows its CAPA, so there is one lifecycle to track, not two.</p>
+      </div>
+      <ol class="lifecycle mt-8" data-reveal aria-label="CAPA lifecycle">
+        <li class="lifecycle-item">
+          <span class="lifecycle-stage">Draft</span>
+          <span class="lifecycle-example">PIQC pre-fills the CAPA from the finding&rsquo;s requirement, responsibility, and evidence. The auditor edits every field.</span>
+        </li>
+        <li class="lifecycle-item">
+          <span class="lifecycle-stage">Needs revision</span>
+          <span class="lifecycle-example">Review feedback sends the CAPA back with its history intact — nothing is lost between rounds.</span>
+        </li>
+        <li class="lifecycle-item">
+          <span class="lifecycle-stage">Accepted</span>
+          <span class="lifecycle-example">The strongest in-app state: ready to export. Formal approval happens in your QMS, after export — deliberately outside PIQC.</span>
+        </li>
+      </ol>
+      <p class="prose mt-8" data-reveal>PIQC deliberately stops at <strong>Accepted</strong> — it never marks a CAPA &ldquo;approved.&rdquo; Approval belongs to your quality system, and the boundary is built in.</p>
+    </div>
+  </section>
+
+  <!-- SECTION: report — AI report drafting with earned write-back -->
+  <section id="report" data-section="report" class="section">
+    <div class="container split split--reverse">
+      <div class="prose" data-reveal>
+        <p class="eyebrow">Live today · Report drafting</p>
+        <h2 class="h-section">AI drafts the report. Two human confirmations before a word lands.</h2>
+        <p class="lead">PIQC drafts the executive summary and conclusions from the findings the auditor logged. But drafting is not writing: nothing enters the report until the auditor gives two explicit confirmations — first reviewing the draft text, then confirming the write-back itself.</p>
+        <ul>
+          <li>Earned write-back: AI text reaches the report only after both confirmations.</li>
+          <li>Every accepted passage is attributed as drafted, with the auditor&rsquo;s confirmation logged.</li>
+          <li>Decline either step and the draft stays a draft — the report is untouched.</li>
+        </ul>
+        <p class="provenance-line"><span class="accent">Humans approve every word</span> that reaches the report.</p>
+      </div>
+      <div data-reveal>
+        <div class="screenshot">
+          <div class="mockup-chrome">
+            <span class="mockup-dot mockup-dot--r" aria-hidden="true"></span>
+            <span class="mockup-dot mockup-dot--y" aria-hidden="true"></span>
+            <span class="mockup-dot mockup-dot--g" aria-hidden="true"></span>
+            <span class="mockup-label">Report drafting — executive summary</span>
+          </div>
+          <div class="mockup-body">
+            <div class="mockup-answer">
+              <p class="m-0">Draft: &ldquo;The vendor demonstrated documented control of assay operations. Three findings were recorded, of which one (Major) concerns the pre-dose PK handling window&hellip;&rdquo;</p>
+            </div>
+            <p class="mockup-phase">Earned write-back</p>
+            <div class="mockup-row">
+              <span class="mockup-check" aria-hidden="true"></span>
+              <div class="mockup-row-main">
+                <span class="mockup-row-title">Confirmation 1 — auditor reviewed the draft text <span class="mockup-tag mockup-tag--eligibility">Confirmed</span></span>
+                <span class="mockup-row-meta">Logged with reviewer and timestamp</span>
+              </div>
+            </div>
+            <div class="mockup-row">
+              <span class="mockup-check" aria-hidden="true"></span>
+              <div class="mockup-row-main">
+                <span class="mockup-row-title">Confirmation 2 — auditor confirmed write-back to the report <span class="mockup-tag mockup-tag--eligibility">Confirmed</span></span>
+                <span class="mockup-row-meta">Only now does the drafted text enter the report</span>
+              </div>
+            </div>
+            <div class="mockup-footer">
+              <span>PIQC drafted · auditor confirmed, twice</span>
+              <span class="accent">Write-back complete</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: traceability — amendment alerts + lineage -->
+  <section id="traceability" data-section="traceability" class="section section--alt">
+    <div class="container">
+      <div class="prose" data-reveal>
+        <p class="eyebrow">Live today · Amendments &amp; lineage</p>
+        <h2 class="h-section">When the protocol changes, the audit knows.</h2>
+        <p class="lead">Because Audit Mode runs on the same parsed protocol as everything else, a protocol amendment surfaces alerts on the audit objects it touches — for the auditor to adopt or dismiss, never applied silently.</p>
+      </div>
+      <div class="cards-3 mt-8" data-reveal>
+        <div class="card card--padded">
+          <h3>Amendment alerts</h3>
+          <p>Version changes flag affected extractions and the audit items built on them. Each alert is an adopt-or-dismiss decision that belongs to the auditor.</p>
+        </div>
+        <div class="card card--padded">
+          <h3>Lineage on every object</h3>
+          <p>Findings, Issues, and CAPAs carry per-object history — who changed what, and when — so any conclusion can be followed back to its origin.</p>
+        </div>
+        <div class="card card--padded">
+          <h3>Evidence, attached in place</h3>
+          <p>Evidence attachments live on the object they support. The chain from protocol requirement to vendor responsibility to evidence stays intact through export.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: investigator-audits — Platform direction -->
+  <section id="investigator-audits" data-section="investigator-audits" class="section">
+    <div class="container">
+      <div class="prose" data-reveal>
+        <p class="eyebrow">Where the workspace is going</p>
+        <h2 class="h-section">The same gated workspace, extending to investigator-site audits. <span class="direction-tag">Platform direction</span></h2>
+        <p class="lead">Vendor audits are live today. The same structure — gated stages, risk-scored findings, Issue-to-CAPA, drafted-then-confirmed reporting — is being extended to investigator-site audits. It is expanding, not shipped: we label it as direction until it is broadly available.</p>
+        <p class="provenance-line"><span class="accent">Live today:</span> the 8-stage vendor audit. <span class="accent">Platform direction:</span> investigator-site audits on the same backbone.</p>
+      </div>
+    </div>
+  </section>
+
+
+<!-- DEMO-CTA:BEGIN -->
+<section id="request-demo" data-section="final-cta" class="section section--dark cta-band">
+  <div class="container cta-band-inner">
+    <h2 class="cta-band-title">The protocol should be a source of mastery, not a recurring cognitive burden.</h2>
+    <p class="cta-band-body">See what PIQC surfaces from your own protocol workflow.</p>
+    <div class="cta-band-actions">
+      <a class="btn-primary" href="mailto:hello@piqclinical.com?subject=PIQClinical%20demo%20request">Request a demo</a>
+      <a class="btn-ghost btn-ghost--dark" href="mailto:hello@piqclinical.com?subject=PIQClinical%20protocol%20workflow%20conversation">Talk through your protocol workflow</a>
+    </div>
+    <!-- FUTURE FORM INTEGRATION POINT (FABLE-BRIEF §8):
+         When an approved scheduling link or form endpoint exists, replace the
+         mailto CTAs above with the real form / scheduler and update
+         content.js demo.{mode,endpoint,ctaHref}. Until then the mailto is the
+         only approved destination — do NOT simulate a successful submission.
+         Any future form must never request PHI, study data, or sensitive
+         operational information. -->
+  </div>
+</section>
+<!-- DEMO-CTA:END -->
+</main>
+<!-- FOOTER:BEGIN -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="/" class="nav-brand">
+          <svg class="nav-logo" aria-hidden="true" focusable="false"><use href="#piqc-mark"/></svg>
+          <span class="wordmark"><span class="grad-text">PIQC</span><span class="wordmark-linical">linical</span></span>
+        </a>
+        <p class="footer-tagline">The intelligence layer between protocol complexity and clinical execution.</p>
+      </div>
+      <nav class="footer-col" aria-label="Product">
+        <p class="footer-heading">Product</p>
+        <ul class="footer-list">
+          <li><a class="footer-link" href="/site">Site Mode</a></li>
+          <li><a class="footer-link" href="/audit">Audit Mode</a></li>
+          <li><a class="footer-link" href="/sponsor">Sponsor Mode</a></li>
+          <li><a class="footer-link" href="/security">Security</a></li>
+        </ul>
+      </nav>
+      <nav class="footer-col" aria-label="Company">
+        <p class="footer-heading">Company</p>
+        <ul class="footer-list">
+          <li><a class="footer-link" href="/#why">Why PIQC</a></li>
+          <li><a class="footer-link" href="/#founder">Founder intent</a></li>
+          <li><a class="footer-link" href="/#request-demo">Request a demo</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="footer-legal">
+      <p>© 2026 PIQClinical. All rights reserved.</p>
+    </div>
+  </div>
+</footer>
+<!-- FOOTER:END -->
+<script type="module" src="/content.js"></script>
+<script type="module" src="/animations.js"></script>
+</body>
+</html>

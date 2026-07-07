@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- HEAD:BEGIN -->
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PIQClinical — Sponsor Mode · The Protocol Deliverable Engine</title>
+<meta name="description" content="Sponsor Mode for enterprise sponsors: parse a protocol once and generate structured draft deliverables — Monitoring Prep Checklist and Risk Overview — with content-origin labels on every block and source provenance on every fact." />
+<link rel="canonical" href="https://piqclinical.com/sponsor" />
+<!-- theme-color = --scrub-blue in tokens.css (meta tags cannot consume CSS custom properties) -->
+<meta name="theme-color" content="#1e7fd4" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="PIQClinical" />
+<meta property="og:title" content="PIQClinical — Sponsor Mode · The Protocol Deliverable Engine" />
+<meta property="og:description" content="Sponsor Mode for enterprise sponsors: parse a protocol once and generate structured draft deliverables — Monitoring Prep Checklist and Risk Overview — with content-origin labels on every block and source provenance on every fact." />
+<meta property="og:url" content="https://piqclinical.com/sponsor" />
+<meta property="og:image" content="https://piqclinical.com/og-card.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="PIQClinical — the intelligence layer between protocol complexity and clinical execution" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="PIQClinical — Sponsor Mode · The Protocol Deliverable Engine" />
+<meta name="twitter:description" content="Sponsor Mode for enterprise sponsors: parse a protocol once and generate structured draft deliverables — Monitoring Prep Checklist and Risk Overview — with content-origin labels on every block and source provenance on every fact." />
+<meta name="twitter:image" content="https://piqclinical.com/og-card.png" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/tokens.css" />
+<link rel="stylesheet" href="/site.css" />
+<script>
+  // Staging guard: Cloudflare Pages previews (*.pages.dev) must never be indexed.
+  if (location.hostname.endsWith('.pages.dev')) {
+    var piqcNoindex = document.createElement('meta');
+    piqcNoindex.name = 'robots';
+    piqcNoindex.content = 'noindex';
+    document.head.appendChild(piqcNoindex);
+  }
+</script>
+<!-- HEAD:END -->
+</head>
+<body>
+<!-- SKIP:BEGIN -->
+<a class="skip-link" href="#main">Skip to main content</a>
+<!-- SKIP:END -->
+
+<!-- LOGO:BEGIN -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <linearGradient id="ribbonGrad" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#2b8fd9"/><stop offset="55%" stop-color="#1e9fc0"/><stop offset="100%" stop-color="#14b8a6"/>
+  </linearGradient>
+  <linearGradient id="wingGrad" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#c6e0d8"/><stop offset="100%" stop-color="#a0c8bc"/>
+  </linearGradient>
+  <symbol id="piqc-mark" viewBox="0 0 64 64">
+    <path d="M6 24 C 14 14, 30 14, 33 38 C 20 40, 8 34, 6 24 Z" fill="url(#wingGrad)" opacity="0.6"/>
+    <path d="M12 30 C 18 24, 28 24, 31 39 C 22 40, 14 37, 12 30 Z" fill="url(#wingGrad)" opacity="0.5"/>
+    <path d="M28 58 C 20 46, 46 39, 39 24 C 35 15, 43 11, 47 8" fill="none" stroke="url(#ribbonGrad)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M33 58 C 45 47, 23 40, 31 25 C 36 16, 33 12, 41 7" fill="none" stroke="url(#ribbonGrad)" stroke-width="2.2" stroke-linecap="round" opacity="0.85"/>
+    <path d="M47 3 L48.7 8.3 L54 10 L48.7 11.7 L47 17 L45.3 11.7 L40 10 L45.3 8.3 Z" fill="#2b8fd9"/>
+    <circle cx="40" cy="15" r="1.3" fill="#2b8fd9"/><circle cx="37" cy="19" r="1.05" fill="#2b8fd9"/><circle cx="35" cy="23" r="0.85" fill="#2b8fd9"/>
+    <circle cx="45" cy="31" r="1.3" fill="#1e9fc0"/><circle cx="47" cy="36" r="1.05" fill="#14b8a6"/><circle cx="46" cy="41" r="0.85" fill="#14b8a6"/>
+  </symbol>
+</defs></svg>
+<!-- LOGO:END -->
+
+<!-- NAV:BEGIN -->
+<header class="site-nav">
+  <div class="container nav-inner">
+    <a href="/" class="nav-brand">
+      <svg class="nav-logo" aria-hidden="true" focusable="false"><use href="#piqc-mark"/></svg>
+      <span class="wordmark"><span class="grad-text">PIQC</span><span class="wordmark-linical">linical</span></span>
+    </a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-menu">
+      <svg aria-hidden="true" focusable="false" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+      <span class="visually-hidden">Menu</span>
+    </button>
+    <nav class="nav-links" id="site-menu" aria-label="Primary">
+      <a class="nav-link" href="/#why">Why PIQC</a>
+      <a class="nav-link" href="/#engine">The engine</a>
+      <a class="nav-link" href="/#ask">Ask</a>
+      <a class="nav-link" href="/#downstream">Downstream</a>
+      <a class="nav-link" href="/#boundary">Product boundary</a>
+      <a class="nav-link" href="/#founder">Founder intent</a>
+      <a class="nav-link" href="/security">Security</a>
+      <div class="nav-modes" role="group" aria-label="Modes">
+        <span class="nav-group-label" aria-hidden="true">Modes</span>
+        <a class="nav-link" href="/site">Site Mode</a>
+        <a class="nav-link" href="/audit">Audit Mode</a>
+        <a class="nav-link" href="/sponsor">Sponsor Mode</a>
+      </div>
+      <a class="btn-primary nav-cta" href="mailto:hello@piqclinical.com?subject=PIQClinical%20demo%20request">Request a demo</a>
+    </nav>
+  </div>
+</header>
+<!-- NAV:END -->
+
+<main id="main">
+
+  <!-- SECTION: hero — Sponsor Mode boundary reassurance + fan-out money shot -->
+  <section id="hero" data-section="hero" class="hero">
+    <div class="hero-bg grad-soft grid-pattern" aria-hidden="true"></div>
+    <div class="container">
+      <div class="hero-intro">
+        <p class="eyebrow">Sponsor Mode · Enterprise tier</p>
+        <h1 class="h-display">Parse the protocol once. Generate every deliverable.</h1>
+        <p class="lead">One extraction feeds many role-tailored deliverables — each block labeled protocol fact vs PIQC framing, each fact traceable to the page it came from.</p>
+        <p class="provenance-line">Read-only intelligence over your protocols — PIQC drafts deliverables; your teams review and release them.</p>
+        <div class="hero-ctas">
+          <a class="btn-primary" href="mailto:hello@piqclinical.com?subject=PIQClinical%20demo%20request">Request a demo</a>
+          <a class="btn-ghost" href="#deliverable-engine">See the Deliverable Engine</a>
+        </div>
+      </div>
+      <div class="hero-visual" data-reveal>
+        <div class="screenshot" data-anim="sponsor-fanout">
+          <div class="mockup-chrome">
+            <span class="mockup-dot mockup-dot--r" aria-hidden="true"></span>
+            <span class="mockup-dot mockup-dot--y" aria-hidden="true"></span>
+            <span class="mockup-dot mockup-dot--g" aria-hidden="true"></span>
+            <span class="mockup-label">PIQC · Protocol Deliverable Engine — Acme BioPharma · Protocol ACM-2024-017</span>
+            <span class="mockup-chrome-badges"><span class="stage-pill badge-blue">Draft</span></span>
+          </div>
+          <div class="mockup-body">
+            <div class="mockup-row" data-step>
+              <div class="mockup-row-main">
+                <span class="mockup-row-title">Protocol ACM-2024-017 — parsed once, human-reviewed in SOTR</span>
+                <span class="mockup-row-meta"><span class="mockup-source">Structured extraction</span><span>fans out into the deliverables below</span></span>
+              </div>
+            </div>
+            <div class="mockup-ask">
+              <div class="mockup-answer" data-step>
+                <p class="mockup-phase">Monitoring Prep Checklist</p>
+                <div class="mockup-row">
+                  <div class="mockup-row-main">
+                    <span class="mockup-row-title">PK sampling — pre-dose and 2, 4, 8 h post-dose <span class="stage-pill badge-blue">Protocol fact</span></span>
+                    <span class="mockup-row-meta"><span class="mockup-source">§7.1.1 · p.42</span><span class="dot dot--high"></span><span>High confidence</span></span>
+                  </div>
+                </div>
+                <div class="mockup-row">
+                  <div class="mockup-row-main">
+                    <span class="mockup-row-title">Day 1 staffing is worth confirming early — the sampling windows are tight <span class="stage-pill badge-medium">PIQC framing</span></span>
+                    <span class="mockup-row-meta"><span>Derived from the facts above — labeled, never blended</span></span>
+                  </div>
+                </div>
+              </div>
+              <div class="mockup-answer" data-step>
+                <p class="mockup-phase">Risk Overview</p>
+                <div class="mockup-row">
+                  <div class="mockup-row-main">
+                    <span class="mockup-row-title">Prohibited medications span three drug classes <span class="stage-pill badge-blue">Protocol fact</span></span>
+                    <span class="mockup-row-meta"><span class="mockup-source">§5.3 · p.29</span><span class="dot dot--high"></span><span>High confidence</span></span>
+                  </div>
+                </div>
+                <div class="mockup-row">
+                  <div class="mockup-row-main">
+                    <span class="mockup-row-title">Concomitant-medication review adds coordination load at screening <span class="stage-pill badge-medium">PIQC framing</span></span>
+                    <span class="mockup-row-meta"><span>Plain-language framing — no opaque scores</span></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="mockup-citation" data-step>
+              <p class="mockup-citation-quote">“Blood samples for pharmacokinetic analysis will be collected pre-dose and at 2, 4, and 8 hours post-dose on Day 1.”</p>
+              <span class="mockup-row-meta"><span class="mockup-citation-ref">§7.1.1 · p.42</span><span class="dot dot--high"></span><span>High confidence</span><span class="mockup-footer-action">View cited page</span></span>
+            </div>
+            <div class="mockup-footer" data-step>
+              <span><span class="accent">PIQC draft</span> · requirements surfaced for review</span>
+              <span class="mockup-footer-action">Export DRAFT PDF</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: parse-once — one reviewed extraction feeds every deliverable -->
+  <section id="parse-once" data-section="parse-once" class="section section--alt">
+    <div class="container" data-reveal>
+      <p class="eyebrow">Parse once, generate many</p>
+      <h2 class="h-section">One reviewed extraction. Every deliverable downstream.</h2>
+      <p class="lead">PIQC parses the protocol once into structured, source-cited intelligence, and a human reviews that extraction in the Source-of-Truth Reviewer before anything is generated from it. Every deliverable the engine drafts is an expression of the same reviewed backbone — no one re-derives the protocol’s meaning per document, and every fact stays linked to the page it came from.</p>
+      <ol class="stepper">
+        <li><span class="stage-pill">Protocol PDF</span></li>
+        <li><span class="stage-pill">Structured extraction</span></li>
+        <li><span class="stage-pill">Human review (SOTR)</span></li>
+        <li><span class="stage-pill">Deliverable Engine</span></li>
+        <li><span class="stage-pill">Draft deliverables</span></li>
+      </ol>
+      <p class="prose">AI extracts; humans own interpretation. Accept for draft, edit, reject, or flag — each decision logged with reviewer, timestamp, and version before it feeds a single deliverable.</p>
+    </div>
+  </section>
+
+  <!-- SECTION: deliverable-engine — the two live deliverables -->
+  <section id="deliverable-engine" data-section="deliverable-engine" class="section">
+    <div class="container" data-reveal>
+      <p class="eyebrow">The Protocol Deliverable Engine</p>
+      <h2 class="h-section">Two deliverables, live today. A shared engine underneath.</h2>
+      <div class="boundary-table">
+        <div class="boundary-col">
+          <h3>Monitoring Prep Checklist</h3>
+          <p>A structured checklist that turns protocol requirements into monitoring preparation focus — endpoint-critical procedures, visit windows, eligibility and prohibited-medication review areas. Every line carries its content-origin label and a link to its protocol source.</p>
+        </div>
+        <div class="boundary-col">
+          <h3>Risk Overview</h3>
+          <p>Plain-language sections describing where the protocol is operationally demanding — no opaque scores, just readable framing a study team can review, edit, and release with the facts cited beneath it.</p>
+        </div>
+      </div>
+      <p class="prose">The deliverable set is extensible: the engine, the review flow, and the provenance model are shared, so new deliverable types inherit the same discipline.</p>
+    </div>
+  </section>
+
+  <!-- SECTION: content-origin — three-way honesty badges -->
+  <section id="content-origin" data-section="content-origin" class="section section--alt">
+    <div class="container" data-reveal>
+      <p class="eyebrow">Content-origin honesty</p>
+      <h2 class="h-section">Every block says where it came from.</h2>
+      <p class="lead">A deliverable that blends protocol text with AI framing — without saying which is which — borrows authority it hasn’t earned. In Sponsor Mode, every block carries one of three content-origin labels, so reviewers always know what they’re reading.</p>
+      <div class="cards-3">
+        <div class="boundary-col">
+          <h3>Protocol fact</h3>
+          <p>Grounded in the protocol itself, with the quote, section, and page behind it — one click away.</p>
+        </div>
+        <div class="boundary-col">
+          <h3>PIQC framing</h3>
+          <p>Operational framing PIQC derived from protocol facts. Labeled so it is never mistaken for the protocol’s own words.</p>
+        </div>
+        <div class="boundary-col">
+          <h3>Human note</h3>
+          <p>Editorial your team adds during review — attributed as human-authored, and preserved through regeneration.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: provenance — source drawer + View cited page -->
+  <section id="provenance" data-section="provenance" class="section">
+    <div class="container split" data-reveal>
+      <div>
+        <p class="eyebrow">Source provenance</p>
+        <h2 class="h-section">Click a fact. See the page it came from.</h2>
+        <p class="lead">Every protocol-fact block opens a source drawer: the quoted passage, its section and page, and the extraction’s confidence — with a “View cited page” control that takes the reviewer to the protocol itself. Trust doesn’t have to be assumed; it can be checked, fact by fact.</p>
+      </div>
+      <div class="screenshot">
+        <div class="mockup-chrome">
+          <span class="mockup-dot mockup-dot--r" aria-hidden="true"></span>
+          <span class="mockup-dot mockup-dot--y" aria-hidden="true"></span>
+          <span class="mockup-dot mockup-dot--g" aria-hidden="true"></span>
+          <span class="mockup-label">Source drawer — Monitoring Prep Checklist · item 07</span>
+        </div>
+        <div class="mockup-body">
+          <div class="mockup-row">
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">PK sampling — pre-dose and 2, 4, 8 h post-dose <span class="stage-pill badge-blue">Protocol fact</span></span>
+            </div>
+          </div>
+          <div class="mockup-citation">
+            <p class="mockup-citation-quote">“Blood samples for pharmacokinetic analysis will be collected pre-dose and at 2, 4, and 8 hours post-dose on Day 1.”</p>
+            <span class="mockup-row-meta"><span class="mockup-citation-ref">§7.1.1 · p.42</span><span class="dot dot--high"></span><span>High confidence</span><span class="mockup-footer-action">View cited page</span></span>
+          </div>
+          <div class="mockup-footer">
+            <span><span class="accent">PIQC draft</span> · requirements surfaced for review</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: regeneration — human work preserved + coverage-gap honesty -->
+  <section id="regeneration" data-section="regeneration" class="section section--alt">
+    <div class="container" data-reveal>
+      <p class="eyebrow">Regeneration</p>
+      <h2 class="h-section">Regenerate the draft. Keep the human work.</h2>
+      <p class="lead">Protocols change, and drafts get re-run. The engine treats your team’s review as the durable layer.</p>
+      <div class="boundary-table">
+        <div class="boundary-col boundary-col--does">
+          <h3>What regeneration preserves</h3>
+          <ul>
+            <li><span class="boundary-icon" aria-hidden="true">✓</span>Accepted edits and human notes carry forward.</li>
+            <li><span class="boundary-icon" aria-hidden="true">✓</span>Items your team rejected stay rejected — regeneration cannot resurrect them.</li>
+            <li><span class="boundary-icon" aria-hidden="true">✓</span>Every change lands in the edit log, attributed to a reviewer and a time.</li>
+          </ul>
+        </div>
+        <div class="boundary-col boundary-col--not">
+          <h3>What the engine won’t pretend</h3>
+          <ul>
+            <li><span class="boundary-icon" aria-hidden="true">—</span>Coverage-gap honesty: when a section can’t be grounded in the protocol, the deliverable says so. A visible gap beats a confident blank.</li>
+            <li><span class="boundary-icon" aria-hidden="true">—</span>Exports are DRAFT-watermarked PDFs with a requires-human-review disclaimer and a traceability appendix — a draft never dresses up as a released document.</li>
+            <li><span class="boundary-icon" aria-hidden="true">—</span>Human sign-off marks an item ready — release decisions stay in your organization’s own process.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: portfolio — read-only portfolio intelligence -->
+  <section id="portfolio" data-section="portfolio" class="section">
+    <div class="container" data-reveal>
+      <p class="eyebrow">Portfolio intelligence</p>
+      <h2 class="h-section">Portfolio visibility — read-only by design.</h2>
+      <p class="lead">Sponsor Mode includes a read-only view of enrollment, visits, and deviations across your sites. PIQC surfaces the picture; your site systems remain the place where the work happens and the records live.</p>
+      <ul class="lifecycle">
+        <li class="lifecycle-item"><span class="lifecycle-stage">Enrollment</span><span class="lifecycle-example">Where participants stand across the sites running your protocol.</span></li>
+        <li class="lifecycle-item"><span class="lifecycle-stage">Visits</span><span class="lifecycle-example">Visit activity across sites, in one read-only view.</span></li>
+        <li class="lifecycle-item"><span class="lifecycle-stage">Deviations</span><span class="lifecycle-example">Reported deviations, visible without pulling site-by-site reports.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- SECTION: direction — operational fragility view (Platform direction) -->
+  <section id="direction" data-section="direction" class="section section--alt">
+    <div class="container" data-reveal>
+      <p class="eyebrow">Where Sponsor Mode is heading</p>
+      <h2 class="h-section">The same backbone, extended.</h2>
+      <div class="boundary-table">
+        <div class="boundary-col">
+          <h3>Operational fragility view <span class="direction-tag">Platform direction</span></h3>
+          <p>A sponsor-level view of where a protocol’s operational demands concentrate — which visits, procedures, and windows deserve attention first. In design, not shipped; today, the Risk Overview carries this job in plain language.</p>
+        </div>
+        <div class="boundary-col">
+          <h3>CRA-facing monitoring outputs <span class="direction-tag">Platform direction</span></h3>
+          <p>Monitoring-preparation outputs expressed as a distinct role surface for CRAs, drawn from the same reviewed extraction. Planned as an extension of the Deliverable Engine — labeled here as direction, not availability.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: enterprise — tier note, no broad-availability implication -->
+  <section id="enterprise" data-section="enterprise" class="section">
+    <div class="container" data-reveal>
+      <p class="eyebrow">Availability</p>
+      <h2 class="h-section">An enterprise-tier surface.</h2>
+      <p class="lead">Sponsor Mode is part of PIQC’s enterprise tier and is scoped with each sponsor organization rather than switched on broadly. If the Deliverable Engine fits how your study teams produce and review documents, talk to us about access.</p>
+    </div>
+  </section>
+
+  <!-- SECTION: final-cta — shared demo CTA band -->
+<!-- DEMO-CTA:BEGIN -->
+<section id="request-demo" data-section="final-cta" class="section section--dark cta-band">
+  <div class="container cta-band-inner">
+    <h2 class="cta-band-title">The protocol should be a source of mastery, not a recurring cognitive burden.</h2>
+    <p class="cta-band-body">See what PIQC surfaces from your own protocol workflow.</p>
+    <div class="cta-band-actions">
+      <a class="btn-primary" href="mailto:hello@piqclinical.com?subject=PIQClinical%20demo%20request">Request a demo</a>
+      <a class="btn-ghost btn-ghost--dark" href="mailto:hello@piqclinical.com?subject=PIQClinical%20protocol%20workflow%20conversation">Talk through your protocol workflow</a>
+    </div>
+    <!-- FUTURE FORM INTEGRATION POINT (FABLE-BRIEF §8):
+         When an approved scheduling link or form endpoint exists, replace the
+         mailto CTAs above with the real form / scheduler and update
+         content.js demo.{mode,endpoint,ctaHref}. Until then the mailto is the
+         only approved destination — do NOT simulate a successful submission.
+         Any future form must never request PHI, study data, or sensitive
+         operational information. -->
+  </div>
+</section>
+<!-- DEMO-CTA:END -->
+
+</main>
+
+<!-- FOOTER:BEGIN -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="/" class="nav-brand">
+          <svg class="nav-logo" aria-hidden="true" focusable="false"><use href="#piqc-mark"/></svg>
+          <span class="wordmark"><span class="grad-text">PIQC</span><span class="wordmark-linical">linical</span></span>
+        </a>
+        <p class="footer-tagline">The intelligence layer between protocol complexity and clinical execution.</p>
+      </div>
+      <nav class="footer-col" aria-label="Product">
+        <p class="footer-heading">Product</p>
+        <ul class="footer-list">
+          <li><a class="footer-link" href="/site">Site Mode</a></li>
+          <li><a class="footer-link" href="/audit">Audit Mode</a></li>
+          <li><a class="footer-link" href="/sponsor">Sponsor Mode</a></li>
+          <li><a class="footer-link" href="/security">Security</a></li>
+        </ul>
+      </nav>
+      <nav class="footer-col" aria-label="Company">
+        <p class="footer-heading">Company</p>
+        <ul class="footer-list">
+          <li><a class="footer-link" href="/#why">Why PIQC</a></li>
+          <li><a class="footer-link" href="/#founder">Founder intent</a></li>
+          <li><a class="footer-link" href="/#request-demo">Request a demo</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="footer-legal">
+      <p>© 2026 PIQClinical. All rights reserved.</p>
+    </div>
+  </div>
+</footer>
+<!-- FOOTER:END -->
+
+<script type="module" src="/content.js"></script>
+<script type="module" src="/animations.js"></script>
+</body>
+</html>

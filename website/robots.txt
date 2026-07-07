@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://piqclinical.com/sitemap.xml
