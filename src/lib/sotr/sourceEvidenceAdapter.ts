@@ -78,6 +78,20 @@ function toNumber(v: unknown): number {
   return 0;
 }
 
+// SOT-301: cycle discriminator, parsed from the RAW visit name (before
+// normalization strips it). normalizeVisitName deliberately collapses
+// parenthetical restatements like "(Cycle 1 Day 1)", which is correct for
+// duplicate-source dedup — but it also collapses visits that differ ONLY by
+// cycle ("Visit 2 (Cycle 1 Day 8)" vs "(Cycle 2 Day 8)"), which would pair
+// evidence with the wrong cycle's visit. The pure normalizer cannot tell a
+// restatement from a discriminator (same lexical shape); the adapter can,
+// because it sees the whole group: when a name-group spans ≥2 DISTINCT cycle
+// numbers, the cycle is load-bearing and the group must split.
+function cycleDiscriminator(rawName: string): number | null {
+  const m = /\bcycle\s*#?\s*(\d+)/i.exec(rawName);
+  return m ? Number(m[1]) : null;
+}
+
 function hasWindow(entry: ScheduleEntry): boolean {
   return toNumber(entry.window_minus_days) > 0 || toNumber(entry.window_plus_days) > 0;
 }
@@ -128,10 +142,41 @@ export function dedupeVisitArray(visits: readonly unknown[]): VisitDedupResult {
     else groups.set(key, [i]);
   }
 
+  // SOT-301: split any name-group that spans ≥2 distinct cycle numbers.
+  // Subgroups: one per distinct cycle, plus one for cycle-less entries
+  // (conservative — we never guess which cycle a bare name belongs to;
+  // under-collapse is recoverable in review, over-collapse pairs evidence
+  // with the wrong cycle's visit). Groups with ≤1 distinct cycle are left
+  // intact, so the legitimate restatement collapse — "Visit 1 (Cycle 1
+  // Day 1)" + "Visit 1" — keeps working exactly as before.
+  const finalGroups: number[][] = [];
+  for (const [key, indices] of groups) {
+    if (indices.length === 1 || key.startsWith('__unnamed_')) {
+      finalGroups.push(indices);
+      continue;
+    }
+    const byCycle = new Map<number | null, number[]>();
+    for (const i of indices) {
+      const raw = entries[i] && typeof entries[i]!.visit_name === 'string'
+        ? (entries[i]!.visit_name as string)
+        : '';
+      const cycle = cycleDiscriminator(raw);
+      const list = byCycle.get(cycle);
+      if (list) list.push(i);
+      else byCycle.set(cycle, [i]);
+    }
+    const distinctCycles = [...byCycle.keys()].filter((c) => c !== null);
+    if (distinctCycles.length >= 2) {
+      for (const sub of byCycle.values()) finalGroups.push(sub);
+    } else {
+      finalGroups.push(indices);
+    }
+  }
+
   const winningIndices: number[] = [];
   const extraEvidenceFor = new Map<number, ExtraEvidenceRef[]>();
 
-  for (const indices of groups.values()) {
+  for (const indices of finalGroups) {
     if (indices.length === 1) {
       winningIndices.push(indices[0]);
       continue;
