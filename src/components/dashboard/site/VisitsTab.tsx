@@ -24,6 +24,7 @@ import AuditSignalsBanner from './AuditSignalsBanner';
 import ProtocolDetailDrawer from './ProtocolDetailDrawer';
 import { Info } from 'lucide-react';
 import { getProtocolColorsById } from '../../../lib/site/protocolColors';
+import { formatYmd } from '../../../lib/site/dateUtils';
 import type { SiteVisit, VisitStatus } from '../../../lib/site/types';
 
 // =============================================================================
@@ -109,6 +110,23 @@ export default function VisitsTab() {
   const [openVisit, setOpenVisit] = useState<SiteVisit | null>(null);
   const [scheduleFormOpen, setScheduleFormOpen] = useState(false);
 
+  // Keep the open drawer in sync with realtime refreshes — the click handler
+  // captures the visit object as it was at click time, but SiteDataContext
+  // rebuilds the visits array on every refresh. Look the row back up by id:
+  // replace the snapshot when the reference changed (refresh only fires on
+  // real events, and once replaced `fresh === openVisit`, so this can't
+  // loop), and close the drawer when the visit disappeared (deleted or
+  // cancelled elsewhere). Mirrors TodayTab (audit finding M3).
+  useEffect(() => {
+    if (!openVisit) return;
+    const fresh = visits.find((v) => v.id === openVisit.id);
+    if (!fresh) {
+      setOpenVisit(null);
+    } else if (fresh !== openVisit) {
+      setOpenVisit(fresh);
+    }
+  }, [visits, openVisit]);
+
   // Deep-link pickup — chat reference chips drop a visit payload into
   // `piq-pending-visit-v1` then navigate the user here. Once the visits
   // list is loaded, consume the key exactly once (removed before any
@@ -149,10 +167,10 @@ export default function VisitsTab() {
     [activeProtocol, visits],
   );
 
-  const today = useMemo(() => {
-    const d = new Date();
-    return d.toISOString().slice(0, 10);
-  }, []);
+  // Local calendar date, not UTC — toISOString() reads tomorrow's date for an
+  // evening coordinator west of UTC, misbucketing today's visits into PAST/
+  // UPCOMING. Same fix as ReportsTab (audit finding 902).
+  const today = useMemo(() => formatYmd(new Date()), []);
   const todayDate = useMemo(() => new Date(), []);
 
   // Filter + search
