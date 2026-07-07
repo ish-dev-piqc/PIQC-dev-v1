@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- HEAD:BEGIN -->
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PIQClinical — Protocol Intelligence for Clinical Trials</title>
+<meta name="description" content="PIQC turns a dense protocol into structured, source-traceable understanding, and hands each person what they need before execution begins." />
+<link rel="canonical" href="https://piqclinical.com/" />
+<!-- theme-color = --scrub-blue in tokens.css (meta tags cannot consume CSS custom properties) -->
+<meta name="theme-color" content="#1e7fd4" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="PIQClinical" />
+<meta property="og:title" content="PIQClinical — Protocol Intelligence for Clinical Trials" />
+<meta property="og:description" content="PIQC turns a dense protocol into structured, source-traceable understanding, and hands each person what they need before execution begins." />
+<meta property="og:url" content="https://piqclinical.com/" />
+<meta property="og:image" content="https://piqclinical.com/og-card.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="PIQClinical — the intelligence layer between protocol complexity and clinical execution" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="PIQClinical — Protocol Intelligence for Clinical Trials" />
+<meta name="twitter:description" content="PIQC turns a dense protocol into structured, source-traceable understanding, and hands each person what they need before execution begins." />
+<meta name="twitter:image" content="https://piqclinical.com/og-card.png" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/tokens.css" />
+<link rel="stylesheet" href="/site.css" />
+<script>
+  // Staging guard: Cloudflare Pages previews (*.pages.dev) must never be indexed.
+  if (location.hostname.endsWith('.pages.dev')) {
+    var piqcNoindex = document.createElement('meta');
+    piqcNoindex.name = 'robots';
+    piqcNoindex.content = 'noindex';
+    document.head.appendChild(piqcNoindex);
+  }
+</script>
+<!-- HEAD:END -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://piqclinical.com/#organization",
+      "name": "PIQClinical",
+      "url": "https://piqclinical.com/",
+      "logo": "https://piqclinical.com/favicon.svg",
+      "email": "hello@piqclinical.com"
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://piqclinical.com/#website",
+      "name": "PIQClinical",
+      "url": "https://piqclinical.com/",
+      "publisher": { "@id": "https://piqclinical.com/#organization" }
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": "PIQClinical",
+      "url": "https://piqclinical.com/",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web",
+      "description": "A protocol-intelligence platform for clinical trials. PIQC drafts structured, source-traceable materials from protocol documents; humans review, decide, and approve.",
+      "featureList": [
+        "Protocol extraction with confidence signals and source citations",
+        "Visit execution workspace with role-filtered worksheets",
+        "Protocol-grounded Ask with cited answers",
+        "Gated 8-stage vendor audit workflow",
+        "Issue-to-CAPA lifecycle",
+        "Parse-once-generate-many deliverables with content-origin labels"
+      ],
+      "publisher": { "@id": "https://piqclinical.com/#organization" }
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<!-- SKIP:BEGIN -->
+<a class="skip-link" href="#main">Skip to main content</a>
+<!-- SKIP:END -->
+
+<!-- LOGO:BEGIN -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <linearGradient id="ribbonGrad" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#2b8fd9"/><stop offset="55%" stop-color="#1e9fc0"/><stop offset="100%" stop-color="#14b8a6"/>
+  </linearGradient>
+  <linearGradient id="wingGrad" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#c6e0d8"/><stop offset="100%" stop-color="#a0c8bc"/>
+  </linearGradient>
+  <symbol id="piqc-mark" viewBox="0 0 64 64">
+    <path d="M6 24 C 14 14, 30 14, 33 38 C 20 40, 8 34, 6 24 Z" fill="url(#wingGrad)" opacity="0.6"/>
+    <path d="M12 30 C 18 24, 28 24, 31 39 C 22 40, 14 37, 12 30 Z" fill="url(#wingGrad)" opacity="0.5"/>
+    <path d="M28 58 C 20 46, 46 39, 39 24 C 35 15, 43 11, 47 8" fill="none" stroke="url(#ribbonGrad)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M33 58 C 45 47, 23 40, 31 25 C 36 16, 33 12, 41 7" fill="none" stroke="url(#ribbonGrad)" stroke-width="2.2" stroke-linecap="round" opacity="0.85"/>
+    <path d="M47 3 L48.7 8.3 L54 10 L48.7 11.7 L47 17 L45.3 11.7 L40 10 L45.3 8.3 Z" fill="#2b8fd9"/>
+    <circle cx="40" cy="15" r="1.3" fill="#2b8fd9"/><circle cx="37" cy="19" r="1.05" fill="#2b8fd9"/><circle cx="35" cy="23" r="0.85" fill="#2b8fd9"/>
+    <circle cx="45" cy="31" r="1.3" fill="#1e9fc0"/><circle cx="47" cy="36" r="1.05" fill="#14b8a6"/><circle cx="46" cy="41" r="0.85" fill="#14b8a6"/>
+  </symbol>
+</defs></svg>
+<!-- LOGO:END -->
+
+<!-- NAV:BEGIN -->
+<header class="site-nav">
+  <div class="container nav-inner">
+    <a href="/" class="nav-brand">
+      <svg class="nav-logo" aria-hidden="true" focusable="false"><use href="#piqc-mark"/></svg>
+      <span class="wordmark"><span class="grad-text">PIQC</span><span class="wordmark-linical">linical</span></span>
+    </a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-menu">
+      <svg aria-hidden="true" focusable="false" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+      <span class="visually-hidden">Menu</span>
+    </button>
+    <nav class="nav-links" id="site-menu" aria-label="Primary">
+      <a class="nav-link" href="/#why">Why PIQC</a>
+      <a class="nav-link" href="/#engine">The engine</a>
+      <a class="nav-link" href="/#ask">Ask</a>
+      <a class="nav-link" href="/#downstream">Downstream</a>
+      <a class="nav-link" href="/#boundary">Product boundary</a>
+      <a class="nav-link" href="/#founder">Founder intent</a>
+      <a class="nav-link" href="/security">Security</a>
+      <div class="nav-modes" role="group" aria-label="Modes">
+        <span class="nav-group-label" aria-hidden="true">Modes</span>
+        <a class="nav-link" href="/site">Site Mode</a>
+        <a class="nav-link" href="/audit">Audit Mode</a>
+        <a class="nav-link" href="/sponsor">Sponsor Mode</a>
+      </div>
+      <a class="btn-primary nav-cta" href="mailto:hello@piqclinical.com?subject=PIQClinical%20demo%20request">Request a demo</a>
+    </nav>
+  </div>
+</header>
+<!-- NAV:END -->
+
+<main id="main">
+
+<!-- ═══ Section A — Hero: the missing layer, shown as the engine ═══ -->
+<section id="hero" data-section="hero" class="hero">
+  <div class="hero-bg grad-soft grid-pattern" aria-hidden="true"></div>
+  <div class="container">
+    <div class="hero-intro">
+      <span class="eyebrow">A better question for clinical trial execution</span>
+      <h1 class="h-display">From protocol complexity to <span class="grad-text">context-aware understanding.</span></h1>
+      <p class="lead">Every clinical system manages data, documents, workflow, and oversight — and every one of them assumes the protocol has already been turned into understanding. None of them does that part. PIQC is the layer that does: it turns a dense protocol into structured, source-traceable understanding, and hands each person what they need before execution begins.</p>
+      <div class="hero-ctas">
+        <a class="btn-primary" href="mailto:hello@piqclinical.com?subject=PIQClinical%20demo%20request">Request a demo</a>
+        <a class="btn-ghost" href="#engine">See the protocol journey</a>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <!-- The core-engine money shot: a protocol page resolving into a phased visit draft -->
+      <div class="screenshot" data-anim="home-flow">
+        <div class="mockup-chrome">
+          <span class="mockup-dot mockup-dot--r" aria-hidden="true"></span>
+          <span class="mockup-dot mockup-dot--y" aria-hidden="true"></span>
+          <span class="mockup-dot mockup-dot--g" aria-hidden="true"></span>
+          <span class="mockup-label">app.piqclinical.com · Acme BioPharma — ACM-2201 · Day 1 — Screening</span>
+          <div class="mockup-chrome-badges">
+            <span class="stage-pill badge-blue">PIQC draft</span>
+          </div>
+        </div>
+        <div class="mockup-body">
+          <div class="mockup-citation" data-step>
+            <p class="mockup-citation-quote">Protocol ACM-2201 — Schedule of Assessments: a 12-lead ECG will be performed in triplicate, pre-dose; PK sampling and vital signs per the assessment schedule…</p>
+            <span class="mockup-citation-ref">Protocol PDF · §6.2 Schedule of Assessments · p.30</span>
+          </div>
+          <p class="mockup-phase" data-step>Subject Arrival / Check-In</p>
+          <div class="mockup-row" data-step>
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">Informed Consent
+                <span class="mockup-tag mockup-tag--required">REQUIRED</span>
+                <span class="mockup-tag mockup-tag--safety">SAFETY-CRITICAL</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--high" aria-hidden="true"></span><span class="visually-hidden">High confidence</span>
+                <span class="mockup-source">§4.8 ICH E6(R2)</span>
+              </span>
+            </div>
+          </div>
+          <div class="mockup-row" data-step>
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">Vital signs (BP, HR, temp)
+                <span class="mockup-tag mockup-tag--required">REQUIRED</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--high" aria-hidden="true"></span><span class="visually-hidden">High confidence</span>
+                <span class="mockup-source">§7.2.1 · p.31</span>
+              </span>
+            </div>
+          </div>
+          <p class="mockup-phase" data-step>Core Visit Procedures</p>
+          <div class="mockup-row" data-step>
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">12-Lead ECG (triplicate, pre-dose)
+                <span class="mockup-tag mockup-tag--endpoint">PRIMARY ENDPOINT</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--high" aria-hidden="true"></span><span class="visually-hidden">High confidence</span>
+                <span class="mockup-source">§6.2.1 · p.34</span>
+              </span>
+            </div>
+          </div>
+          <div class="mockup-row" data-step>
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">PK blood draw (pre-dose)
+                <span class="mockup-tag mockup-tag--endpoint">PRIMARY ENDPOINT</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--high" aria-hidden="true"></span><span class="visually-hidden">High confidence</span>
+                <span class="mockup-source">§6.3 · p.36</span>
+              </span>
+            </div>
+          </div>
+          <div class="mockup-row" data-step>
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">ECOG Performance Status
+                <span class="mockup-tag mockup-tag--eligibility">ELIGIBILITY</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--medium" aria-hidden="true"></span><span class="visually-hidden">Medium confidence</span>
+                <span class="mockup-source">§5.1 · p.22</span>
+              </span>
+            </div>
+          </div>
+          <p class="mockup-phase" data-step>Dosing / IMP Administration</p>
+          <div class="mockup-row" data-step>
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">IP accountability check
+                <span class="mockup-tag mockup-tag--conditional">CONDITIONAL</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--medium" aria-hidden="true"></span><span class="visually-hidden">Medium confidence</span>
+                <span class="mockup-source">§8.4 · p.44</span>
+              </span>
+            </div>
+          </div>
+          <div class="mockup-footer" data-step>
+            <span><span class="accent">PIQC draft</span> · 14 requirements surfaced for review</span>
+            <span class="mockup-footer-action">Review draft</span>
+          </div>
+        </div>
+      </div>
+      <p class="provenance-line">Illustrative product interface. PIQC advises and drafts; humans review, decide, and approve.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ Section B — The manual interpretation burden ═══ -->
+<section id="why" data-section="burden" class="section section--alt">
+  <div class="container" data-reveal>
+    <span class="eyebrow">Why PIQC</span>
+    <h2 class="h-section prose">The burden was never reading the protocol. It’s translating it into execution.</h2>
+    <p class="lead">A new protocol arrives, and the real work starts: turning hundreds of pages of requirements into worksheets, visit guidance, eligibility logic, monitoring focus, vendor coordination, and training. Today that translation is manual, fragmented, and carried in people’s heads. Miss one conditional rule, one visit window, one prohibited medication, and the error is already inside the workflow before anyone thinks to look for it.</p>
+    <div class="split">
+      <div class="boundary-col">
+        <h3>Today</h3>
+        <ol class="stepper">
+          <li>Protocol</li>
+          <li>manual review</li>
+          <li>cross-referencing</li>
+          <li>local notes &amp; spreadsheets</li>
+          <li>repeated questions</li>
+          <li>re-created deliverables</li>
+          <li>execution</li>
+        </ol>
+      </div>
+      <div class="boundary-col">
+        <h3>With PIQC</h3>
+        <ol class="stepper">
+          <li>Protocol</li>
+          <li><span class="stage-pill">structured intelligence</span></li>
+          <li>traceable, role-specific understanding</li>
+          <li>editable deliverables</li>
+          <li>a prepared human</li>
+          <li>your existing system</li>
+        </ol>
+      </div>
+    </div>
+    <p class="lead"><strong>Protocols will remain complex. The human burden does not have to.</strong></p>
+  </div>
+</section>
+
+<!-- ═══ Section C — The first failure happens upstream ═══ -->
+<section id="first-failure" data-section="first-failure" class="section">
+  <div class="container" data-reveal>
+    <h2 class="h-section prose">The first failure doesn’t happen at the first patient visit. It happens upstream.</h2>
+    <p class="lead">Before a protocol can be executed, it has to be operationalized — read, cross-referenced, and rewritten into something a site, monitor, or auditor can act on. That translation step is the earliest and least-supported point of risk. PIQC moves the question forward: where will this protocol be hardest to operationalize, and who needs to understand it first?</p>
+    <ol class="stepper" aria-label="From protocol receipt to first patient visit">
+      <li>Protocol received</li>
+      <li><span class="stage-pill">interpretation</span></li>
+      <li>worksheets &amp; workflows</li>
+      <li>site prep &amp; SIV</li>
+      <li>activation</li>
+      <li>first patient visit</li>
+    </ol>
+    <p class="lead">PIQC works at the highlighted interpretation step — where complexity deserves attention.</p>
+  </div>
+</section>
+
+<!-- ═══ Section D — Act 1: The core engine (the star) ═══ -->
+<section id="engine" data-section="core-engine" class="section section--alt">
+  <div class="container">
+    <div data-reveal>
+      <span class="eyebrow">Act 1 — The core engine</span>
+      <h2 class="h-section prose">From protocol PDF to visual, review-ready visit drafts — in minutes.</h2>
+      <p class="lead">This is the engine everything else runs on. PIQC reads the Schedule of Assessments and the procedure text and drafts every study visit as a phased, visual checklist — each requirement classified, confidence-scored, and linked to the exact protocol source. A completeness pass flags what might be missing. Days of manual transcription become a review-ready draft in minutes — and a human still reviews and owns every line.</p>
+      <div class="boundary-col boundary-col--does">
+        <ul>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8.5 6.5 12 13 4"/></svg>Every requirement classified — required, conditional, endpoint-critical, safety-critical</li>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8.5 6.5 12 13 4"/></svg>A confidence signal on every line</li>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8.5 6.5 12 13 4"/></svg>A § source link to the exact section, page, and quote</li>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8.5 6.5 12 13 4"/></svg>A completeness pass that flags possibly-missing requirements — you add or dismiss</li>
+        </ul>
+      </div>
+    </div>
+    <!-- MockupShowcase — the largest mockup on the site, with the working role-filter demo -->
+    <div class="hero-visual" data-demo="role-filter">
+      <div class="screenshot">
+        <div class="mockup-chrome">
+          <span class="mockup-dot mockup-dot--r" aria-hidden="true"></span>
+          <span class="mockup-dot mockup-dot--y" aria-hidden="true"></span>
+          <span class="mockup-dot mockup-dot--g" aria-hidden="true"></span>
+          <span class="mockup-label">app.piqclinical.com · Acme BioPharma — ACM-2201 · Day 1 — Screening</span>
+          <div class="mockup-chrome-badges">
+            <span class="stage-pill badge-blue">PIQC draft</span>
+          </div>
+        </div>
+        <div class="mockup-body">
+          <div class="chip-row" role="group" aria-label="Filter the visit draft by role">
+            <button type="button" class="chip is-active" data-role="all" aria-pressed="true">All</button>
+            <button type="button" class="chip" data-role="coordinator" aria-pressed="false">Coordinator</button>
+            <button type="button" class="chip" data-role="nurse" aria-pressed="false">Nurse</button>
+            <button type="button" class="chip" data-role="investigator" aria-pressed="false">Investigator</button>
+            <button type="button" class="chip" data-role="lab" aria-pressed="false">Lab</button>
+            <button type="button" class="chip" data-role="pharmacy" aria-pressed="false">Pharmacy</button>
+          </div>
+          <p class="mockup-phase">Subject Arrival / Check-In</p>
+          <div class="mockup-row" data-row data-roles="coordinator investigator">
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">Informed Consent
+                <span class="mockup-tag mockup-tag--required">REQUIRED</span>
+                <span class="mockup-tag mockup-tag--safety">SAFETY-CRITICAL</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--high" aria-hidden="true"></span><span class="visually-hidden">High confidence</span>
+                <span class="mockup-source">§4.8 ICH E6(R2)</span>
+              </span>
+            </div>
+          </div>
+          <div class="mockup-row" data-row data-roles="nurse">
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">Vital signs (BP, HR, temp)
+                <span class="mockup-tag mockup-tag--required">REQUIRED</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--high" aria-hidden="true"></span><span class="visually-hidden">High confidence</span>
+                <span class="mockup-source">§7.2.1 · p.31</span>
+              </span>
+            </div>
+          </div>
+          <p class="mockup-phase">Core Visit Procedures</p>
+          <div class="mockup-row" data-row data-roles="nurse">
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">12-Lead ECG (triplicate, pre-dose)
+                <span class="mockup-tag mockup-tag--endpoint">PRIMARY ENDPOINT</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--high" aria-hidden="true"></span><span class="visually-hidden">High confidence</span>
+                <span class="mockup-source">§6.2.1 · p.34</span>
+              </span>
+            </div>
+          </div>
+          <div class="mockup-row" data-row data-roles="lab">
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">PK blood draw (pre-dose)
+                <span class="mockup-tag mockup-tag--endpoint">PRIMARY ENDPOINT</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--high" aria-hidden="true"></span><span class="visually-hidden">High confidence</span>
+                <span class="mockup-source">§6.3 · p.36</span>
+              </span>
+            </div>
+          </div>
+          <div class="mockup-row" data-row data-roles="investigator">
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">ECOG Performance Status
+                <span class="mockup-tag mockup-tag--eligibility">ELIGIBILITY</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--medium" aria-hidden="true"></span><span class="visually-hidden">Medium confidence</span>
+                <span class="mockup-source">§5.1 · p.22</span>
+              </span>
+            </div>
+          </div>
+          <p class="mockup-phase">Dosing / IMP Administration</p>
+          <div class="mockup-row" data-row data-roles="pharmacy">
+            <span class="mockup-check" aria-hidden="true"></span>
+            <div class="mockup-row-main">
+              <span class="mockup-row-title">IP accountability check
+                <span class="mockup-tag mockup-tag--conditional">CONDITIONAL</span>
+              </span>
+              <span class="mockup-row-meta">
+                <span class="dot dot--medium" aria-hidden="true"></span><span class="visually-hidden">Medium confidence</span>
+                <span class="mockup-source">§8.4 · p.44</span>
+              </span>
+            </div>
+          </div>
+          <div class="mockup-footer">
+            <span aria-live="polite"><span class="accent">PIQC draft</span> · <span data-count>6</span> shown · 14 requirements surfaced for review</span>
+            <span class="mockup-footer-action" data-export-label>Export full worksheet</span>
+          </div>
+        </div>
+      </div>
+      <p class="provenance-line">Try it: the role chips filter the draft the way site teams do in the product. Live today · Site Mode — Visit Execution Workspace.</p>
+    </div>
+    <p class="lead" data-reveal><strong>Parse once. Draft the whole study. You review.</strong></p>
+  </div>
+</section>
+
+<!-- ═══ Section E — Act 2: Ask, answered by the protocol (the co-star) ═══ -->
+<section id="ask" data-section="ask-source-of-truth" class="section">
+  <div class="container" data-demo="ask">
+    <div class="split" data-reveal>
+      <div>
+        <span class="eyebrow">Act 2 — Ask, answered by the protocol</span>
+        <h2 class="h-section prose">Ask in plain language. Answered by the protocol itself.</h2>
+        <p class="lead">Ask works shoulder to shoulder with the source of truth. Ask a plain question and PIQC answers from this protocol — with the exact cited passage shown right beside the answer. It won’t invent clinical guidance; if something isn’t in the protocol, Ask says so. Prompts adapt to the study’s phase and the site’s team.</p>
+        <div class="chip-row" role="group" aria-label="Example questions">
+          <button type="button" class="chip is-active" data-example-idx="0" aria-pressed="true">Which visits require a 12-lead ECG, and in what window?</button>
+          <button type="button" class="chip" data-example-idx="1" aria-pressed="false">What are the key exclusion criteria?</button>
+          <button type="button" class="chip" data-example-idx="2" aria-pressed="false">Is there a washout period before dosing?</button>
+        </div>
+        <div class="field">
+          <label class="provenance-line" for="home-ask-input">Ask anything — live in the product</label>
+          <input id="home-ask-input" type="text" data-ask-input disabled />
+        </div>
+        <p class="lead"><strong>Answers you can trace — because the source is right there.</strong></p>
+      </div>
+      <div>
+        <div class="screenshot" data-anim="ask-source">
+          <div class="mockup-chrome">
+            <span class="mockup-dot mockup-dot--r" aria-hidden="true"></span>
+            <span class="mockup-dot mockup-dot--y" aria-hidden="true"></span>
+            <span class="mockup-dot mockup-dot--g" aria-hidden="true"></span>
+            <span class="mockup-label">app.piqclinical.com · Ask — ACM-2201</span>
+            <div class="mockup-chrome-badges">
+              <span class="stage-pill badge-blue">Protocol-grounded</span>
+            </div>
+          </div>
+          <div class="mockup-body">
+            <div class="mockup-ask" aria-live="polite">
+              <div class="mockup-answer" data-step>
+                <p class="mockup-phase">Answer</p>
+                <span data-ask-answer>A 12-lead ECG is required at Screening and at Day 29 — in triplicate, pre-dose, within ±15 minutes of the scheduled time.</span>
+              </div>
+              <div class="mockup-citation" data-step data-ask-citation>
+                <p class="mockup-citation-quote" data-ask-quote>A 12-lead ECG will be performed in triplicate, pre-dose…</p>
+                <span class="mockup-citation-ref" data-ask-ref>§6.2.1 · p.34</span>
+              </div>
+            </div>
+            <div class="mockup-footer" data-step>
+              <span><span class="accent">Cited from this protocol</span> · answer and source arrive together</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ Section F — Act 3: Downstream — the same intelligence, extended ═══ -->
+<section id="downstream" data-section="downstream" class="section section--alt">
+  <div class="container" data-reveal>
+    <span class="eyebrow">Act 3 — Downstream</span>
+    <h2 class="h-section prose">Parse once. The whole trial benefits.</h2>
+    <p class="lead">Because the protocol is already parsed once into traceable logic, that same intelligence flows downstream — no one rebuilds the protocol’s meaning from scratch. For auditors it becomes a gated 8-stage vendor audit with risk-scored, traceable findings. For sponsors it becomes parse-once-generate-many deliverables, every block labeled fact vs framing, every fact traceable to its page.</p>
+    <div class="cards-3">
+      <div class="card boundary-col">
+        <h3>Site Mode</h3>
+        <p class="provenance-line">The core engine, in depth</p>
+        <ul>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8.5 6.5 12 13 4"/></svg>Protocol → visit-by-visit execution drafts</li>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8.5 6.5 12 13 4"/></svg>Ask, answered by the protocol</li>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8.5 6.5 12 13 4"/></svg>Role-filtered worksheets from one dataset</li>
+        </ul>
+        <a class="btn-ghost" href="/site">Explore Site Mode</a>
+      </div>
+      <div class="card boundary-col">
+        <h3>Audit Mode</h3>
+        <p class="provenance-line">Downstream · for auditors, QA &amp; sponsors</p>
+        <ul>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8.5 6.5 12 13 4"/></svg>A gated 8-stage vendor audit</li>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8.5 6.5 12 13 4"/></svg>Risk-scored findings → Issue → CAPA</li>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8.5 6.5 12 13 4"/></svg>AI-drafted report, human-approved</li>
+        </ul>
+        <a class="btn-ghost" href="/audit">Explore Audit Mode</a>
+      </div>
+      <div class="card boundary-col">
+        <h3>Sponsor Mode</h3>
+        <p class="provenance-line">Downstream · for sponsors (enterprise)</p>
+        <ul>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8.5 6.5 12 13 4"/></svg>Parse once, generate many deliverables</li>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8.5 6.5 12 13 4"/></svg>Every block labeled: fact vs framing</li>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8.5 6.5 12 13 4"/></svg>Source-traceable provenance</li>
+        </ul>
+        <a class="btn-ghost" href="/sponsor">Explore Sponsor Mode</a>
+      </div>
+    </div>
+  </div>
+  <div class="stat-band grad-brand">
+    <div class="container">
+      <div class="stat-band-grid">
+        <div><span class="stat-value">8</span><span class="stat-label">gated audit stages</span></div>
+        <div><span class="stat-value">5</span><span class="stat-label">role-filtered views</span></div>
+        <div><span class="stat-value">4</span><span class="stat-label">evidence support types</span></div>
+        <div><span class="stat-value">Protocol-first</span><span class="stat-label">PIQC’s intelligence is built from the protocol document itself</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="container" data-reveal>
+    <p class="lead"><strong>Parse once. Generate many. Humans remain responsible.</strong></p>
+  </div>
+</section>
+
+<!-- ═══ Section G — Who it serves (role lenses) ═══ -->
+<section id="roles" data-section="roles" class="section">
+  <div class="container" data-reveal>
+    <h2 class="h-section prose">Every role asks a different question of the same protocol.</h2>
+    <div class="role-grid">
+      <div class="card boundary-col">
+        <h3>Site teams</h3>
+        <p><em>“What do I need to do next?”</em></p>
+        <p>Study worksheets, visit-by-visit guidance, protocol-grounded answers, amendment updates.</p>
+      </div>
+      <div class="card boundary-col">
+        <h3>CRAs / monitors <span class="direction-tag">Platform direction</span></h3>
+        <p><em>“What deserves focused oversight before and during this visit?”</em></p>
+        <p>Protocol-derived monitoring focus, endpoint and eligibility review areas, visit-window reminders.</p>
+      </div>
+      <div class="card boundary-col">
+        <h3>Sponsors / ClinOps</h3>
+        <p><em>“Where is this protocol operationally complex or time-sensitive?”</em></p>
+        <p>A Risk Overview of operational complexity today; an operational-fragility view as the platform extends.</p>
+        <p class="provenance-line">Risk Overview is live; the operational-fragility view is platform direction.</p>
+      </div>
+      <div class="card boundary-col">
+        <h3>QA / Audit</h3>
+        <p><em>“What protocol requirements should be validated?”</em></p>
+        <p>Protocol-aware audit scope, evidence-linked review focus, risk-scored findings through the 8-stage workflow.</p>
+      </div>
+      <div class="card boundary-col">
+        <h3>Study team <span class="direction-tag">Platform direction</span></h3>
+        <p><em>“What must each role understand before execution?”</em></p>
+        <p>An SIV knowledge-transfer package and role-specific quick references.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ Section H — Understanding first. Action second. ═══ -->
+<section id="handoff" data-section="handoff" class="section section--alt">
+  <div class="container" data-reveal>
+    <div class="split">
+      <div>
+        <h2 class="h-section prose">PIQC prepares the next action. Your systems execute it.</h2>
+        <p class="lead">Your teams already trust their systems for data capture, tracking, documents, and records. PIQC doesn’t compete with them. It gives people the protocol context to walk into those systems prepared instead of overloaded — then gets out of the way.</p>
+        <p class="lead"><strong>PIQC informs. PIQC prepares. PIQC guides. Your systems execute.</strong></p>
+      </div>
+      <div class="boundary-col">
+        <h3>A monitoring visit needs preparation</h3>
+        <p class="provenance-line">PIQC explains, in protocol context:</p>
+        <ul>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8.5 6.5 12 13 4"/></svg>endpoint-critical procedures</li>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8.5 6.5 12 13 4"/></svg>time-sensitive visit windows</li>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8.5 6.5 12 13 4"/></svg>amendment-affected requirements</li>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8.5 6.5 12 13 4"/></svg>eligibility &amp; prohibited-medication review areas</li>
+        </ul>
+        <p>Prepare the visit — then open your CTMS, EDC, or travel system, informed.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ Section I — Living protocol knowledge transfer (Platform direction) ═══ -->
+<section id="knowledge-transfer" data-section="knowledge-transfer" class="section">
+  <div class="container" data-reveal>
+    <span class="direction-tag">Platform direction</span>
+    <h2 class="h-section prose">Protocol understanding shouldn’t expire after the SIV.</h2>
+    <p class="lead">Protocol uncertainty keeps coming back — at startup, during enrollment, when new staff join, when an amendment lands, before a monitoring visit or an audit, at closeout. PIQC is designed to re-express the same protocol intelligence in the right form, for the right role, at the moment it’s needed.</p>
+    <ol class="lifecycle" aria-label="Study lifecycle">
+      <li class="lifecycle-item"><span class="lifecycle-stage">Startup</span><span class="lifecycle-example">site-ready study worksheets</span></li>
+      <li class="lifecycle-item"><span class="lifecycle-stage">SIV</span><span class="lifecycle-example">a sponsor-reviewable knowledge-transfer package</span></li>
+      <li class="lifecycle-item"><span class="lifecycle-stage">Enrollment</span><span class="lifecycle-example">eligibility &amp; prohibited-medication focus</span></li>
+      <li class="lifecycle-item"><span class="lifecycle-stage">Conduct</span><span class="lifecycle-example">visit-specific guidance</span></li>
+      <li class="lifecycle-item"><span class="lifecycle-stage">Amendment</span><span class="lifecycle-example">affected-role &amp; change-impact view</span></li>
+      <li class="lifecycle-item"><span class="lifecycle-stage">Monitoring / Audit</span><span class="lifecycle-example">protocol-derived review focus</span></li>
+      <li class="lifecycle-item"><span class="lifecycle-stage">Closeout</span><span class="lifecycle-example">remaining protocol-derived obligations</span></li>
+    </ol>
+    <p>PIQC prepares knowledge-transfer materials. Your organization owns training approval, delivery, records, competency, signatures, and controlled storage. PIQC is not an LMS.</p>
+  </div>
+</section>
+
+<!-- ═══ Section J — What PIQC is / is not (boundary table) ═══ -->
+<section id="boundary" data-section="boundary" class="section section--alt">
+  <div class="container" data-reveal>
+    <h2 class="h-section prose">Built to strengthen clinical judgment, not replace it.</h2>
+    <div class="boundary-table">
+      <div class="boundary-col boundary-col--does">
+        <h3>What PIQC does</h3>
+        <ul>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8.5 6.5 12 13 4"/></svg>Converts protocol content into structured, traceable understanding</li>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8.5 6.5 12 13 4"/></svg>Prepares editable, role-specific draft materials</li>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8.5 6.5 12 13 4"/></svg>Helps teams locate protocol evidence in context</li>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8.5 6.5 12 13 4"/></svg>Supports preparation, review, and human decision-making</li>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8.5 6.5 12 13 4"/></svg>Provides context-rich handoffs to your existing systems</li>
+        </ul>
+      </div>
+      <div class="boundary-col boundary-col--not">
+        <h3>What PIQC does not do</h3>
+        <ul>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>Replace clinical judgment</li>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>Become the system of record</li>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>Execute regulated workflows</li>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>Replace your CTMS, EDC, eTMF, LMS, or travel tools</li>
+          <li><svg class="boundary-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>Approve or mandate decisions on your behalf</li>
+        </ul>
+      </div>
+    </div>
+    <p class="lead"><strong>PIQC prepares. Your people and systems govern.</strong></p>
+  </div>
+</section>
+
+<!-- ═══ Section K — Founder intent ═══ -->
+<section id="founder" data-section="founder" class="section">
+  <div class="container" data-reveal>
+    <span class="eyebrow">Founder intent</span>
+    <h2 class="h-section prose">Built from the belief that clinical teams deserve better support before execution begins.</h2>
+    <div class="prose">
+      <p>The same thing shows up on study after study. Not careless teams. Not badly written protocols. Skilled people re-deriving a protocol’s meaning by hand — from memory, under time pressure — before anyone has seen a patient. The same interpretation work, redone at every site, in every role, with nothing there to catch what slips.</p>
+      <p>That isn’t a people problem. It’s a systems problem. Every tool in a trial assumes the protocol has already been understood — none of them does the understanding. So the burden lands on whoever is closest to the work, and the first failure happens long before the first visit.</p>
+      <p>PIQC exists to carry that burden: to turn protocol complexity into structured, traceable understanding, and to hand it to each person prepared — while judgment, review, and accountability stay firmly with them. I’m certain this layer has to exist. We’re building it.</p>
+      <p class="lead"><strong>PIQC exists to replace manual interpretation overload with anytime mastery.</strong></p>
+      <p class="provenance-line">Built by people who have audited these trials from the inside.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ Section L — Security teaser (restrained) ═══ -->
+<section id="security-teaser" data-section="security-teaser" class="section section--alt">
+  <div class="container" data-reveal>
+    <h2 class="h-section prose">Designed with privacy, controlled access, and auditability in mind.</h2>
+    <p class="lead">PIQC’s intelligence is built from the protocol document itself, with controlled access and traceable actions throughout. See how we approach privacy and data handling.</p>
+    <a class="btn-ghost" href="/security">See our security approach</a>
+  </div>
+</section>
+
+<!-- ═══ Section M — Final CTA ═══ -->
+<!-- DEMO-CTA:BEGIN -->
+<section id="request-demo" data-section="final-cta" class="section section--dark cta-band">
+  <div class="container cta-band-inner">
+    <h2 class="cta-band-title">The protocol should be a source of mastery, not a recurring cognitive burden.</h2>
+    <p class="cta-band-body">See what PIQC surfaces from your own protocol workflow.</p>
+    <div class="cta-band-actions">
+      <a class="btn-primary" href="mailto:hello@piqclinical.com?subject=PIQClinical%20demo%20request">Request a demo</a>
+      <a class="btn-ghost btn-ghost--dark" href="mailto:hello@piqclinical.com?subject=PIQClinical%20protocol%20workflow%20conversation">Talk through your protocol workflow</a>
+    </div>
+    <!-- FUTURE FORM INTEGRATION POINT (FABLE-BRIEF §8):
+         When an approved scheduling link or form endpoint exists, replace the
+         mailto CTAs above with the real form / scheduler and update
+         content.js demo.{mode,endpoint,ctaHref}. Until then the mailto is the
+         only approved destination — do NOT simulate a successful submission.
+         Any future form must never request PHI, study data, or sensitive
+         operational information. -->
+  </div>
+</section>
+<!-- DEMO-CTA:END -->
+
+</main>
+
+<!-- FOOTER:BEGIN -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="/" class="nav-brand">
+          <svg class="nav-logo" aria-hidden="true" focusable="false"><use href="#piqc-mark"/></svg>
+          <span class="wordmark"><span class="grad-text">PIQC</span><span class="wordmark-linical">linical</span></span>
+        </a>
+        <p class="footer-tagline">The intelligence layer between protocol complexity and clinical execution.</p>
+      </div>
+      <nav class="footer-col" aria-label="Product">
+        <p class="footer-heading">Product</p>
+        <ul class="footer-list">
+          <li><a class="footer-link" href="/site">Site Mode</a></li>
+          <li><a class="footer-link" href="/audit">Audit Mode</a></li>
+          <li><a class="footer-link" href="/sponsor">Sponsor Mode</a></li>
+          <li><a class="footer-link" href="/security">Security</a></li>
+        </ul>
+      </nav>
+      <nav class="footer-col" aria-label="Company">
+        <p class="footer-heading">Company</p>
+        <ul class="footer-list">
+          <li><a class="footer-link" href="/#why">Why PIQC</a></li>
+          <li><a class="footer-link" href="/#founder">Founder intent</a></li>
+          <li><a class="footer-link" href="/#request-demo">Request a demo</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="footer-legal">
+      <p>© 2026 PIQClinical. All rights reserved.</p>
+    </div>
+  </div>
+</footer>
+<!-- FOOTER:END -->
+
+<script type="module" src="/content.js"></script>
+<script type="module" src="/animations.js"></script>
+</body>
+</html>

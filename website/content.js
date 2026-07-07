@@ -22,19 +22,32 @@ export const content = {
 
   nav: {
     links: [
-      { label: 'Why PIQC',      href: '#why' },
-      { label: 'How it works',  href: '#how' },
-      { label: 'Who it serves', href: '#roles' },
-      { label: 'Product boundary', href: '#boundary' },
-      { label: 'Founder intent', href: '#founder' },
-      { label: 'Security',      href: 'security.html' },
+      { label: 'Why PIQC',      href: '/#why' },
+      { label: 'The engine',    href: '/#engine' },
+      { label: 'Ask',           href: '/#ask' },
+      { label: 'Downstream',    href: '/#downstream' },
+      { label: 'Product boundary', href: '/#boundary' },
+      { label: 'Founder intent', href: '/#founder' },
+      { label: 'Security',      href: '/security' },
     ],
     modes: [
-      { label: 'Site Mode',    href: 'site.html' },
-      { label: 'Audit Mode',   href: 'audit.html' },
-      { label: 'Sponsor Mode', href: 'sponsor.html' },
+      { label: 'Site Mode',    href: '/site' },
+      { label: 'Audit Mode',   href: '/audit' },
+      { label: 'Sponsor Mode', href: '/sponsor' },
     ],
     cta: 'Request a demo',
+  },
+
+  /* ── Conversion (FABLE-BRIEF §8) — CTA must reach a REAL destination. ──
+     Default v1 = mailto fallback. Swap `ctaHref` for a Calendly/HubSpot/Formspree
+     link (or wire the form to an approved endpoint) when available.
+     Never simulate a successful submission without a functioning integration. */
+  demo: {
+    ctaHref: 'mailto:hello@piqclinical.com?subject=PIQClinical%20demo%20request',
+    mode: 'mailto',               // 'mailto' | 'schedule' | 'form-endpoint'
+    endpoint: null,               // set to an approved form endpoint to enable a real form
+    privacyNote: 'We use your details only to respond to your request.',
+    // The form must NOT request PHI, study data, or sensitive operational information.
   },
 
   /* ── HOME · Section A — Hero: the missing layer ─────────────────────── */
@@ -65,12 +78,55 @@ export const content = {
     highlight: 'interpretation',   // the phase PIQC addresses — emphasize, don't accuse
   },
 
-  /* ── HOME · Section D — Parse once, generate many ───────────────────── */
-  parseOnce: {
-    h2: 'One protocol intelligence backbone. Many moments of understanding.',
-    body: 'PIQC reads the protocol once and converts it into structured, source-traceable logic — each fact linked back to the exact page it came from. From that single backbone, it generates the view each role actually needs, so no one rebuilds the protocol’s meaning from scratch.',
-    map: ['visits & visit windows', 'procedures', 'eligibility / exclusion', 'prohibited medications', 'endpoints', 'safety & lab requirements', 'cohort logic', 'vendor dependencies', 'amendments', 'source citations'],
-    key: 'Parse once. Generate many. Humans remain responsible.',
+  /* ── HOME · Section D · ACT 1 — The core engine (the star) ──────────── */
+  coreEngine: {
+    anchor: 'engine',
+    h2: 'From protocol PDF to visual, review-ready visit drafts — in minutes.',
+    body: 'This is the engine everything else runs on. PIQC reads the Schedule of Assessments and the procedure text and drafts every study visit as a phased, visual checklist — each requirement classified, confidence-scored, and linked to the exact protocol source. A completeness pass flags what might be missing. Days of manual transcription become a review-ready draft in minutes — and a human still reviews and owns every line.',
+    proofPoints: [
+      'Every requirement classified — required, conditional, endpoint-critical, safety-critical',
+      'A confidence signal on every line',
+      'A § source link to the exact section, page, and quote',
+      'A completeness pass that flags possibly-missing requirements — you add or dismiss',
+    ],
+    // mock visit-draft: drives the money-shot animation (`home-flow`) AND the role-filter demo.
+    // `roles` = which role chips show the row (empty/absent = shown for all).
+    mock: {
+      visit: 'Day 1 — Screening',
+      roleChips: ['All', 'Coordinator', 'Nurse', 'Investigator', 'Lab', 'Pharmacy'],
+      rows: [
+        { label: 'Informed Consent',                   tags: ['REQUIRED', 'SAFETY-CRITICAL'], source: '§4.8 ICH E6(R2)', confidence: 'high',   roles: ['Coordinator', 'Investigator'] },
+        { label: 'Vital signs (BP, HR, temp)',         tags: ['REQUIRED'],                    source: '§7.2.1 · p.31',   confidence: 'high',   roles: ['Nurse'] },
+        { label: '12-Lead ECG (triplicate, pre-dose)', tags: ['PRIMARY ENDPOINT'],            source: '§6.2.1 · p.34',   confidence: 'high',   roles: ['Nurse'] },
+        { label: 'PK blood draw (pre-dose)',           tags: ['PRIMARY ENDPOINT'],            source: '§6.3 · p.36',     confidence: 'high',   roles: ['Lab'] },
+        { label: 'ECOG Performance Status',            tags: ['ELIGIBILITY'],                 source: '§5.1 · p.22',     confidence: 'medium', roles: ['Investigator'] },
+        { label: 'IP accountability check',            tags: ['CONDITIONAL'],                 source: '§8.4 · p.44',     confidence: 'medium', roles: ['Pharmacy'] },
+      ],
+      footer: 'PIQC draft · 14 requirements surfaced for review',   // no "0 gaps"/completeness claim (FABLE-BRIEF §4.5)
+    },
+    key: 'Parse once. Draft the whole study. You review.',
+  },
+
+  /* ── HOME · Section E · ACT 2 — Ask, answered by the protocol ───────── */
+  askSourceOfTruth: {
+    anchor: 'ask',
+    h2: 'Ask in plain language. Answered by the protocol itself.',
+    body: 'Ask works shoulder to shoulder with the source of truth. Ask a plain question and PIQC answers from this protocol — with the exact cited passage shown right beside the answer. It won’t invent clinical guidance; if something isn’t in the protocol, Ask says so. Prompts adapt to the study’s phase and the site’s team.',
+    inputPlaceholder: 'Ask anything — live in the product',   // disabled free-text input in the demo
+    // clickable preset chips (`ask-source` demo): each swaps answer + slides in its citation.
+    // First item is also the default shown state (JS-off fallback).
+    examples: [
+      { question: 'Which visits require a 12-lead ECG, and in what window?',
+        answer: 'A 12-lead ECG is required at Screening and at Day 29 — in triplicate, pre-dose, within ±15 minutes of the scheduled time.',
+        citation: { quote: 'A 12-lead ECG will be performed in triplicate, pre-dose…', ref: '§6.2.1 · p.34' } },
+      { question: 'What are the key exclusion criteria?',
+        answer: 'Prior systemic therapy within 14 days or 5 half-lives (whichever is longer), and any unresolved Grade ≥2 toxicity from prior treatment.',
+        citation: { quote: '≥14 days or 5 half-lives (whichever is longer) from prior systemic therapy…', ref: '§5.2 · p.28' } },
+      { question: 'Is there a washout period before dosing?',
+        answer: 'Yes — a minimum 14-day washout (or 5 half-lives) is required from prior systemic therapy before the first dose.',
+        citation: { quote: 'Washout: ≥14 days or 5 half-lives prior to Day 1 dosing.', ref: '§5.2 · p.28' } },
+    ],
+    key: 'Answers you can trace — because the source is right there.',
   },
 
   /* ── HOME · Section E — Who it serves (role lenses) ─────────────────── */
@@ -146,7 +202,7 @@ export const content = {
       'Become the system of record',
       'Execute regulated workflows',
       'Replace your CTMS, EDC, eTMF, LMS, or travel tools',
-      'Approve, attest, certify, or mandate decisions',
+      'Approve or mandate decisions on your behalf',
     ],
     line: 'PIQC prepares. Your people and systems govern.',
   },
@@ -165,34 +221,40 @@ export const content = {
     credibilityLine: 'Built by people who have audited these trials from the inside.',
   },
 
-  /* ── HOME · Section J — Explore the product (bridge to proof) ────────── */
-  explore: {
-    h2: 'Three ways to act on the same protocol intelligence.',
+  /* ── HOME · Section F · ACT 3 — Downstream: the same intelligence ────── */
+  downstream: {
+    anchor: 'downstream',
+    h2: 'Parse once. The whole trial benefits.',
+    body: 'Because the protocol is already parsed once into traceable logic, that same intelligence flows downstream — no one rebuilds the protocol’s meaning from scratch. For auditors it becomes a gated 8-stage vendor audit with risk-scored, traceable findings. For sponsors it becomes parse-once-generate-many deliverables, every block labeled fact vs framing, every fact traceable to its page.',
     cards: [
-      { mode: 'Site Mode',    href: 'site.html',
-        who: 'For research sites',
-        bullets: ['Protocol → visit-by-visit execution checklists', 'Role-filtered worksheets, one dataset', 'Every requirement traceable to its source'] },
-      { mode: 'Audit Mode',   href: 'audit.html',
-        who: 'For auditors, QA & sponsors',
+      { mode: 'Site Mode',    href: '/site',
+        who: 'The core engine, in depth',
+        bullets: ['Protocol → visit-by-visit execution drafts', 'Ask, answered by the protocol', 'Role-filtered worksheets from one dataset'] },
+      { mode: 'Audit Mode',   href: '/audit',
+        who: 'Downstream · for auditors, QA & sponsors',
         bullets: ['A gated 8-stage vendor audit', 'Risk-scored findings → Issue → CAPA', 'AI-drafted report, human-approved'] },
-      { mode: 'Sponsor Mode', href: 'sponsor.html',
-        who: 'For sponsors (enterprise)',
-        bullets: ['Parse once, generate many deliverables', 'Every block labeled: fact vs framing', 'Byte-level source provenance'] },
+      { mode: 'Sponsor Mode', href: '/sponsor',
+        who: 'Downstream · for sponsors (enterprise)',
+        bullets: ['Parse once, generate many deliverables', 'Every block labeled: fact vs framing', 'Source-traceable provenance'] },
     ],
+    // Numbers must clear FABLE-BRIEF §4.5 (verify against the product baseline) before publishing.
     stats: [
       { value: '8', label: 'gated audit stages' },
       { value: '5', label: 'role-filtered views' },
       { value: '4', label: 'evidence support types' },
-      { value: '0', label: 'PHI stored — ever' },
+      { value: 'Protocol-first', label: 'PIQC’s intelligence is built from the protocol document itself' },
     ],
+    key: 'Parse once. Generate many. Humans remain responsible.',
   },
 
-  /* ── HOME · Section K — Security teaser ─────────────────────────────── */
+  /* ── HOME · Section L — Security teaser ─────────────────────────────────
+     RESTRAINED wording only until the §6.5 claim register is filled + approved.
+     Do NOT reinstate "zero PHI", "immutable", "21 CFR Part 11", badges, etc. here. */
   securityTeaser: {
-    h2: 'Built for regulated environments from the ground up.',
-    body: 'Zero-PHI by architecture — PHI can’t be entered, by design, not policy. Row-level security at the database layer. An immutable, 21 CFR Part 11-aligned audit trail on every action.',
-    cta: 'See our security posture',
-    href: 'security.html',
+    h2: 'Designed with privacy, controlled access, and auditability in mind.',
+    body: 'PIQC’s intelligence is built from the protocol document itself, with controlled access and traceable actions throughout. See how we approach privacy and data handling.',
+    cta: 'See our security approach',
+    href: '/security',
   },
 
   /* ── HOME · Section L — Final CTA ───────────────────────────────────── */
@@ -227,17 +289,19 @@ export const content = {
     tagline: 'The intelligence layer between protocol complexity and clinical execution.',
     columns: [
       { heading: 'Product', links: [
-        { label: 'Site Mode', href: 'site.html' },
-        { label: 'Audit Mode', href: 'audit.html' },
-        { label: 'Sponsor Mode', href: 'sponsor.html' },
-        { label: 'Security', href: 'security.html' },
+        { label: 'Site Mode', href: '/site' },
+        { label: 'Audit Mode', href: '/audit' },
+        { label: 'Sponsor Mode', href: '/sponsor' },
+        { label: 'Security', href: '/security' },
       ]},
       { heading: 'Company', links: [
-        { label: 'Why PIQC', href: 'index.html#why' },
-        { label: 'Founder intent', href: 'index.html#founder' },
-        { label: 'Request a demo', href: 'index.html#contact' },
+        { label: 'Why PIQC', href: '/#why' },
+        { label: 'Founder intent', href: '/#founder' },
+        { label: 'Request a demo', href: '/#request-demo' },
       ]},
     ],
+    // Do NOT ship dead footer links or placeholder legal pages. Missing legal/policy
+    // destinations are RELEASE BLOCKERS (FABLE-BRIEF §9). Add real Privacy/Terms when ready.
     legal: '© 2026 PIQClinical. All rights reserved.',
   },
 };

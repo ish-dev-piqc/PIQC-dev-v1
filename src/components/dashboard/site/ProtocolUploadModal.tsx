@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { UploadForm } from '../KnowledgeBase';
 import { useTheme } from '../../../context/ThemeContext';
 import { useOverlay } from '../../../hooks/useOverlay';
+import { useProtocol } from '../../../context/ProtocolContext';
 
 // =============================================================================
 // ProtocolUploadModal — opened from the Navbar protocol picker's "Upload
@@ -25,10 +26,12 @@ interface ProtocolUploadModalProps {
 export default function ProtocolUploadModal({ onClose }: ProtocolUploadModalProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
+  const { refresh } = useProtocol();
   const overlay = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [isParsing, setIsParsing] = useState(false);
   const [confirmingClose, setConfirmingClose] = useState(false);
+  const [justFinished, setJustFinished] = useState(false);
 
   const requestClose = () => {
     if (isParsing && !confirmingClose) {
@@ -36,6 +39,16 @@ export default function ProtocolUploadModal({ onClose }: ProtocolUploadModalProp
       return;
     }
     onClose();
+  };
+
+  // Explicit refetch rather than trusting the protocols realtime channel
+  // alone — same rationale as the site_participants fix elsewhere. Stay
+  // open so the success state UploadForm just rendered is actually visible;
+  // closing immediately (the old onSuccess={onClose} wiring) unmounted the
+  // form in the same tick it painted "Protocol parsed and ready."
+  const handleUploadSuccess = () => {
+    refresh();
+    setJustFinished(true);
   };
 
   useOverlay({ isOpen: true, onClose: requestClose, containerRef: panelRef });
@@ -99,7 +112,27 @@ export default function ProtocolUploadModal({ onClose }: ProtocolUploadModalProp
               </div>
             </div>
           ) : (
-            <UploadForm isLight={isLight} onSuccess={onClose} onParsingChange={setIsParsing} />
+            <>
+              <UploadForm
+                isLight={isLight}
+                onSuccess={handleUploadSuccess}
+                onParsingChange={(parsing) => {
+                  setIsParsing(parsing);
+                  if (parsing) setJustFinished(false);
+                }}
+              />
+              {justFinished && (
+                <div className="flex justify-end mt-3">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-4 py-2 rounded-lg text-sm font-medium bg-brand-600 hover:bg-brand-500 text-white"
+                  >
+                    Done
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
