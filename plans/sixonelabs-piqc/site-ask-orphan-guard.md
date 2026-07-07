@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: site-ask-orphan-guard
-status: active
+status: in-review
 started: 2026-07-07
 target_pr:
 ---
