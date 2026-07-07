@@ -83,7 +83,7 @@ const TAB_DEFS: TabDef[] = [
 
 export default function PreAuditDraftingWorkspace() {
   const { theme } = useTheme();
-  const { activeAudit, advanceStage } = useAudit();
+  const { activeAudit, advanceStage, advanceStageError } = useAudit();
   const isLight = theme === 'light';
 
   const { preAuditBundles: bundles, setPreAuditBundles: setBundles } = useAuditData();
@@ -461,6 +461,18 @@ export default function PreAuditDraftingWorkspace() {
             Advance to Audit conduct
             <ArrowRight size={14} />
           </button>
+          {advanceStageError && (
+            <div
+              role="alert"
+              className={`text-xs px-3 py-2 mt-3 rounded-md border ${
+                isLight
+                  ? 'bg-red-50 border-red-200 text-red-700'
+                  : 'bg-red-500/15 border-red-500/30 text-red-300'
+              }`}
+            >
+              Couldn’t advance the stage: {advanceStageError}
+            </div>
+          )}
         </div>
       </div>
     </div>

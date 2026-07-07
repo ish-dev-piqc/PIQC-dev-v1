@@ -11,7 +11,7 @@
 // Reports / Today cross-protocol view has data.
 // =============================================================================
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useProtocol } from './ProtocolContext';
 import { useDemoMode } from './DemoModeContext';
@@ -84,6 +84,22 @@ export function SiteDataProvider({ children }: { children: React.ReactNode }) {
   // ---------------------------------------------------------------------------
   const fetchTokenRef = useRef(0);
 
+  // The cross-protocol (activeProtocol === null) branch fans out over the whole
+  // protocols list. We must NOT put `protocols` in refresh's dep array: its
+  // array identity changes on every ProtocolContext load() (including unrelated,
+  // org-wide realtime-triggered reloads via the unfiltered protocols-changes
+  // channel), which would churn refresh's identity and needlessly re-run the
+  // fetch + realtime-resubscribe effects below — even when scoped to a single
+  // protocol that didn't change.
+  //
+  // Instead: depend on a content-stable `protocolIds` key (only changes when the
+  // actual set of protocol ids changes, which is the only thing the cross-scope
+  // branch reads from each protocol), and read the *live* array through a ref at
+  // call time so the fan-out always sees current data (staleness-safe).
+  const protocolsRef = useRef(protocols);
+  protocolsRef.current = protocols;
+  const protocolIds = useMemo(() => protocols.map((p) => p.id).join(','), [protocols]);
+
   const refresh = useCallback(async () => {
     const token = ++fetchTokenRef.current;
     setLoading(true);
@@ -99,7 +115,8 @@ export function SiteDataProvider({ children }: { children: React.ReactNode }) {
         const allVisits: SiteVisit[] = [];
         const allTeam: SiteTeamMember[] = [];
         const allDocs: ProtocolDocument[] = [];
-        for (const p of protocols) {
+        // Read live protocols via ref — see protocolsRef note above.
+        for (const p of protocolsRef.current) {
           const [pr, vr, tr, dr] = await Promise.all([
             fetchParticipants(p.id),
             fetchVisitsForProtocol(p.id),
@@ -140,7 +157,11 @@ export function SiteDataProvider({ children }: { children: React.ReactNode }) {
     } finally {
       if (token === fetchTokenRef.current) setLoading(false);
     }
-  }, [activeProtocol?.id, protocols]);
+    // protocolsRef.current is read (not protocols) so unrelated array-identity
+    // churn doesn't recreate refresh; protocolIds tracks the one thing the
+    // cross-scope fan-out actually depends on (the set of ids).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProtocol?.id, protocolIds]);
 
   useEffect(() => {
     refresh();
