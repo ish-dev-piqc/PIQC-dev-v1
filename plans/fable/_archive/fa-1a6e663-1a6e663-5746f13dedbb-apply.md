@@ -1,9 +1,10 @@
 ---
 owner: fable
 feature: fa-1a6e663-1a6e663-5746f13dedbb-apply
-status: active
+status: merged
+merged: 2026-07-07
 started: 2026-07-07
-target_pr:
+target_pr: #477
 ---
 
 # Fable apply — FA-1a6e663-1a6e663-5746f13dedbb (Sponsor audit)
