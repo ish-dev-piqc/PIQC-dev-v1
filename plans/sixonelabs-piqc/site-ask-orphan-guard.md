@@ -25,8 +25,10 @@ site-side original, keeping the two surfaces mirrored at the same layer.
 
 ## Scope (files allowed)
 
-- `src/components/dashboard/site/AskBubble.tsx` — wrap the setter passed to AskTab in `guardedSetMessages` (verbatim port of the sponsor guard): drop a functional update that lands on an empty thread and produces messages with no user turn but an assistant error — a legitimate thread always starts with the user's turn, so that state can only be the aborted straggler.
-- `src/components/dashboard/site/__tests__/AskBubble.test.tsx` — new regression test (mock contexts + AskTab, drive the New-chat-mid-stream straggler write, assert it's dropped and legitimate writes still land).
+- `src/components/dashboard/site/AskBubble.tsx`
+  Wrap the setter passed to AskTab in `guardedSetMessages` (verbatim port of the sponsor guard): drop a functional update that lands on an empty thread and produces messages with no user turn but an assistant error — a legitimate thread always starts with the user's turn, so that state can only be the aborted straggler.
+- `src/components/dashboard/site/__tests__/AskBubble.test.tsx`
+  New regression test (mock contexts + AskTab, drive the New-chat-mid-stream straggler write, assert it's dropped and legitimate writes still land).
 
 ## Out of scope (files forbidden)
 
@@ -54,7 +56,7 @@ none
 
 ## Verification
 
-- [ ] `AskBubble.test.tsx` — straggler write (assistant-error-only update onto a cleared thread) is dropped; New chat stays disabled after the drop
-- [ ] `AskBubble.test.tsx` — legitimate first send (user turn + streaming placeholder) passes the guard; normal Stop-mid-stream with a preceding user turn is NOT dropped
-- [ ] Full vitest suite green
+- [x] `AskBubble.test.tsx` — straggler write (assistant-error-only update onto a cleared thread) is dropped; New chat stays disabled after the drop. Red-green verified: this case fails against the unguarded component, passes with the guard.
+- [x] `AskBubble.test.tsx` — legitimate first send (user turn + streaming placeholder) passes the guard; normal Stop-mid-stream with a preceding user turn is NOT dropped. Both pass with AND without the guard (behavior-preservation controls).
+- [x] `tsc --noEmit -p tsconfig.app.json` clean; full vitest suite green (102 files / 1362 tests)
 - [ ] Manual (dev with a live protocol): send a question, click New chat mid-stream → thread is empty, no orphaned "Stopped…" bubble

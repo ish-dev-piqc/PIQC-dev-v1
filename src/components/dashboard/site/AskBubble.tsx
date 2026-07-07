@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { MessageSquare, X, Sparkles, SquarePen } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useAskThread } from '../../../lib/site/useAskThread';
+import type { ExtendedMessage } from '../../../lib/supabase';
 import AskTab from './AskTab';
 
 // =============================================================================
@@ -100,6 +101,34 @@ export default function AskBubble() {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [open]);
+
+  // New-chat-mid-stream guard (mirrors SponsorAskPanel): clearing + remounting
+  // aborts the stream, but the aborted send's finally still writes its "Stopped
+  // before a response was received." bubble through this (same-protocol,
+  // still-valid) setter — which would land as the sole message of the freshly
+  // cleared thread, with a Retry that can't work (no user turn to retry). A
+  // legitimate thread always starts with the user's turn, so an update that
+  // leaves NO user message but carries an assistant error can only be that
+  // straggler: drop it.
+  const guardedSetMessages = useCallback<
+    React.Dispatch<React.SetStateAction<ExtendedMessage[]>>
+  >(
+    (value) => {
+      setMessages((prev) => {
+        const next =
+          typeof value === 'function'
+            ? (value as (m: ExtendedMessage[]) => ExtendedMessage[])(prev)
+            : value;
+        const orphanedError =
+          prev.length === 0 &&
+          next.length > 0 &&
+          !next.some((m) => m.role === 'user') &&
+          next.some((m) => m.error);
+        return orphanedError ? prev : next;
+      });
+    },
+    [setMessages],
+  );
 
   const handleNewChat = () => {
     clearThread();
@@ -230,7 +259,7 @@ export default function AskBubble() {
           <AskTab
             key={`${activeProtocol.id}:${epoch}`}
             messages={messages}
-            setMessages={setMessages}
+            setMessages={guardedSetMessages}
           />
         ) : (
           <div className="h-full flex items-center justify-center p-6 text-center">
