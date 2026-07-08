@@ -24,6 +24,14 @@ import type {
 // Types
 // -----------------------------------------------------------------------------
 
+// Read/create results carry the failure reason instead of collapsing it to [] /
+// null, so a caller can tell a genuine empty list from a DB error and surface
+// the RPC's specific message. Defined locally: mode isolation forbids importing
+// Site Mode's Result<T>.
+export type Result<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: string };
+
 export interface VendorRow {
   id: string;
   name: string;
@@ -76,16 +84,13 @@ export interface AuditRow {
 // Vendor reads + creates
 // -----------------------------------------------------------------------------
 
-export async function listVendors(): Promise<VendorRow[]> {
+export async function listVendors(): Promise<Result<VendorRow[]>> {
   const { data, error } = await supabase
     .from('vendors')
     .select('id, name, legal_name, country, website')
     .order('name', { ascending: true });
-  if (error) {
-    console.error('[auditCreationApi] listVendors error:', error);
-    return [];
-  }
-  return (data ?? []) as VendorRow[];
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, data: (data ?? []) as VendorRow[] };
 }
 
 export async function createVendor(input: {
@@ -114,16 +119,13 @@ export async function createVendor(input: {
 // RLS); creation goes through the SECURITY DEFINER audit_mode_create_site RPC.
 // -----------------------------------------------------------------------------
 
-export async function listSites(): Promise<SiteRow[]> {
+export async function listSites(): Promise<Result<SiteRow[]>> {
   const { data, error } = await supabase
     .from('sites')
     .select('id, name, site_number, principal_investigator, country')
     .order('name', { ascending: true });
-  if (error) {
-    console.error('[auditCreationApi] listSites error:', error);
-    return [];
-  }
-  return (data ?? []) as SiteRow[];
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, data: (data ?? []) as SiteRow[] };
 }
 
 export async function createSite(input: {
@@ -156,9 +158,9 @@ export async function createSite(input: {
 // scopes documents and audits to the caller — no extra server logic needed.
 // -----------------------------------------------------------------------------
 
-export async function listAuditorProtocolLibrary(): Promise<AuditorProtocolRow[]> {
+export async function listAuditorProtocolLibrary(): Promise<Result<AuditorProtocolRow[]>> {
   const user = (await supabase.auth.getUser()).data.user;
-  if (!user) return [];
+  if (!user) return { ok: true, data: [] };
 
   const [docRes, auditRes] = await Promise.all([
     supabase
@@ -172,8 +174,10 @@ export async function listAuditorProtocolLibrary(): Promise<AuditorProtocolRow[]
       .eq('lead_auditor_id', user.id),
   ]);
 
-  if (docRes.error) console.error('[auditCreationApi] library docs error:', docRes.error);
-  if (auditRes.error) console.error('[auditCreationApi] library audits error:', auditRes.error);
+  // Either source failing means the union would be silently incomplete — treat
+  // that as a load error, not a short library, so the picker can say so.
+  if (docRes.error) return { ok: false, error: docRes.error.message };
+  if (auditRes.error) return { ok: false, error: auditRes.error.message };
 
   const ids = new Set<string>();
   for (const row of (docRes.data ?? []) as { protocol_id: string | null }[]) {
@@ -182,7 +186,7 @@ export async function listAuditorProtocolLibrary(): Promise<AuditorProtocolRow[]
   for (const row of (auditRes.data ?? []) as { protocol_id: string | null }[]) {
     if (row.protocol_id) ids.add(row.protocol_id);
   }
-  if (ids.size === 0) return [];
+  if (ids.size === 0) return { ok: true, data: [] };
 
   // One query for the protocol + latest active version + phase, ordered by title.
   const { data, error } = await supabase
@@ -194,12 +198,9 @@ export async function listAuditorProtocolLibrary(): Promise<AuditorProtocolRow[]
     .in('id', Array.from(ids))
     .order('title', { ascending: true });
 
-  if (error) {
-    console.error('[auditCreationApi] library protocols error:', error);
-    return [];
-  }
+  if (error) return { ok: false, error: error.message };
 
-  return ((data ?? []) as unknown as Array<{
+  const rows = ((data ?? []) as unknown as Array<{
     id: string;
     study_number: string | null;
     title: string;
@@ -232,6 +233,8 @@ export async function listAuditorProtocolLibrary(): Promise<AuditorProtocolRow[]
       } satisfies AuditorProtocolRow;
     })
     .filter((p): p is AuditorProtocolRow => p !== null);
+
+  return { ok: true, data: rows };
 }
 
 // -----------------------------------------------------------------------------
@@ -330,7 +333,7 @@ export async function createAudit(input: {
   protocolVersionId: string;
   auditType: AuditType;
   scheduledDate?: string | null;
-}): Promise<AuditRow | null> {
+}): Promise<Result<AuditRow>> {
   const { data, error } = await supabase.rpc('audit_mode_create_audit', {
     p_audit_name: input.auditName,
     p_vendor_id: input.vendorId ?? null,
@@ -340,9 +343,8 @@ export async function createAudit(input: {
     p_workflow_type: input.workflowType,
     p_site_id: input.siteId ?? null,
   });
-  if (error) {
-    console.error('[auditCreationApi] createAudit error:', error);
-    return null;
-  }
-  return data as AuditRow;
+  // Preserve the RPC's specific reason ("Protocol version % not found", auditee
+  // mismatch, etc.) so the drawer can show it instead of a flat failure line.
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, data: data as AuditRow };
 }

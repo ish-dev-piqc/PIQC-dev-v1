@@ -183,11 +183,15 @@ export function AuditProvider({ children }: { children: React.ReactNode }) {
     }
   }, [activeId]);
 
+  // Only evict when the audit is genuinely gone from a good list — not when the
+  // SELECT errored (audits is []), which would treat a transient DB failure as
+  // "the audit disappeared" and drop the auditor out of their persisted active
+  // audit.
   useEffect(() => {
-    if (activeId && !loading && !audits.some((a) => a.id === activeId)) {
+    if (activeId && !loading && !error && !audits.some((a) => a.id === activeId)) {
       setActiveId(null);
     }
-  }, [activeId, audits, loading]);
+  }, [activeId, audits, loading, error]);
 
   const activeAudit = activeId
     ? audits.find((a) => a.id === activeId) ?? null

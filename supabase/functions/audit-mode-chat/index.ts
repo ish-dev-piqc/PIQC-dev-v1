@@ -228,6 +228,17 @@ const STAGE_FOCUS_HINTS: Record<string, string> = {
   AUDIT_CONDUCT:         "The auditor is conducting the audit and capturing findings; questions are likely about classification, severity, and source-of-truth checks.",
   REPORT_DRAFTING:       "The auditor is writing the report; questions are likely about phrasing, recommendation framing, and which findings to surface.",
   FINAL_REVIEW_EXPORT:   "The auditor is finalizing and exporting; questions are likely about sign-off, missing approvals, and export readiness.",
+  // INVESTIGATOR_SITE_AUDIT (ISA) stages. Auditee-neutral phrasing — the ISA
+  // workflow audits a site, not a vendor. These exist so the drift invariant
+  // below holds now that VALID_VIEWED_STAGES carries the ISA_* stages; ISA chat
+  // framing is otherwise still vendor-shaped (tracked separately).
+  ISA_SITE_INTAKE:       "The auditor is setting up the site audit; questions are likely about scope, dates, and which site activities are in play.",
+  ISA_RISK_ASSESSMENT:   "The auditor is assessing site risk; questions are likely about prior history, enrollment, protocol deviations, and known risk signals.",
+  ISA_SCOPE_BUILDER:     "The auditor is finalizing scope and risk posture; questions are likely about which areas to prioritize and why.",
+  ISA_PREP:              "The auditor is preparing the site audit; questions are likely about what to review on site, records to request, and prior findings to chase.",
+  ISA_CONDUCT:           "The auditor is conducting the site audit and capturing findings; questions are likely about classification, severity, and source-of-truth checks.",
+  ISA_REPORT:            "The auditor is writing the report; questions are likely about phrasing, recommendation framing, and which findings to surface.",
+  ISA_EXPORT:            "The auditor is finalizing and exporting; questions are likely about sign-off, missing approvals, and export readiness.",
 };
 
 // Drift invariant: VALID_VIEWED_STAGES and STAGE_FOCUS_HINTS are two independent
