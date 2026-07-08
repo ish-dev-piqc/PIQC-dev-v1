@@ -3,6 +3,7 @@ owner: sixonelabs-piqc
 feature: fable-audit-workflow
 status: merged
 started: 2026-07-06
+merged: 2026-07-08
 target_pr: "#451"
 ---
 
