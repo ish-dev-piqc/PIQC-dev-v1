@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: deliverable-engine-ui-gate
-status: active
+status: in-review
 started: 2026-07-08
 target_pr:
 ---
@@ -26,22 +26,31 @@ the entitlement decision as pure functions.
 
 ## Scope (files allowed)
 
-- `plans/sixonelabs-piqc/deliverable-engine-ui-gate.md` (this plan)
-- `src/hooks/useDeliverableEntitlement.ts` — NEW. Reads `protocolOwnerOrgId` from
-  `useOrg()`, calls `supabase.rpc('org_has_entitlement', { p_org_id, p_capability:
+Bare paths (scope-check matches each bullet as a glob against the changed file —
+no inline prose on these lines). Per-file intent is in the mapping below.
+
+- `plans/sixonelabs-piqc/deliverable-engine-ui-gate.md`
+- `src/hooks/useDeliverableEntitlement.ts`
+- `src/lib/entitlements.ts`
+- `src/lib/__tests__/entitlements.test.ts`
+- `src/components/dashboard/sponsor/deliverables/ProtocolIntelligenceTab.tsx`
+- `src/components/dashboard/cra/CraWorkspaceShell.tsx`
+
+What each file does:
+
+- `useDeliverableEntitlement.ts` — NEW. Reads `protocolOwnerOrgId` from `useOrg()`,
+  calls `supabase.rpc('org_has_entitlement', { p_org_id, p_capability:
   'deliverable_engine' })`, returns `{ hasEntitlement, loading }`. Mirrors the
   `useSubscription` precedent (fetch lives in a hook, not the component).
-- `src/lib/entitlements.ts` — repurpose `canUseSponsorMode`/`canUseCraMode` to take
-  the capability boolean instead of `subscription.kind`; rewrite reason/gate copy to
+- `entitlements.ts` — repurpose `canUseSponsorMode`/`canUseCraMode` to take the
+  capability boolean instead of `subscription.kind`; rewrite reason/gate copy to
   drop the dead "enterprise tier" language. Functions stay pure + separate
   (product-lever decoupling preserved).
-- `src/lib/__tests__/entitlements.test.ts` — update the two gate tests to the new
-  boolean signature; add entitled/non-entitled cases.
-- `src/components/dashboard/sponsor/deliverables/ProtocolIntelligenceTab.tsx` —
-  consume the hook, thread the boolean through the pure gate, add an entitlement
-  loading branch, update gate-card copy.
-- `src/components/dashboard/cra/CraWorkspaceShell.tsx` — same wiring for the CRA
-  workspace.
+- `entitlements.test.ts` — update the two gate tests to the new boolean signature;
+  add entitled/non-entitled cases.
+- `ProtocolIntelligenceTab.tsx` — consume the hook, thread the boolean through the
+  pure gate, add an entitlement loading branch, update gate-card copy.
+- `CraWorkspaceShell.tsx` — same wiring for the CRA workspace.
 
 ## Out of scope (files forbidden)
 

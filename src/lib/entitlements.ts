@@ -207,53 +207,55 @@ export function canInviteViewer(
   };
 }
 
+// =============================================================================
+// Protocol Deliverable Engine gates (Sponsor + CRA surfaces).
+//
+// These gate on the REAL `org_entitlements` capability ('deliverable_engine'),
+// not on a subscription tier. They previously checked `subscription.kind ===
+// 'enterprise'` — a tier with no Stripe price that no code path can ever set,
+// so the gate blocked 100% of users while the backend engine was live. The
+// capability boolean comes from `useDeliverableEntitlement()`, which reads the
+// SECURITY DEFINER `org_has_entitlement()` RPC (the same grant the backend
+// RPC/RLS enforces — see #479's ENT-1/MAC-1). The server is the real boundary;
+// these functions only decide whether to render the surface or the gate card.
+//
+// Kept as two SEPARATE pure functions even though they share behavior today —
+// entitlements are product levers, and coupling them would couple future
+// pricing decisions.
+// =============================================================================
+
 /**
- * Is the caller's plan in the family that unlocks multi-org / sponsor-mode features?
- * v1 returns false unless the subscription is 'enterprise'; flips to true once we
- * ship the sponsor-mode admin UI gated behind this entitlement.
+ * Can the caller use the Sponsor Mode Protocol Intelligence surface?
+ * `hasDeliverableEngine` is the org's `deliverable_engine` capability grant.
  */
 export function canUseSponsorMode(
-  subscription: Subscription | null,
+  hasDeliverableEngine: boolean,
 ): EntitlementDecision {
-  if (!subscription || subscription.kind === null) {
-    return {
-      allowed: false,
-      reason: 'No active plan. Sponsor Mode requires the enterprise tier.',
-      addonProductKind: null,
-    };
-  }
-  if (subscription.kind === 'enterprise') {
+  if (hasDeliverableEngine) {
     return { allowed: true };
   }
   return {
     allowed: false,
-    reason: 'Sponsor Mode requires the enterprise tier. Talk to PIQC to upgrade.',
+    reason:
+      'Sponsor Mode isn’t enabled for this workspace yet. Talk to PIQC to turn on Protocol Intelligence.',
     addonProductKind: null,
   };
 }
 
 /**
- * CRA/Monitor Mode is an enterprise capability. Deliberately a SEPARATE
- * gate from canUseSponsorMode even though both check the enterprise tier
- * today — entitlements are product levers, and coupling them would couple
- * future pricing decisions.
+ * Can the caller use the CRA/Monitor Mode workspace?
+ * `hasDeliverableEngine` is the org's `deliverable_engine` capability grant.
  */
 export function canUseCraMode(
-  subscription: Subscription | null,
+  hasDeliverableEngine: boolean,
 ): EntitlementDecision {
-  if (!subscription || subscription.kind === null) {
-    return {
-      allowed: false,
-      reason: 'No active plan. CRA Mode requires the enterprise tier.',
-      addonProductKind: null,
-    };
-  }
-  if (subscription.kind === 'enterprise') {
+  if (hasDeliverableEngine) {
     return { allowed: true };
   }
   return {
     allowed: false,
-    reason: 'CRA Mode requires the enterprise tier. Talk to PIQC to upgrade.',
+    reason:
+      'CRA Mode isn’t enabled for this workspace yet. Talk to PIQC to turn it on.',
     addonProductKind: null,
   };
 }

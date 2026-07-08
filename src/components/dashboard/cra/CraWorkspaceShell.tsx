@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { FolderOpen, Loader2, Lock, SearchCheck } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useProtocol } from '../../../context/ProtocolContext';
-import { useSubscription } from '../../../hooks/useSubscription';
+import { useDeliverableEntitlement } from '../../../hooks/useDeliverableEntitlement';
 import { canUseCraMode } from '../../../lib/entitlements';
 import {
   ARTIFACT_TYPE_LABELS,
@@ -29,9 +29,10 @@ import { CRA_ARTIFACT_ORDER } from './craDeliverables';
 //      sponsor's full four (risk overview / SIV are sponsor-facing).
 //
 // Gate order mirrors ProtocolIntelligenceTab, top to bottom:
-//   1. Entitlement — canUseCraMode(subscription). The rail icon itself is
-//      never gated (sponsor precedent): the mode is discoverable, the
-//      capability is gated. Not allowed → calm amber gate card.
+//   1. Entitlement — canUseCraMode(hasEntitlement), read from the org's real
+//      'deliverable_engine' capability via useDeliverableEntitlement(). The
+//      rail icon itself is never gated (sponsor precedent): the mode is
+//      discoverable, the capability is gated. Not allowed → calm amber gate card.
 //   2. Protocol scope — ProtocolContext supplies the list; the workspace
 //      defaults to the app-wide activeProtocol and offers a local <select> so
 //      a monitor can switch protocols without moving the global selection.
@@ -50,7 +51,7 @@ export default function CraWorkspaceShell() {
   const { theme } = useTheme();
   const isLight = theme === 'light';
 
-  const { subscription, loading: subscriptionLoading } = useSubscription();
+  const { hasEntitlement, loading: entitlementLoading } = useDeliverableEntitlement();
   const { protocols, isLoading: protocolsLoading, activeProtocol } = useProtocol();
 
   // Local protocol override — scoped to this workspace. null = follow the
@@ -74,7 +75,7 @@ export default function CraWorkspaceShell() {
   // Full-screen spinner ONLY while there is nothing to show yet (the
   // ProtocolIntelligenceTab discipline: a background protocol reload must not
   // unmount the panel and destroy in-progress reviewer text).
-  if (subscriptionLoading || (protocolsLoading && protocols.length === 0)) {
+  if (entitlementLoading || (protocolsLoading && protocols.length === 0)) {
     return (
       <div className="flex items-center justify-center min-h-[30vh]">
         <Loader2
@@ -87,7 +88,7 @@ export default function CraWorkspaceShell() {
     );
   }
 
-  const decision = canUseCraMode(subscription);
+  const decision = canUseCraMode(hasEntitlement);
   if (!decision.allowed) {
     return (
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
@@ -106,14 +107,14 @@ export default function CraWorkspaceShell() {
             </div>
             <div className="min-w-0">
               <h2 className="text-fg-heading text-sm font-semibold">
-                CRA Mode is an enterprise capability
+                CRA Mode isn’t enabled yet
               </h2>
               <p className="text-fg-sub text-sm mt-1 leading-relaxed">{decision.reason}</p>
               <p className="text-fg-muted text-xs mt-3 leading-relaxed">
-                With the enterprise tier, monitors get a dedicated workspace over
-                the same protocol intelligence — PIQC-drafted monitoring focus,
-                preparation checklists, and next-action context, every item
-                traceable to its protocol source.
+                Once enabled, monitors get a dedicated workspace over the same
+                protocol intelligence — PIQC-drafted monitoring focus, preparation
+                checklists, and next-action context, every item traceable to its
+                protocol source.
               </p>
             </div>
           </div>
