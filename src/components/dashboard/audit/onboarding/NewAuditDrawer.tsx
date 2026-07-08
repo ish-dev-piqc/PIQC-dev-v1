@@ -109,23 +109,27 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
   // fetch must not render as "no vendors / no protocols yet" — the auditor's
   // data is still there, we just couldn't reach it. Drives a retryable banner.
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadingPickers, setLoadingPickers] = useState(true);
 
   // ---------------------------------------------------------------------------
   // Bootstrap reads
   // ---------------------------------------------------------------------------
   const loadPickers = useCallback(async () => {
-    setLoadError(null);
+    setLoadingPickers(true);
     const [v, s, p] = await Promise.all([
       listVendors(),
       listSites(),
       listAuditorProtocolLibrary(),
     ]);
     // Any failed source → surface the reason, not a misleadingly-empty picker.
+    // Keep the prior banner (if any) up until this attempt resolves, so a retry
+    // never briefly reads as "loaded but empty."
     if (!v.ok || !s.ok || !p.ok) {
       setLoadError(
         (!v.ok && v.error) || (!s.ok && s.error) || (!p.ok && p.error) ||
         'Could not load vendors, sites, or protocols.',
       );
+      setLoadingPickers(false);
       return;
     }
     setVendors(v.data);
@@ -133,6 +137,8 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
     setProtocols(p.data);
     // If the auditor has no library yet, default to upload mode.
     if (p.data.length === 0) setProtocolMode('upload');
+    setLoadError(null);
+    setLoadingPickers(false);
   }, []);
 
   useEffect(() => {
@@ -362,10 +368,10 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
               <button
                 type="button"
                 onClick={() => { void loadPickers(); }}
-                disabled={submitting}
-                className={`shrink-0 text-xs font-semibold px-3 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+                disabled={submitting || loadingPickers}
+                className={`shrink-0 text-xs font-semibold px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 ${buttonSecondary}`}
               >
-                Retry
+                {loadingPickers ? 'Retrying…' : 'Retry'}
               </button>
             </div>
           )}
@@ -630,7 +636,7 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
 
             {protocolMode === 'existing' && (
               <div>
-                {protocols.length === 0 ? (
+                {protocols.length === 0 && !loadError ? (
                   <p className={`text-xs ${subColor} px-3 py-2`}>
                     Your protocol library is empty. Upload a PDF on the other tab.
                   </p>

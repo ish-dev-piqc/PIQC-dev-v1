@@ -160,7 +160,10 @@ export async function createSite(input: {
 
 export async function listAuditorProtocolLibrary(): Promise<Result<AuditorProtocolRow[]>> {
   const user = (await supabase.auth.getUser()).data.user;
-  if (!user) return { ok: true, data: [] };
+  // No verifiable session → surface it as a load error (retryable banner), not a
+  // fake-empty library. Reads as "couldn't reach your data," consistent with the
+  // rest of this function's contract.
+  if (!user) return { ok: false, error: 'Could not verify your session. Try again.' };
 
   const [docRes, auditRes] = await Promise.all([
     supabase

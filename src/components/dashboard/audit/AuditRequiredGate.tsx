@@ -194,8 +194,9 @@ export default function AuditRequiredGate() {
       {error ? (
         // A failed load must not read as "no audits" — the auditor's audits are
         // still there, we just couldn't reach them. Reuses the empty-state card
-        // shell so the surface stays familiar; Retry re-runs the fetch.
-        <div className={`${cardBg} border rounded-xl px-6 py-12 text-center border-dashed`}>
+        // shell so the surface stays familiar; Retry re-runs the fetch. role=alert
+        // announces the failure to assistive tech (matches the drawer banner).
+        <div role="alert" className={`${cardBg} border rounded-xl px-6 py-12 text-center border-dashed`}>
           <div className={`inline-flex items-center justify-center w-12 h-12 rounded-2xl border mb-4 ${isLight ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-rose-500/15 border-rose-500/30 text-rose-300'}`}>
             <AlertTriangle size={20} />
           </div>
