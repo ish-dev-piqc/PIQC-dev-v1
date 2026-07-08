@@ -87,11 +87,13 @@ export default function SourceTruthListDrawer({
         </div>
 
         <div className="px-5 py-5 space-y-5">
-          {/* Protocol Awareness Layer — "what PIQC noticed" above the item
-              list, next to the evidence it cites (studyId IS protocol_id).
-              Self-hiding: renders nothing when there are no notices. */}
-          <NoticeRail protocolId={studyId} />
           <WorksheetItemsList studyId={studyId} studyCode={studyCode} onPick={onPick} />
+          {/* Protocol Awareness Layer — "what PIQC noticed" below the item
+              list (matches the ActionCardRail below-content precedent) and
+              browse-mode only (M2): the pick flow is item selection, not
+              protocol review, so it skips the rail's sync/fetch entirely.
+              Self-hiding: renders nothing when there are no notices. */}
+          {!onPick && <NoticeRail protocolId={studyId} />}
         </div>
       </div>
     </div>

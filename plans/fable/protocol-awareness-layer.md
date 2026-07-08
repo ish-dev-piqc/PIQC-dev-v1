@@ -1,7 +1,7 @@
 ---
 owner: fable-dev-piqc
 feature: protocol-awareness-layer
-status: active
+status: in-review
 started: 2026-07-08
 target_pr:
 ---
@@ -50,6 +50,13 @@ rationale sits on the indented lines beneath (the hook only reads `- ` lines).
     (DEFINER, `user_can_access_protocol` first-line gate, reads owner-gated SOTR
     fact tables exactly as `action_cards_sync` does), `protocol_notices_get`
     (INVOKER), `protocol_notice_set_status` (INVOKER).
+- `supabase/migrations/2026072*_protocol_notices_lowconf_wording.sql`
+  - new, append-only. fable-audit FA-160a358-9c899fe-bf434f6051b5 finding M1
+    (confirmed, high): rewords the `low_confidence_extraction` notice's detail
+    string only (drops "awaiting review", which collided with the drawer's
+    review_status-based chip) via `CREATE OR REPLACE FUNCTION
+    protocol_notices_sync`. No predicate/logic change. **No type impact** —
+    string literal only, `NoticeRecord.detail` is already `string`.
 - `src/types/actions/index.ts`
   - add the `NoticeRecord` / `NoticeType` / sync + status result mirrors
     alongside the existing `ActionCardRecord` (same non-mode types module; DB→TS
