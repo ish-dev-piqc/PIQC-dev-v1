@@ -1,7 +1,8 @@
 ---
 owner: sixonelabs-piqc
 feature: audit-mode-readiness
-status: in-review
+status: merged
+merged: 2026-07-08
 started: 2026-07-08
 ---
 
