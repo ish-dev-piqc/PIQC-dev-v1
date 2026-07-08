@@ -168,9 +168,9 @@ describe('NewAuditDrawer — orphan-document retry (PR #61)', () => {
     // Bootstrap effect reads vendors + sites + library. Sites empty (these
     // tests exercise the VENDOR_AUDIT workflow); library empty → drawer
     // defaults to upload mode, which is the path we're testing.
-    mockListVendors.mockResolvedValue(VENDORS);
-    mockListSites.mockResolvedValue([]);
-    mockListLibrary.mockResolvedValue([]);
+    mockListVendors.mockResolvedValue({ ok: true, data: VENDORS });
+    mockListSites.mockResolvedValue({ ok: true, data: [] });
+    mockListLibrary.mockResolvedValue({ ok: true, data: [] });
     // Suppress the expected '[NewAuditDrawer] submit error:' logs in the
     // failure-path tests. The drawer logs every caught error; we don't
     // want a noisy test report. Per-test assertions on errorSpy would
@@ -223,7 +223,7 @@ describe('NewAuditDrawer — orphan-document retry (PR #61)', () => {
       protocol_id: 'protocol-1',
       title: 'Test Protocol Title',
     });
-    mockCreateAudit.mockResolvedValueOnce({ id: 'audit-1' });
+    mockCreateAudit.mockResolvedValueOnce({ ok: true, data: { id: 'audit-1' } });
 
     // Retry — click Create audit again.
     await user.click(screen.getByRole('button', { name: /create audit/i }));
@@ -277,7 +277,7 @@ describe('NewAuditDrawer — orphan-document retry (PR #61)', () => {
       protocol_id: 'protocol-1',
       title: 'Test Protocol Title',
     });
-    mockCreateAudit.mockResolvedValueOnce({ id: 'audit-1' });
+    mockCreateAudit.mockResolvedValueOnce({ ok: true, data: { id: 'audit-1' } });
 
     await user.click(screen.getByRole('button', { name: /create audit/i }));
 
@@ -295,7 +295,7 @@ describe('NewAuditDrawer — orphan-document retry (PR #61)', () => {
       protocol_id: 'protocol-1',
       title: 'Test Protocol Title',
     });
-    mockCreateAudit.mockResolvedValueOnce({ id: 'audit-1' });
+    mockCreateAudit.mockResolvedValueOnce({ ok: true, data: { id: 'audit-1' } });
 
     const onCreated = vi.fn();
     const user = userEvent.setup();
@@ -315,5 +315,37 @@ describe('NewAuditDrawer — orphan-document retry (PR #61)', () => {
     // catches it. errorSpy is suppressed-but-spied, not unmocked — call
     // counts still register.
     expect(errorSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('NewAuditDrawer — bootstrap load failure', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Vendors + library load fine; the sites read errors. A failed source must
+    // surface a retryable banner, NOT render as an empty picker.
+    mockListVendors.mockResolvedValue({ ok: true, data: VENDORS });
+    mockListSites.mockResolvedValue({ ok: false, error: 'sites unavailable' });
+    mockListLibrary.mockResolvedValue({ ok: true, data: [] });
+  });
+
+  it('shows a retryable load-error banner (not the empty state) when a picker read fails', async () => {
+    const user = userEvent.setup();
+    render(<NewAuditDrawer onClose={vi.fn()} onCreated={vi.fn()} />);
+
+    // The banner reports the specific reason and offers Retry.
+    expect(
+      await screen.findByText(/Couldn't load your vendors, sites, or protocols/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/sites unavailable/i)).toBeInTheDocument();
+    const retry = screen.getByRole('button', { name: /retry/i });
+
+    // Retry succeeds this time → banner clears.
+    mockListSites.mockResolvedValue({ ok: true, data: [] });
+    await user.click(retry);
+    await waitFor(() =>
+      expect(
+        screen.queryByText(/Couldn't load your vendors, sites, or protocols/i),
+      ).not.toBeInTheDocument(),
+    );
   });
 });

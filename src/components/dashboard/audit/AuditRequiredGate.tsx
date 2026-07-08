@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ClipboardList, ChevronRight, Calendar, Building2, Stethoscope, Plus, CheckCircle2, Clock } from 'lucide-react';
+import { ClipboardList, ChevronRight, Calendar, Building2, Stethoscope, Plus, CheckCircle2, Clock, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useAudit, type AuditWithContext } from '../../../context/AuditContext';
 import {
@@ -55,7 +55,7 @@ function formatDate(iso: string | null): string | null {
 
 export default function AuditRequiredGate() {
   const { theme } = useTheme();
-  const { audits, loading, setActiveAudit } = useAudit();
+  const { audits, loading, error, refresh, setActiveAudit } = useAudit();
   const isLight = theme === 'light';
   const [newAuditOpen, setNewAuditOpen] = useState(false);
   // Worklist segmentation — one workspace, filterable by workflow. 'ALL' is the
@@ -191,7 +191,33 @@ export default function AuditRequiredGate() {
       </div>
 
       {/* Worklist */}
-      {audits.length === 0 ? (
+      {error ? (
+        // A failed load must not read as "no audits" — the auditor's audits are
+        // still there, we just couldn't reach them. Reuses the empty-state card
+        // shell so the surface stays familiar; Retry re-runs the fetch. role=alert
+        // announces the failure to assistive tech (matches the drawer banner).
+        <div role="alert" className={`${cardBg} border rounded-xl px-6 py-12 text-center border-dashed`}>
+          <div className={`inline-flex items-center justify-center w-12 h-12 rounded-2xl border mb-4 ${isLight ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-rose-500/15 border-rose-500/30 text-rose-300'}`}>
+            <AlertTriangle size={20} />
+          </div>
+          <h3 className={`${headingColor} font-semibold text-base mb-1`}>Couldn't load your audits</h3>
+          <p className={`${subColor} text-sm max-w-xs mx-auto mb-4`}>
+            {error}
+          </p>
+          <button
+            type="button"
+            onClick={() => { void refresh(); }}
+            className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${
+              isLight
+                ? 'bg-brand-600 text-white hover:bg-brand-800'
+                : 'bg-brand-300 text-[#0F172A] hover:bg-brand-700'
+            }`}
+          >
+            <RefreshCw size={14} />
+            Retry
+          </button>
+        </div>
+      ) : audits.length === 0 ? (
         <div className={`${cardBg} border rounded-xl px-6 py-12 text-center border-dashed`}>
           <div className={`inline-flex items-center justify-center w-12 h-12 rounded-2xl border mb-4 ${isLight ? 'bg-brand-600/10 border-brand-600/20 text-brand-600' : 'bg-brand-600/15 border-brand-600/30 text-brand-300'}`}>
             <ClipboardList size={20} />
