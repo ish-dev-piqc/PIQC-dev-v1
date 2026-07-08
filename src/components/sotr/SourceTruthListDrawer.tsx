@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { useOverlay } from '../../hooks/useOverlay';
 import { useSwipeDismiss } from '../../hooks/useSwipeDismiss';
 import WorksheetItemsList from './WorksheetItemsList';
+import { NoticeRail } from '../actions/NoticeRail';
 import type { ExtractedItemRecord } from '../../types/sotr';
 
 // =============================================================================
@@ -85,7 +86,11 @@ export default function SourceTruthListDrawer({
           </button>
         </div>
 
-        <div className="px-5 py-5">
+        <div className="px-5 py-5 space-y-5">
+          {/* Protocol Awareness Layer — "what PIQC noticed" above the item
+              list, next to the evidence it cites (studyId IS protocol_id).
+              Self-hiding: renders nothing when there are no notices. */}
+          <NoticeRail protocolId={studyId} />
           <WorksheetItemsList studyId={studyId} studyCode={studyCode} onPick={onPick} />
         </div>
       </div>

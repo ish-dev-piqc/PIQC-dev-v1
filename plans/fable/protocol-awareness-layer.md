@@ -40,28 +40,44 @@ hypothesis; it does not lock the predicate/ranking internals.
 
 ## Scope (files allowed)
 
-- `plans/fable/protocol-awareness-layer.md` — this plan.
-- `supabase/migrations/2026072*_protocol_notices.sql` — new, append-only. Sibling
-  `protocol_notices` table + `protocol_notices_sync` (DEFINER, `user_can_access_protocol`
-  first-line gate, reads owner-gated SOTR fact tables exactly as `action_cards_sync`
-  does), `protocol_notices_get` (INVOKER), `protocol_notice_set_status` (INVOKER).
-- `src/types/actions/index.ts` — add the `NoticeRecord` / `NoticeType` / sync +
-  status result mirrors alongside the existing `ActionCardRecord` (same non-mode
-  types module; DB→TS mirror).
-- `src/lib/actions/actionsApi.ts` — add `syncNotices` / `fetchNotices` /
-  `setNoticeStatus` `Result<T>` wrappers (mirror the action-card wrappers).
-- `src/lib/actions/actionsAdapter.ts` — pure notice packet → `NoticeRecord`
-  mapper (no supabase import).
-- `src/lib/actions/__tests__/` — adapter + api-shape tests (mirror existing).
-- `src/components/actions/NoticeRail.tsx`, `src/components/actions/NoticeCard.tsx`
-  — non-mode, mirror `ActionCardRail` / `ActionCard` (self-fetch, token-guarded,
-  self-hiding, evidence-count chip, dismiss). Pure presentation in NoticeCard.
-- `src/components/actions/__tests__/` — rail/card render + silent-with-signal tests.
-- `src/components/sotr/SourceTruthListDrawer.tsx` — the ONE mount: render
-  `<NoticeRail studyId={studyId} />` above `<WorksheetItemsList>`. **Ishika's file.**
-- `docs/CODEOWNERS.md` — add the missing Fable-block lines for the action layer
-  (`/src/lib/actions/`, `/src/types/actions/`, `/src/components/actions/`).
-  **Ishika owns this file.**
+Each bullet is a bare path/glob so the scope-check hook can match it; the
+rationale sits on the indented lines beneath (the hook only reads `- ` lines).
+
+- `plans/fable/protocol-awareness-layer.md`
+  - this plan.
+- `supabase/migrations/2026072*_protocol_notices.sql`
+  - new, append-only. Sibling `protocol_notices` table + `protocol_notices_sync`
+    (DEFINER, `user_can_access_protocol` first-line gate, reads owner-gated SOTR
+    fact tables exactly as `action_cards_sync` does), `protocol_notices_get`
+    (INVOKER), `protocol_notice_set_status` (INVOKER).
+- `src/types/actions/index.ts`
+  - add the `NoticeRecord` / `NoticeType` / sync + status result mirrors
+    alongside the existing `ActionCardRecord` (same non-mode types module; DB→TS
+    mirror).
+- `src/lib/actions/actionsApi.ts`
+  - add `syncNotices` / `fetchNotices` / `setNoticeStatus` `Result<T>` wrappers
+    (mirror the action-card wrappers).
+- `src/lib/actions/actionsAdapter.ts`
+  - pure notice packet → `NoticeRecord` mapper (no supabase import).
+- `src/lib/actions/__tests__/`
+  - adapter + api-shape tests (mirror existing).
+- `src/lib/actions/__tests__/*`
+  - individual test files under the actions test dir.
+- `src/components/actions/NoticeRail.tsx`
+  - non-mode, mirrors `ActionCardRail` (self-fetch, token-guarded, self-hiding,
+    dismiss).
+- `src/components/actions/NoticeCard.tsx`
+  - non-mode, mirrors `ActionCard` (pure presentation, evidence-count chip).
+- `src/components/actions/__tests__/`
+  - rail/card render + silent-with-signal tests.
+- `src/components/actions/__tests__/*`
+  - individual test files under the actions component test dir.
+- `src/components/sotr/SourceTruthListDrawer.tsx`
+  - the ONE mount: render `<NoticeRail protocolId={studyId} />` above
+    `<WorksheetItemsList>` (studyId IS protocol_id). **Ishika's file.**
+- `docs/CODEOWNERS.md`
+  - add the missing Fable-block lines for the action layer (`/src/lib/actions/`,
+    `/src/types/actions/`, `/src/components/actions/`). **Ishika owns this file.**
 
 ## Out of scope (files forbidden)
 
@@ -99,9 +115,10 @@ None.
 
 ## Verification
 
-- [ ] Unit: notice adapter (partial-null tolerance, evidence passthrough,
-  ordering), api Result<T> shape, NoticeRail silent-with-signal (loading → null,
-  zero notices → null, dismiss → refetch), NoticeCard evidence-count chip.
+- [x] Unit: notice adapter (partial-null tolerance, evidence passthrough,
+  severity-last fallback), api Result<T> shape, NoticeRail silent-with-signal
+  (loading → null, zero notices → null, dismiss → refetch), NoticeCard
+  evidence-count chip + no-link-out. 43 tests green; typecheck + lint clean.
 - [ ] SQL: `protocol_notices_sync` first-line `user_can_access_protocol` gate
   (non-member → 42501), derived-only rationale (no scores/dates fabricated),
   re-sync never resurrects a dismissed notice, `_get` empty-not-null.
