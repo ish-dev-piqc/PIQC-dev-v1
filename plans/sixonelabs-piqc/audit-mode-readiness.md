@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: audit-mode-readiness
-status: active
+status: in-review
 started: 2026-07-08
 ---
 
