@@ -3,7 +3,7 @@ owner: ish-dev-piqc
 feature: db-remediation
 status: in-review
 started: 2026-07-07
-target_pr:
+target_pr: 481
 ---
 
 # DB remediation — anon corpus revoke + stage-gate column lock
