@@ -1,8 +1,9 @@
 ---
 owner: sixonelabs-piqc
 feature: audit-mode-readiness
-status: in-review
+status: merged
 started: 2026-07-08
+merged: 2026-07-08
 ---
 
 # Audit Mode Readiness — vendor-product regression fixes from the ISA generalization

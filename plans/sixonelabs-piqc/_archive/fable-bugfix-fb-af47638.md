@@ -3,6 +3,7 @@ owner: sixonelabs-piqc
 feature: fable-bugfix-fb-af47638
 status: merged
 started: 2026-07-06
+merged: 2026-07-08
 target_pr: "#458"
 ---
 
