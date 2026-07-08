@@ -198,6 +198,10 @@ else
     pass "minted access token via admin magiclink (no user password used)"
   fi
 fi
+
+# The SOTR sections below authenticate as $USER_JWT; under `set -u` an unbound
+# reference aborts the whole script, so alias it to the token minted above.
+USER_JWT="$ACCESS_TOKEN"
 echo
 
 # ---------------------------------------------------------------------------
@@ -489,6 +493,122 @@ rpc_call audit_mode_advance_audit_stage "$(jq -n \
 echo
 
 # ---------------------------------------------------------------------------
+# Test 9c–9e — current_stage column lock (20260721000100)
+#   The gate RPC must be the ONLY writer of current_stage. Direct PATCH as the
+#   lead auditor must fail 42501; granted columns stay writable; service_role
+#   bypasses (seeds/ops).
+# ---------------------------------------------------------------------------
+
+echo "════════════════════════════════════════════════════════════════"
+echo "  Test 9c–9e — current_stage column lock"
+echo "════════════════════════════════════════════════════════════════"
+
+# rest_patch <role> <query> <json_body> — role: user|service.
+# Writes HTTP code to HTTP_CODE, body to RESP (same globals as rpc_call).
+rest_patch() {
+  local role="$1"; local query="$2"; local body="$3"
+  local key tok
+  if [[ "$role" == "service" ]]; then
+    key="$SUPABASE_SERVICE_ROLE_KEY"; tok="$SUPABASE_SERVICE_ROLE_KEY"
+  else
+    key="$SUPABASE_ANON_KEY"; tok="$ACCESS_TOKEN"
+  fi
+  local tmp; tmp=$(mktemp)
+  HTTP_CODE=$(curl -s -o "$tmp" -w "%{http_code}" \
+    -X PATCH "$REST/$query" \
+    -H "apikey: $key" \
+    -H "Authorization: Bearer $tok" \
+    -H "Content-Type: application/json" \
+    -H "Prefer: return=representation" \
+    -d "$body")
+  RESP=$(cat "$tmp")
+  rm -f "$tmp"
+}
+
+# 9c — authenticated lead auditor PATCHes current_stage directly → must be denied
+rest_patch user "audits?id=eq.$AUDIT_002" '{"current_stage":"AUDIT_CONDUCT"}'
+if [[ "$HTTP_CODE" =~ ^4 ]] && echo "$RESP" | grep -qi "42501\|permission denied"; then
+  pass "T9c: direct PATCH of current_stage denied (code=$HTTP_CODE)"
+else
+  fail "T9c: direct PATCH of current_stage should be denied" "code=$HTTP_CODE body=$RESP"
+fi
+
+# 9d — granted column (audit_name) must still be writable by the lead auditor
+ORIG_AUDIT_NAME=$(curl -s "$REST/audits?id=eq.$AUDIT_002&select=audit_name" \
+  -H "apikey: $SUPABASE_ANON_KEY" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" | jq -r '.[0].audit_name')
+rest_patch user "audits?id=eq.$AUDIT_002" "$(jq -n --arg n "$ORIG_AUDIT_NAME (smoke t9d)" '{audit_name:$n}')"
+T9D_NAME=$(echo "$RESP" | jq -r '.[0].audit_name // empty')
+if [[ "$HTTP_CODE" =~ ^2 && "$T9D_NAME" == "$ORIG_AUDIT_NAME (smoke t9d)" ]]; then
+  pass "T9d: granted-column PATCH (audit_name) still works"
+else
+  fail "T9d: audit_name PATCH should succeed" "code=$HTTP_CODE body=$RESP"
+fi
+# restore
+rest_patch user "audits?id=eq.$AUDIT_002" "$(jq -n --arg n "$ORIG_AUDIT_NAME" '{audit_name:$n}')" >/dev/null
+
+# 9e — service_role PATCH of current_stage bypasses the lock (seeds/ops path)
+rest_patch service "audits?id=eq.$AUDIT_002" '{"current_stage":"VENDOR_ENRICHMENT"}'
+T9E_CODE_FWD="$HTTP_CODE"
+rest_patch service "audits?id=eq.$AUDIT_002" '{"current_stage":"INTAKE"}'
+if [[ "$T9E_CODE_FWD" =~ ^2 && "$HTTP_CODE" =~ ^2 ]]; then
+  pass "T9e: service_role PATCH of current_stage bypasses lock (and restored)"
+else
+  fail "T9e: service_role PATCH should succeed" "fwd=$T9E_CODE_FWD back=$HTTP_CODE"
+fi
+echo
+
+# ---------------------------------------------------------------------------
+# Test SEC-1..3 — anon corpus revoke (20260721000000)
+#   The anon key alone (no user session) must not read documents/chunks or
+#   execute hybrid_search.
+# ---------------------------------------------------------------------------
+
+echo "════════════════════════════════════════════════════════════════"
+echo "  Test SEC-1..3 — anon corpus access revoked"
+echo "════════════════════════════════════════════════════════════════"
+
+# anon_get <path> — GET as pure anon (anon key as both apikey and bearer)
+anon_get() {
+  local path="$1"
+  local tmp; tmp=$(mktemp)
+  HTTP_CODE=$(curl -s -o "$tmp" -w "%{http_code}" "$REST/$path" \
+    -H "apikey: $SUPABASE_ANON_KEY" \
+    -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+  RESP=$(cat "$tmp")
+  rm -f "$tmp"
+}
+
+anon_get "documents?select=id&limit=1"
+if [[ "$HTTP_CODE" =~ ^4 ]] && echo "$RESP" | grep -qi "42501\|permission denied"; then
+  pass "SEC-1: anon SELECT on documents denied (code=$HTTP_CODE)"
+else
+  fail "SEC-1: anon can still read documents" "code=$HTTP_CODE body=$RESP"
+fi
+
+anon_get "chunks?select=id&limit=1"
+if [[ "$HTTP_CODE" =~ ^4 ]] && echo "$RESP" | grep -qi "42501\|permission denied"; then
+  pass "SEC-2: anon SELECT on chunks denied (code=$HTTP_CODE)"
+else
+  fail "SEC-2: anon can still read chunks" "code=$HTTP_CODE body=$RESP"
+fi
+
+SEC3_TMP=$(mktemp)
+HTTP_CODE=$(curl -s -o "$SEC3_TMP" -w "%{http_code}" \
+  -X POST "$REST/rpc/hybrid_search" \
+  -H "apikey: $SUPABASE_ANON_KEY" \
+  -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query_embedding":[],"query_text":"smoke"}')
+RESP=$(cat "$SEC3_TMP"); rm -f "$SEC3_TMP"
+if [[ "$HTTP_CODE" =~ ^4 ]] && echo "$RESP" | grep -qi "42501\|permission denied"; then
+  pass "SEC-3: anon EXECUTE on hybrid_search denied (code=$HTTP_CODE)"
+else
+  fail "SEC-3: anon can still execute hybrid_search" "code=$HTTP_CODE body=$RESP"
+fi
+echo
+
+# ---------------------------------------------------------------------------
 # Test 10 — public history RPC returns deltas with correct actor
 # ---------------------------------------------------------------------------
 
@@ -610,10 +730,12 @@ echo "  SOTR — source evidence RPCs (T13–T17)"
 echo "════════════════════════════════════════════════════════════════"
 echo
 
-# Create a temporary document owned by the auditor so RLS passes.
+# Create a temporary document owned by the auditor. Service role: documents
+# writes are service-role-only since the enterprise-access remediation (the
+# ingest lane owns inserts), so user-JWT inserts are correctly rejected.
 SOTR_DOC_RESP=$(curl -s -X POST "$REST/documents" \
-  -H "apikey: $SUPABASE_ANON_KEY" \
-  -H "Authorization: Bearer $USER_JWT" \
+  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
   -H "Content-Type: application/json" \
   -H "Prefer: return=representation" \
   -d "{\"title\":\"Smoke test protocol — SOTR\",\"source\":\"smoke\",\"user_id\":\"$AUDITOR_ID\"}")
@@ -1012,18 +1134,61 @@ if [[ -n "${DOC_A:-}" && -n "${STUDY_A:-}" ]]; then
 fi
 echo
 
-# --- T28 — wrong study returns 42501 (no existence-of-id leak) ------------
-if [[ -n "${DOC_A:-}" && -n "${STUDY_B:-}" ]]; then
+# --- T28 — no-access study returns 42501 (no existence-of-id leak) --------
+# Under the org-access model the auditor may legitimately reach every seeded
+# protocol (same org), so "wrong study" must be a protocol owned by a
+# different user in a different org, created here via service role.
+T28_OUTSIDER_EMAIL="smoke-outsider@piqclinical.test"
+T28_OUTSIDER_ID=$(curl -s "$AUTH/admin/users?page=1&per_page=100" \
+  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+  | jq -r ".users[]? | select(.email==\"$T28_OUTSIDER_EMAIL\") | .id" | head -1)
+if [[ -z "$T28_OUTSIDER_ID" ]]; then
+  T28_OUTSIDER_ID=$(curl -s -X POST "$AUTH/admin/users" \
+    -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+    -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+    -H "Content-Type: application/json" \
+    -d "{\"email\":\"$T28_OUTSIDER_EMAIL\",\"password\":\"smoke-outsider-pw\",\"email_confirm\":true}" \
+    | jq -r '.id // empty')
+fi
+T28_ORG_ID=$(curl -s -X POST "$REST/orgs" \
+  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Content-Type: application/json" -H "Prefer: return=representation,resolution=merge-duplicates" \
+  -d '{"name":"Smoke Outsider Org","slug":"smoke-outsider-org"}' | jq -r '.[0].id // empty')
+STUDY_NOACCESS=""
+if [[ -n "$T28_OUTSIDER_ID" && -n "$T28_ORG_ID" ]]; then
+  STUDY_NOACCESS=$(curl -s -X POST "$REST/protocols" \
+    -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+    -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+    -H "Content-Type: application/json" -H "Prefer: return=representation" \
+    -d "{\"study_number\":\"SMOKE-NOACCESS\",\"title\":\"Smoke no-access study\",\"sponsor\":\"Smoke\",\"owner_id\":\"$T28_OUTSIDER_ID\",\"owner_org\":\"Smoke Outsider Org\",\"owner_org_id\":\"$T28_ORG_ID\"}" \
+    | jq -r '.[0].id // empty')
+fi
+if [[ -n "${DOC_A:-}" && -n "$STUDY_NOACCESS" ]]; then
   RESP=$(curl -s -X POST "$REST/rpc/sotr_get_protocol_pdf_storage_path" \
     -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
     -H "Content-Type: application/json" \
-    -d "{\"p_study_id\":\"$STUDY_B\",\"p_document_id\":\"$DOC_A\"}")
+    -d "{\"p_study_id\":\"$STUDY_NOACCESS\",\"p_document_id\":\"$DOC_A\"}")
   T28_CODE=$(echo "$RESP" | jq -r '.code // empty')
   if [[ "$T28_CODE" == "42501" || $(echo "$RESP" | grep -c "access denied") -ge 1 ]]; then
-    pass "T28: wrong-study fetch rejected"
+    pass "T28: no-access-study fetch rejected"
   else
-    fail "T28: wrong-study fetch should be rejected" "resp=$RESP"
+    fail "T28: no-access-study fetch should be rejected" "resp=$RESP"
   fi
+else
+  fail "T28-setup: create no-access study" "outsider=$T28_OUTSIDER_ID org=$T28_ORG_ID study=$STUDY_NOACCESS"
+fi
+# Cleanup the no-access fixture (protocol + org; outsider user is reused).
+if [[ -n "$STUDY_NOACCESS" ]]; then
+  curl -s -X DELETE "$REST/protocols?id=eq.$STUDY_NOACCESS" \
+    -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+    -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" >/dev/null
+fi
+if [[ -n "$T28_ORG_ID" ]]; then
+  curl -s -X DELETE "$REST/orgs?id=eq.$T28_ORG_ID" \
+    -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+    -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" >/dev/null
 fi
 echo
 
@@ -1291,20 +1456,36 @@ SITE_VISIT_ID=""
 SITE_TEAM_ID=""
 SITE_TEMPLATE_ID=""
 
-# --- T41 — create protocol (auditor-owned) --------------------------------
-RESP=$(curl -s -X POST "$REST/protocols" \
-  -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $ACCESS_TOKEN" \
-  -H "Content-Type: application/json" -H "Prefer: return=representation" \
-  -d "{\"study_number\":\"$SITE_PROTO_CODE\",\"title\":\"Smoke test protocol\",\"sponsor\":\"Smoke Sponsor\"}")
-SITE_PROTO_ID=$(echo "$RESP" | jq -r '.[0].id // empty')
+# --- T41 — create protocol fixture (auditor-owned, via service role) ------
+# Direct user inserts into protocols are gone by design (no INSERT policy —
+# creation flows through onramp RPCs / ingest). This fixture just needs an
+# auditor-owned protocol for T42–T48, so create it service-side with the
+# auditor's own org as owner.
+AUDITOR_ORG_ID=$(curl -s "$REST/org_members?user_id=eq.$AUDITOR_ID&select=org_id&limit=1" \
+  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" | jq -r '.[0].org_id // empty')
+AUDITOR_ORG_NAME=$(curl -s "$REST/orgs?id=eq.$AUDITOR_ORG_ID&select=name" \
+  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" | jq -r '.[0].name // empty')
+if [[ -z "$AUDITOR_ORG_ID" ]]; then
+  fail "T41: auditor has no org membership (org-scoped policies need one)" ""
+else
+  RESP=$(curl -s -X POST "$REST/protocols" \
+    -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+    -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+    -H "Content-Type: application/json" -H "Prefer: return=representation" \
+    -d "{\"study_number\":\"$SITE_PROTO_CODE\",\"title\":\"Smoke test protocol\",\"sponsor\":\"Smoke Sponsor\",\"owner_id\":\"$AUDITOR_ID\",\"owner_org\":\"$AUDITOR_ORG_NAME\",\"owner_org_id\":\"$AUDITOR_ORG_ID\"}")
+  SITE_PROTO_ID=$(echo "$RESP" | jq -r '.[0].id // empty')
+fi
 if [[ -n "$SITE_PROTO_ID" ]]; then
   # Insert the active version so the protocol shows up in fetchProtocols joins.
   curl -s -X POST "$REST/protocol_versions" \
-    -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $ACCESS_TOKEN" \
+    -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+    -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
     -H "Content-Type: application/json" \
     -d "{\"protocol_id\":\"$SITE_PROTO_ID\",\"version_number\":\"1.0\",\"clinical_trial_phase\":\"PHASE_2\",\"status\":\"ACTIVE\"}" >/dev/null
-  pass "T41: protocol created id=$SITE_PROTO_ID"
-else
+  pass "T41: protocol fixture created id=$SITE_PROTO_ID"
+elif [[ -n "$AUDITOR_ORG_ID" ]]; then
   fail "T41: protocol create" "resp=$RESP"
 fi
 echo
