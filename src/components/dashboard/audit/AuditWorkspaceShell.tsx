@@ -386,7 +386,7 @@ export default function AuditWorkspaceShell() {
             // dispatches through the no-props record below. If a second
             // stage ever needs shell-injected state, hoist this into a
             // dedicated context rather than growing the if-ladder.
-            if (viewedStage === 'REPORT_DRAFTING') {
+            if (activeAudit.workflow_type === 'VENDOR_AUDIT' && viewedStage === 'REPORT_DRAFTING') {
               return (
                 <ReportDraftingWorkspace
                   landingNotice={pendingWritebackNotice}

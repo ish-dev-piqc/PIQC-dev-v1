@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { FolderOpen, Loader2, Lock, Sparkles } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useProtocol } from '../../../../context/ProtocolContext';
-import { useSubscription } from '../../../../hooks/useSubscription';
+import { useDeliverableEntitlement } from '../../../../hooks/useDeliverableEntitlement';
 import { canUseSponsorMode } from '../../../../lib/entitlements';
 import {
   ARTIFACT_TYPE_LABELS,
@@ -20,10 +20,11 @@ import SponsorAskPanel from './SponsorAskPanel';
 // (Protocol Deliverable Engine).
 //
 // Order of gates, top to bottom:
-//   1. Entitlement — canUseSponsorMode(subscription) (its first consumer).
-//      Subscription comes from useSubscription(), the same hook Dashboard
-//      uses; there is no billing context to share, so the tab owns its own
-//      fetch. Not allowed → calm gate card with the decision's reason.
+//   1. Entitlement — canUseSponsorMode(hasEntitlement). The grant comes from
+//      useDeliverableEntitlement(), which reads the org's real
+//      'deliverable_engine' capability (org_has_entitlement RPC) — the same
+//      grant the backend RPC/RLS enforces. Not allowed → calm gate card with
+//      the decision's reason.
 //   2. Protocol scope — ProtocolContext supplies the workspace's protocol
 //      list; the tab defaults to the app-wide activeProtocol and offers a
 //      local <select> so a reviewer can switch protocols without leaving
@@ -52,7 +53,7 @@ export default function ProtocolIntelligenceTab() {
   const { theme } = useTheme();
   const isLight = theme === 'light';
 
-  const { subscription, loading: subscriptionLoading } = useSubscription();
+  const { hasEntitlement, loading: entitlementLoading } = useDeliverableEntitlement();
   const { protocols, isLoading: protocolsLoading, activeProtocol } = useProtocol();
 
   // Local protocol override — scoped to this tab. null = follow the app-wide
@@ -76,7 +77,7 @@ export default function ProtocolIntelligenceTab() {
   // — swapping to a spinner then would unmount the panel and any open
   // drawer, destroying in-progress reviewer text. With data on screen,
   // background reloads render through.
-  if (subscriptionLoading || (protocolsLoading && protocols.length === 0)) {
+  if (entitlementLoading || (protocolsLoading && protocols.length === 0)) {
     return (
       <div className="flex items-center justify-center min-h-[30vh]">
         <Loader2
@@ -88,7 +89,7 @@ export default function ProtocolIntelligenceTab() {
     );
   }
 
-  const decision = canUseSponsorMode(subscription);
+  const decision = canUseSponsorMode(hasEntitlement);
   if (!decision.allowed) {
     return (
       <div
@@ -109,13 +110,13 @@ export default function ProtocolIntelligenceTab() {
           </div>
           <div className="min-w-0">
             <h2 className="text-fg-heading text-sm font-semibold">
-              Protocol Intelligence is an enterprise capability
+              Protocol Intelligence isn’t enabled yet
             </h2>
             <p className="text-fg-sub text-sm mt-1 leading-relaxed">{decision.reason}</p>
             <p className="text-fg-muted text-xs mt-3 leading-relaxed">
-              With the enterprise tier, PIQC drafts evidence-linked monitoring
-              preparation checklists from your parsed protocols — every draft
-              traceable to its protocol source and requiring human review.
+              Once enabled, PIQC drafts evidence-linked monitoring preparation
+              checklists from your parsed protocols — every draft traceable to its
+              protocol source and requiring human review.
             </p>
           </div>
         </div>

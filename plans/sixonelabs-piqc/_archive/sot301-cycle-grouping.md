@@ -1,8 +1,9 @@
 ---
 owner: sixonelabs-piqc
 feature: sot301-cycle-grouping
-status: active
+status: merged
 started: 2026-07-06
+merged: 2026-07-08
 target_pr:
 ---
 

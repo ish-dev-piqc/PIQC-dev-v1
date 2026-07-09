@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Building2, FileText, Upload, ChevronDown, CheckCircle2, AlertTriangle, Stethoscope } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useAudit } from '../../../../context/AuditContext';
@@ -105,23 +105,45 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
   const [progressStep, setProgressStep] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
+  // Bootstrap load failure. Distinct from a genuinely empty library: an errored
+  // fetch must not render as "no vendors / no protocols yet" — the auditor's
+  // data is still there, we just couldn't reach it. Drives a retryable banner.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadingPickers, setLoadingPickers] = useState(true);
+
   // ---------------------------------------------------------------------------
   // Bootstrap reads
   // ---------------------------------------------------------------------------
-  useEffect(() => {
-    void (async () => {
-      const [v, s, p] = await Promise.all([
-        listVendors(),
-        listSites(),
-        listAuditorProtocolLibrary(),
-      ]);
-      setVendors(v);
-      setSites(s);
-      setProtocols(p);
-      // If the auditor has no library yet, default to upload mode.
-      if (p.length === 0) setProtocolMode('upload');
-    })();
+  const loadPickers = useCallback(async () => {
+    setLoadingPickers(true);
+    const [v, s, p] = await Promise.all([
+      listVendors(),
+      listSites(),
+      listAuditorProtocolLibrary(),
+    ]);
+    // Any failed source → surface the reason, not a misleadingly-empty picker.
+    // Keep the prior banner (if any) up until this attempt resolves, so a retry
+    // never briefly reads as "loaded but empty."
+    if (!v.ok || !s.ok || !p.ok) {
+      setLoadError(
+        (!v.ok && v.error) || (!s.ok && s.error) || (!p.ok && p.error) ||
+        'Could not load vendors, sites, or protocols.',
+      );
+      setLoadingPickers(false);
+      return;
+    }
+    setVendors(v.data);
+    setSites(s.data);
+    setProtocols(p.data);
+    // If the auditor has no library yet, default to upload mode.
+    if (p.data.length === 0) setProtocolMode('upload');
+    setLoadError(null);
+    setLoadingPickers(false);
   }, []);
+
+  useEffect(() => {
+    void loadPickers();
+  }, [loadPickers]);
 
   // ---------------------------------------------------------------------------
   // Theme tokens (calm, consistent with AuditWorkspaceShell)
@@ -197,7 +219,7 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
       }
 
       setProgressStep('Creating audit…');
-      const audit = await createAudit({
+      const result = await createAudit({
         auditName: auditName.trim(),
         workflowType,
         vendorId: workflowType === 'VENDOR_AUDIT' ? vendorId : null,
@@ -206,7 +228,10 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
         auditType,
         scheduledDate: scheduledDate || null,
       });
-      if (!audit) throw new Error('Audit creation failed.');
+      // Surface the RPC's specific reason (bad auditee pairing, missing protocol
+      // version, etc.) instead of a flat "Audit creation failed."
+      if (!result.ok) throw new Error(result.error);
+      const audit = result.data;
 
       // Refresh the AuditContext worklist so the new audit appears and can be
       // activated by the host via onCreated(audit.id).
@@ -320,6 +345,37 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
         </div>
 
         <div className="px-5 py-5 space-y-6">
+          {/* Bootstrap load failure — shown above the form so the empty pickers
+              below read as "couldn't reach your data (retry)" rather than the
+              genuine "you have none yet" empty state. */}
+          {loadError && (
+            <div
+              role="alert"
+              className={`flex items-start gap-3 rounded-md border px-3.5 py-3 ${
+                isLight ? 'bg-rose-50 border-rose-200' : 'bg-rose-500/10 border-rose-500/30'
+              }`}
+            >
+              <AlertTriangle
+                size={16}
+                className={`mt-0.5 shrink-0 ${isLight ? 'text-rose-600' : 'text-rose-300'}`}
+              />
+              <div className="flex-1 min-w-0">
+                <p className={`${headingColor} text-sm font-semibold`}>
+                  Couldn't load your vendors, sites, or protocols
+                </p>
+                <p className={`${subColor} text-xs mt-0.5`}>{loadError}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { void loadPickers(); }}
+                disabled={submitting || loadingPickers}
+                className={`shrink-0 text-xs font-semibold px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 ${buttonSecondary}`}
+              >
+                {loadingPickers ? 'Retrying…' : 'Retry'}
+              </button>
+            </div>
+          )}
+
           {/* ----- Audit workflow -----
               Both workflows are live. The choice drives which auditee field
               renders below (vendor vs site) and is passed to createAudit, which
@@ -580,7 +636,7 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
 
             {protocolMode === 'existing' && (
               <div>
-                {protocols.length === 0 ? (
+                {protocols.length === 0 && !loadError ? (
                   <p className={`text-xs ${subColor} px-3 py-2`}>
                     Your protocol library is empty. Upload a PDF on the other tab.
                   </p>

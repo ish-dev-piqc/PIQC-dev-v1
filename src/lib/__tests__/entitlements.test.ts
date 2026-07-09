@@ -1,28 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { canUseCraMode, canUseSponsorMode } from '../entitlements';
-import type { Subscription } from '../../hooks/useSubscription';
 
 // =============================================================================
-// Mode entitlement gates — enterprise-tier checks for Sponsor and CRA modes.
-// The two gates are deliberately separate functions (entitlements are product
-// levers; coupling them would couple future pricing) but share behavior
-// today, so both are pinned by the same matrix.
+// Protocol Deliverable Engine gates — Sponsor + CRA surfaces.
+//
+// These gate on the org's real 'deliverable_engine' capability (a boolean read
+// from org_has_entitlement via useDeliverableEntitlement), NOT on a dead
+// subscription tier. The two gates are deliberately separate functions
+// (entitlements are product levers; coupling them would couple future pricing)
+// but share behavior today, so both are pinned by the same matrix.
 // =============================================================================
-
-function sub(kind: Subscription['kind']): Subscription {
-  return {
-    kind,
-    billingMode: kind === null ? null : 'monthly',
-    planName: kind ?? 'none',
-    status: 'active',
-    includedUsers: 5,
-    includedProtocols: 3,
-    addonSeatPacks: 0,
-    addonProtocols: 0,
-    totalUsers: 5,
-    totalProtocols: 3,
-  } as Subscription;
-}
 
 const GATES = [
   ['canUseSponsorMode', canUseSponsorMode],
@@ -30,36 +17,29 @@ const GATES = [
 ] as const;
 
 describe.each(GATES)('%s', (_name, gate) => {
-  it('denies with no subscription at all', () => {
-    const d = gate(null);
-    expect(d.allowed).toBe(false);
-    if (!d.allowed) expect(d.reason).toMatch(/enterprise/);
+  it('allows when the org holds the deliverable_engine capability', () => {
+    expect(gate(true)).toEqual({ allowed: true });
   });
 
-  it('denies a subscription with a null plan kind', () => {
-    const d = gate(sub(null));
-    expect(d.allowed).toBe(false);
-    if (!d.allowed) expect(d.addonProductKind).toBeNull();
-  });
-
-  it('allows the enterprise tier', () => {
-    expect(gate(sub('enterprise'))).toEqual({ allowed: true });
-  });
-
-  it('denies non-enterprise tiers with an upgrade reason and no addon path', () => {
-    const d = gate(sub('pilot' as Subscription['kind']));
+  it('denies when the org lacks the capability, with a reason and no addon path', () => {
+    const d = gate(false);
     expect(d.allowed).toBe(false);
     if (!d.allowed) {
-      expect(d.reason).toMatch(/enterprise tier/);
+      expect(d.reason).toMatch(/isn’t enabled/);
       expect(d.addonProductKind).toBeNull();
     }
+  });
+
+  it('does not mention the dead enterprise tier in its denial', () => {
+    const d = gate(false);
+    if (!d.allowed) expect(d.reason).not.toMatch(/enterprise/i);
   });
 });
 
 describe('gate copy stays mode-specific', () => {
   it('names its own mode in the denial reason', () => {
-    const sponsor = canUseSponsorMode(sub(null));
-    const cra = canUseCraMode(sub(null));
+    const sponsor = canUseSponsorMode(false);
+    const cra = canUseCraMode(false);
     if (!sponsor.allowed) expect(sponsor.reason).toMatch(/Sponsor Mode/);
     if (!cra.allowed) expect(cra.reason).toMatch(/CRA Mode/);
   });
