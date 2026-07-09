@@ -1,7 +1,7 @@
 ---
 owner: fable
 feature: fa-38bbb03-38bbb03-23e5de6f8d9d-apply
-status: active
+status: merged
 started: 2026-07-07
 target_pr:
 ---

@@ -17,8 +17,12 @@ import type {
   ActionCardStatusResult,
   ActionCardSyncResult,
   ActionsResult,
+  NoticeRecord,
+  NoticeStatus,
+  NoticeStatusResult,
+  NoticeSyncResult,
 } from '../../types/actions';
-import { adaptActionCards } from './actionsAdapter';
+import { adaptActionCards, adaptNotices } from './actionsAdapter';
 
 /**
  * Derive/refresh the protocol's action cards from its deliverables + facts.
@@ -78,5 +82,75 @@ export async function setActionCardStatus(
   return {
     ok: true,
     data: { card_id: payload.card_id, status: (payload.status ?? status) as ActionCardStatus },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Protocol Awareness Layer — notice wrappers (protocol_notices_sync/_get/
+// _set_status in supabase/migrations/*_protocol_notices.sql). Same contract as
+// the card wrappers: adapter invoked here so the rail only sees typed notices,
+// RPC errors surface as ok:false, error strings carry the RPC message only.
+// ---------------------------------------------------------------------------
+
+/**
+ * Derive/refresh the protocol's notices from its extracted facts. Idempotent;
+ * a dismissed notice is refreshed in place but stays dismissed, and a notice
+ * whose predicate drops to zero is DELETED (observation of current truth, not
+ * a stale card). Surfaces the moment a protocol parses — no deliverable
+ * dependency. Best-effort from the rail's perspective.
+ */
+export async function syncNotices(
+  protocolId: string,
+): Promise<ActionsResult<NoticeSyncResult>> {
+  const { data, error } = await supabase.rpc('protocol_notices_sync', {
+    p_protocol_id: protocolId,
+  });
+
+  if (error) return { ok: false, error: error.message };
+
+  const payload = data as Partial<NoticeSyncResult> | null;
+  return {
+    ok: true,
+    data: {
+      notices_upserted:
+        typeof payload?.notices_upserted === 'number' ? payload.notices_upserted : 0,
+      notices_deleted:
+        typeof payload?.notices_deleted === 'number' ? payload.notices_deleted : 0,
+    },
+  };
+}
+
+/** Fetch the protocol's notices (all statuses — the rail filters dismissed). */
+export async function fetchNotices(
+  protocolId: string,
+): Promise<ActionsResult<NoticeRecord[]>> {
+  const { data, error } = await supabase.rpc('protocol_notices_get', {
+    p_protocol_id: protocolId,
+  });
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, data: adaptNotices(data) };
+}
+
+/** Flip a notice's status. Only active/dismissed exist — no 'acted' (a notice
+ *  is an observation, not a handoff). */
+export async function setNoticeStatus(
+  noticeId: string,
+  status: NoticeStatus,
+): Promise<ActionsResult<NoticeStatusResult>> {
+  const { data, error } = await supabase.rpc('protocol_notice_set_status', {
+    p_notice_id: noticeId,
+    p_status: status,
+  });
+
+  if (error) return { ok: false, error: error.message };
+
+  const payload = data as Partial<NoticeStatusResult> | null;
+  if (!payload || typeof payload.notice_id !== 'string') {
+    return { ok: false, error: 'malformed RPC response' };
+  }
+  return {
+    ok: true,
+    data: { notice_id: payload.notice_id, status: (payload.status ?? status) as NoticeStatus },
   };
 }

@@ -53,6 +53,13 @@
 /src/components/deliverables/                      @fable-dev-piqc
 /src/components/dashboard/sponsor/deliverables/    @fable-dev-piqc
 
+# Context-Aware Action Layer + Protocol Awareness Layer — Fable
+# Shared, non-mode. The action rail (warm handoffs) and the notice rail
+# ("what PIQC noticed") live side by side under the same namespaces.
+/src/lib/actions/                                  @fable-dev-piqc
+/src/types/actions/                                @fable-dev-piqc
+/src/components/actions/                           @fable-dev-piqc
+
 # Backend / ingest — Roger
 /supabase/                        @rv61
 /src/lib/supabase.ts              @rv61

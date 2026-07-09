@@ -15,6 +15,8 @@ import type {
   ActionCardStatus,
   ActionDestinationType,
   ActionSuggestedWindow,
+  NoticeRecord,
+  NoticeStatus,
 } from '../../types/actions';
 import { DESTINATION_LABELS } from '../../types/actions';
 
@@ -99,4 +101,68 @@ export function adaptActionCards(raw: unknown): ActionCardRecord[] {
     if (card !== null) cards.push(card);
   }
   return cards;
+}
+
+// ---------------------------------------------------------------------------
+// Protocol Awareness Layer — notice mappers. Same defensive contract as the
+// card mappers: RPC JSON is untrusted, a malformed entry is SKIPPED, and only
+// the closed status enum is whitelisted (an unknown status must not render as
+// something else). notice_type is intentionally NOT whitelisted — the server
+// owns the taxonomy, so a new kind renders rather than silently vanishing;
+// only presence + type (non-empty string) is required.
+// ---------------------------------------------------------------------------
+
+const NOTICE_STATUSES: ReadonlySet<string> = new Set([
+  'active',
+  'dismissed',
+] satisfies NoticeStatus[]);
+
+function asFiniteInt(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+/** Adapt one raw notice entry. Null for anything unusable. */
+export function adaptNotice(raw: unknown): NoticeRecord | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+
+  const id = asString(r.id);
+  const protocolId = asString(r.protocol_id);
+  const noticeType = asString(r.notice_type);
+  const headline = asString(r.headline);
+  const detail = asString(r.detail);
+  const status = asString(r.status);
+
+  if (!id || !protocolId || !noticeType || !headline || !detail) return null;
+  if (status === null || !NOTICE_STATUSES.has(status)) return null;
+
+  return {
+    id,
+    protocol_id: protocolId,
+    notice_type: noticeType,
+    // Missing/garbage severity sorts last (large fallback) rather than 0, which
+    // would jump an unranked notice to the top of the feed.
+    severity: asFiniteInt(r.severity, Number.MAX_SAFE_INTEGER),
+    headline,
+    detail,
+    observed_count: asFiniteInt(r.observed_count, 0),
+    protocol_evidence_ids: asEvidenceIds(r.protocol_evidence_ids),
+    status: status as NoticeStatus,
+    created_at: asString(r.created_at) ?? '',
+    updated_at: asString(r.updated_at) ?? '',
+  };
+}
+
+/** Adapt the protocol_notices_get payload (jsonb array). Malformed entries are
+ *  skipped; a non-array payload adapts to an empty list (the RPC never returns
+ *  NULL — an empty array is the "no notices" answer). The server already
+ *  orders by (severity, created_at); this preserves that order. */
+export function adaptNotices(raw: unknown): NoticeRecord[] {
+  if (!Array.isArray(raw)) return [];
+  const notices: NoticeRecord[] = [];
+  for (const entry of raw) {
+    const notice = adaptNotice(entry);
+    if (notice !== null) notices.push(notice);
+  }
+  return notices;
 }
