@@ -2898,11 +2898,50 @@ export async function processIngestCompletion(
           .neq("id", docId)
           .not("reducto_job_id", "is", null);
 
+        // Cost guard: extractCrossReferencesForVisits bills Reducto per page of
+        // the *sibling* document regardless of how many visits are requested,
+        // so re-running the full visit list against every sibling on every
+        // upload is the dominant driver of Extract credit spend on protocols
+        // with several attached documents (original + amendments/IB/lab
+        // manual). protocol_visit_templates.cross_references already tags each
+        // entry with the document_id it came from, so we can tell which
+        // siblings have already been checked against which visits and skip
+        // (or narrow) the call instead of always re-extracting everything.
+        const { data: existingTemplates } = await supabase
+          .from("protocol_visit_templates")
+          .select("visit_name, study_day, cross_references")
+          .eq("protocol_id", protocolId);
+
+        const coveredBySibling = new Map<string, Set<string>>();
+        for (const t of (existingTemplates ?? []) as Array<{
+          visit_name: string;
+          study_day: number;
+          cross_references: unknown;
+        }>) {
+          const key = `${t.visit_name}|${t.study_day}`;
+          const refs = Array.isArray(t.cross_references)
+            ? (t.cross_references as Array<Record<string, unknown>>)
+            : [];
+          for (const r of refs) {
+            const sibId = typeof r?.document_id === "string" ? r.document_id : null;
+            if (!sibId) continue;
+            const set = coveredBySibling.get(sibId) ?? new Set<string>();
+            set.add(key);
+            coveredBySibling.set(sibId, set);
+          }
+        }
+
         for (const s of (siblings ?? []) as Array<{ id: string; reducto_job_id: string; title: string | null }>) {
+          const covered = coveredBySibling.get(s.id) ?? new Set<string>();
+          const visitsToCheck = visitListForFanOut.filter(
+            (v) => !covered.has(`${v.visit_name}|${v.study_day}`),
+          );
+          if (visitsToCheck.length === 0) continue; // already reconciled against this sibling — no new Extract call needed
+
           try {
             const hits = await extractCrossReferencesForVisits(
               s.reducto_job_id,
-              visitListForFanOut,
+              visitsToCheck,
               reductoKey,
             );
             await mergeCrossReferencesIntoTemplates(supabase, {
