@@ -2,9 +2,9 @@ import type { SiteParticipant } from '../../site/types';
 import { DEMO_PARTICIPANT_UUIDS, DEMO_PROTOCOL_IDS } from '../ids';
 import { addDays } from '../relativeDate';
 
-// 11 participants rebalanced 4 / 4 / 3 across the three demo studies so none
-// looks thin. Each study carries a status spread (ACTIVE + screening / failure
-// / withdrawn / completed) and at least one open deviation so the Reports tab
+// 15 participants across the four demo studies (4 / 4 / 3 / 4) so none looks
+// thin. Each study carries a status spread (ACTIVE + screening / failure /
+// withdrawn / completed) and at least one open deviation so the Reports tab
 // renders meaningful compliance, deviation, and missed-visit data. All clinical
 // detail is synthetic but themed to each study's real indication.
 export function getDemoParticipants(): SiteParticipant[] {
@@ -156,6 +156,60 @@ export function getDemoParticipants(): SiteParticipant[] {
       assigned_coordinator: 'Tom Walsh',
       open_deviations: 0,
       notes: 'Referred this week. Awaiting central HRCT eligibility read.',
+    },
+
+    // EFC14833 — Sotagliflozin / T2DM (key 'GLYCEMIC-11')
+    {
+      id: 'P-0072',
+      uuid: DEMO_PARTICIPANT_UUIDS['P-0072'],
+      protocol_id: DEMO_PROTOCOL_IDS['GLYCEMIC-11'],
+      status: 'ACTIVE',
+      enrolled_at: addDays(-80),
+      current_study_day: 80,
+      next_visit_date: addDays(4),
+      next_visit_name: 'Week 12 (Day 84)',
+      assigned_coordinator: 'Renata Silva',
+      open_deviations: 1,
+      notes: 'On sotagliflozin monotherapy. Week 4 visit conducted 4 days outside window due to a scheduling conflict; PI signed off.',
+    },
+    {
+      id: 'P-0084',
+      uuid: DEMO_PARTICIPANT_UUIDS['P-0084'],
+      protocol_id: DEMO_PROTOCOL_IDS['GLYCEMIC-11'],
+      status: 'ACTIVE',
+      enrolled_at: addDays(-24),
+      current_study_day: 24,
+      next_visit_date: addDays(4),
+      next_visit_name: 'Week 4 (Day 28)',
+      assigned_coordinator: 'Renata Silva',
+      open_deviations: 0,
+      notes: 'Tolerating IMP well. FPG trending down per self-monitored glucose log.',
+    },
+    {
+      id: 'P-0093',
+      uuid: DEMO_PARTICIPANT_UUIDS['P-0093'],
+      protocol_id: DEMO_PROTOCOL_IDS['GLYCEMIC-11'],
+      status: 'COMPLETED',
+      enrolled_at: addDays(-215),
+      current_study_day: 210,
+      next_visit_date: null,
+      next_visit_name: null,
+      assigned_coordinator: 'Renata Silva',
+      open_deviations: 0,
+      notes: 'Completed the Week 26 primary-endpoint visit and Day 210 follow-up. HbA1c improved from baseline.',
+    },
+    {
+      id: 'P-0107',
+      uuid: DEMO_PARTICIPANT_UUIDS['P-0107'],
+      protocol_id: DEMO_PROTOCOL_IDS['GLYCEMIC-11'],
+      status: 'SCREENING',
+      enrolled_at: null,
+      current_study_day: null,
+      next_visit_date: addDays(5),
+      next_visit_name: 'Screening',
+      assigned_coordinator: 'Renata Silva',
+      open_deviations: 0,
+      notes: 'Referred from endocrinology clinic. Consent appointment scheduled; screening labs pending.',
     },
   ];
 }

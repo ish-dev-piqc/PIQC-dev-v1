@@ -12,10 +12,12 @@
 //   'BRIGHTEN-2' → PP06489            (PledOx, Ph3 colorectal CIPN) — primary
 //   'CARDIAC-7'  → CLR_18_06          (K0706, Ph2 early Parkinson's)
 //   'IMMUNE-14'  → ND-L02-s0201-005   (Ph2 idiopathic pulmonary fibrosis)
+//   'GLYCEMIC-11' → EFC14833          (Sotagliflozin, Ph3 type 2 diabetes)
 export const DEMO_PROTOCOL_IDS = {
   'BRIGHTEN-2': '00000001-d000-4000-8000-000000000001',
   'CARDIAC-7':  '00000002-d000-4000-8000-000000000002',
   'IMMUNE-14':  '00000003-d000-4000-8000-000000000003',
+  'GLYCEMIC-11': '00000004-d000-4000-8000-000000000004',
 } as const;
 
 // Participant UUIDs — keyed by the human participant_code. Used for FK
@@ -32,4 +34,8 @@ export const DEMO_PARTICIPANT_UUIDS: Record<string, string> = {
   'P-0008': '00000008-d000-4000-8000-000000000002',
   'P-0012': '00000012-d000-4000-8000-000000000002',
   'P-0031': '00000031-d000-4000-8000-000000000003',
+  'P-0072': '00000072-d000-4000-8000-000000000004',
+  'P-0084': '00000084-d000-4000-8000-000000000004',
+  'P-0093': '00000093-d000-4000-8000-000000000004',
+  'P-0107': '00000107-d000-4000-8000-000000000004',
 };
