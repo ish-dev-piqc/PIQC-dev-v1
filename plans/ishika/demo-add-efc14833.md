@@ -3,7 +3,7 @@ owner: ish-dev-piqc
 feature: demo-add-efc14833
 status: in-review
 started: 2026-07-14
-target_pr:
+target_pr: 492
 ---
 
 # Demo Mode — add EFC14833 (Sotagliflozin) as a 4th fixture protocol
