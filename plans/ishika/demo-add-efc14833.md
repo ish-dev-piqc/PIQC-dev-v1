@@ -1,7 +1,7 @@
 ---
 owner: ish-dev-piqc
 feature: demo-add-efc14833
-status: active
+status: in-review
 started: 2026-07-14
 target_pr:
 ---
@@ -47,8 +47,8 @@ Existing `demoActive` seam only — no new toggle. Extends the sanctioned `src/l
 
 ## Verification
 
-- [ ] `npx tsc --noEmit` clean; `npm run test` — `demoSiteRepo.test.ts` passes with the 4th protocol
-- [ ] Demo user, toggle ON: protocol switcher shows EFC14833 alongside the existing three; calendar/participants/team/documents/Ask all populate with no empty states
+- [x] `npx tsc --noEmit` clean; full `vitest run` — 109 files / 1398 tests pass, including updated `demoSiteRepo.test.ts` (now asserts all 4 protocol codes) and unaffected `store.test.ts` (`toBeGreaterThanOrEqual` bounds, no hardcoded exact counts)
+- [ ] Demo user, toggle ON: protocol switcher shows EFC14833 alongside the existing three; calendar/participants/team/documents/Ask all populate with no empty states (manual browser check — needs a demo-flagged account, not run this session)
 - [ ] Reset re-seeds EFC14833 correctly; Exit returns real data
 - [ ] `/piqc-review` clean (scope, Approved-by, no-new-mocks, PHI)
 

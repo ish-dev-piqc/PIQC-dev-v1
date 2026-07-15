@@ -107,6 +107,39 @@ export const DEMO_ASK_RESPONSES: Record<string, DemoAskResponse[]> = {
         'Q2W infusion visits use a ±2-day window; spirometry milestone visits (mid-study and Day 169) allow ±5 days. The Day 169 FVC assessment anchors the key secondary efficacy analysis, so deviations there are logged with justification.',
     },
   ],
+
+  // EFC14833 — Sotagliflozin / T2DM
+  [DEMO_PROTOCOL_IDS['GLYCEMIC-11']]: [
+    {
+      key: 'schedule of assessments',
+      answer:
+        'EFC14833 is a 210-day (~30-week), randomized, double-blind, placebo-controlled study of once-daily oral sotagliflozin as monotherapy. Key visits are Screening (Day -28), Baseline/Randomization (Day 1), Week 4, Week 12, the Week 26 primary-endpoint visit, and a Day 210 follow-up. HbA1c and FPG are collected at most visits; a standard mixed meal tolerance test is done at Baseline and Week 26.',
+      citations: [
+        { document_title: 'EFC14833 — Sotagliflozin Protocol Amendment 03', page: 16, snippet: 'Table 4 Schedule of assessments' },
+      ],
+    },
+    {
+      key: 'inclusion',
+      answer:
+        'EFC14833 enrolls adults with Type 2 diabetes mellitus and inadequate glycemic control (HbA1c within the protocol-defined range) who are drug-naïve or on a stable background regimen eligible for monotherapy conversion. Key exclusions include Type 1 diabetes, a history of diabetic ketoacidosis, and significant renal or hepatic impairment.',
+      citations: [
+        { document_title: 'EFC14833 — Sotagliflozin Protocol Amendment 03', page: 22, snippet: 'Section 4.1 Inclusion criteria' },
+      ],
+    },
+    {
+      key: 'safety reporting',
+      answer:
+        'Adverse events are reviewed at every visit, with particular attention to diabetic ketoacidosis symptoms and genitourinary infections given the SGLT2-inhibitor mechanism. SAEs are reported to the sponsor within 24 hours of investigator awareness, per ICH E2A.',
+      citations: [
+        { document_title: 'EFC14833 — Sotagliflozin Protocol Amendment 03', page: 47, snippet: 'Section 7 Safety reporting' },
+      ],
+    },
+    {
+      key: 'visit window',
+      answer:
+        'Baseline/Randomization occurs on a fixed Day 1. Subsequent visits (Week 4, Week 12, Week 26, Day 210 follow-up) use a ±3-day window. The Week 26 HbA1c assessment is the primary endpoint, so out-of-window visits there are escalated and logged as deviations.',
+    },
+  ],
 };
 
 export const DEMO_FALLBACK_ASK_RESPONSE: DemoAskResponse = {
