@@ -77,6 +77,10 @@ interface Props {
    * their current behavior.
    */
   roleFilter?: RoleFilter;
+  /** Verbatim grid labels of requirements in this visit that carry a
+   * narrative↔grid divergence — the row gets a "Readings differ" chip
+   * pointing at the divergence panel. */
+  divergentLabels?: ReadonlySet<string>;
 }
 
 export default function ExecutionChecklist({
@@ -86,6 +90,7 @@ export default function ExecutionChecklist({
   onItemAction,
   onOpenTraceability,
   roleFilter = 'all',
+  divergentLabels,
 }: Props) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
@@ -234,6 +239,7 @@ export default function ExecutionChecklist({
                   <ChecklistItemRow
                     key={item.id}
                     item={item}
+                    divergent={divergentLabels?.has(item.label) ?? false}
                     status={reviewStatus.get(item.id) ?? item.review_status}
                     onToggleReviewed={onToggleReviewed}
                     onItemAction={onItemAction}
@@ -295,6 +301,7 @@ export default function ExecutionChecklist({
 
 interface RowProps {
   item: VisitExecutionItem;
+  divergent: boolean;
   status: ExecutionReviewStatus;
   onToggleReviewed: (itemId: string) => void;
   onItemAction: (item: VisitExecutionItem, action: ChecklistItemAction) => void;
@@ -303,6 +310,7 @@ interface RowProps {
 
 function ChecklistItemRow({
   item,
+  divergent,
   status,
   onToggleReviewed,
   onItemAction,
@@ -384,6 +392,19 @@ function ChecklistItemRow({
             <p className="text-fg-body text-sm font-medium flex-1 min-w-0">{item.label}</p>
             <ExecutionItemClassificationBadge classification={item.classification} />
             <ExecutionReviewStatusBadge status={status} />
+            {divergent && (
+              <span
+                data-testid="vew-divergence-chip"
+                title="The protocol's narrative and its SoA read this differently — see the divergence panel above the checklist."
+                className={`inline-flex items-center text-[10px] font-semibold uppercase tracking-wider rounded-md border px-1.5 py-0.5 ${
+                  isLight
+                    ? 'text-amber-700 bg-amber-50 border-amber-200'
+                    : 'text-amber-400 bg-amber-400/10 border-amber-400/20'
+                }`}
+              >
+                Readings differ
+              </span>
+            )}
             {/* Sprint 7: per-item confidence flag. Renders ONLY for 'low' /
                 'needs_review' states (polish-v2 rare-loud discipline) — the
                 expected 'high' / 'medium' baseline gets no chip. Tooltip

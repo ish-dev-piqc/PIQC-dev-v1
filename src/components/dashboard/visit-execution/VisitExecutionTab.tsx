@@ -5,6 +5,9 @@ import { useProtocol } from '../../../context/ProtocolContext';
 import { useTheme } from '../../../context/ThemeContext';
 import { useSiteData } from '../../../context/SiteDataContext';
 import { fetchVisitExecutionWorkspaces, fetchVisitCoverage, fetchProtocolCohorts, isMockEnabled } from '../../../lib/visit-execution/visitExecutionApi';
+import { fetchProtocolDivergences, updateDivergenceStatus } from '../../../lib/divergence/divergenceApi';
+import type { DivergenceRecord, DivergenceStatus } from '../../../types/divergence';
+import DivergencePanel from './DivergencePanel';
 // Cross-mode import allowed: sourceEvidenceApi is on the piqc-discipline
 // ALLOWED_CROSS_MODE allowlist (same helper the old Protocol tab badge used).
 import { countWorksheetItemsForStudy } from '../../../lib/sotr/sourceEvidenceApi';
@@ -128,6 +131,7 @@ export default function VisitExecutionTab() {
   // extracted from the protocol body. Drives the cohort selector (so EVERY
   // cohort shows, not just SoA "[X only]" markers) + the per-cohort dose panel.
   const [protocolCohorts, setProtocolCohorts] = useState<ProtocolCohort[]>([]);
+  const [divergences, setDivergences] = useState<DivergenceRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -256,6 +260,7 @@ export default function VisitExecutionTab() {
       setWorkspaces([]);
       setCoverage(null);
       setProtocolCohorts([]);
+      setDivergences([]);
       setSelectedId(null);
       return;
     }
@@ -270,6 +275,11 @@ export default function VisitExecutionTab() {
     // workspace load. Empty / error → no cohort UI (no behavior change).
     fetchProtocolCohorts(activeProtocol.id).then((cr) => {
       if (!cancelled) setProtocolCohorts(cr.ok ? cr.data : []);
+    });
+    // Narrative↔grid divergences — best-effort, independent of the workspace
+    // load. Empty / error → no divergence UI (no behavior change).
+    fetchProtocolDivergences(activeProtocol.id).then((dr) => {
+      if (!cancelled) setDivergences(dr.ok ? dr.data : []);
     });
     fetchVisitExecutionWorkspaces(activeProtocol.id).then((r) => {
       if (cancelled) return;
@@ -367,6 +377,36 @@ export default function VisitExecutionTab() {
     setMutationError(null);
     setRoleFilter('all');
   }, [selectedId]);
+
+  // Narrative↔grid divergences scoped to the visit in view (+ protocol-wide
+  // cohort-scope records). The panel renders nothing when empty — no wallpaper.
+  const visitDivergences = useMemo(() => {
+    const name = selectedWorkspace?.snapshot.visit_name ?? null;
+    return divergences.filter(
+      (d) => d.visit_name === null || (name !== null && d.visit_name === name),
+    );
+  }, [divergences, selectedWorkspace]);
+  const divergentLabels = useMemo(
+    () =>
+      new Set(
+        visitDivergences
+          .map((d) => d.procedure_label)
+          .filter((l): l is string => l !== null),
+      ),
+    [visitDivergences],
+  );
+  const handleSetDivergenceStatus = useCallback(
+    async (id: string, status: DivergenceStatus, note: string | null) => {
+      const r = await updateDivergenceStatus(id, status, note);
+      if (r.ok) {
+        setDivergences((prev) => prev.map((d) => (d.id === r.data.id ? r.data : d)));
+        return true;
+      }
+      setMutationError(r.error);
+      return false;
+    },
+    [],
+  );
 
   const reviewedCountForSelected = useMemo(() => {
     if (!selectedWorkspace) return 0;
@@ -1083,6 +1123,12 @@ export default function VisitExecutionTab() {
                 derivedConfidence={derivedVisitConfidence}
               />
 
+              <DivergencePanel
+                divergences={visitDivergences}
+                protocolCode={activeProtocol?.code ?? null}
+                onSetStatus={handleSetDivergenceStatus}
+              />
+
               <div className="flex justify-end">
                 <button
                   type="button"
@@ -1191,6 +1237,7 @@ export default function VisitExecutionTab() {
                 onToggleReviewed={handleToggleReviewed}
                 onItemAction={handleItemAction}
                 onOpenTraceability={setTraceabilityItem}
+                divergentLabels={divergentLabels}
                 roleFilter={roleFilter}
               />
 

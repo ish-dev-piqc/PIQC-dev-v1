@@ -25,7 +25,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { mapReductoExtractToSotr } from "./sourceEvidenceAdapter.ts";
 import { dedupeVisitTemplateRowsByQuality, pickTemplateForVisit, staleTemplateIds, visitMatchKey } from "./visitTemplateDedup.ts";
 import { canonicalVisitName, normalizeVisitName } from "./visitNameNormalize.ts";
-import { assembleVisitsFromGrouping, enrichScheduleFromLlm, extractRawColumns } from "./soaGridParser.ts";
+import { assembleVisitsFromGrouping, enrichScheduleFromLlm, extractRawColumns, type ScheduleOfEventsItem } from "./soaGridParser.ts";
+import { detectNarrativeGridDivergences } from "./narrativeDivergence.ts";
 import {
   parseStatedCohortCount,
   parseStudyCohorts,
@@ -2231,6 +2232,10 @@ export async function processIngestCompletion(
     // sees only headers — never cells — so it cannot under-read or invent. On LLM
     // failure → raw columns ungrouped (flagged grid_ungrouped); no grid at all →
     // keep the LLM's own schedule_of_events (llm_fallback). Downstream shape unchanged.
+    // Captured for the 5a2 divergence pass (the pre-overwrite narrative reading
+    // + the divergence-shaped cohort reconcile notes).
+    let llmScheduleForDivergence: unknown = null;
+    let cohortReconNotes: string[] = [];
     let soaMethod: "grid_grouped" | "grid_ungrouped" | "llm_fallback" = "llm_fallback";
     let soaExpectedFromSignal = 0;
     try {
@@ -2248,6 +2253,7 @@ export async function processIngestCompletion(
         // metadata the grid can't see (role_hint / conditions / timing / source_fields)
         // by label-match — the visit×procedure structure stays deterministic.
         const llmSchedule = extractedFields.schedule_of_events;
+        llmScheduleForDivergence = llmSchedule;
         // cohortList (from study_cohorts) drives per-visit cohort-scope binding:
         // each visit's applies_to is derived from its source table heading(s) ∪
         // "[X only]" markers. Empty list → markers-only (unchanged).
@@ -2321,6 +2327,7 @@ export async function processIngestCompletion(
       const statedCount = parseStatedCohortCount(cohortProse);
       const reconciliation = reconcileCohorts(studyCohorts, scheduleCohorts, hasSharedBackbone, statedCount);
       extractedFields._cohort_reconciliation = reconciliation;
+      cohortReconNotes = reconciliation.notes;
       console.log("[ingest] cohort_reconciliation", { document_id: docId, ...reconciliation });
     }
 
@@ -2575,6 +2582,62 @@ export async function processIngestCompletion(
           console.log("[ingest] protocol_cohorts_persisted", {
             protocol_id: resolvedProtocolId,
             count: cohortRows.length,
+          });
+        }
+      }
+
+      // ---------------------------------------------------------------------
+      // 5a2. Narrative↔grid divergence records (narrative-first spec §5.5).
+      // Deterministic comparison of the protocol's two readings (grid vs the
+      // pre-overwrite narrative extraction) — the protocol cited against
+      // itself, never an external norm. Upsert keyed on (protocol_id,
+      // locus_key) with ignoreDuplicates so a re-ingest never clobbers an
+      // existing record's lifecycle (status / dispositions). Grid path only —
+      // a fallback protocol has ONE reading; nothing to compare (the engine is
+      // honestly silent there, not broken).
+      // ---------------------------------------------------------------------
+      if (resolvedProtocolId && llmScheduleForDivergence && extractedFields) {
+        try {
+          const gridForDivergence = Array.isArray(extractedFields.schedule_of_events)
+            ? extractedFields.schedule_of_events as ScheduleOfEventsItem[]
+            : [];
+          const divergences = detectNarrativeGridDivergences(
+            gridForDivergence,
+            llmScheduleForDivergence,
+            cohortReconNotes,
+          );
+          if (divergences.length > 0) {
+            const rows = divergences.map((d) => ({
+              protocol_id: resolvedProtocolId,
+              document_id: docId,
+              class: d.class,
+              locus_key: d.locus_key,
+              visit_name: d.visit_name,
+              procedure_label: d.procedure_label,
+              reading_a: d.reading_a,
+              reading_b: d.reading_b,
+              detail: d.detail,
+            }));
+            const { error: divErr } = await supabase
+              .from("protocol_divergences")
+              .upsert(rows, { onConflict: "protocol_id,locus_key", ignoreDuplicates: true });
+            if (divErr) {
+              console.error("[ingest] protocol_divergences_upsert_failed", { error: divErr.message });
+            } else {
+              console.log("[ingest] protocol_divergences_persisted", {
+                protocol_id: resolvedProtocolId,
+                count: rows.length,
+                classes: rows.map((r) => r.class),
+              });
+            }
+          } else {
+            console.log("[ingest] protocol_divergences_none", { protocol_id: resolvedProtocolId });
+          }
+        } catch (err) {
+          // Divergence detection must never abort ingest.
+          console.error("[ingest] protocol_divergences_error", {
+            document_id: docId,
+            error: err instanceof Error ? err.message : String(err),
           });
         }
       }

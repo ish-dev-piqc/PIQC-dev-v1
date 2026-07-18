@@ -615,6 +615,9 @@ export interface ScheduleOfEventsItem {
    * sort anchor (monotonic approximate-day pass), NOT a protocol claim. UI must
    * not display it as "Day N" (spec §2.9 — ordering may use it; a claim may not). */
   study_day_is_approximate?: boolean;
+  /** Verbatim composite SoA column header of the first source column — the grid
+   * reading's quotable text for divergence records. */
+  source_header?: string;
 }
 
 /** Normalized citation shape matching ingestPipeline's normalizeReductoCitation output. */
@@ -1031,6 +1034,7 @@ export function assembleVisitsFromGrouping(
       cross_references: [],
       applies_to,
     };
+    if (srcCols[0]?.header) item.source_header = srcCols[0].header;
     if (day.approximate) item.study_day_is_approximate = true;
     schedule.push(item);
     isApproxDay.set(item, day.approximate);
@@ -1074,14 +1078,14 @@ export function assembleVisitsFromGrouping(
 /** Full-fidelity label key — case/whitespace/footnote-superscript folding with
  * PARENTHETICALS PRESERVED, so sibling procedures like "Pregnancy test (serum)"
  * and "Pregnancy test (urine)" keep distinct keys. */
-function normLabelFull(s: string): string {
+export function normLabelFull(s: string): string {
   return clean(s).toLowerCase().replace(/[ª²³¹º⁰-⁹]/g, "").replace(/\s+/g, " ").trim();
 }
 
 /** Paren-stripped key (the historical normLabel behavior). It maps distinct
  * sibling procedures onto ONE key, so it is only ever used behind a both-sides
  * uniqueness gate (tier 3) — never as the primary join. */
-function normLabelLoose(s: string): string {
+export function normLabelLoose(s: string): string {
   return normLabelFull(s).replace(/\([^)]*\)/g, "").replace(/\s+/g, " ").trim();
 }
 
@@ -1158,11 +1162,77 @@ export interface NarrativeRecovery {
   cross_references_recovered: number;
 }
 
-interface LlmVisitEntry {
+/** One LLM schedule visit, indexed for alignment. */
+export interface LlmVisitEntry {
   raw: Record<string, unknown>;
   nameKey: string | null;
   studyDay: number | null;
   procs: Record<string, unknown>[];
+}
+
+/** Alignment index over the LLM extraction's visits — shared by narrative
+ * recovery (enrichScheduleFromLlm) and narrative↔grid divergence detection
+ * (narrativeDivergence.ts), so the two features can never disagree about which
+ * LLM visit a grid visit means. */
+export interface LlmVisitIndex {
+  entries: LlmVisitEntry[];
+  byNameKey: Map<string, number[]>;
+  byDay: Map<number, number[]>;
+}
+
+export function indexLlmScheduleVisits(llmSchedule: unknown): LlmVisitIndex {
+  const entries: LlmVisitEntry[] = [];
+  if (Array.isArray(llmSchedule)) {
+    for (const v of llmSchedule) {
+      if (!v || typeof v !== "object") continue;
+      const raw = v as Record<string, unknown>;
+      const name = typeof raw.visit_name === "string" ? raw.visit_name.trim() : "";
+      const day = typeof raw.study_day === "number" && Number.isFinite(raw.study_day)
+        ? Math.trunc(raw.study_day)
+        : null;
+      const procs = Array.isArray(raw.procedures_structured)
+        ? (raw.procedures_structured as unknown[]).filter(
+          (p): p is Record<string, unknown> =>
+            !!p && typeof p === "object" && typeof (p as { label?: unknown }).label === "string",
+        )
+        : [];
+      entries.push({ raw, nameKey: name ? normalizeVisitName(name) : null, studyDay: day, procs });
+    }
+  }
+  const byNameKey = new Map<string, number[]>();
+  const byDay = new Map<number, number[]>();
+  for (let i = 0; i < entries.length; i++) {
+    const { nameKey, studyDay } = entries[i];
+    if (nameKey) {
+      const l = byNameKey.get(nameKey);
+      if (l) l.push(i);
+      else byNameKey.set(nameKey, [i]);
+    }
+    if (studyDay != null) {
+      const l = byDay.get(studyDay);
+      if (l) l.push(i);
+      else byDay.set(studyDay, [i]);
+    }
+  }
+  return { entries, byNameKey, byDay };
+}
+
+/** Confident grid→LLM visit alignment: unique normalized-name match first;
+ * unique exact study_day only when the grid day is REAL — a synthetic
+ * approximate day is PIQC's sort-order invention, not the protocol's claim
+ * (spec §2.9), so it must not drive alignment. */
+export function alignGridVisitToLlm(
+  visit: ScheduleOfEventsItem,
+  idx: LlmVisitIndex,
+): LlmVisitEntry | null {
+  const key = visit.visit_name ? normalizeVisitName(visit.visit_name) : "";
+  const byName = key ? idx.byNameKey.get(key) : undefined;
+  if (byName && byName.length === 1) return idx.entries[byName[0]];
+  if (typeof visit.study_day === "number" && !visit.study_day_is_approximate) {
+    const byDay = idx.byDay.get(visit.study_day);
+    if (byDay && byDay.length === 1) return idx.entries[byDay[0]];
+  }
+  return null;
 }
 
 /**
@@ -1204,25 +1274,8 @@ export function enrichScheduleFromLlm(
     cross_references_recovered: 0,
   };
 
-  // ---- normalize the LLM side --------------------------------------------
-  const llmVisits: LlmVisitEntry[] = [];
-  if (Array.isArray(llmSchedule)) {
-    for (const v of llmSchedule) {
-      if (!v || typeof v !== "object") continue;
-      const raw = v as Record<string, unknown>;
-      const name = typeof raw.visit_name === "string" ? raw.visit_name.trim() : "";
-      const day = typeof raw.study_day === "number" && Number.isFinite(raw.study_day)
-        ? Math.trunc(raw.study_day)
-        : null;
-      const procs = Array.isArray(raw.procedures_structured)
-        ? (raw.procedures_structured as unknown[]).filter(
-          (p): p is Record<string, unknown> =>
-            !!p && typeof p === "object" && typeof (p as { label?: unknown }).label === "string",
-        )
-        : [];
-      llmVisits.push({ raw, nameKey: name ? normalizeVisitName(name) : null, studyDay: day, procs });
-    }
-  }
+  const llmIndex = indexLlmScheduleVisits(llmSchedule);
+  const llmVisits = llmIndex.entries;
   if (llmVisits.length === 0) return recovery;
 
   // ---- global occurrence census (T2 invariance gate + T3 global census) ---
@@ -1269,38 +1322,9 @@ export function enrichScheduleFromLlm(
     }
   }
 
-  // ---- visit alignment (name key first, exact real study_day fallback) ----
-  const llmByNameKey = new Map<string, number[]>();
-  const llmByDay = new Map<number, number[]>();
-  for (let i = 0; i < llmVisits.length; i++) {
-    const { nameKey, studyDay } = llmVisits[i];
-    if (nameKey) {
-      const l = llmByNameKey.get(nameKey);
-      if (l) l.push(i);
-      else llmByNameKey.set(nameKey, [i]);
-    }
-    if (studyDay != null) {
-      const l = llmByDay.get(studyDay);
-      if (l) l.push(i);
-      else llmByDay.set(studyDay, [i]);
-    }
-  }
-  const alignLlmVisit = (visit: ScheduleOfEventsItem): LlmVisitEntry | null => {
-    const key = visit.visit_name ? normalizeVisitName(visit.visit_name) : "";
-    const byName = key ? llmByNameKey.get(key) : undefined;
-    if (byName && byName.length === 1) return llmVisits[byName[0]];
-    // A synthetic (approximate) day must not drive alignment — it is PIQC's
-    // sort-order invention, not the protocol's claim (spec §2.9).
-    if (typeof visit.study_day === "number" && !visit.study_day_is_approximate) {
-      const byDay = llmByDay.get(visit.study_day);
-      if (byDay && byDay.length === 1) return llmVisits[byDay[0]];
-    }
-    return null;
-  };
-
   // ---- bind loop ----------------------------------------------------------
   for (const visit of gridSchedule) {
-    const aligned = alignLlmVisit(visit);
+    const aligned = alignGridVisitToLlm(visit, llmIndex);
 
     // Per-visit T1 map (full keys) + T3a loose map, with in-visit collision refusal.
     const visitByFull = new Map<string, Record<string, unknown> | "collision">();
