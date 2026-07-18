@@ -2,8 +2,8 @@ import type { SiteVisit } from '../../site/types';
 import { DEMO_PROTOCOL_IDS } from '../ids';
 import { addDays, addDaysIso } from '../relativeDate';
 
-// ~15 visits spanning the window centred on "today", distributed across the
-// three studies and themed to each indication. Statuses exercise every UI
+// ~20 visits spanning the window centred on "today", distributed across the
+// four studies and themed to each indication. Statuses exercise every UI
 // branch: completed, missed, deviation, overdue, closing_soon, scheduled.
 // Offsets are relative to today so the calendar always looks "current".
 export function getDemoVisits(): SiteVisit[] {
@@ -196,6 +196,70 @@ export function getDemoVisits(): SiteVisit[] {
       status: 'scheduled',
       procedures: ['Vitals', 'ND-L02-s0201 IV infusion', 'Spirometry (FVC)', 'DLCO', 'AE check'],
       priorNote: 'Mid-study pulmonary function assessment.',
+    },
+
+    // ===== EFC14833 — Sotagliflozin / T2DM =====
+    {
+      id: 'demo-v-016',
+      date: addDays(-52),
+      time: '9:00 AM',
+      protocolId: DEMO_PROTOCOL_IDS['GLYCEMIC-11'],
+      participantId: 'P-0072',
+      studyDay: 28,
+      visitName: 'Week 4 (Day 28)',
+      status: 'deviation',
+      procedures: ['Vitals', 'Self-monitored blood glucose review', 'IMP accountability', 'FPG'],
+      priorNote: 'Participant arrived 4 days outside the visit window due to a scheduling conflict.',
+      deviationReason:
+        'Week 4 visit conducted outside the protocol-defined window (±3 days). PI notified, deviation logged.',
+    },
+    {
+      id: 'demo-v-017',
+      date: addDays(-24),
+      time: '10:00 AM',
+      protocolId: DEMO_PROTOCOL_IDS['GLYCEMIC-11'],
+      participantId: 'P-0084',
+      studyDay: 0,
+      visitName: 'Baseline / Randomization (Day 1)',
+      status: 'completed',
+      procedures: ['Body weight, height', 'Vitals', 'Randomization', 'IMP dispensation', 'Self-monitored blood glucose training'],
+      priorNote: 'Screening completed prior. Randomized without issue.',
+    },
+    {
+      id: 'demo-v-018',
+      date: addDays(-3),
+      time: '11:00 AM',
+      protocolId: DEMO_PROTOCOL_IDS['GLYCEMIC-11'],
+      participantId: 'P-0072',
+      studyDay: 77,
+      visitName: 'Week 12 (Day 84) — early check-in',
+      status: 'completed',
+      procedures: ['Vitals', 'IMP accountability', 'FPG', 'Concomitant medication review'],
+      priorNote: 'On schedule for the Week 12 window.',
+    },
+    {
+      id: 'demo-v-019',
+      date: addDays(4),
+      time: '9:30 AM',
+      protocolId: DEMO_PROTOCOL_IDS['GLYCEMIC-11'],
+      participantId: 'P-0072',
+      studyDay: 84,
+      visitName: 'Week 12 (Day 84)',
+      status: 'scheduled',
+      procedures: ['Vitals', 'HbA1c', 'FPG', 'Chemistry (incl. amylase and lipase)', 'Fasting lipids', 'IMP accountability', 'AE review'],
+      priorNote: 'Week 4 visit had a window deviation. Please confirm on-time arrival.',
+    },
+    {
+      id: 'demo-v-020',
+      date: addDays(4),
+      time: '2:00 PM',
+      protocolId: DEMO_PROTOCOL_IDS['GLYCEMIC-11'],
+      participantId: 'P-0084',
+      studyDay: 28,
+      visitName: 'Week 4 (Day 28)',
+      status: 'scheduled',
+      procedures: ['Vitals', 'Self-monitored blood glucose review', 'IMP accountability', 'FPG', 'Concomitant medication review'],
+      priorNote: 'Tolerating IMP well since baseline.',
     },
   ];
 }

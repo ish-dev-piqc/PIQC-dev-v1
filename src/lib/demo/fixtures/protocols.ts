@@ -36,5 +36,14 @@ export function getDemoProtocols(): Protocol[] {
       demoAnchorDate: addDays(-15),
       timezone: null,
     },
+    {
+      id: DEMO_PROTOCOL_IDS['GLYCEMIC-11'],
+      code: 'EFC14833',
+      name: 'A Randomized, Double-blind, Placebo-controlled, Parallel-group, Multicenter Study to Evaluate the Efficacy and Safety of Sotagliflozin as Monotherapy in Patients with Type 2 Diabetes Mellitus Who Have Inadequate Glycemic Control',
+      sponsor: 'Sanofi',
+      phase: 'Phase 3',
+      demoAnchorDate: addDays(-56),
+      timezone: null,
+    },
   ];
 }
