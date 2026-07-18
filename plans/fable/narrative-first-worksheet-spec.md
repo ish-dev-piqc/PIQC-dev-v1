@@ -47,6 +47,14 @@ design is universal by construction (the litmus, applied at design level, *is* t
 guarantee), with two silences patched there (the `llm_fallback` path; the ontology restated as a
 universal trunk with per-persona projections).
 
+A second post-delivery pass (`protocol-physics-first-principles.md`, this branch) folded **two
+physics-derived enhancements back into this spec** — **E1** visit-window recovery and **E2**
+honest day claims for event-anchored visits (details at the end of §4) — plus a seam-map framing
+line (§5) and the CLOCK reservation (§1). The *disruptive* physics learnings (anchor model,
+trajectory forks, dose-mod trees, amendment projection) are deliberately **not** in this spec:
+they are parked in the physics doc pending a founder call, and nothing in slices 1–4 depends on
+them.
+
 ---
 
 ## 1. (§5.1) The narrative ontology — five buckets, keyed to coordinator decisions
@@ -72,6 +80,12 @@ Scope note (made precise in §10.3): the five buckets are **universal properties
 content** — any protocol's narrative decomposes into them regardless of who reads it. What is
 persona-specific is only the **visibility-default column**, which is the acting-surface
 (coordinator) projection; other surfaces re-project the same buckets (§5.3, §10.3).
+
+CLOCK reservation (from the first-principles pass; intent only, zero schema now): CLOCK is
+properly **(anchor, offset, window)** — protocols run on multiple named clocks (Day 1, cycle
+clocks, event clocks), and today's flat `study_day` is the degenerate single-anchor case. Slices
+1–4 build on the flat model unchanged; the reservation exists so the eventual anchor arc evolves
+this bucket instead of re-designing it.
 
 **v1 vs deferred:**
 - **v1 populates all five buckets** — every field above already exists end-to-end
@@ -264,6 +278,25 @@ And the self-test the brief demanded: a worksheet row at rest is ≤3 lines (lab
 description / chips). A visit page is a checklist with a lede, not a linearized reprint — the
 prose lives one poke deep, where the bucket rule put it.
 
+### 2.9 Honest day claims — event-anchored visits stop wearing invented days (physics E2)
+
+A finding from the first-principles pass that lands squarely in this arc's visualization surface:
+the grid's approximate-day pass **fabricates** a sortable day number for visits the protocol never
+dates — EOT, ED, LTFU are *event-anchored*, not day-anchored (`soaGridParser.ts:1042-1064`, the
+`isApproxDay` compensation). The UI then displays that number as "Day N" (VisitNavigator's day
+sub-line, `VisitSnapshot.study_day`) — **an uncited assertion, shipping today.** The protocol
+says "End of Treatment"; PIQC invented Day 23 for sort order and then *claimed* it.
+
+The rule that fixes it: **ordering may use the synthetic day — ordering is presentation; the
+claim may not.** For approximate visits the UI shows the visit's own name (which *is* the
+protocol's label) and no day number. Sort position is unchanged.
+
+Mechanics constraint, non-negotiable: the flag must **originate at the parse**, where the
+approximation decision is made — never a UI name-pattern heuristic ("looks like EOT"), which
+would be exactly the hardcoded visit-shape template §10.1's tripwires ban. Slice assignment:
+flag origination in slice 1, display suppression in slice 4; persistence choice is Opus's
+(§4, E2 entry).
+
 ---
 
 ## 3. (§5.4) Adversarial pressure-test of the join — verdict: narrow it, don't widen it
@@ -341,6 +374,17 @@ callers unchanged, `ingestPipeline.ts:2255`):
    (`ingestPipeline.ts:2288-2308`). `had_candidate` preserves the bind-failure vs.
    absent-in-protocol distinction §2.4 needs.
 
+7. **Visit-level fills (aligned visits only).** For each tier-1-aligned visit pair, fill the
+   visit-level fields the grid path discards: `visit_purpose`, `cross_references` (the brief's
+   slice 2), and — physics addition **E1** — **`window_minus_days`/`window_plus_days` when the
+   grid parsed none**. Grid `0/0` means *not found* (`parseVisitHeader` defaults,
+   `soaGridParser.ts:286-294`); the LLM value carries the protocol's prose-stated window with the
+   visit's own citation. Fill-only-empty, same contract as everything above. When **both** sides
+   carry nonzero windows and disagree: leave the grid value in place and do nothing in slice 1 —
+   that disagreement is precisely D2 (§5.5), detected at the same ingest point in slice 2; slice 1
+   must not silently prefer either reading. Window fills are recorded in `_narrative_recovery`
+   (`window_filled_from_narrative: [visit…]`) so an audit can distinguish the source.
+
 **What I explicitly reject from the brief's candidate slice:** token/alias widening borrowed from
 the cohort resolver. The cohort machinery works because its vocabulary is **tiny, closed, and
 alias-extracted** — `study_cohorts` ships `soa_aliases` from prose (`ingestPipeline.ts:2213-2216`),
@@ -377,8 +421,28 @@ Ranked by value × lift × litmus-safety, with the dependency edges that actuall
 | 7 | Footnote linkage | **Slice 3** — unchanged | Now carries two consumers (worksheet caveats + D3). |
 
 Slices 1–4 are one **vertical slice** in the working agreement's sense: parse fix → persistence →
-adapter → render, demoable end-to-end on one re-ingested seeded protocol, no new schema, no
-re-parse (the enricher runs at ingest on already-parsed artifacts).
+adapter → render, demoable end-to-end on one re-ingested seeded protocol, no new schema (one
+possible exception under E2, named below), no re-parse (the enricher runs at ingest on
+already-parsed artifacts).
+
+**Physics enhancements folded in (post-first-principles pass, founder-directed — additive only):**
+
+- **E1 — visit-window recovery** (extends slice 2's visit-level recovery; mechanics in §3.4
+  step 7). The grid can only read windows stated in *table headers* ("±N days"); protocols that
+  state windows in visit-section prose instead **lose them on the grid path** even though the
+  extract captured them (`window_minus/plus_days` are required schema fields). Fill only when the
+  grid found none, aligned visits only. Feeds the `VisitSnapshot` window chips and `TimingBanner`
+  immediately — visible in the branch demo — and gives D2 its narrative side later. Zero schema.
+- **E2 — honest day claims for event-anchored visits** (flag in slice 1, display in slice 4; full
+  statement in §2.9). Fixes a litmus violation shipping today: an invented "Day N" displayed for
+  visits the protocol never dates. The one place this vertical may touch schema: if flag
+  persistence needs a column it is a single nullable boolean + type mirror; otherwise it rides
+  the schedule JSONB through the workspace RPC. Opus picks the cheapest honest path and names it
+  in the plan MD.
+- **Explicitly NOT folded in** (parked in `protocol-physics-first-principles.md`, founder-gated):
+  the anchor model (F2), trajectory forks (F3), dose-mod decision trees (F5), amendment
+  projection (F6). Nothing in slices 1–4 depends on them, and none of them may leak into this
+  vertical.
 
 ---
 
@@ -393,6 +457,14 @@ re-parse (the enricher runs at ingest on already-parsed artifacts).
 | **D1 — presence** (narrative mandates; grid unmarked) | **3 — gated** | Set-difference per aligned visit: LLM procedure list vs grid marks | Three-part gate below — the boundary test, made mechanical. **One-directional only.** |
 | **D3 — conditionality** | **Deferred — blocked by footnotes** | The grid cannot express conditionality except via footnote markers, and that link is destroyed at parse (brief §2d). "The grid says unconditional" is not a grid claim — it is a parse limitation | Shipping D3 now would fire a false contradiction on every footnote-conditioned cell — the noisy-direction failure the brief says kills the feature on contact. Unlocks with the footnote arc. |
 | **D5 — frequency** | **Deferred** | No parser on either side; requires arithmetic over visit sequences (cycles, unscheduled visits) | High false rate, no existing machinery. Revisit after D1/D2 prove the surfacing loop. |
+
+Sequencing note from the authoring physics (`protocol-physics-first-principles.md` §3): these
+classes sit on the **SoA↔prose seam** — where the industry's own authoring process (table and
+body text maintained by different hands; late table edits that never propagate back) provably
+concentrates contradictions. The roadmap after this arc walks the remaining seams in yield order:
+footnotes↔cells (D3's unlock), synopsis↔body, eligibility↔restatements — the same two-readings
+machinery, a new pair each time. The flagship is pointed here first not as generic "AI finds
+inconsistencies" but as detection aimed at the seam where protocols actually break.
 
 ### 5.2 The boundary test — granularity vs. contradiction, made mechanical
 
