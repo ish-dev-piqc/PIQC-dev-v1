@@ -14,6 +14,8 @@ import {
   markerCohortScope,
   leadingCohortToken,
   type TableBlock,
+  type RawColumn,
+  type ScheduleOfEventsItem,
 } from "../soaGridParser.ts";
 // Golden fixture: the real Schedule-of-Assessments table blocks Reducto returned
 // for PP06489 (39814_Protocol_V5.0.pdf, pages 53–61). Verbatim, PDF-verified.
@@ -186,6 +188,40 @@ describe("gridToScheduleOfEvents (golden file)", () => {
   });
 });
 
+// Minimal synthetic visit factory for the enrichment tests (golden file used
+// where verbatim fidelity matters; synthetic where visit alignment must be
+// controlled precisely).
+const mkVisit = (
+  name: string,
+  day: number | null,
+  labels: string[],
+  window: [number, number] = [0, 0],
+): ScheduleOfEventsItem => ({
+  visit_name: name,
+  study_day: day,
+  window_minus_days: window[0],
+  window_plus_days: window[1],
+  column_order: 0,
+  procedures: [...labels],
+  procedures_structured: labels.map((label) => ({
+    label,
+    description: null,
+    phase: null,
+    classification: null,
+    role_hint: null,
+    soa_column: name,
+    protocol_section: "Schedule of Assessments",
+    protocol_page: null,
+    conditions: [],
+    timing: null,
+    source_fields: [],
+  })),
+  visit_purpose: "",
+  schedule_variant: "",
+  cross_references: [],
+  applies_to: null,
+});
+
 describe("enrichScheduleFromLlm", () => {
   it("recovers role_hint / conditions / timing the grid can't see, by label match", () => {
     const { schedule } = gridToScheduleOfEvents(parseSoaGrid(TABLES).visits);
@@ -197,8 +233,8 @@ describe("enrichScheduleFromLlm", () => {
         ],
       },
     ];
-    const n = enrichScheduleFromLlm(schedule, llm);
-    expect(n).toBeGreaterThan(0);
+    const r = enrichScheduleFromLlm(schedule, llm);
+    expect(r.bound).toBeGreaterThan(0);
     const hema = schedule.flatMap((s) => s.procedures_structured).find((p) => p.label === "Hematology");
     expect(hema?.role_hint).toBe("Lab");
     expect((hema?.conditions as unknown[]).length).toBe(1);
@@ -212,8 +248,113 @@ describe("enrichScheduleFromLlm", () => {
     schedule[0].procedures_structured[0].role_hint = "Coordinator";
     enrichScheduleFromLlm(schedule, [{ procedures_structured: [{ label: schedule[0].procedures_structured[0].label, role_hint: "Lab" }] }]);
     expect(schedule[0].procedures_structured[0].role_hint).toBe("Coordinator"); // not overwritten
-    expect(enrichScheduleFromLlm(schedule, [])).toBe(0);
-    expect(enrichScheduleFromLlm(schedule, null)).toBe(0);
+    expect(enrichScheduleFromLlm(schedule, []).bound).toBe(0);
+    expect(enrichScheduleFromLlm(schedule, null).bound).toBe(0);
+  });
+
+  it("binds visit-variant narrative per visit — the global first-wins defect is gone", () => {
+    const schedule = [
+      mkVisit("Visit 1", 1, ["Vital signs"]),
+      mkVisit("Visit 2", 8, ["Vital signs"]),
+      mkVisit("Visit 3", 15, ["Vital signs"]),
+    ];
+    const llm = [
+      { visit_name: "Visit 1", study_day: 1, procedures_structured: [{ label: "Vital signs", timing: { label: "pre-dose serial" } }] },
+      { visit_name: "Visit 2", study_day: 8, procedures_structured: [{ label: "Vital signs", timing: { label: "single measurement" } }] },
+    ];
+    const r = enrichScheduleFromLlm(schedule, llm);
+    expect(schedule[0].procedures_structured[0].timing).toMatchObject({ label: "pre-dose serial" });
+    expect(schedule[1].procedures_structured[0].timing).toMatchObject({ label: "single measurement" });
+    // Visit 3 has no aligned LLM visit; timing varies across occurrences → NOT
+    // hoisted → stays empty and is reported unbound WITH a candidate (a bind
+    // failure made visible — never a silent wrong-visit inheritance).
+    expect(schedule[2].procedures_structured[0].timing).toBeNull();
+    expect(r.unbound).toContainEqual({ visit: "Visit 3", label: "Vital signs", had_candidate: true });
+  });
+
+  it("refuses paren-stripped sibling collisions instead of guessing (uniqueness gate)", () => {
+    const schedule = [mkVisit("Visit 1", 1, ["Pregnancy test"])];
+    const llm = [
+      {
+        visit_name: "Visit 1",
+        study_day: 1,
+        procedures_structured: [
+          { label: "Pregnancy test (serum)", description: "Serum β-hCG." },
+          { label: "Pregnancy test (urine)", description: "Urine dipstick." },
+        ],
+      },
+    ];
+    const r = enrichScheduleFromLlm(schedule, llm);
+    expect(schedule[0].procedures_structured[0].description).toBeNull(); // neither sibling guessed
+    expect(r.collisions.length).toBeGreaterThan(0);
+    expect(r.unbound[0]).toMatchObject({ label: "Pregnancy test", had_candidate: true });
+  });
+
+  it("hoists only invariant fields to visits it cannot align", () => {
+    const schedule = [mkVisit("Unlabeled Column 9", null, ["ECG"])];
+    const llm = [
+      { visit_name: "Visit 1", study_day: 1, procedures_structured: [{ label: "ECG", role_hint: "Nurse", timing: { label: "triplicate, pre-dose" } }] },
+      { visit_name: "Visit 2", study_day: 8, procedures_structured: [{ label: "ECG", role_hint: "Nurse", timing: { label: "single" } }] },
+    ];
+    enrichScheduleFromLlm(schedule, llm);
+    const proc = schedule[0].procedures_structured[0];
+    expect(proc.role_hint).toBe("Nurse"); // identical everywhere → hoisted
+    expect(proc.timing).toBeNull(); // varies across visits → aligned-visit-only
+  });
+
+  it("recovers visit_purpose, cross_references and a prose-stated window for aligned visits (E1)", () => {
+    const schedule = [mkVisit("Visit 1", 1, ["ECG"])];
+    const llm = [
+      {
+        visit_name: "Visit 1",
+        study_day: 1,
+        visit_purpose: "Establish pre-treatment baseline and confirm eligibility prior to first dose.",
+        cross_references: [{ source_section: "7.1", snippet: "ECG procedures are described in Section 7.1." }],
+        window_minus_days: 2,
+        window_plus_days: 3,
+        procedures_structured: [],
+      },
+    ];
+    const r = enrichScheduleFromLlm(schedule, llm);
+    expect(schedule[0].visit_purpose).toContain("baseline");
+    expect(schedule[0].cross_references.length).toBe(1);
+    expect(schedule[0].window_minus_days).toBe(2);
+    expect(schedule[0].window_plus_days).toBe(3);
+    expect(r.visit_purpose_recovered).toBe(1);
+    expect(r.cross_references_recovered).toBe(1);
+    expect(r.window_filled_from_narrative).toEqual(["Visit 1"]);
+  });
+
+  it("never touches a nonzero grid window — a disagreement there is divergence's finding, not recovery's", () => {
+    const schedule = [mkVisit("Visit 1", 1, ["ECG"], [1, 1])];
+    const llm = [{ visit_name: "Visit 1", study_day: 1, window_minus_days: 3, window_plus_days: 3, procedures_structured: [] }];
+    const r = enrichScheduleFromLlm(schedule, llm);
+    expect(schedule[0].window_minus_days).toBe(1);
+    expect(schedule[0].window_plus_days).toBe(1);
+    expect(r.window_filled_from_narrative).toEqual([]);
+  });
+});
+
+describe("study_day_is_approximate (E2)", () => {
+  it("flags dateless visits whose day is a sort-order invention, not a protocol claim", () => {
+    const mkCol = (idx: number, header: string, labels: string[]): RawColumn => ({
+      idx,
+      header,
+      page: 1,
+      section: "Schedule of Assessments",
+      procedures: labels.map((label) => ({ label, note: null, mark: "marked" as const })),
+      markCount: labels.length,
+    });
+    const columns = [mkCol(0, "Day 1", ["ECG", "Hematology"]), mkCol(1, "EOT", ["ECG", "Hematology"])];
+    const grouping = { visits: [{ name: "Day 1", source_idx: [0] }, { name: "EOT", source_idx: [1] }] };
+    const { schedule } = assembleVisitsFromGrouping(columns, grouping);
+    const v1 = schedule.find((s) => s.visit_name === "Day 1");
+    const eot = schedule.find((s) => s.visit_name === "EOT");
+    expect(v1?.study_day_is_approximate).toBeUndefined();
+    expect(eot?.study_day_is_approximate).toBe(true);
+    // The synthetic day is still there for ORDERING — ordering may use it; a
+    // UI claim ("Day N") may not (spec §2.9).
+    expect(typeof eot?.study_day).toBe("number");
   });
 });
 

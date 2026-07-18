@@ -131,6 +131,17 @@ export default function ExecutionChecklist({
   );
   const showEmptyFilteredState = roleFilter !== 'all' && filteredTotal === 0;
 
+  // Completeness strip inputs (spec §2.4): derived from the FULL item set for
+  // the visit (render-set invariant) — never from the filtered view.
+  const narrativeCount = useMemo(
+    () =>
+      workspace.items.filter(
+        (i) => !!i.description || i.conditions.length > 0 || !!i.timing,
+      ).length,
+    [workspace],
+  );
+  const unboundCount = workspace.items.length - narrativeCount;
+
   return (
     <section
       data-testid="vew-checklist"
@@ -234,6 +245,45 @@ export default function ExecutionChecklist({
           </div>
         );
       })}
+
+      {/* Completeness strip (narrative-first spec §2.4): the denominator is the
+          FULL requirement set for this visit — a self-referential claim about
+          PIQC's render, derived from the same set the list renders from. */}
+      {workspace.items.length > 0 && (
+        <div
+          data-testid="vew-completeness-strip"
+          className={`rounded-lg border px-4 py-2.5 text-[11px] leading-relaxed text-fg-sub ${
+            isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5'
+          }`}
+        >
+          {roleFilter === 'all' ? (
+            <>
+              All{' '}
+              <span className="font-semibold text-fg-body tabular-nums">
+                {workspace.items.length}
+              </span>{' '}
+              requirements for this visit are shown ·{' '}
+              <span className="tabular-nums">{narrativeCount}</span> with narrative
+              {unboundCount > 0 && (
+                <>
+                  {' '}·{' '}
+                  <span className="font-semibold text-amber-700 dark:text-amber-400 tabular-nums">
+                    {unboundCount}
+                  </span>{' '}
+                  without — verify those against the protocol source
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              Showing <span className="tabular-nums">{filteredTotal}</span> of{' '}
+              <span className="tabular-nums">{workspace.items.length}</span> requirements for
+              this role — switch to <span className="font-semibold">All</span> for the
+              complete set.
+            </>
+          )}
+        </div>
+      )}
     </section>
   );
 }
@@ -262,6 +312,7 @@ function ChecklistItemRow({
   const isLight = theme === 'light';
 
   const [conditionsOpen, setConditionsOpen] = useState(false);
+  const firstConditionText = item.conditions[0]?.condition_text ?? '';
   const [menuOpen, setMenuOpen] = useState(false);
   const menuBtnRef = useRef<HTMLButtonElement>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
@@ -353,8 +404,25 @@ function ChecklistItemRow({
               )}
           </div>
 
-          {item.description && (
-            <p className="text-fg-sub text-xs mt-1 leading-relaxed">{item.description}</p>
+          {item.description ? (
+            /* Narrative promoted to the readable second line (narrative-first
+               spec §2.3) — it is the substance the validators hand-copied; it
+               must not read as metadata. */
+            <p className="text-fg-body text-sm mt-1 leading-relaxed">{item.description}</p>
+          ) : (
+            item.conditions.length === 0 &&
+            !item.timing && (
+              /* Silence ≠ emptiness (spec §2.4): a row with NO bound narrative
+                 says so explicitly. Wording is "no narrative found" — a claim
+                 about PIQC's recovery, never about the protocol. */
+              <p
+                data-testid="vew-narrative-unbound"
+                className="text-fg-muted text-[11px] mt-1 italic leading-relaxed"
+              >
+                No narrative found for this item — showing the SoA entry only. Verify against
+                the protocol source.
+              </p>
+            )
           )}
 
           {hasDrift && item.derived_text && (
@@ -437,14 +505,24 @@ function ChecklistItemRow({
                 type="button"
                 onClick={() => setConditionsOpen((p) => !p)}
                 aria-expanded={conditionsOpen}
-                className={`inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider rounded-md border px-1.5 py-0.5 ${
+                className={`inline-flex items-center gap-1 text-[11px] font-semibold rounded-md border px-1.5 py-0.5 max-w-full ${
                   isLight
                     ? 'text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100'
                     : 'text-amber-400 bg-amber-400/10 border-amber-400/20 hover:bg-amber-400/15'
                 }`}
               >
-                <GitFork size={10} aria-hidden />
-                ↳ {item.conditions.length === 1 ? 'If' : `${item.conditions.length} conditions`}
+                <GitFork size={10} aria-hidden className="flex-shrink-0" />
+                {/* GATE states its gate at rest (narrative-first spec §2.3):
+                    the first condition is previewed on the chip; the full
+                    if/then callouts stay behind the toggle. */}
+                <span className="uppercase tracking-wider flex-shrink-0">
+                  ↳ {item.conditions.length === 1 ? 'If' : `${item.conditions.length} conditions`}
+                </span>
+                {firstConditionText && (
+                  <span className="font-medium truncate max-w-[240px]">
+                    · {firstConditionText}
+                  </span>
+                )}
               </button>
               {conditionsOpen && (
                 <div className="mt-2 space-y-2">

@@ -2252,13 +2252,17 @@ export async function processIngestCompletion(
         // each visit's applies_to is derived from its source table heading(s) ∪
         // "[X only]" markers. Empty list → markers-only (unchanged).
         const { schedule, citations } = assembleVisitsFromGrouping(columns, grouping, cohortList, cohortAliasMap);
-        const enrichedCount = enrichScheduleFromLlm(schedule, llmSchedule);
+        const recovery = enrichScheduleFromLlm(schedule, llmSchedule);
         extractedFields.schedule_of_events = schedule;
         const citMap = (extractedFields._reducto_citations && typeof extractedFields._reducto_citations === "object")
           ? extractedFields._reducto_citations as Record<string, unknown>
           : {};
         citMap.schedule_of_events = citations;
         extractedFields._reducto_citations = citMap;
+        // Narrative-recovery reconcile record — persisted like _cohort_reconciliation
+        // (1c below), so a silent bind failure becomes a visible, countable one. The
+        // guarantee: narrative binds OR the gap surfaces; never silent loss.
+        extractedFields._narrative_recovery = recovery;
         // A lossy parse (unknown mark glyph) still ships its visits, but is flagged for review.
         if (guards.selfConsistency < 0.95 && soaMethod === "grid_grouped") soaMethod = "grid_ungrouped";
         console.log("[ingest] soa_hybrid_used", {
@@ -2267,7 +2271,10 @@ export async function processIngestCompletion(
           visits: schedule.length,
           method: soaMethod,
           self_consistency: Number(guards.selfConsistency.toFixed(2)),
-          enriched: enrichedCount,
+          enriched: recovery.bound,
+          narrative_unbound: recovery.unbound.length,
+          windows_from_narrative: recovery.window_filled_from_narrative.length,
+          visit_purpose_recovered: recovery.visit_purpose_recovered,
           notes: guards.notes,
         });
       } else {

@@ -14,7 +14,7 @@
 // grade confidence and decide fallback. Pure, no I/O, vitest-importable.
 // =============================================================================
 
-import { canonicalVisitName } from "./visitNameNormalize.ts";
+import { canonicalVisitName, normalizeVisitName } from "./visitNameNormalize.ts";
 
 export type CellMark = "marked" | "conditional" | "empty" | "uncertain";
 
@@ -611,6 +611,10 @@ export interface ScheduleOfEventsItem {
    * single-schedule protocols get `null` everywhere (no behavior change).
    */
   applies_to: string[] | null;
+  /** true → this visit has no protocol-stated day; `study_day` is a synthetic
+   * sort anchor (monotonic approximate-day pass), NOT a protocol claim. UI must
+   * not display it as "Day N" (spec §2.9 — ordering may use it; a claim may not). */
+  study_day_is_approximate?: boolean;
 }
 
 /** Normalized citation shape matching ingestPipeline's normalizeReductoCitation output. */
@@ -1027,6 +1031,7 @@ export function assembleVisitsFromGrouping(
       cross_references: [],
       applies_to,
     };
+    if (day.approximate) item.study_day_is_approximate = true;
     schedule.push(item);
     isApproxDay.set(item, day.approximate);
     citations.push({
@@ -1066,71 +1071,348 @@ export function assembleVisitsFromGrouping(
   return { schedule, citations };
 }
 
-/** Normalize a procedure label for cross-source matching (drop parentheticals/footnotes/case). */
-function normLabel(s: string): string {
-  return clean(s).toLowerCase().replace(/\([^)]*\)/g, "").replace(/[ª²³¹º⁰-⁹]/g, "").replace(/\s+/g, " ").trim();
+/** Full-fidelity label key — case/whitespace/footnote-superscript folding with
+ * PARENTHETICALS PRESERVED, so sibling procedures like "Pregnancy test (serum)"
+ * and "Pregnancy test (urine)" keep distinct keys. */
+function normLabelFull(s: string): string {
+  return clean(s).toLowerCase().replace(/[ª²³¹º⁰-⁹]/g, "").replace(/\s+/g, " ").trim();
+}
+
+/** Paren-stripped key (the historical normLabel behavior). It maps distinct
+ * sibling procedures onto ONE key, so it is only ever used behind a both-sides
+ * uniqueness gate (tier 3) — never as the primary join. */
+function normLabelLoose(s: string): string {
+  return normLabelFull(s).replace(/\([^)]*\)/g, "").replace(/\s+/g, " ").trim();
+}
+
+/** One LLM procedure occurrence (label × the LLM visit that carries it). */
+interface LlmProcOccurrence {
+  visitIdx: number;
+  rec: Record<string, unknown>;
+}
+
+/** Per-procedure narrative fields the enricher may fill (fill-only-empty). */
+const PROC_NARRATIVE_FIELDS = ["role_hint", "conditions", "timing", "source_fields", "description"] as const;
+type ProcNarrativeField = (typeof PROC_NARRATIVE_FIELDS)[number];
+
+const ALL_PROC_FIELDS: ReadonlySet<ProcNarrativeField> = new Set(PROC_NARRATIVE_FIELDS);
+
+/** Fill empty narrative fields on a grid procedure from an LLM record, restricted
+ * to `allowed` (the invariance gate for global binds). Mirrors the historical
+ * fill-only-empty semantics exactly; a grid-set value is never overwritten. */
+function fillProcFromRec(
+  proc: ScheduleProcedure,
+  rec: Record<string, unknown>,
+  allowed: ReadonlySet<ProcNarrativeField>,
+): boolean {
+  let touched = false;
+  if (allowed.has("role_hint") && proc.role_hint == null && typeof rec.role_hint === "string" && rec.role_hint.trim()) {
+    proc.role_hint = rec.role_hint;
+    touched = true;
+  }
+  if (allowed.has("conditions") && (!proc.conditions || proc.conditions.length === 0) && Array.isArray(rec.conditions) && rec.conditions.length > 0) {
+    proc.conditions = rec.conditions;
+    touched = true;
+  }
+  if (allowed.has("timing") && proc.timing == null && rec.timing && typeof rec.timing === "object") {
+    proc.timing = rec.timing;
+    touched = true;
+  }
+  if (allowed.has("source_fields") && (!proc.source_fields || proc.source_fields.length === 0) && Array.isArray(rec.source_fields) && rec.source_fields.length > 0) {
+    proc.source_fields = rec.source_fields;
+    touched = true;
+  }
+  if (allowed.has("description") && proc.description == null && typeof rec.description === "string" && rec.description.trim()) {
+    proc.description = rec.description;
+    touched = true;
+  }
+  return touched;
+}
+
+/** Stable value fingerprint for the invariance gate (absent → null). */
+function fieldFingerprint(rec: Record<string, unknown>, field: ProcNarrativeField): string {
+  return JSON.stringify(rec[field] ?? null);
+}
+
+export interface NarrativeRecoveryUnbound {
+  visit: string;
+  label: string;
+  /** true → an LLM record with a matching label existed somewhere but did not
+   * bind (a bind failure); false → the extract has no candidate at all. */
+  had_candidate: boolean;
+}
+
+/** The reconcile record for narrative recovery — persisted on
+ * documents.extracted_fields (like `_cohort_reconciliation`) so silent loss
+ * becomes visible, countable loss. */
+export interface NarrativeRecovery {
+  /** grid procedures that received at least one narrative field */
+  bound: number;
+  /** grid procedures left with NO narrative (no description/conditions/timing) */
+  unbound: NarrativeRecoveryUnbound[];
+  /** ambiguous keys refused by a uniqueness gate — never bound, never guessed */
+  collisions: string[];
+  /** visits whose ±window was recovered from the narrative reading (grid header stated none) */
+  window_filled_from_narrative: string[];
+  visit_purpose_recovered: number;
+  cross_references_recovered: number;
+}
+
+interface LlmVisitEntry {
+  raw: Record<string, unknown>;
+  nameKey: string | null;
+  studyDay: number | null;
+  procs: Record<string, unknown>[];
 }
 
 /**
- * The SoA grid gives the verbatim per-visit checklist (which the LLM collapsed)
- * but not the per-procedure metadata the LLM CAN infer — role_hint (drives the
- * role-filtered views), conditional rules, timing windows, source-field
- * scaffolds. This recovers those by matching each grid procedure to the LLM's
- * procedures_structured by normalized label (a label like "Hematology" has the
- * same role wherever it appears), filling ONLY fields the grid left empty.
- * Classification/phase are deliberately NOT inherited — those stay deterministic
- * (the grid's "(X)" + buildPersistPayloadForVisit's heuristic). Mutates in place;
- * returns the number of procedures enriched. Pure (no I/O), vitest-importable.
+ * Recover per-procedure and per-visit narrative from the pre-overwrite LLM
+ * extraction into the deterministic grid schedule. Replaces the historical
+ * single global first-wins label map, which carried two live defects:
+ *   (1) global first-wins — a procedure recurring across visits inherited the
+ *       FIRST visit's conditions/timing (narrative attached to the wrong visit);
+ *   (2) paren-stripped keys — distinct siblings ("Pregnancy test (serum)" vs
+ *       "(urine)") collided into one key and first-wins picked a winner silently.
+ *
+ * Precision-tiered design (narrative-first spec §3.4 — correctness before
+ * coverage; every non-bind is surfaced, never guessed):
+ *   T1  per-visit map, full-fidelity keys (parens preserved), on visits aligned
+ *       by normalized visit name (fallback: exact non-approximate study_day) —
+ *       binds ALL fields;
+ *   T2  invariant-hoisted global map — a field binds globally ONLY when its
+ *       value is deep-equal across EVERY occurrence of that label in the LLM
+ *       extract (a single occurrence is trivially invariant);
+ *   T3  paren-stripped fallback, gated on uniqueness on BOTH sides (per-visit
+ *       first; then global, hoisted fields only). Ambiguity → no bind + flag.
+ * Visit-level fills for aligned pairs: visit_purpose, cross_references, and the
+ * ±window when the grid header stated none (grid 0/0 = not-found; a nonzero
+ * grid window is NEVER touched — a narrative disagreement there is divergence
+ * detection's finding, not recovery's).
+ * Mutates in place; returns the NarrativeRecovery reconcile record. Pure
+ * (no I/O), vitest-importable.
  */
 export function enrichScheduleFromLlm(
   gridSchedule: ScheduleOfEventsItem[],
   llmSchedule: unknown,
-): number {
-  const byLabel = new Map<string, Record<string, unknown>>();
+): NarrativeRecovery {
+  const recovery: NarrativeRecovery = {
+    bound: 0,
+    unbound: [],
+    collisions: [],
+    window_filled_from_narrative: [],
+    visit_purpose_recovered: 0,
+    cross_references_recovered: 0,
+  };
+
+  // ---- normalize the LLM side --------------------------------------------
+  const llmVisits: LlmVisitEntry[] = [];
   if (Array.isArray(llmSchedule)) {
     for (const v of llmSchedule) {
-      const procs = (v as { procedures_structured?: unknown })?.procedures_structured;
-      if (!Array.isArray(procs)) continue;
-      for (const p of procs) {
-        if (!p || typeof p !== "object") continue;
-        const rec = p as Record<string, unknown>;
-        const key = normLabel(typeof rec.label === "string" ? rec.label : "");
-        if (key && !byLabel.has(key)) byLabel.set(key, rec);
-      }
+      if (!v || typeof v !== "object") continue;
+      const raw = v as Record<string, unknown>;
+      const name = typeof raw.visit_name === "string" ? raw.visit_name.trim() : "";
+      const day = typeof raw.study_day === "number" && Number.isFinite(raw.study_day)
+        ? Math.trunc(raw.study_day)
+        : null;
+      const procs = Array.isArray(raw.procedures_structured)
+        ? (raw.procedures_structured as unknown[]).filter(
+          (p): p is Record<string, unknown> =>
+            !!p && typeof p === "object" && typeof (p as { label?: unknown }).label === "string",
+        )
+        : [];
+      llmVisits.push({ raw, nameKey: name ? normalizeVisitName(name) : null, studyDay: day, procs });
     }
   }
-  if (byLabel.size === 0) return 0;
+  if (llmVisits.length === 0) return recovery;
 
-  let enriched = 0;
+  // ---- global occurrence census (T2 invariance gate + T3 global census) ---
+  const occByFull = new Map<string, LlmProcOccurrence[]>();
+  for (let i = 0; i < llmVisits.length; i++) {
+    for (const rec of llmVisits[i].procs) {
+      const key = normLabelFull(String(rec.label));
+      if (!key) continue;
+      const list = occByFull.get(key);
+      if (list) list.push({ visitIdx: i, rec });
+      else occByFull.set(key, [{ visitIdx: i, rec }]);
+    }
+  }
+  // Fields invariant across EVERY occurrence of a label may bind globally; a
+  // varying field binds only within its own aligned visit. This is what
+  // recovers the common "described once in prose, applies everywhere" case
+  // that plain per-visit scoping would lose — at zero wrong-visit risk.
+  const hoisted = new Map<string, { rec: Record<string, unknown>; allowed: Set<ProcNarrativeField> }>();
+  for (const [key, occs] of occByFull) {
+    const allowed = new Set<ProcNarrativeField>();
+    for (const f of PROC_NARRATIVE_FIELDS) {
+      const fp = fieldFingerprint(occs[0].rec, f);
+      if (occs.every((o) => fieldFingerprint(o.rec, f) === fp)) allowed.add(f);
+    }
+    if (allowed.size > 0) hoisted.set(key, { rec: occs[0].rec, allowed });
+  }
+  // T3 global census: loose key → the set of full keys it covers, per side.
+  const llmLooseFulls = new Map<string, Set<string>>();
+  for (const key of occByFull.keys()) {
+    const loose = normLabelLoose(key);
+    if (!loose) continue;
+    const set = llmLooseFulls.get(loose);
+    if (set) set.add(key);
+    else llmLooseFulls.set(loose, new Set([key]));
+  }
+  const gridLooseFulls = new Map<string, Set<string>>();
   for (const visit of gridSchedule) {
     for (const proc of visit.procedures_structured) {
-      const match = byLabel.get(normLabel(proc.label));
-      if (!match) continue;
-      let touched = false;
-      if (proc.role_hint == null && typeof match.role_hint === "string") {
-        proc.role_hint = match.role_hint;
-        touched = true;
-      }
-      if ((!proc.conditions || proc.conditions.length === 0) && Array.isArray(match.conditions) && match.conditions.length > 0) {
-        proc.conditions = match.conditions;
-        touched = true;
-      }
-      if (proc.timing == null && match.timing && typeof match.timing === "object") {
-        proc.timing = match.timing;
-        touched = true;
-      }
-      if ((!proc.source_fields || proc.source_fields.length === 0) && Array.isArray(match.source_fields) && match.source_fields.length > 0) {
-        proc.source_fields = match.source_fields;
-        touched = true;
-      }
-      if (proc.description == null && typeof match.description === "string" && match.description.trim()) {
-        proc.description = match.description;
-        touched = true;
-      }
-      if (touched) enriched += 1;
+      const loose = normLabelLoose(proc.label);
+      if (!loose) continue;
+      const set = gridLooseFulls.get(loose);
+      if (set) set.add(normLabelFull(proc.label));
+      else gridLooseFulls.set(loose, new Set([normLabelFull(proc.label)]));
     }
   }
-  return enriched;
+
+  // ---- visit alignment (name key first, exact real study_day fallback) ----
+  const llmByNameKey = new Map<string, number[]>();
+  const llmByDay = new Map<number, number[]>();
+  for (let i = 0; i < llmVisits.length; i++) {
+    const { nameKey, studyDay } = llmVisits[i];
+    if (nameKey) {
+      const l = llmByNameKey.get(nameKey);
+      if (l) l.push(i);
+      else llmByNameKey.set(nameKey, [i]);
+    }
+    if (studyDay != null) {
+      const l = llmByDay.get(studyDay);
+      if (l) l.push(i);
+      else llmByDay.set(studyDay, [i]);
+    }
+  }
+  const alignLlmVisit = (visit: ScheduleOfEventsItem): LlmVisitEntry | null => {
+    const key = visit.visit_name ? normalizeVisitName(visit.visit_name) : "";
+    const byName = key ? llmByNameKey.get(key) : undefined;
+    if (byName && byName.length === 1) return llmVisits[byName[0]];
+    // A synthetic (approximate) day must not drive alignment — it is PIQC's
+    // sort-order invention, not the protocol's claim (spec §2.9).
+    if (typeof visit.study_day === "number" && !visit.study_day_is_approximate) {
+      const byDay = llmByDay.get(visit.study_day);
+      if (byDay && byDay.length === 1) return llmVisits[byDay[0]];
+    }
+    return null;
+  };
+
+  // ---- bind loop ----------------------------------------------------------
+  for (const visit of gridSchedule) {
+    const aligned = alignLlmVisit(visit);
+
+    // Per-visit T1 map (full keys) + T3a loose map, with in-visit collision refusal.
+    const visitByFull = new Map<string, Record<string, unknown> | "collision">();
+    const visitByLoose = new Map<string, Record<string, unknown>[]>();
+    if (aligned) {
+      for (const rec of aligned.procs) {
+        const key = normLabelFull(String(rec.label));
+        if (!key) continue;
+        const existing = visitByFull.get(key);
+        if (existing === undefined) visitByFull.set(key, rec);
+        else if (existing !== "collision" && JSON.stringify(existing) !== JSON.stringify(rec)) {
+          visitByFull.set(key, "collision");
+          recovery.collisions.push(`${visit.visit_name} :: ${key}`);
+        }
+        const loose = normLabelLoose(String(rec.label));
+        if (loose) {
+          const l = visitByLoose.get(loose);
+          if (l) l.push(rec);
+          else visitByLoose.set(loose, [rec]);
+        }
+      }
+    }
+    // Grid-side loose census within this visit (T3a uniqueness gate).
+    const gridVisitLooseCount = new Map<string, number>();
+    for (const proc of visit.procedures_structured) {
+      const loose = normLabelLoose(proc.label);
+      if (loose) gridVisitLooseCount.set(loose, (gridVisitLooseCount.get(loose) ?? 0) + 1);
+    }
+
+    for (const proc of visit.procedures_structured) {
+      const full = normLabelFull(proc.label);
+      const loose = normLabelLoose(proc.label);
+      let touched = false;
+
+      // T1 — aligned visit, full-fidelity key: bind everything.
+      const t1 = visitByFull.get(full);
+      if (t1 && t1 !== "collision") {
+        touched = fillProcFromRec(proc, t1, ALL_PROC_FIELDS) || touched;
+      }
+      // T2 — invariant-hoisted global bind (only fields identical everywhere).
+      const t2 = hoisted.get(full);
+      if (t2) {
+        touched = fillProcFromRec(proc, t2.rec, t2.allowed) || touched;
+      }
+      // T3a — per-visit paren-stripped, unique on both sides in THIS visit.
+      if (loose && aligned) {
+        const cands = visitByLoose.get(loose);
+        if (cands && cands.length === 1 && gridVisitLooseCount.get(loose) === 1 && normLabelFull(String(cands[0].label)) !== full) {
+          touched = fillProcFromRec(proc, cands[0], ALL_PROC_FIELDS) || touched;
+        } else if (cands && cands.length > 1) {
+          recovery.collisions.push(`${visit.visit_name} :: ${loose} (loose ×${cands.length})`);
+        }
+      }
+      // T3b — global paren-stripped, unique on both sides, hoisted fields only.
+      if (loose) {
+        const llmFulls = llmLooseFulls.get(loose);
+        const gridFulls = gridLooseFulls.get(loose);
+        if (llmFulls && llmFulls.size === 1 && gridFulls && gridFulls.size === 1) {
+          const target = [...llmFulls][0];
+          if (target !== full) {
+            const h = hoisted.get(target);
+            if (h) touched = fillProcFromRec(proc, h.rec, h.allowed) || touched;
+          }
+        }
+      }
+
+      if (touched) recovery.bound += 1;
+      const hasNarrative = (typeof proc.description === "string" && proc.description.trim().length > 0) ||
+        (Array.isArray(proc.conditions) && proc.conditions.length > 0) ||
+        proc.timing != null;
+      if (!hasNarrative) {
+        recovery.unbound.push({
+          visit: visit.visit_name,
+          label: proc.label,
+          had_candidate: occByFull.has(full) || (loose ? llmLooseFulls.has(loose) : false),
+        });
+      }
+    }
+
+    // ---- visit-level fills (aligned pairs only) ---------------------------
+    if (aligned) {
+      const raw = aligned.raw;
+      if (visit.visit_purpose === "" && typeof raw.visit_purpose === "string" && raw.visit_purpose.trim()) {
+        visit.visit_purpose = raw.visit_purpose.trim();
+        recovery.visit_purpose_recovered += 1;
+      }
+      if (
+        (!Array.isArray(visit.cross_references) || visit.cross_references.length === 0) &&
+        Array.isArray(raw.cross_references) && raw.cross_references.length > 0
+      ) {
+        visit.cross_references = raw.cross_references;
+        recovery.cross_references_recovered += 1;
+      }
+      // E1 — window recovery: grid 0/0 means the header stated none (parser
+      // default), NOT a zero-day window; the narrative reading may carry a
+      // prose-stated window. A nonzero grid window is never touched — if the
+      // two readings disagree there, that is divergence detection's finding.
+      const lm = typeof raw.window_minus_days === "number" && Number.isFinite(raw.window_minus_days)
+        ? Math.max(0, Math.trunc(raw.window_minus_days))
+        : null;
+      const lp = typeof raw.window_plus_days === "number" && Number.isFinite(raw.window_plus_days)
+        ? Math.max(0, Math.trunc(raw.window_plus_days))
+        : null;
+      if (visit.window_minus_days === 0 && visit.window_plus_days === 0 && ((lm ?? 0) > 0 || (lp ?? 0) > 0)) {
+        visit.window_minus_days = lm ?? 0;
+        visit.window_plus_days = lp ?? 0;
+        recovery.window_filled_from_narrative.push(visit.visit_name);
+      }
+    }
+  }
+
+  return recovery;
 }
 
 export interface SoaGateDecision {
