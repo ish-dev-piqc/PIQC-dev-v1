@@ -219,6 +219,31 @@ Work out:
   overflow menu) and the notice rail — don't invent a surface.
 - **Wording honesty.** PIQC shows **both quoted sources side by side** and says what it compared. It
   **never adjudicates which one is right** and never auto-resolves. The human clarifies with the sponsor.
+**🔒 LOCKED — who is notified, and who talks to the sponsor (founder, 2026-07-18).**
+When PIQC surfaces a discrepancy it **notifies the protocol user (coordinator / reviewer) for
+clarification. The user then takes it to the sponsor.** PIQC **never contacts the sponsor**, never
+sends anything outward, and never adjudicates. PIQC's job ends at *"here are two readings of your
+protocol that disagree, here are both quotes, this needs clarifying."* This is the advisory-only
+doctrine applied to divergence: PIQC finds and cites; the human carries it.
+
+Design consequences you must work out:
+- **The discrepancy needs somewhere to live between raised and resolved.** The user leaves PIQC to
+  ask the sponsor and comes back days later — possibly a different user. Propose the **minimum**
+  lifecycle that survives that round trip (candidate: `open → acknowledged / raised-with-sponsor →
+  resolved`, with the resolution being a human note + optional protocol-amendment link). Argue for
+  the smallest thing that works; do not invent a ticketing system inside PIQC.
+- **⚠️ The real failure mode: a discrepancy nobody can close becomes permanent noise.** If there is
+  no way to mark it handled, the notice rail accumulates unresolvable flags and turns into the
+  always-on wallpaper the no-wallpaper rule exists to prevent — the feature dies the same death,
+  just slower. **Closability is a correctness requirement here, not a polish item.**
+- **Who may close it, and does closing it hide the evidence?** An audit should still be able to see
+  that a divergence existed and how it was dispositioned. Resolution should annotate, not erase.
+- **Open trade (recommend, do not assume):** should PIQC **draft the clarification query** the user
+  sends the sponsor — pre-filled with both verbatim quotes, sections, and pages? It is squarely
+  in-doctrine (PIQC drafts, the human approves and sends) and collapses real cognitive load, since
+  the user must compose that question anyway. It is also scope the founder has not asked for. Weigh
+  it; **any version stops at a drafted, human-owned, human-sent artifact — no outbound send.**
+
 - **Fit with the S1 notice spine.** Is this a new notice family (intra-document sibling of
   `cross_document_divergence`)? Does it obey the no-wallpaper rule?
 
