@@ -147,7 +147,7 @@ Proven in-repo, and the template for everything here:
 
 ---
 
-## 5. YOUR MANDATE — five deliverables
+## 5. YOUR MANDATE — five deliverables, under one governing frame (§5.6)
 
 ### 5.1 Narrative-type ontology for a worksheet
 Enumerate the categories of narrative context a coordinator worksheet needs — candidates: procedure
@@ -224,6 +224,78 @@ Work out:
 
 ---
 
+### 5.6 ⭐ THE PHYSICS OF THE PROTOCOL — and the context-bloat constraint
+
+**Read this as the governing frame for §5.2, not a sixth separate deliverable.** Founder direction,
+2026-07-18:
+
+- Discover the **physics of the protocol**; do **not** touch the compliant static view it delivers —
+  that view is a user requirement for generating quality data.
+- Frame a protocol as **a static document waiting for a human to unlock its physics, then re-lock it
+  into an executable view.** Explore what PIQC can unlock in that gap.
+- **Question the assumption that the view must always be locked.**
+- Explore whether **the view can change for the human without sacrificing the compliance requirements
+  for the day/visit in question.**
+- ⚠️ Foreseeable problem: **context bloat inside the current PIQC visualization.** More context is
+  genuinely valuable here — but it risks bad UI by reverting back toward protocol density.
+- Explore how to **minimize context within the SoA** — treat it as **a bubble to be poked** for
+  additional context only when the user needs it.
+
+**What "physics" names.** The static document states *what*. The physics is the **dependency
+structure underneath**: what a procedure is conditional on, what a window is anchored to, what a
+footnote modifies, what changes for Cohort B, what must precede what within the visit. Today the
+coordinator reads the document, reconstructs those dependencies in their head, and re-locks them into
+a worksheet by hand. **That reconstruction is precisely the labor PIQC is failing to do** — and the
+narrative recovery in §2 is what makes the physics observable at all, because the dependencies live
+in `conditions[]`, `timing`, `cross_references[]`, and footnotes.
+
+**The two-layer split this implies (adopt, sharpen, or refute):**
+- **Static compliant layer — INVARIANT.** The SoA view and the *requirement set* for a given visit.
+  Never adapts, never silently drops members, is what an audit reconstructs against.
+- **Physics layer — NAVIGABLE.** The dependency structure over that set: what can be unlocked,
+  probed, re-ordered, and progressively disclosed for the human in front of it.
+
+Under this split the founder's question resolves cleanly: **the presentation of the set may adapt;
+the membership of the set may not.** Say whether you accept that reduction.
+
+**⚠️ THE HARD TENSION — resolve it explicitly, do not paper over it.** Three constraints in this
+brief pull against each other:
+1. **Completeness** (§3) — nothing protocol-mandated may be missing for the visit.
+2. **Adaptive view** (§5.6) — the view may change for the human.
+3. **Minimal context / poke-the-bubble** (§5.6) — most context stays hidden until asked for.
+
+A view that adapts *and* hides by default can **look complete while being incomplete, and the user
+cannot tell the difference.** Candidate resolution: hiding is legal only when what is hidden is still
+**represented as present** — an unexpanded affordance is itself a claim that something is there —
+and never legal when the content is simply absent from the surface. Name your resolution **and its
+failure mode.**
+
+**⚠️ THE AUDIT-RECONSTRUCTION CONSTRAINT (not yet named anywhere else).** If the view differs per
+user or per moment, PIQC must still be able to answer *"what did the coordinator see when they
+executed this visit?"* An adaptive view that leaves no trace is a regulatory problem, not only a
+design one. Either say what the adaptive layer must record, or argue why adaptation that **only
+re-orders and discloses — never filters membership** — needs no trace. This is a real constraint on
+how far "the view need not be locked" can go.
+
+**"Poke the bubble" — design it concretely.** The **SoA cell** is the natural probe target: it is
+already the atom the user points at, and already the join key between grid and narrative. Work out:
+- What a poke returns (the cell's narrative: description, conditions, timing, cohort scope, footnote
+  caveat, provenance) and in what order.
+- What tier is **always** visible vs. revealed on demand — and whether some classes (a hard
+  conditional, a tight window) are too consequential to hide behind a poke.
+- **How a cell signals it has depth without every cell shouting.** A grid where every cell is
+  decorated is exactly the density we are escaping.
+- Honest constraint: a cell with **no bound narrative** must look different from one whose narrative
+  is merely **collapsed**. Silence and emptiness are not the same claim — this is where the §6
+  reconcile signal earns its place in the UI, not just the pipeline.
+
+**The bloat test — apply it to your own design.** Compare against the failure being replaced: the
+coordinator hand-copying from the PDF. **If the worksheet is a linearized reprint of the protocol's
+visit section, the density has been moved, not collapsed.** State what your design *removes* from the
+reading path, not only what it adds.
+
+---
+
 ## 6. The candidate build slice you are re-ranking
 
 "Recover the narrative PIQC already pays for" — no new schema, no re-parse:
@@ -246,7 +318,7 @@ retrofitted.
 
 ## 7. What to return
 
-Write `plans/fable/narrative-first-worksheet-spec.md` on this branch containing §5.1–5.5, with:
+Write `plans/fable/narrative-first-worksheet-spec.md` on this branch containing §5.1–5.6, with:
 - explicit **trade space + recommendation** for each product-shaped call (not a locked answer)
 - a **litmus audit** of every surface you propose
 - what you'd **cut** if forced to ship one thing
