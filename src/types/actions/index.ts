@@ -115,9 +115,10 @@ export type NoticeStatus = 'active' | 'dismissed';
  * be dropped — same anti-stale-whitelist discipline as the destination map).
  */
 export type NoticeType =
+  | 'cross_document_divergence'
   | 'tight_visit_window'
   | 'amendment_in_force'
-  | 'endpoint_sdv'
+  | 'unwindowed_visit'
   | 'low_confidence_extraction';
 
 /** Mirror of protocol_notices. */
