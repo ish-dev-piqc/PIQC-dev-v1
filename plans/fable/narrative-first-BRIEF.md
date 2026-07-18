@@ -238,11 +238,33 @@ Design consequences you must work out:
   just slower. **Closability is a correctness requirement here, not a polish item.**
 - **Who may close it, and does closing it hide the evidence?** An audit should still be able to see
   that a divergence existed and how it was dispositioned. Resolution should annotate, not erase.
-- **Open trade (recommend, do not assume):** should PIQC **draft the clarification query** the user
-  sends the sponsor — pre-filled with both verbatim quotes, sections, and pages? It is squarely
-  in-doctrine (PIQC drafts, the human approves and sends) and collapses real cognitive load, since
-  the user must compose that question anyway. It is also scope the founder has not asked for. Weigh
-  it; **any version stops at a drafted, human-owned, human-sent artifact — no outbound send.**
+**🔒 LOCKED — PIQC DRAFTS the clarification query (founder, 2026-07-18).** The "for" case won: the
+user must compose that question anyway, and composing it sends them back into the PDF to collect
+citations — the exact failure this whole arc exists to kill. So PIQC produces a **full reference
+query**: both readings quoted verbatim, with section + page for each, and a plain statement of what
+was compared. Useful to the user **up front**, at the moment of surfacing.
+Bounds that do not move: it is a **draft**, human-owned and **human-sent**. **No outbound send from
+PIQC, ever. No sponsor contact. No auto-resolution.** The draft asserts nothing about which reading
+is correct — it asks. Design the wording so a coordinator can send it unedited without PIQC having
+taken a position.
+
+**🔒 DESIGN BOTH READING POSTURES — coordinator AND auditor (founder, 2026-07-18; build-decision
+deferred).** Design is in scope for this pass; *which ships in v1 is decided after you return.*
+The two personas read with different postures and this is a **data-shape** question, not a render
+question:
+- **Coordinator (Site/VEW)** — *"what do I do at this visit?"* Per-visit, forward-looking, divergence
+  arrives anchored to the visit in hand.
+- **Auditor (SOTR / protocol review)** — *"is this protocol internally consistent?"* Whole-document,
+  **no visit in hand**, wants divergences grouped by class and severity across the entire protocol.
+  Finding contradictions *is* this persona's job, so divergence may be **more native here than in the
+  worksheet.**
+
+⚠️ **Do not design the divergence surface only against the worksheet.** A per-visit-anchored shape
+retrofits badly into a protocol-wide review, and mode isolation (Site / SOTR never import from each
+other) means the retrofit is real work, not a CSS change. State what the two postures **share at the
+data layer** (one divergence record, both surfaces read it) versus what is genuinely per-surface.
+Note the known constraint: SOTR's `WorksheetItemRow.formatVisit()` prints only "… · 2 procedures"
+today, so the auditor surface needs its own small renderer change — cost that honestly.
 
 - **Fit with the S1 notice spine.** Is this a new notice family (intra-document sibling of
   `cross_document_divergence`)? Does it obey the no-wallpaper rule?
