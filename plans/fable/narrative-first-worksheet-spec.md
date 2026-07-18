@@ -41,6 +41,12 @@ The three calls that shape everything below:
 If forced to ship exactly one thing: the narrative-recovery slice (§7). It is the load-bearing
 prerequisite of everything else, including the flagship.
 
+A post-delivery founder question — *does this generalize to any protocol and any reader, or is it
+tied to the interaction that triggered the arc?* — is answered and made binding in **§10**: the
+design is universal by construction (the litmus, applied at design level, *is* the universality
+guarantee), with two silences patched there (the `llm_fallback` path; the ontology restated as a
+universal trunk with per-persona projections).
+
 ---
 
 ## 1. (§5.1) The narrative ontology — five buckets, keyed to coordinator decisions
@@ -61,6 +67,11 @@ of twenty per-field judgments.
 Rationale for the one asymmetry: GATE and CLOCK change *what the coordinator does or when* —
 hiding them creates deviations. ACT and TRACE explain and evidence — hiding them creates clicks.
 A click is recoverable; a deviation is not. That is the whole tiering argument.
+
+Scope note (made precise in §10.3): the five buckets are **universal properties of protocol
+content** — any protocol's narrative decomposes into them regardless of who reads it. What is
+persona-specific is only the **visibility-default column**, which is the acting-surface
+(coordinator) projection; other surfaces re-project the same buckets (§5.3, §10.3).
 
 **v1 vs deferred:**
 - **v1 populates all five buckets** — every field above already exists end-to-end
@@ -597,6 +608,85 @@ sequencing (recover → diverge → footnotes) is the dependency order, not just
    record; this is pure sequencing. My lean: record + worksheet chips together (they ride VEW
    surfaces slice 1 already touched), SOTR list immediately after — but you said the
    build-decision waits for this spec, so it waits.
+
+---
+
+## 10. Addendum — the universality contract (founder question, answered into the spec)
+
+Post-delivery, the founder asked whether this pass designs for PIQC as a **universal protocol
+product** — any protocol, any reader — rather than around the single interaction that triggered
+the arc. The answer was implicit in the design's mechanics; this addendum makes it explicit and
+binding, and patches the two places where the spec was silent.
+
+### 10.1 Universal by construction — the litmus does double duty
+
+The litmus test is usually read as an output rule. Applied at the *design* level it is also the
+universality guarantee: a system that may only cite the uploaded document, and may only derive
+structure from **measured properties of that document**, cannot over-fit to a protocol archetype.
+Every mechanism in this spec already obeys that discipline:
+
+- **Invariant-hoisting (§3.4)** assumes nothing about which fields vary across visits — it
+  measures *each protocol's own variance* and hoists only what that document holds constant.
+- **Phase ordering (§2.3)** uses the extracted `phase` when the protocol supports it and falls
+  back to **document order** — never to a "typical visit" template. An observational protocol
+  with no dosing orders by its own document; the fallback *is* the litmus posture.
+- **D2 (§5.5)** compares windows only where the protocol states them on both sides. A windowless
+  protocol is silent, not defective.
+- **Cohort machinery** participates by graceful absence — an empty cohort list is a no-op end to
+  end (`ingestPipeline.ts:2204-2216`: "Empty for single-schedule protocols → no cohort UI").
+- **Exception marks (§2.5)** decorate deviation from *the row's own norm, computed per protocol* —
+  "special" is defined by this document, never by what cells usually look like.
+- **The D1 boundary (§5.5)** is this protocol's own vocabulary — granularity vs. contradiction is
+  decided by what *this* grid itemizes, with no external procedure list anywhere.
+
+**Universality tripwires — Opus review checks, same standing as the spine:** no hardcoded
+procedure vocabulary; no visit-shape template; no default keyed to study phase or therapeutic
+area; every closed world the matcher binds into must come from *this document's* parse. Any of
+these appearing in the build is a universality regression **and** a litmus regression — one
+defect, two names.
+
+### 10.2 Patched silence #1 — the two parse paths converge to one shape
+
+The spec was silent on `llm_fallback` protocols (grid absent/unreliable → the LLM extract *is*
+the schedule; `evaluateSoaGate`, `soaGridParser.ts:1157-1178`). The universal statement:
+
+- **The worksheet works on both paths.** On the fallback path narrative is already native —
+  nothing was overwritten, so nothing needs recovery. The recovery slice's real effect is
+  **convergence**: it brings the grid path up to the narrative-native shape the fallback path
+  already has. After slice 1 there is one downstream shape, not two — which is what "universal"
+  means at the data layer.
+- **Divergence requires two readings by definition; fallback protocols have one.** The engine is
+  silent there — honestly, not brokenly. No new disclosure surface is needed: the
+  extraction-method banner already flags the fallback path (the gate's contract is "never
+  silent"). One wording obligation: the auditor list's empty state on a fallback protocol must
+  say the schedule derives from a single reading so narrative-vs-grid comparison does not apply —
+  never a bare "no divergences found," which would claim a check that didn't run. One sentence,
+  rendered only when the list is opened; not wallpaper.
+- Protocols with no visit schedule at all degrade to the existing empty-schedule state
+  (`ProtocolTab.tsx:193-198`) — a product boundary that precedes this arc, unchanged by it.
+
+### 10.3 Patched silence #2 — universal trunk, per-persona projections
+
+§1's original header ("keyed to coordinator decisions") under-stated its own design. Binding
+restatement:
+
+- **The five buckets are properties of protocol content** — any protocol's narrative decomposes
+  into ORIENT/GATE/CLOCK/ACT/TRACE regardless of who reads it. They are the trunk, alongside the
+  divergence records.
+- **Visibility defaults are per-surface projections.** §1's table is the coordinator
+  (acting-surface) projection. The auditor projection (§5.3) re-weights the same buckets:
+  GATE/CLOCK/TRACE promoted, execution chrome absent, whole-document grouping. The sponsor
+  projection already exists implicitly — the Deliverable Engine consumes the same trunk with zero
+  new plumbing (brief §4, verified).
+- **The contract for the future: a new persona costs a projection, never parse work** —
+  visibility defaults plus one thin surface in its own mode lane. If a persona ever appears to
+  need new *extraction*, that is a trunk gap to be fixed for everyone, not a persona feature.
+  Mode isolation makes this the cheap path as well as the correct one.
+
+This is also the direct answer to "not tied to one's interaction with the protocol": the
+validation interaction (worksheet hand-copying) *located* the gap; the fix lands in the shared
+trunk; the worksheet is merely the **first projection to demo it**. Same shape as the brief's
+"one trunk, three branches" — now stated as a contract instead of a diagram.
 
 ---
 
