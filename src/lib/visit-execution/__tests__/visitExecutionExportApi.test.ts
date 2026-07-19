@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  CLASSIFICATION_LABEL,
   READING_DIVERGENCE_CAP,
+  REVIEW_LABEL,
   WORKSHEET_DISCLAIMER,
   WORKSHEET_HEADER_LABEL,
   WORKSHEET_PLACEHOLDER_PURPOSE,
@@ -410,6 +412,37 @@ describe('buildVisitWorksheetPdf — pure function', () => {
       snapshot: { ...makePacket().snapshot, confidence_state: null },
     });
     expect(() => buildVisitWorksheetPdf(packet, 'pharmacy')).not.toThrow();
+  });
+});
+
+// ===========================================================================
+// WinAnsi glyph safety — jsPDF's built-in helvetica cannot encode glyphs
+// outside CP1252: '\u26a0' printed as '&' and '\u2713' as "'" in shipped
+// worksheets (caught on a rendered sample, 2026-07-19). Print labels stay
+// pure ASCII; '!' / '[x]' carry the visual-flag intent instead.
+// ===========================================================================
+
+describe('print labels — WinAnsi glyph safety', () => {
+  it('classification labels are pure ASCII', () => {
+    for (const label of Object.values(CLASSIFICATION_LABEL)) {
+      for (const ch of label) {
+        expect(ch.charCodeAt(0), `non-ASCII '${ch}' in label '${label}'`).toBeLessThan(128);
+      }
+    }
+  });
+
+  it('review-status labels are pure ASCII', () => {
+    for (const label of Object.values(REVIEW_LABEL)) {
+      for (const ch of label) {
+        expect(ch.charCodeAt(0), `non-ASCII '${ch}' in label '${label}'`).toBeLessThan(128);
+      }
+    }
+  });
+
+  it('keeps the visual-flag intent with ASCII markers', () => {
+    expect(CLASSIFICATION_LABEL.safety_critical).toBe('! Safety Critical');
+    expect(REVIEW_LABEL.needs_review).toBe('! Needs review');
+    expect(REVIEW_LABEL.reviewed).toBe('Reviewed [x]');
   });
 });
 

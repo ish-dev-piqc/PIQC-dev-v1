@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: Worksheet export — PDF-safe glyphs (WinAnsi)
-status: active
+status: in-review
 started: 2026-07-19
 target_pr:
 ---
@@ -44,6 +44,6 @@ none
 
 ## Verification
 
-- [ ] vitest: existing export suite green + new WinAnsi-safety tests (exact label shapes + all-ASCII sweep over both label maps)
-- [ ] `tsc --noEmit -p tsconfig.app.json` clean
-- [ ] Manual: export a worksheet with ≥1 safety-critical item, ≥1 reviewed item, ≥1 open item, and a −/+ window; confirm '! Safety Critical', 'Reviewed [x]', banner '!', and 'Day N · -X / +Y days' render without mojibake
+- [x] vitest: existing export suite green + new WinAnsi-safety tests (exact label shapes + all-ASCII sweep over both label maps)
+- [x] `tsc --noEmit -p tsconfig.app.json` clean
+- [x] Manual: export a worksheet with ≥1 safety-critical item, ≥1 reviewed item, ≥1 open item, and a −/+ window; confirm '! Safety Critical', 'Reviewed [x]', banner '!', and 'Day N · -X / +Y days' render without mojibake
