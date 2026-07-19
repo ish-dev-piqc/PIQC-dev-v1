@@ -25,6 +25,7 @@ import type {
   DerivedCriticality,
   EndpointTier,
   ImpactSurface,
+  IsaDomain,
   MaturityPosture,
   ProtocolVersionStatus,
   ProvisionalClassification,
@@ -475,6 +476,24 @@ export interface CapaObject {
   accepted_at: string | null;
   accepted_by: string | null;
   exported_at: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Freeform fieldwork note on an Investigator Site Audit (ISA_CONDUCT pad).
+// Working papers, not findings: freely editable and soft-deletable, unlike
+// the append-only AuditWorkspaceEntryObject. Soft delete keeps the note's
+// state-history deltas resolvable and (S2) protects findings' evidence
+// trails. 1:1 with audit_note_objects
+// (20260723000000_audit_mode_isa_notes_schema.sql).
+export interface AuditNoteObject {
+  id: string;
+  audit_id: string;
+  body: string;
+  isa_domain: IsaDomain | null;      // optional tag; S2 infers when absent
+  is_positive: boolean;              // feeds the report's positive-observations section
+  deleted_at: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
