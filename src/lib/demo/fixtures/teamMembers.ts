@@ -2,7 +2,7 @@ import type { SiteTeamMember } from '../../site/types';
 import { DEMO_PROTOCOL_IDS } from '../ids';
 import { addDays } from '../relativeDate';
 
-// Team rosters across the three demo studies, exercising every role (PI, SUB_I,
+// Team rosters across the four demo studies, exercising every role (PI, SUB_I,
 // COORDINATOR, NURSE, PHARMACIST, MONITOR) plus an INACTIVE row so the
 // "show/hide inactive" toggle is meaningful. Delegated tasks are themed to each
 // study's procedures. Coordinator names match participants.assigned_coordinator.
@@ -168,6 +168,68 @@ export function getDemoTeamMembers(): SiteTeamMember[] {
       added_at: addDays(-50),
       status: 'ACTIVE',
       notes: 'Certified pulmonary function technologist.',
+    },
+
+    // EFC14833 — Sotagliflozin / T2DM (endocrinology site)
+    {
+      id: 'demo-tm-014',
+      protocol_id: DEMO_PROTOCOL_IDS['GLYCEMIC-11'],
+      name: 'Dr. Sofia Marchetti',
+      role: 'PI',
+      email: 'sofia.marchetti@example.org',
+      delegated_tasks: ['Informed consent', 'Eligibility assessment', 'AE assessment'],
+      certified_through: addDays(200),
+      added_at: addDays(-90),
+      status: 'ACTIVE',
+      notes: 'Endocrinologist. GCP cert valid; CV on file.',
+    },
+    {
+      id: 'demo-tm-015',
+      protocol_id: DEMO_PROTOCOL_IDS['GLYCEMIC-11'],
+      name: 'Dr. Adeyemi Bello',
+      role: 'SUB_I',
+      email: 'adeyemi.bello@example.org',
+      delegated_tasks: ['Eligibility assessment', 'Physical examination', 'AE assessment'],
+      certified_through: addDays(170),
+      added_at: addDays(-85),
+      status: 'ACTIVE',
+      notes: null,
+    },
+    {
+      id: 'demo-tm-016',
+      protocol_id: DEMO_PROTOCOL_IDS['GLYCEMIC-11'],
+      name: 'Renata Silva',
+      role: 'COORDINATOR',
+      email: 'renata.silva@example.org',
+      delegated_tasks: ['Informed consent', 'Source data entry', 'Self-monitored blood glucose review', 'Query resolution'],
+      certified_through: addDays(150),
+      added_at: addDays(-88),
+      status: 'ACTIVE',
+      notes: 'Primary contact for sponsor monitor.',
+    },
+    {
+      id: 'demo-tm-017',
+      protocol_id: DEMO_PROTOCOL_IDS['GLYCEMIC-11'],
+      name: 'Owen Fitzgerald',
+      role: 'NURSE',
+      email: 'owen.fitzgerald@example.org',
+      delegated_tasks: ['Vitals', '12-lead ECG', 'Phlebotomy', 'Mixed meal tolerance test administration'],
+      certified_through: addDays(120),
+      added_at: addDays(-82),
+      status: 'ACTIVE',
+      notes: null,
+    },
+    {
+      id: 'demo-tm-018',
+      protocol_id: DEMO_PROTOCOL_IDS['GLYCEMIC-11'],
+      name: 'Priyanka Deshmukh',
+      role: 'PHARMACIST',
+      email: 'priyanka.deshmukh@example.org',
+      delegated_tasks: ['IMP accountability', 'IMP dispensation'],
+      certified_through: addDays(190),
+      added_at: addDays(-88),
+      status: 'ACTIVE',
+      notes: null,
     },
   ];
 }

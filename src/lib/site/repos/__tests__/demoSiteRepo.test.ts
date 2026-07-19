@@ -123,12 +123,12 @@ describe('demoSiteRepo — visits + protocols', () => {
     sessionStorage.clear();
   });
 
-  it('fetchProtocols returns all three demo protocols', async () => {
+  it('fetchProtocols returns all four demo protocols', async () => {
     const result = await demoSiteRepo.fetchProtocols();
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const codes = result.data.map((p) => p.code).sort();
-    expect(codes).toEqual(['CLR_18_06', 'ND-L02-s0201-005', 'PP06489']);
+    expect(codes).toEqual(['CLR_18_06', 'EFC14833', 'ND-L02-s0201-005', 'PP06489']);
   });
 
   it('updateVisit flips status and persists', async () => {

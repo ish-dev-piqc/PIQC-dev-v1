@@ -79,6 +79,22 @@ export function getDemoDocuments(): ProtocolDocument[] {
           'A Phase 2, randomized, double-blind, placebo-controlled study to evaluate the safety, tolerability, biological activity, and PK of ND-L02-s0201 in subjects with idiopathic pulmonary fibrosis (IPF)',
       },
     },
+    {
+      id: 'demo-doc-004',
+      title: 'EFC14833 — Sotagliflozin Protocol Amendment 03',
+      source: 'Demo protocol PDF',
+      filename: 'efc14833_sotagliflozin_protocol_amd03.pdf',
+      created_at: addDays(-45),
+      status: 'ready',
+      error_message: null,
+      extracted_fields: {
+        protocol_number: 'EFC14833',
+        sponsor: 'Sanofi',
+        phase: 'Phase 3',
+        protocol_title:
+          'A Randomized, Double-blind, Placebo-controlled, Parallel-group, Multicenter Study to Evaluate the Efficacy and Safety of Sotagliflozin as Monotherapy in Patients with Type 2 Diabetes Mellitus Who Have Inadequate Glycemic Control',
+      },
+    },
   ];
 }
 
@@ -89,4 +105,5 @@ export const DEMO_DOCS_BY_PROTOCOL: Record<string, string[]> = {
   [DEMO_PROTOCOL_IDS['BRIGHTEN-2']]: ['demo-doc-001', 'demo-doc-001-lab', 'demo-doc-001-pharm'],
   [DEMO_PROTOCOL_IDS['CARDIAC-7']]: ['demo-doc-002'],
   [DEMO_PROTOCOL_IDS['IMMUNE-14']]: ['demo-doc-003'],
+  [DEMO_PROTOCOL_IDS['GLYCEMIC-11']]: ['demo-doc-004'],
 };
