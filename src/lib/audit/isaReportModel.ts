@@ -28,7 +28,7 @@ import type {
 // generic by construction; sponsor branding is added externally on export.
 // =============================================================================
 
-export type IsaSectionSource = 'templated' | 'auditor_edited';
+export type IsaSectionSource = 'templated' | 'llm' | 'auditor_edited';
 
 export interface IsaReportSection {
   text: string;
@@ -243,7 +243,11 @@ export function buildExecSummary(
   const verdictSet = !!draft?.site_verdict;
 
   if (draft?.exec_summary) {
-    return { text: draft.exec_summary, source: 'auditor_edited', verdictSet };
+    return {
+      text: draft.exec_summary,
+      source: draft.exec_summary_source ?? 'auditor_edited',
+      verdictSet,
+    };
   }
 
   const counts = countBySeverity(findings);
@@ -292,9 +296,13 @@ export function buildMatrix(
   });
 }
 
-function resolveSection(stored: string | null | undefined, placeholder: string): IsaReportSection {
+function resolveSection(
+  stored: string | null | undefined,
+  storedSource: 'llm' | 'auditor_edited' | null | undefined,
+  placeholder: string,
+): IsaReportSection {
   return stored
-    ? { text: stored, source: 'auditor_edited' }
+    ? { text: stored, source: storedSource ?? 'auditor_edited' }
     : { text: placeholder, source: 'templated' };
 }
 
@@ -314,9 +322,15 @@ export function buildIsaReportPacket(
     meta,
     execSummary: buildExecSummary(draft, findings),
     objectives: ISA_OBJECTIVES,
-    auditeeBackground: resolveSection(draft?.auditee_background, AUDITEE_BACKGROUND_PLACEHOLDER),
-    openingMeeting: resolveSection(draft?.opening_meeting, OPENING_MEETING_PLACEHOLDER),
-    closingMeeting: resolveSection(draft?.closing_meeting, CLOSING_MEETING_PLACEHOLDER),
+    auditeeBackground: resolveSection(
+      draft?.auditee_background, draft?.auditee_background_source, AUDITEE_BACKGROUND_PLACEHOLDER,
+    ),
+    openingMeeting: resolveSection(
+      draft?.opening_meeting, draft?.opening_meeting_source, OPENING_MEETING_PLACEHOLDER,
+    ),
+    closingMeeting: resolveSection(
+      draft?.closing_meeting, draft?.closing_meeting_source, CLOSING_MEETING_PLACEHOLDER,
+    ),
     positiveObservations: positiveNotes.map((n) => n.body),
     severityDefinitions: ISA_SEVERITY_DEFINITIONS,
     matrix: buildMatrix(findings, domains),
