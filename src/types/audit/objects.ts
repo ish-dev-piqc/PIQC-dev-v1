@@ -29,6 +29,7 @@ import type {
   IsaFindingOrigin,
   IsaResponseOwner,
   IsaSeverity,
+  IsaSiteVerdict,
   MaturityPosture,
   ProtocolVersionStatus,
   ProvisionalClassification,
@@ -531,6 +532,27 @@ export interface IsaFindingObject {
   reference: string | null;
   response_owner: IsaResponseOwner;
   origin: IsaFindingOrigin;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Auditor-owned pieces of the ISA report; everything else derives at render
+// time. NULL prose columns mean "still templated" — the client renders the
+// derived template until the auditor takes the pen (see the schema migration
+// header). 1:1 with isa_report_draft_objects
+// (20260725000000_audit_mode_isa_report_schema.sql).
+export interface IsaReportDraftObject {
+  id: string;
+  audit_id: string;                  // 1:1 with Audit
+  exec_summary: string | null;
+  auditee_background: string | null;
+  opening_meeting: string | null;
+  closing_meeting: string | null;
+  site_verdict: IsaSiteVerdict | null;
+  site_verdict_text: string | null;
+  response_due_days: number;
+  response_due_basis: 'CALENDAR' | 'BUSINESS';
   created_by: string;
   created_at: string;
   updated_at: string;
