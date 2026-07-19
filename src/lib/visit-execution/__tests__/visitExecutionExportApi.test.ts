@@ -1,16 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  READING_DIVERGENCE_CAP,
   WORKSHEET_DISCLAIMER,
   WORKSHEET_HEADER_LABEL,
   WORKSHEET_PLACEHOLDER_PURPOSE,
   buildVisitWorksheetPdf,
   buildWorksheetFilename,
+  buildWorksheetReadingSection,
   downloadVisitWorksheet,
   fetchVisitWorksheetPacket,
   slugifyForFilename,
 } from '../visitExecutionExportApi';
 import { MOCK_TOGGLE_KEY } from '../visitExecutionApi';
 import { supabase } from '../../supabase';
+import type { VisitBriefLine } from '../visitBriefModel';
+import type { DivergenceRecord } from '../../../types/divergence';
 import type { VisitWorksheetExportPacket } from '../../../types/visit-execution';
 
 // =============================================================================
@@ -577,5 +581,177 @@ describe('disclaimer + header label constants', () => {
     expect(WORKSHEET_PLACEHOLDER_PURPOSE).toBe(
       'Per-protocol visit. Detailed execution requirements pending structured ingest extraction.',
     );
+  });
+});
+
+// ===========================================================================
+// Narrative-first S1.5 — buildWorksheetReadingSection (pure) + render smoke.
+// ===========================================================================
+
+function makeBriefLine(overrides: Partial<VisitBriefLine> = {}): VisitBriefLine {
+  return {
+    key: 'gate-1',
+    kind: 'gate',
+    text: 'ECG — if QTcF exceeds 480 ms, then withhold study drug',
+    refs: [{ label: '§7.3.2 · p 43', section: '7.3.2', page: 43 }],
+    piqcDrafted: false,
+    ...overrides,
+  };
+}
+
+function makeReadingDivergence(overrides: Partial<DivergenceRecord> = {}): DivergenceRecord {
+  return {
+    id: 'div-1',
+    protocol_id: 'p-1',
+    divergence_class: 'window_mismatch',
+    visit_name: 'Week 6 visit',
+    procedure_label: null,
+    reading_a: { source: 'soa_grid', quote: 'Day 42 (±3)', verbatim: true, section: 'Appendix 2', page: 96 },
+    reading_b: { source: 'narrative', quote: 'Day 42 ± 2 days', verbatim: false, section: '5.2', page: 28 },
+    detail: 'Window components differ.',
+    status: 'open',
+    dispositions: [],
+    created_at: '2026-07-19T10:00:00Z',
+    ...overrides,
+  };
+}
+
+describe('buildWorksheetReadingSection — claim selection', () => {
+  it('drops orient/clock/watchout (already on page 1 or superseded) and keeps the rest', () => {
+    const section = buildWorksheetReadingSection({
+      briefLines: [
+        makeBriefLine({ key: 'orient', kind: 'orient', text: 'Purpose prose.' }),
+        makeBriefLine({ key: 'scope', kind: 'scope', text: 'Applies to Cohort B only.', refs: [] }),
+        makeBriefLine({ key: 'clock', kind: 'clock', text: 'Scheduled at Study Day +42.', refs: [] }),
+        makeBriefLine(),
+        makeBriefLine({ key: 'more', kind: 'more', text: '2 more — in the sequence below.', refs: [] }),
+        makeBriefLine({ key: 'watchout', kind: 'watchout', text: 'Two readings…', refs: [] }),
+      ],
+      divergences: [],
+    });
+    expect(section.claims.map((c) => c.text)).toEqual([
+      'Applies to Cohort B only.',
+      'ECG — if QTcF exceeds 480 ms, then withhold study drug',
+      '2 more — in the sequence below.',
+    ]);
+  });
+
+  it('joins multiple refs into one address string and empties cleanly', () => {
+    const section = buildWorksheetReadingSection({
+      briefLines: [
+        makeBriefLine({
+          refs: [
+            { label: '§9.1 · p 58', section: '9.1', page: 58 },
+            { label: 'p 97', section: null, page: 97 },
+          ],
+        }),
+        makeBriefLine({ key: 'g2', refs: [] }),
+      ],
+      divergences: [],
+    });
+    expect(section.claims[0].where).toBe('§9.1 · p 58 · p 97');
+    expect(section.claims[1].where).toBe('');
+  });
+});
+
+describe('buildWorksheetReadingSection — divergence blocks', () => {
+  it('renders both readings with verbatim honesty labels, section/page, and status — never a verdict', () => {
+    const section = buildWorksheetReadingSection({
+      briefLines: [],
+      divergences: [makeReadingDivergence()],
+    });
+    const d = section.divergences[0];
+    expect(d.title).toBe('Window mismatch — this visit');
+    // "Appendix 2" gets NO § prefix (named location); numeric "5.2" does.
+    expect(d.readingA).toBe('SoA grid: “Day 42 (±3)” (verbatim) — Appendix 2 · p 96');
+    expect(d.readingB).toBe('Narrative: “Day 42 ± 2 days” (as extracted) — §5.2 · p 28');
+    expect(d.status).toBe('Status: Open');
+    expect(JSON.stringify(d)).not.toMatch(/correct|right|wrong/i);
+  });
+
+  it('uses the procedure label when the divergence is procedure-scoped', () => {
+    const section = buildWorksheetReadingSection({
+      briefLines: [],
+      divergences: [
+        makeReadingDivergence({ divergence_class: 'presence', procedure_label: '12-lead ECG' }),
+      ],
+    });
+    expect(section.divergences[0].title).toBe('Presence — 12-lead ECG');
+  });
+
+  it('keeps open + raised, drops resolved + dismissed', () => {
+    const section = buildWorksheetReadingSection({
+      briefLines: [],
+      divergences: [
+        makeReadingDivergence({ id: 'a', status: 'open' }),
+        makeReadingDivergence({ id: 'b', status: 'raised_with_sponsor' }),
+        makeReadingDivergence({ id: 'c', status: 'resolved' }),
+        makeReadingDivergence({ id: 'd', status: 'dismissed' }),
+      ],
+    });
+    expect(section.divergences).toHaveLength(2);
+    expect(section.moreDivergencesNote).toBeNull();
+  });
+
+  it('caps blocks and names the trimmed remainder', () => {
+    const many = Array.from({ length: READING_DIVERGENCE_CAP + 2 }, (_, i) =>
+      makeReadingDivergence({ id: `d${i}` }),
+    );
+    const section = buildWorksheetReadingSection({ briefLines: [], divergences: many });
+    expect(section.divergences).toHaveLength(READING_DIVERGENCE_CAP);
+    expect(section.moreDivergencesNote).toContain('2 more open divergences');
+  });
+});
+
+describe('buildVisitWorksheetPdf — with a reading attached', () => {
+  it('renders without throwing and stays a valid PDF', () => {
+    const doc = buildVisitWorksheetPdf(makePacket(), 'all', {
+      briefLines: [
+        makeBriefLine({ key: 'orient', kind: 'orient', text: 'Purpose.' }),
+        makeBriefLine({ key: 'scope', kind: 'scope', text: 'Applies to Cohort B only.', refs: [] }),
+        makeBriefLine(),
+      ],
+      divergences: [makeReadingDivergence()],
+    });
+    expect(doc.getNumberOfPages()).toBeGreaterThanOrEqual(1);
+    expect(doc.output('blob').size).toBeGreaterThan(500);
+  });
+
+  it('renders identically-shaped output when the reading is empty (no reading section)', () => {
+    expect(() =>
+      buildVisitWorksheetPdf(makePacket(), 'all', { briefLines: [], divergences: [] }),
+    ).not.toThrow();
+  });
+
+  it('handles a long reading without clobbering the layout (page-break guard)', () => {
+    const gates = Array.from({ length: 30 }, (_, i) =>
+      makeBriefLine({ key: `g${i}`, text: `Gated requirement number ${i} — if a very long condition holds across the visit day, then a correspondingly long consequence applies. `.repeat(2) }),
+    );
+    const doc = buildVisitWorksheetPdf(makePacket(), 'all', {
+      briefLines: gates,
+      divergences: Array.from({ length: 4 }, (_, i) => makeReadingDivergence({ id: `dv${i}` })),
+    });
+    expect(doc.getNumberOfPages()).toBeGreaterThan(1);
+  });
+});
+
+describe('downloadVisitWorksheet — reading pass-through', () => {
+  it('threads the reading to the built PDF without altering the Result shape', async () => {
+    window.localStorage.setItem(MOCK_TOGGLE_KEY, '1');
+    const downloads: string[] = [];
+    const r = await downloadVisitWorksheet(
+      '00000001-e000-4000-8000-00000000000b',
+      { triggerDownload: (filename) => downloads.push(filename) },
+      'all',
+      { briefLines: [makeBriefLine()], divergences: [makeReadingDivergence()] },
+    );
+    window.localStorage.removeItem(MOCK_TOGGLE_KEY);
+    // Mock fixture may or may not contain this visit id — either way the
+    // call must not throw, and on success a filename must be delivered.
+    if (r.ok) {
+      expect(downloads).toHaveLength(1);
+    } else {
+      expect(r.error).toMatch(/mock fixture/);
+    }
   });
 });

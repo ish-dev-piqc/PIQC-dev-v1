@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Download, Loader2, Check, AlertTriangle } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
-import { downloadVisitWorksheet } from '../../../lib/visit-execution/visitExecutionExportApi';
+import {
+  downloadVisitWorksheet,
+  type WorksheetReading,
+} from '../../../lib/visit-execution/visitExecutionExportApi';
 import { ROLE_LABELS, type RoleFilter } from '../../../types/visit-execution';
 
 // =============================================================================
@@ -48,6 +51,13 @@ interface Props {
    * is false — no sentinel value needed.
    */
   filteredCount?: number;
+  /**
+   * Narrative-first S1.5: the workspace's reading (brief claims + open
+   * divergences), rendered on the PDF's first page so the deliverable
+   * carries what the coordinator just read on screen. Optional — omitted,
+   * the export renders as before.
+   */
+  reading?: WorksheetReading;
 }
 
 type ButtonState = 'idle' | 'loading' | 'success' | 'error';
@@ -59,6 +69,7 @@ export default function ExportWorksheetButton({
   visitName,
   roleFilter = 'all',
   filteredCount,
+  reading,
 }: Props) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
@@ -93,7 +104,7 @@ export default function ExportWorksheetButton({
     setState('loading');
     setErrorMessage(null);
 
-    const result = await downloadVisitWorksheet(visitTemplateId, {}, roleFilter);
+    const result = await downloadVisitWorksheet(visitTemplateId, {}, roleFilter, reading);
 
     if (!result.ok) {
       console.error('[vew] export_failed', {
