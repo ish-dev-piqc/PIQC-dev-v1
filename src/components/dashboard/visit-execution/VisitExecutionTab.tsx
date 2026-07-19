@@ -36,6 +36,8 @@ import type {
 import { itemMatchesRoleFilter } from '../../../lib/visit-execution/parseRoleHint';
 import { deriveVisitConfidence } from '../../../lib/visit-execution/deriveVisitConfidence';
 import { buildVisitBrief } from '../../../lib/visit-execution/visitBriefModel';
+import { buildStudyBrief } from '../../../lib/visit-execution/studyBriefModel';
+import StudyOverviewPanel from './StudyOverviewPanel';
 import VisitNavigator from './VisitNavigator';
 import VisitSnapshotCard from './VisitSnapshotCard';
 import VisitBriefBlock from './VisitBriefBlock';
@@ -85,6 +87,15 @@ import FootnotesDrawer from './FootnotesDrawer';
  * Falls back to a generic message so a coordinator never sees raw Postgres
  * jargon. The raw error stays in console.error for debugging.
  */
+/**
+ * Narrative-first S1.6 — sentinel for the pinned "Study overview" selection.
+ * Lives in the same `selectedId` state as visit ids (it can never collide
+ * with a UUID); `selectedWorkspace` resolves to null for it, and the right
+ * pane branches to StudyOverviewPanel. Default selection stays first-visit —
+ * the study view is available, not imposed (validation decides its role).
+ */
+const STUDY_VIEW_ID = '__study_overview__';
+
 function humanizeRpcError(raw: string): string {
   const r = raw.toLowerCase();
   if (r.includes('permission denied') || r.includes('access denied')) {
@@ -416,6 +427,14 @@ export default function VisitExecutionTab() {
     () => (selectedWorkspace ? buildVisitBrief(selectedWorkspace, visitDivergences) : []),
     [selectedWorkspace, visitDivergences],
   );
+
+  // S1.6: the study-level reading — derived from the same already-loaded
+  // data (workspaces, authoritative cohorts, protocol-wide divergences).
+  const studyBrief = useMemo(
+    () => buildStudyBrief(workspaces, protocolCohorts, divergences),
+    [workspaces, protocolCohorts, divergences],
+  );
+  const isStudyView = selectedId === STUDY_VIEW_ID;
 
   const handleSetDivergenceStatus = useCallback(
     async (id: string, status: DivergenceStatus, note: string | null) => {
@@ -1132,6 +1151,8 @@ export default function VisitExecutionTab() {
         cohorts={cohorts}
         cohortFilter={cohortFilter}
         onCohortFilter={setCohortFilter}
+        onSelectStudy={() => setSelectedId(STUDY_VIEW_ID)}
+        studySelected={isStudyView}
       />
 
       <div className="flex-1 overflow-y-auto">
@@ -1140,7 +1161,19 @@ export default function VisitExecutionTab() {
           {/* Slice 3: per-cohort dose/description when a specific cohort is
               selected. The shared visit schedule renders below unchanged. */}
           {selectedCohort && <CohortDetailPanel cohort={selectedCohort} />}
-          {selectedWorkspace ? (
+          {isStudyView ? (
+            /* S1.6 — the study-level reading. The DivergencePanel here gets
+               the FULL protocol list (the visit view filters to one visit);
+               same component, wider lens. */
+            <>
+              <StudyOverviewPanel brief={studyBrief} onSelectVisit={setSelectedId} />
+              <DivergencePanel
+                divergences={divergences}
+                protocolCode={activeProtocol?.code ?? null}
+                onSetStatus={handleSetDivergenceStatus}
+              />
+            </>
+          ) : selectedWorkspace ? (
             <>
               <VisitSnapshotCard
                 snapshot={selectedWorkspace.snapshot}
