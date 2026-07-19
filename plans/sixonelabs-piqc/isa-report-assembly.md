@@ -24,6 +24,7 @@ S1/S2/S2.5 (PRs #498/#500/#502) carry the auditor from shorthand notes to accept
 - src/lib/audit/isaReportDocx.ts
 - src/lib/audit/__tests__/isaReportModel.test.ts
 - src/lib/audit/__tests__/isaReportClipboard.test.ts
+- src/lib/audit/__tests__/isaReportApi.test.ts
 - src/components/dashboard/audit/stages/investigator/IsaReportWorkspace.tsx
 - src/components/dashboard/audit/AuditWorkspaceShell.tsx
 
