@@ -17,6 +17,7 @@ Slice 2 (separate arc): LLM refine pass on the brief with a per-sentence cite-or
 ## Scope (files allowed)
 
 - plans/sixonelabs-piqc/narrative-first-visit-landing.md
+- plans/fable/HANDOVER-narrative-first-landing.md
 - src/lib/visit-execution/visitBriefModel.ts
 - src/lib/visit-execution/__tests__/visitBriefModel.test.ts
 - src/components/dashboard/visit-execution/VisitBriefBlock.tsx
