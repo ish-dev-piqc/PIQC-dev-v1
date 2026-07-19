@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: isa-notes-pad
-status: active
+status: merged
+merged: 2026-07-19
 started: 2026-07-19
-target_pr:
+target_pr: #498
 ---
 
 # ISA notes pad — S1 of the notes → findings → report arc
