@@ -1354,6 +1354,9 @@ export default function VisitExecutionTab() {
                         visitName={selectedWorkspace.snapshot.visit_name}
                         roleFilter={roleFilter}
                         filteredCount={roleFilteredCount}
+                        // S1.5: the deliverable carries the same reading the
+                        // workspace shows — computed once, rendered twice.
+                        reading={{ briefLines, divergences: visitDivergences }}
                       />
                     </div>
                   </div>

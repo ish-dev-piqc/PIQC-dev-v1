@@ -85,22 +85,34 @@ function makeWorkspace(
 }
 
 function makeDivergence(overrides: Partial<DivergenceRecord> = {}): DivergenceRecord {
+  // Real DivergenceRecord shape (src/types/divergence) — no cast, so a type
+  // drift in the divergence domain fails THIS fixture loudly.
   return {
     id: crypto.randomUUID(),
     protocol_id: 'p-1',
-    class: 'window_mismatch',
-    locus_key: 'visit:C2D1:window',
+    divergence_class: 'window_mismatch',
     visit_name: 'C2D1',
     procedure_label: null,
-    reading_a: { source: 'soa_grid', value: '±3 days', where: 'Appendix 2 p 96' },
-    reading_b: { source: 'narrative', value: '±2 days', where: '§5.2 p 28' },
+    reading_a: {
+      source: 'soa_grid',
+      quote: 'Day 22 (±3)',
+      verbatim: true,
+      section: 'Appendix 2',
+      page: 96,
+    },
+    reading_b: {
+      source: 'narrative',
+      quote: 'Day 22 ± 2 days',
+      verbatim: true,
+      section: '5.2',
+      page: 28,
+    },
     detail: 'Window components differ.',
     status: 'open',
     dispositions: [],
     created_at: '2026-07-19T10:00:00Z',
-    updated_at: '2026-07-19T10:00:00Z',
     ...overrides,
-  } as DivergenceRecord;
+  };
 }
 
 function byKind(lines: VisitBriefLine[], kind: VisitBriefLine['kind']) {

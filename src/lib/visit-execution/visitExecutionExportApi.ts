@@ -41,6 +41,9 @@ interface JsPDFWithAutoTable extends jsPDF {
 }
 import { supabase } from '../supabase';
 import type { Result } from '../site/siteApi';
+import type { DivergenceRecord, DivergenceReading } from '../../types/divergence';
+import { DIVERGENCE_CLASS_LABELS, DIVERGENCE_STATUS_LABELS } from '../../types/divergence';
+import type { VisitBriefLine } from './visitBriefModel';
 import type {
   ExecutionPhase,
   ItemClassification,
@@ -87,6 +90,109 @@ export const WORKSHEET_HEADER_LABEL = 'PIQC drafted · Visit worksheet · DRAFT'
  */
 export const WORKSHEET_PLACEHOLDER_PURPOSE =
   'Per-protocol visit. Detailed execution requirements pending structured ingest extraction.';
+
+// ---------------------------------------------------------------------------
+// Narrative-first S1.5 — the reading travels with the deliverable.
+//
+// The workspace computes the Visit Brief + the visit-scoped divergences once
+// (VisitExecutionTab). The export receives THAT — computed once, rendered
+// twice, single source of truth. The packet is deliberately not widened
+// (its trimmed snapshot lacks applies_to; re-deriving here would fork the
+// truth the coordinator just read on screen).
+// ---------------------------------------------------------------------------
+
+/** The workspace's reading, passed into the export. Both optional-empty. */
+export interface WorksheetReading {
+  briefLines: VisitBriefLine[];
+  divergences: DivergenceRecord[];
+}
+
+/** One print-ready claim line: text + (possibly empty) source address. */
+export interface WorksheetReadingClaim {
+  text: string;
+  /** Joined ref addresses, e.g. "§7.3.2 · p 43" — empty string when none. */
+  where: string;
+}
+
+/** One print-ready divergence block — both readings, never a verdict. */
+export interface WorksheetReadingDivergence {
+  /** e.g. "Window mismatch — 12-lead ECG" or "Window mismatch — this visit". */
+  title: string;
+  /** "SoA grid: “±3 days” (verbatim) — Appendix 2 · p 96" */
+  readingA: string;
+  readingB: string;
+  /** "Status: Open" */
+  status: string;
+}
+
+export interface WorksheetReadingSection {
+  claims: WorksheetReadingClaim[];
+  divergences: WorksheetReadingDivergence[];
+  /** Honest cap line when divergence blocks were trimmed; null otherwise. */
+  moreDivergencesNote: string | null;
+}
+
+/** Cap on divergence blocks in the PDF; the remainder is named, not dropped. */
+export const READING_DIVERGENCE_CAP = 5;
+
+function formatDivergenceReading(label: string, r: DivergenceReading): string {
+  const honesty = r.verbatim ? 'verbatim' : 'as extracted';
+  // § prefix only for numeric section ids ("5.2" → "§5.2"); named locations
+  // like "Appendix 2" read wrong with one ("§Appendix 2").
+  const raw = r.section?.trim().replace(/^§\s*/, '') ?? null;
+  const sec = raw ? (/^\d/.test(raw) ? `§${raw}` : raw) : null;
+  const pg = r.page !== null ? `p ${r.page}` : null;
+  const where = [sec, pg].filter(Boolean).join(' · ');
+  return `${label}: “${r.quote}” (${honesty})${where ? ` — ${where}` : ''}`;
+}
+
+/**
+ * Pure: the workspace reading → print-ready strings for the PDF.
+ *
+ * Claim selection: the brief's `orient` line IS the purpose block already on
+ * page 1, and `clock` restates the window line in the title block — both are
+ * dropped so the deliverable never says one thing twice. `watchout` is
+ * superseded by the full divergence blocks (both readings beat a one-line
+ * count). Everything else (scope / gate / timed / more) prints.
+ *
+ * Divergences: open + raised_with_sponsor only — a resolved or dismissed
+ * record is settled history and would read as an active warning on paper.
+ * Capped at READING_DIVERGENCE_CAP with an explicit remainder line.
+ */
+export function buildWorksheetReadingSection(
+  reading: WorksheetReading,
+): WorksheetReadingSection {
+  const claims: WorksheetReadingClaim[] = reading.briefLines
+    .filter((l) => l.kind !== 'orient' && l.kind !== 'clock' && l.kind !== 'watchout')
+    .map((l) => ({
+      text: l.text,
+      where: l.refs.map((r) => r.label).join(' · '),
+    }));
+
+  const live = reading.divergences.filter(
+    (d) => d.status === 'open' || d.status === 'raised_with_sponsor',
+  );
+  const divergences: WorksheetReadingDivergence[] = live
+    .slice(0, READING_DIVERGENCE_CAP)
+    .map((d) => ({
+      title: `${DIVERGENCE_CLASS_LABELS[d.divergence_class]} — ${
+        d.procedure_label ?? 'this visit'
+      }`,
+      readingA: formatDivergenceReading('SoA grid', d.reading_a),
+      readingB: formatDivergenceReading('Narrative', d.reading_b),
+      status: `Status: ${DIVERGENCE_STATUS_LABELS[d.status]}`,
+    }));
+
+  const trimmed = live.length - divergences.length;
+  return {
+    claims,
+    divergences,
+    moreDivergencesNote:
+      trimmed > 0
+        ? `${trimmed} more open divergence${trimmed === 1 ? '' : 's'} — see the workspace divergence panel.`
+        : null,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Filename helper
@@ -449,6 +555,13 @@ function formatGeneratedAt(iso: string): string {
 export function buildVisitWorksheetPdf(
   packet: VisitWorksheetExportPacket,
   roleFilter: RoleFilter = 'all',
+  /**
+   * Narrative-first S1.5: the workspace's reading (brief claims + open
+   * divergences). Omitted → the PDF renders exactly as before this slice.
+   * Always the CANONICAL visit reading, even for role-filtered exports —
+   * the "Filtered view" subtitle already flags the narrowed table below.
+   */
+  reading?: WorksheetReading,
 ): jsPDF {
   const doc = new jsPDF({ unit: 'pt', format: 'letter', orientation: 'portrait' });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -607,6 +720,97 @@ export function buildVisitWorksheetPdf(
     const purposeLines = doc.splitTextToSize(packet.snapshot.purpose, pageWidth - margin * 2);
     doc.text(purposeLines, margin, cursorY);
     cursorY += purposeLines.length * 12 + 14;
+  }
+
+  // ---- Narrative-first S1.5: the reading section --------------------------
+  // Between the purpose (the brief's orient line) and the stats: the brief's
+  // remaining claims, then the open-divergence blocks. Deliberately BEFORE
+  // the review stats + phase tables — on paper as on screen, the reading
+  // comes before the acting surface.
+  if (reading) {
+    const section = buildWorksheetReadingSection(reading);
+    const contentWidth = pageWidth - margin * 2;
+
+    if (section.claims.length > 0) {
+      for (const claim of section.claims) {
+        // Hanging indent: the bullet sits at the margin; every text line —
+        // including wraps — aligns at margin+10 so multi-line claims read
+        // as one block instead of the second line jumping flush-left.
+        const textX = margin + 10;
+        const claimLines = doc.splitTextToSize(claim.text, contentWidth - 10);
+        const whereLines = claim.where
+          ? doc.splitTextToSize(claim.where, contentWidth - 20)
+          : [];
+        const blockHeight = claimLines.length * 11 + whereLines.length * 10 + 4;
+        if (cursorY + blockHeight > pageHeight - margin - 60) {
+          doc.addPage();
+          cursorY = margin + 20;
+        }
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(40);
+        doc.text('•', margin, cursorY);
+        doc.text(claimLines, textX, cursorY);
+        cursorY += claimLines.length * 11;
+        if (whereLines.length > 0) {
+          doc.setFontSize(7.5);
+          doc.setTextColor(130);
+          doc.text(whereLines, textX, cursorY);
+          cursorY += whereLines.length * 10;
+        }
+        cursorY += 4;
+      }
+      cursorY += 6;
+    }
+
+    if (section.divergences.length > 0) {
+      // Amber warning box, same family as the open-items banner. Height is
+      // computed from the wrapped lines before drawing the rect.
+      doc.setFontSize(8.5);
+      const boxPadding = 8;
+      const lineH = 11;
+      type BoxLine = { text: string; bold: boolean; indent: number };
+      const boxLines: BoxLine[] = [
+        {
+          text: 'The protocol gives two readings — resolve before scheduling',
+          bold: true,
+          indent: 0,
+        },
+      ];
+      for (const d of section.divergences) {
+        boxLines.push({ text: d.title, bold: true, indent: 0 });
+        for (const half of [d.readingA, d.readingB]) {
+          for (const wrapped of doc.splitTextToSize(half, contentWidth - boxPadding * 2 - 10)) {
+            boxLines.push({ text: wrapped, bold: false, indent: 10 });
+          }
+        }
+        boxLines.push({ text: d.status, bold: false, indent: 10 });
+      }
+      if (section.moreDivergencesNote) {
+        boxLines.push({ text: section.moreDivergencesNote, bold: false, indent: 0 });
+      }
+
+      const boxHeight = boxLines.length * lineH + boxPadding * 2;
+      if (cursorY + boxHeight > pageHeight - margin - 60) {
+        doc.addPage();
+        cursorY = margin + 20;
+      }
+      doc.setFillColor(254, 243, 199); // amber-100
+      doc.setDrawColor(252, 211, 77);  // amber-300
+      doc.setLineWidth(0.8);
+      doc.rect(margin, cursorY, contentWidth, boxHeight, 'FD');
+
+      let lineY = cursorY + boxPadding + 8;
+      doc.setTextColor(146, 64, 14); // amber-800
+      for (const line of boxLines) {
+        doc.setFont('helvetica', line.bold ? 'bold' : 'normal');
+        doc.text(line.text, margin + boxPadding + line.indent, lineY);
+        lineY += lineH;
+      }
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(60);
+      cursorY += boxHeight + 14;
+    }
   }
 
   // Stats line. The "to review" count is colored amber when non-zero so a
@@ -902,12 +1106,14 @@ export async function downloadVisitWorksheet(
   visitTemplateId: string,
   opts: DownloadOptions = {},
   roleFilter: RoleFilter = 'all',
+  /** Narrative-first S1.5 — the workspace's reading; see buildVisitWorksheetPdf. */
+  reading?: WorksheetReading,
 ): Promise<Result<{ filename: string; itemCount: number }>> {
   const fetchResult = await fetchVisitWorksheetPacket(visitTemplateId);
   if (!fetchResult.ok) return fetchResult;
 
   const packet = fetchResult.data;
-  const doc = buildVisitWorksheetPdf(packet, roleFilter);
+  const doc = buildVisitWorksheetPdf(packet, roleFilter, reading);
   const filename = buildWorksheetFilename(packet, roleFilter);
 
   try {
