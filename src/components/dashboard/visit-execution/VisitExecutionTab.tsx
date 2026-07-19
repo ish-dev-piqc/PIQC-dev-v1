@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, FlaskConical, X, AlertTriangle, Plus, Database, BookMarked } from 'lucide-react';
+import { Loader2, FlaskConical, X, AlertTriangle, Plus, Database, BookMarked, ChevronDown, ChevronRight, ClipboardCheck } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useTheme } from '../../../context/ThemeContext';
@@ -35,8 +35,11 @@ import type {
 } from '../../../types/visit-execution';
 import { itemMatchesRoleFilter } from '../../../lib/visit-execution/parseRoleHint';
 import { deriveVisitConfidence } from '../../../lib/visit-execution/deriveVisitConfidence';
+import { buildVisitBrief } from '../../../lib/visit-execution/visitBriefModel';
 import VisitNavigator from './VisitNavigator';
 import VisitSnapshotCard from './VisitSnapshotCard';
+import VisitBriefBlock from './VisitBriefBlock';
+import VisitSequenceBlock from './VisitSequenceBlock';
 import ExecutionChecklist, { type ChecklistItemAction } from './ExecutionChecklist';
 import TraceabilityDrawer from './TraceabilityDrawer';
 import ExportWorksheetButton from './ExportWorksheetButton';
@@ -163,6 +166,13 @@ export default function VisitExecutionTab() {
   // Slice 2: cohort lens over the VISIT LIST (vs roleFilter, which narrows the
   // checklist within a visit). 'all' or a cohort label (SAD/MAD/CSF/…).
   const [cohortFilter, setCohortFilter] = useState<string>('all');
+
+  // Narrative-first S1: the acting layer ("Work the visit" — add-requirement,
+  // role lens, checklist, export) starts collapsed so the visit OPENS on the
+  // reading (brief + sequence). Resets on visit change; auto-opens whenever a
+  // mutation lands a row the coordinator must be able to see (add requirement,
+  // promote signal) — a new row must never be born invisible.
+  const [workOpen, setWorkOpen] = useState(false);
 
   // Sprint 4b: RequirementTextDrawer state. Sprint 4c extends to three modes.
   // textDrawerSubject is the generic display payload (title + initial draft
@@ -377,6 +387,9 @@ export default function VisitExecutionTab() {
   useEffect(() => {
     setMutationError(null);
     setRoleFilter('all');
+    // Narrative-first S1: each visit opens on its reading; the acting layer
+    // re-collapses on navigation.
+    setWorkOpen(false);
   }, [selectedId]);
 
   // Narrative↔grid divergences scoped to the visit in view (+ protocol-wide
@@ -396,6 +409,14 @@ export default function VisitExecutionTab() {
       ),
     [visitDivergences],
   );
+  // Narrative-first S1: the deterministic Visit Brief — the reading the visit
+  // opens on. Pure derivation (visitBriefModel); recomputed when the selected
+  // workspace or its visit-scoped divergences change.
+  const briefLines = useMemo(
+    () => (selectedWorkspace ? buildVisitBrief(selectedWorkspace, visitDivergences) : []),
+    [selectedWorkspace, visitDivergences],
+  );
+
   const handleSetDivergenceStatus = useCallback(
     async (id: string, status: DivergenceStatus, note: string | null) => {
       const r = await updateDivergenceStatus(id, status, note);
@@ -750,6 +771,8 @@ export default function VisitExecutionTab() {
           };
         }),
       );
+      // The new row lives in the acting checklist — make sure it's visible.
+      setWorkOpen(true);
     },
     [],
   );
@@ -999,6 +1022,8 @@ export default function VisitExecutionTab() {
           };
         }),
       );
+      // The new row lives in the acting checklist — make sure it's visible.
+      setWorkOpen(true);
       closeTextDrawer();
       return { ok: true };
     },
@@ -1122,27 +1147,20 @@ export default function VisitExecutionTab() {
                 reviewedCount={reviewedCountForSelected}
                 totalItems={selectedWorkspace.items.length}
                 derivedConfidence={derivedVisitConfidence}
+                hidePurpose={briefLines.length > 0}
               />
+
+              {/* Narrative-first S1: the visit opens on its READING — the
+                  brief (what/who/when/gates/watch-outs, every claim carrying
+                  its protocol address), then the watch-out panels, then the
+                  day in order. The acting layer is behind "Work the visit". */}
+              <VisitBriefBlock lines={briefLines} />
 
               <DivergencePanel
                 divergences={visitDivergences}
                 protocolCode={activeProtocol?.code ?? null}
                 onSetStatus={handleSetDivergenceStatus}
               />
-
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleOpenAdd}
-                  className={`inline-flex items-center gap-1.5 text-xs font-medium rounded-md px-3 py-1.5 border ${
-                    isLight
-                      ? 'border-[#E2E8F0] text-fg-body hover:bg-[#F2F2F2]'
-                      : 'border-white/10 text-fg-body hover:bg-white/[0.04]'
-                  }`}
-                >
-                  <Plus size={13} aria-hidden /> Add requirement
-                </button>
-              </div>
 
               {selectedWorkspace.items.length === 0 ? (
                 /* Visits loaded (templates exist) but no requirements were
@@ -1172,6 +1190,9 @@ export default function VisitExecutionTab() {
               ) : (
                 <>
               {selectedWorkspace.snapshot.completeness_signals.length > 0 && (
+                /* Watch-out zone: PIQC-detected gaps sit with the divergences,
+                   in the reading — a possible missing requirement is exactly
+                   what a coordinator must see BEFORE working the checklist. */
                 <CompletenessSignalsPanel
                   signals={selectedWorkspace.snapshot.completeness_signals}
                   inFlightSignalIds={inFlightSignalIds}
@@ -1180,17 +1201,10 @@ export default function VisitExecutionTab() {
                 />
               )}
 
-              {/* Sprint 6: role-filter lens. Sits between the snapshot/signals
-                  area (workspace overview) and the checklist (narrowed view).
-                  Filtering signals + edit-log is intentionally NOT in scope —
-                  signals are visit-level + audit-log is role-agnostic.
-                  filteredCount computed once; also fed downstream to the
-                  ExportWorksheetButton (zero-item-export guard). */}
-              <RoleFilterBar
-                filter={roleFilter}
-                onSelect={setRoleFilter}
-                totalCount={selectedWorkspace.items.length}
-                filteredCount={roleFilteredCount}
+              <VisitSequenceBlock
+                workspace={selectedWorkspace}
+                onOpenTraceability={setTraceabilityItem}
+                divergentLabels={divergentLabels}
               />
 
               {mutationError && (
@@ -1238,33 +1252,113 @@ export default function VisitExecutionTab() {
                 </div>
               )}
 
-              <ExecutionChecklist
-                workspace={selectedWorkspace}
-                reviewStatus={reviewStatus}
-                onToggleReviewed={handleToggleReviewed}
-                onItemAction={handleItemAction}
-                onOpenTraceability={setTraceabilityItem}
-                divergentLabels={divergentLabels}
-                roleFilter={roleFilter}
-              />
+              {/* Narrative-first S1 — "Work the visit": the ACTING layer.
+                  The reading above shows every requirement; this section holds
+                  the same rows with their checkboxes, menus, role lens, and
+                  export. Collapsed by default so the visit opens on the
+                  reading; one gesture away, count on the toggle, nothing
+                  subtracted. The mutation-error banner deliberately lives
+                  ABOVE this section so a failed save is never hidden by the
+                  collapse. */}
+              <section
+                data-testid="vew-work-section"
+                className={`rounded-xl border overflow-hidden ${
+                  isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setWorkOpen((p) => !p)}
+                  aria-expanded={workOpen}
+                  aria-controls="vew-work-body"
+                  data-testid="vew-work-toggle"
+                  className={`w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left ${
+                    isLight ? 'hover:bg-[#F8FAFC]' : 'hover:bg-white/[0.02]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    {workOpen ? (
+                      <ChevronDown size={14} className="text-fg-sub flex-shrink-0" aria-hidden />
+                    ) : (
+                      <ChevronRight size={14} className="text-fg-sub flex-shrink-0" aria-hidden />
+                    )}
+                    <ClipboardCheck size={14} className="text-brand-500 flex-shrink-0" aria-hidden />
+                    <span className="text-fg-heading text-[15px] font-semibold tracking-tight">
+                      Work the visit
+                    </span>
+                  </div>
+                  <span className="text-fg-sub text-xs font-medium tabular-nums flex-shrink-0">
+                    <span
+                      className={
+                        reviewedCountForSelected === selectedWorkspace.items.length
+                          ? 'text-emerald-700 dark:text-emerald-400'
+                          : 'text-fg-body'
+                      }
+                    >
+                      {reviewedCountForSelected}
+                    </span>
+                    <span className="text-fg-muted"> / {selectedWorkspace.items.length} reviewed</span>
+                  </span>
+                </button>
 
-              {/* Polish-v2 follow-up (Sprint 5 design-critique): the
-                  export row is the moment-of-lock-in / funnel-exit action.
-                  Bumped pt-2 → pt-6 gives the row breathing room from the
-                  checklist content above so it doesn't read as a footer
-                  attachment to the disclaimer line. */}
-              <div className="flex items-center justify-between pt-6 gap-3">
-                <p className="text-fg-muted text-[11px] leading-relaxed max-w-md">
-                  This workspace is a draft. Final source-document authoring and
-                  approval are performed outside PIQC.
-                </p>
-                <ExportWorksheetButton
-                  visitTemplateId={selectedWorkspace.visit_template_id}
-                  visitName={selectedWorkspace.snapshot.visit_name}
-                  roleFilter={roleFilter}
-                  filteredCount={roleFilteredCount}
-                />
-              </div>
+                {workOpen && (
+                  <div
+                    id="vew-work-body"
+                    className={`px-4 pb-4 space-y-4 border-t ${
+                      isLight ? 'border-[#F2F2F2]' : 'border-white/[0.04]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3 pt-4">
+                      {/* Sprint 6 role lens — narrows the acting checklist +
+                          export only; the reading above always shows the full
+                          set. */}
+                      <RoleFilterBar
+                        filter={roleFilter}
+                        onSelect={setRoleFilter}
+                        totalCount={selectedWorkspace.items.length}
+                        filteredCount={roleFilteredCount}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleOpenAdd}
+                        className={`flex-shrink-0 inline-flex items-center gap-1.5 text-xs font-medium rounded-md px-3 py-1.5 border ${
+                          isLight
+                            ? 'border-[#E2E8F0] text-fg-body hover:bg-[#F2F2F2]'
+                            : 'border-white/10 text-fg-body hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <Plus size={13} aria-hidden /> Add requirement
+                      </button>
+                    </div>
+
+                    <ExecutionChecklist
+                      workspace={selectedWorkspace}
+                      reviewStatus={reviewStatus}
+                      onToggleReviewed={handleToggleReviewed}
+                      onItemAction={handleItemAction}
+                      onOpenTraceability={setTraceabilityItem}
+                      divergentLabels={divergentLabels}
+                      roleFilter={roleFilter}
+                    />
+
+                    {/* Polish-v2 follow-up (Sprint 5 design-critique): the
+                        export row is the moment-of-lock-in / funnel-exit action.
+                        pt-2 keeps breathing room inside the section. */}
+                    <div className="flex items-center justify-between pt-2 gap-3">
+                      <p className="text-fg-muted text-[11px] leading-relaxed max-w-md">
+                        This workspace is a draft. Final source-document authoring and
+                        approval are performed outside PIQC.
+                      </p>
+                      <ExportWorksheetButton
+                        visitTemplateId={selectedWorkspace.visit_template_id}
+                        visitName={selectedWorkspace.snapshot.visit_name}
+                        roleFilter={roleFilter}
+                        filteredCount={roleFilteredCount}
+                      />
+                    </div>
+                  </div>
+                )}
+              </section>
                 </>
               )}
             </>
