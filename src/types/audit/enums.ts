@@ -181,6 +181,15 @@ export type IsaFindingOrigin = 'AUDITOR' | 'PIQC_DRAFTED' | 'PIQC_EDITED';
 // Who owns the response to a finding (from the Audit Observation Form).
 export type IsaResponseOwner = 'SITE' | 'CLIENT' | 'CRO';
 
+// The site-continuation ruling — the most consequential sentence in the ISA
+// report. Never machine-drafted, never defaulted: the auditor sets it, and
+// export is blocked while it is unset. 1:1 with Postgres isa_site_verdict
+// (20260725000000_audit_mode_isa_report_schema.sql).
+export type IsaSiteVerdict =
+  | 'CONTINUE'
+  | 'CONTINUE_INCREASED_MONITORING'
+  | 'DO_NOT_CONTINUE';
+
 // Polymorphic discriminator for state_history_deltas.
 export type TrackedObjectType =
   | 'PROTOCOL_RISK_OBJECT'
@@ -192,6 +201,7 @@ export type TrackedObjectType =
   | 'AUDIT_WORKSPACE_ENTRY_OBJECT'
   | 'AUDIT_NOTE_OBJECT'
   | 'ISA_FINDING_OBJECT'
+  | 'ISA_REPORT_DRAFT_OBJECT'
   | 'AUDIT'
   | 'AMENDMENT_ALERT'
   | 'VENDOR_RISK_SUMMARY_OBJECT'
