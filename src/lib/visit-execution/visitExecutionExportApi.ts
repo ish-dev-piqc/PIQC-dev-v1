@@ -431,22 +431,28 @@ const PHASE_ORDER: ExecutionPhase[] = [
 /**
  * Compact labels for the table cells. Mirrors the workspace UI labels but
  * tighter (no surrounding chip chrome — just the word).
+ *
+ * Label values must stay WinAnsi-encodable: jsPDF's built-in helvetica
+ * cannot render glyphs outside CP1252 ('⚠', '✓', U+2212 minus) and silently
+ * prints mojibake ('&', "'", '"') in their place. '!' / '[x]' are the
+ * print-safe flags, matching formatTiming's hard-constraint convention.
+ * Exported for the WinAnsi-safety regression test.
  */
-const CLASSIFICATION_LABEL: Record<ItemClassification, string> = {
+export const CLASSIFICATION_LABEL: Record<ItemClassification, string> = {
   required:           'Required',
   conditional:        'Conditional',
   if_applicable:      'If Applicable',
   primary_endpoint:   'Primary Endpoint',
   secondary_endpoint: 'Secondary Endpoint',
-  safety_critical:    '⚠ Safety Critical',
+  safety_critical:    '! Safety Critical',
 };
 
-const REVIEW_LABEL: Record<ExecutionReviewStatus, string> = {
+export const REVIEW_LABEL: Record<ExecutionReviewStatus, string> = {
   not_reviewed:    'Not reviewed',
   // "!" prefix gives needs_review a visual flag for at-a-glance scanning
   // on a printed page where color and weight aren't reliable cues.
   needs_review:    '! Needs review',
-  reviewed:        'Reviewed ✓',
+  reviewed:        'Reviewed [x]',
   edited:          'Edited',
   site_note_added: 'Site note',
 };
@@ -510,7 +516,7 @@ function formatWindow(snapshot: VisitWorksheetExportPacket['snapshot']): string 
   if (snapshot.window_minus_days === snapshot.window_plus_days) {
     return `Day ${day} · ± ${snapshot.window_plus_days} day${snapshot.window_plus_days === 1 ? '' : 's'}`;
   }
-  return `Day ${day} · −${snapshot.window_minus_days} / +${snapshot.window_plus_days} days`;
+  return `Day ${day} · -${snapshot.window_minus_days} / +${snapshot.window_plus_days} days`;
 }
 
 /**
@@ -861,7 +867,7 @@ export function buildVisitWorksheetPdf(
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
     const bannerLeadingX = margin + 8;
-    doc.text('⚠', bannerLeadingX, bannerY + 12);
+    doc.text('!', bannerLeadingX, bannerY + 12);
     doc.setFont('helvetica', 'normal');
     const bannerMessage =
       `${statsNeedsReviewCount} requirement${statsNeedsReviewCount === 1 ? '' : 's'} not yet reviewed. ` +
