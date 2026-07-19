@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: Worksheet export — PDF-safe glyphs (WinAnsi)
-status: in-review
+status: merged
+merged: 2026-07-19
 started: 2026-07-19
-target_pr:
+target_pr: #518
 ---
 
 # Worksheet export — PDF-safe glyphs
