@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, NotebookPen, Pencil, ThumbsUp, Trash2, X as XIcon } from 'lucide-react';
+import { ArrowRight, NotebookPen, Pencil, Presentation, ThumbsUp, Trash2, X as XIcon } from 'lucide-react';
 import { useTheme } from '../../../../../context/ThemeContext';
 import { useAudit } from '../../../../../context/AuditContext';
 import { ISA_DOMAIN_LABELS } from '../../../../../lib/audit/labels';
@@ -15,6 +15,8 @@ import {
   requestIsaFindingDrafts,
   type IsaFindingDraft,
 } from '../../../../../lib/audit/isaFindingsApi';
+import { coverageByDomain, escalationSignals } from '../../../../../lib/audit/isaInsights';
+import IsaClosingMeetingView from './IsaClosingMeetingView';
 import PiqcMark from '../../PiqcMark';
 import type {
   AuditNoteObject,
@@ -128,6 +130,9 @@ export default function IsaConductWorkspace() {
   const [draftNote, setDraftNote] = useState<string | null>(null);
   const [acceptingKey, setAcceptingKey] = useState<string | null>(null);
 
+  // Insights (S2.5)
+  const [showClosing, setShowClosing] = useState(false);
+
   const auditId = activeAudit?.id;
 
   useEffect(() => {
@@ -222,6 +227,10 @@ export default function IsaConductWorkspace() {
       !n.promoted_finding_id &&
       (draftScope === '' || n.isa_domain === draftScope),
   );
+
+  // S2.5 derivations — pure, zero fetch (isaInsights.ts).
+  const coverage = coverageByDomain(notes, findings, DOMAIN_OPTIONS.map(([v]) => v));
+  const signals = escalationSignals(findings);
 
   // -------------------------------------------------------------------------
   // Notes (S1)
@@ -479,6 +488,53 @@ export default function IsaConductWorkspace() {
           </p>
         </div>
       </section>
+
+      {/* Coverage strip — which domains have fieldwork behind them. The
+          auditor's worst failure mode is the blind spot the auditee finds
+          first; gaps stay visible while there's still time to look. */}
+      {!loading && (notes.length > 0 || findings.length > 0) && (
+        <section className={`rounded-lg border ${cardBase} px-4 py-3`}>
+          <div className="flex items-center justify-between">
+            <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold">
+              Coverage
+            </p>
+            <p className="text-fg-muted text-[11px]">
+              {coverage.uncoveredCount > 0
+                ? `${coverage.uncoveredCount} of ${coverage.rows.length} domains have no notes yet`
+                : 'Every domain has fieldwork behind it'}
+              {coverage.untaggedNoteCount > 0 &&
+                ` · ${coverage.untaggedNoteCount} untagged ${coverage.untaggedNoteCount === 1 ? 'note' : 'notes'} not counted`}
+            </p>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {coverage.rows.map((row) => {
+              const label = ISA_DOMAIN_LABELS[row.domain];
+              const state =
+                row.findingCount > 0
+                  ? `${chipBase} font-semibold`
+                  : row.noteCount > 0
+                    ? chipBase
+                    : `border-dashed text-fg-muted ${isLight ? 'border-[#CBD5E1]' : 'border-white/15'}`;
+              return (
+                <button
+                  key={row.domain}
+                  type="button"
+                  onClick={() => {
+                    setDomain(row.domain);
+                    captureRef.current?.focus();
+                  }}
+                  title={`${label}: ${row.noteCount} ${row.noteCount === 1 ? 'note' : 'notes'}, ${row.findingCount} ${row.findingCount === 1 ? 'finding' : 'findings'} — click to tag new notes with this domain`}
+                  className={`rounded border px-1.5 py-0.5 text-[10px] transition-colors ${state}`}
+                >
+                  {label}
+                  {row.noteCount > 0 && ` · ${row.noteCount}`}
+                  {row.findingCount > 0 && ` · ${row.findingCount}F`}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Notes list */}
       <section className={`rounded-lg border ${cardBase}`}>
@@ -818,12 +874,46 @@ export default function IsaConductWorkspace() {
 
       {/* Findings */}
       <section className={`rounded-lg border ${cardBase}`}>
-        <div className={`flex items-center justify-between px-4 py-3 border-b ${rowBorder}`}>
+        <div className={`flex items-center justify-between gap-2 px-4 py-3 border-b ${rowBorder}`}>
           <h3 className="text-fg-heading text-sm font-semibold">Findings</h3>
-          <span className="text-fg-muted text-xs">
-            {findings.length} {findings.length === 1 ? 'finding' : 'findings'}
-          </span>
+          <div className="flex items-center gap-3">
+            {findings.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowClosing(true)}
+                className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs text-fg-body transition-colors ${inputBase}`}
+              >
+                <Presentation size={12} className={brandText} />
+                Closing meeting view
+              </button>
+            )}
+            <span className="text-fg-muted text-xs">
+              {findings.length} {findings.length === 1 ? 'finding' : 'findings'}
+            </span>
+          </div>
         </div>
+
+        {/* Escalation tripwire — the templates' accumulation rules, live.
+            Advisory only (D-008): PIQC cites the rule; the auditor judges. */}
+        {signals.length > 0 && (
+          <div className={`px-4 py-2.5 border-b ${rowBorder} space-y-1`}>
+            {signals.map((s) => (
+              <p
+                key={`${s.domain}-${s.severity}`}
+                className="flex items-start gap-1.5 text-xs text-fg-sub"
+              >
+                <PiqcMark size={11} className={`${brandText} mt-0.5 flex-shrink-0`} />
+                <span>
+                  {s.count} {SEVERITY_LABELS[s.severity]} findings in{' '}
+                  {ISA_DOMAIN_LABELS[s.domain]} — the accumulation rule suggests
+                  evaluating for a systemic failure (consider{' '}
+                  {SEVERITY_LABELS[s.suggests]}).
+                </span>
+              </p>
+            ))}
+          </div>
+        )}
+
         {findings.length === 0 ? (
           <p className="text-fg-sub text-sm px-4 py-6">
             No findings yet. Accepted drafts collect here for the report stage.
@@ -861,6 +951,14 @@ export default function IsaConductWorkspace() {
           </ul>
         )}
       </section>
+
+      {showClosing && (
+        <IsaClosingMeetingView
+          findings={findings}
+          positiveNotes={notes.filter((n) => n.is_positive)}
+          onClose={() => setShowClosing(false)}
+        />
+      )}
     </div>
   );
 }
