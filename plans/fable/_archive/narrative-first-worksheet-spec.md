@@ -1,6 +1,7 @@
 # FABLE SPEC — narrative-first: the complete study worksheet
 
-status: spec (OUTPUT of the Fable pass; input to the Opus build)
+status: merged
+merged: 2026-07-19
 brief: `plans/fable/narrative-first-BRIEF.md` (this branch)
 branch: `fable/narrative-first` (proving ground, cut from main `0b93bb5`). NOT a merge target.
 author: Fable (claude-fable-5), 2026-07-18
