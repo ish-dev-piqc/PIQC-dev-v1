@@ -85,4 +85,48 @@ describe('NoticeCard', () => {
       'brand_new_kind',
     );
   });
+
+  it('renders the cross_document_divergence type (N1)', () => {
+    render(
+      <NoticeCard
+        notice={{
+          ...baseNotice,
+          notice_type: 'cross_document_divergence',
+          headline: 'Documents disagree',
+          detail:
+            "2 protocol facts read differently across two or more of this protocol's documents \u2014 reconcile the versions before relying on them.",
+        }}
+        onDismiss={() => {}}
+      />,
+    );
+    expect(screen.getByText('Documents disagree')).toBeInTheDocument();
+    expect(screen.getByText(/reconcile the versions/)).toBeInTheDocument();
+    expect(screen.getByTestId('notice-card')).toHaveAttribute(
+      'data-notice-type',
+      'cross_document_divergence',
+    );
+  });
+
+  it('renders the unwindowed_visit type (N2)', () => {
+    render(
+      <NoticeCard
+        notice={{
+          ...baseNotice,
+          notice_type: 'unwindowed_visit',
+          headline: 'Visits without scheduling windows',
+          detail:
+            "1 visit has no scheduling window in the schedule rows PIQC read, while other visits in this protocol state one \u2014 confirm the open timing is intentional.",
+        }}
+        onDismiss={() => {}}
+      />,
+    );
+    expect(
+      screen.getByText('Visits without scheduling windows'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/schedule rows PIQC read/)).toBeInTheDocument();
+    expect(screen.getByTestId('notice-card')).toHaveAttribute(
+      'data-notice-type',
+      'unwindowed_visit',
+    );
+  });
 });

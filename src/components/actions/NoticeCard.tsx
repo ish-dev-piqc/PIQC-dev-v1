@@ -1,10 +1,11 @@
 import {
   CalendarClock,
+  CalendarOff,
   Eye,
   FileText,
+  GitCompareArrows,
   GitPullRequestArrow,
   HelpCircle,
-  Target,
   X,
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
@@ -35,9 +36,10 @@ import type { NoticeRecord, NoticeType } from '../../types/actions';
  *  this client build predates (taxonomy is server-owned — a new notice_type
  *  must still render, never blank). */
 const NOTICE_ICONS: Record<NoticeType, typeof Eye> = {
+  cross_document_divergence: GitCompareArrows,
   tight_visit_window: CalendarClock,
   amendment_in_force: GitPullRequestArrow,
-  endpoint_sdv: Target,
+  unwindowed_visit: CalendarOff,
   low_confidence_extraction: HelpCircle,
 };
 
