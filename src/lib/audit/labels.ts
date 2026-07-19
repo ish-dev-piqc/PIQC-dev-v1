@@ -16,6 +16,7 @@ import type {
   DerivedCriticality,
   EndpointTier,
   ImpactSurface,
+  IsaDomain,
   MaturityPosture,
   ProvisionalClassification,
   ProvisionalImpact,
@@ -43,6 +44,26 @@ export const STAGE_LABELS: Record<AuditStage, string> = {
   ISA_CONDUCT: 'Audit conduct',
   ISA_REPORT: 'Report drafting',
   ISA_EXPORT: 'Review & export',
+};
+
+// Investigator Site Audit observation domains (ISA_CONDUCT pad tags; the
+// S2 finding writer and report rollups key off the same map).
+export const ISA_DOMAIN_LABELS: Record<IsaDomain, string> = {
+  INFORMED_CONSENT: 'Informed consent',
+  INVESTIGATOR_OVERSIGHT_DELEGATION: 'Investigator oversight & delegation',
+  INVESTIGATIONAL_PRODUCT: 'Investigational product',
+  SAFETY_AE_SAE: 'Safety — AE/SAE reporting',
+  SOURCE_DATA_VERIFICATION: 'Source data verification',
+  RECORDKEEPING_SOURCE_DOCS: 'Recordkeeping & source documents',
+  ESSENTIAL_DOCUMENTS: 'Essential documents',
+  IRB_EC: 'IRB / EC',
+  STAFF_QUALIFICATIONS_TRAINING: 'Staff qualifications & training',
+  FACILITIES_EQUIPMENT: 'Facilities & equipment',
+  ELECTRONIC_SYSTEMS: 'Electronic systems',
+  STUDY_CONDUCT_GCP: 'Study conduct & GCP',
+  CLINICAL_MONITORING: 'Clinical monitoring',
+  SOP_REVIEW: 'SOP review',
+  OTHER: 'Other',
 };
 
 // Brief description shown under each stage in the StageNav and elsewhere.

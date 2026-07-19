@@ -145,6 +145,28 @@ export type AmendmentDecision = 'ADOPT_NEW_VERSION' | 'STAY_ON_CURRENT';
 
 export type TaggingMode = 'MANUAL' | 'PIQC_ASSISTED' | 'LLM_ASSISTED';
 
+// Investigator Site Audit observation domains — the site-audit analogue of
+// the vendor lane's freetext vendor_domain, but closed-world: the 15 values
+// come from the S0 writing contract (standard ISA report templates' category
+// matrix). 1:1 with Postgres isa_domain
+// (20260723000000_audit_mode_isa_notes_schema.sql).
+export type IsaDomain =
+  | 'INFORMED_CONSENT'
+  | 'INVESTIGATOR_OVERSIGHT_DELEGATION'
+  | 'INVESTIGATIONAL_PRODUCT'
+  | 'SAFETY_AE_SAE'
+  | 'SOURCE_DATA_VERIFICATION'
+  | 'RECORDKEEPING_SOURCE_DOCS'
+  | 'ESSENTIAL_DOCUMENTS'
+  | 'IRB_EC'
+  | 'STAFF_QUALIFICATIONS_TRAINING'
+  | 'FACILITIES_EQUIPMENT'
+  | 'ELECTRONIC_SYSTEMS'
+  | 'STUDY_CONDUCT_GCP'
+  | 'CLINICAL_MONITORING'
+  | 'SOP_REVIEW'
+  | 'OTHER';
+
 // Polymorphic discriminator for state_history_deltas.
 export type TrackedObjectType =
   | 'PROTOCOL_RISK_OBJECT'
@@ -154,6 +176,7 @@ export type TrackedObjectType =
   | 'QUESTIONNAIRE_INSTANCE'
   | 'QUESTIONNAIRE_RESPONSE_OBJECT'
   | 'AUDIT_WORKSPACE_ENTRY_OBJECT'
+  | 'AUDIT_NOTE_OBJECT'
   | 'AUDIT'
   | 'AMENDMENT_ALERT'
   | 'VENDOR_RISK_SUMMARY_OBJECT'
