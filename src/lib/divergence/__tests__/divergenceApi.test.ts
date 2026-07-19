@@ -2,10 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock the supabase client BEFORE importing the module under test so the
 // import sees the stub. Avoid the live client entirely in unit tests.
-const rpcMock = vi.fn();
-const eqMock = vi.fn();
-const selectMock = vi.fn(() => ({ eq: (...a: unknown[]) => eqMock(...a) }));
-const fromMock = vi.fn(() => ({ select: (...a: unknown[]) => selectMock(...a) }));
+// Each stub takes a rest param so the chained `from().select().eq()` calls
+// type-check while still recording their arguments.
+type QueryResult = { data: unknown; error: { message: string } | null };
+const settled = (): Promise<QueryResult> => Promise.resolve({ data: null, error: null });
+
+const rpcMock = vi.fn((..._args: unknown[]) => settled());
+const eqMock = vi.fn((..._args: unknown[]) => settled());
+const selectMock = vi.fn((..._args: unknown[]) => ({
+  eq: (...a: unknown[]) => eqMock(...a),
+}));
+const fromMock = vi.fn((..._args: unknown[]) => ({
+  select: (...a: unknown[]) => selectMock(...a),
+}));
 vi.mock('../../supabase', () => ({
   supabase: {
     from: (...args: unknown[]) => fromMock(...args),

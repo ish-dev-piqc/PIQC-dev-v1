@@ -145,6 +145,7 @@ export default function VisitExecutionTab() {
   const [mutationError, setMutationError] = useState<
     | { kind: 'item'; message: string; itemLabel: string }
     | { kind: 'signal'; message: string; gapText: string }
+    | { kind: 'divergence'; message: string }
     | null
   >(null);
   const [traceabilityItem, setTraceabilityItem] = useState<VisitExecutionItem | null>(null);
@@ -402,7 +403,7 @@ export default function VisitExecutionTab() {
         setDivergences((prev) => prev.map((d) => (d.id === r.data.id ? r.data : d)));
         return true;
       }
-      setMutationError(r.error);
+      setMutationError({ kind: 'divergence', message: humanizeRpcError(r.error) });
       return false;
     },
     [],
@@ -1210,11 +1211,17 @@ export default function VisitExecutionTab() {
                         Couldn't save change to <strong>{mutationError.itemLabel}</strong>:{' '}
                         {mutationError.message} Your previous state was restored.
                       </>
-                    ) : (
+                    ) : mutationError.kind === 'signal' ? (
                       <>
                         Couldn't update <strong>{mutationError.gapText}</strong>:{' '}
                         {mutationError.message} The suggestion is still pending — try again
                         or reload the page.
+                      </>
+                    ) : (
+                      <>
+                        Couldn't update this <strong>divergence</strong>:{' '}
+                        {mutationError.message} Its status is unchanged — try again or
+                        reload the page.
                       </>
                     )}
                   </span>
