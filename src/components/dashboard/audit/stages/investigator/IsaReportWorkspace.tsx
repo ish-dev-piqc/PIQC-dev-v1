@@ -27,10 +27,15 @@ import {
 import {
   buildFindingHtml,
   buildFindingPlain,
+  buildObservationFormHtml,
+  buildObservationFormPlain,
   buildReportHtml,
   buildReportPlain,
 } from '../../../../../lib/audit/isaReportClipboard';
-import { buildIsaReportDocx } from '../../../../../lib/audit/isaReportDocx';
+import {
+  buildIsaObservationFormDocx,
+  buildIsaReportDocx,
+} from '../../../../../lib/audit/isaReportDocx';
 import PiqcMark from '../../PiqcMark';
 import type {
   AuditNoteObject,
@@ -221,16 +226,37 @@ export default function IsaReportWorkspace() {
     }
   };
 
-  const downloadDocx = async () => {
-    const blob = await buildIsaReportDocx(packet);
-    const stamp = new Date().toISOString().slice(0, 10);
-    const name = `${meta.protocolCode ?? 'isa'}_site_audit_report_draft_${stamp}.docx`;
+  const downloadBlob = (blob: Blob, name: string) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = name;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const downloadDocx = async () => {
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadBlob(
+      await buildIsaReportDocx(packet),
+      `${meta.protocolCode ?? 'isa'}_site_audit_report_draft_${stamp}.docx`,
+    );
+  };
+
+  const copyObservationForm = async () => {
+    if (await copyRich(buildObservationFormHtml(packet), buildObservationFormPlain(packet))) {
+      flashCopied('form');
+    } else {
+      setError('Copy failed — your browser blocked clipboard access.');
+    }
+  };
+
+  const downloadObservationFormDocx = async () => {
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadBlob(
+      await buildIsaObservationFormDocx(packet),
+      `${meta.protocolCode ?? 'isa'}_audit_observation_form_draft_${stamp}.docx`,
+    );
   };
 
   const sectionCard = (
@@ -510,13 +536,39 @@ export default function IsaReportWorkspace() {
 
           {/* Observations preview + per-finding copy */}
           <section className={`rounded-lg border ${cardBase}`}>
-            <div className={`flex items-center justify-between px-4 py-3 border-b ${rowBorder}`}>
+            <div className={`flex flex-wrap items-center gap-2 px-4 py-3 border-b ${rowBorder}`}>
               <h3 className="text-fg-heading text-sm font-semibold">Observations in this report</h3>
-              <span className="text-fg-muted text-xs">
-                {findings.length === 0
-                  ? 'none yet — accept findings in Audit conduct'
-                  : `${packet.counts.CRITICAL} critical · ${packet.counts.MAJOR} major · ${packet.counts.MINOR} minor · ${packet.counts.RECOMMENDATION} rec`}
-              </span>
+              <div className="ml-auto flex items-center gap-2">
+                {/* The observation form is the auditee-facing response
+                    vehicle — it needs findings, not the site verdict. */}
+                {findings.length > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => void copyObservationForm()}
+                      title="Copy the auditee observation form — paste into Word or Google Docs"
+                      className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs text-fg-body ${inputBase}`}
+                    >
+                      {copied === 'form' ? <Check size={12} /> : <ClipboardCopy size={12} />}
+                      {copied === 'form' ? 'Copied' : 'Copy obs. form'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void downloadObservationFormDocx()}
+                      title="Download the auditee observation form as .docx"
+                      className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs text-fg-body ${inputBase}`}
+                    >
+                      <Download size={12} />
+                      Form .docx
+                    </button>
+                  </>
+                )}
+                <span className="text-fg-muted text-xs">
+                  {findings.length === 0
+                    ? 'none yet — accept findings in Audit conduct'
+                    : `${packet.counts.CRITICAL} critical · ${packet.counts.MAJOR} major · ${packet.counts.MINOR} minor · ${packet.counts.RECOMMENDATION} rec`}
+                </span>
+              </div>
             </div>
             {findings.length > 0 && (
               <ul>
