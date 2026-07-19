@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: isa-finding-writer
-status: active
+status: merged
+merged: 2026-07-19
 started: 2026-07-19
-target_pr:
+target_pr: #500
 ---
 
 # ISA finding writer — S2 of the notes → findings → report arc
