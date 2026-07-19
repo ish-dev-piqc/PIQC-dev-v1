@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
-import { GitFork, Target, AlertOctagon } from 'lucide-react';
+// Map aliased: the bare name would shadow the built-in Map constructor used
+// by the visitConfidences memo below.
+import { GitFork, Target, AlertOctagon, Map as MapIcon } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import type {
   ExecutionReviewStatus,
@@ -43,6 +45,13 @@ interface Props {
   cohorts?: string[];
   cohortFilter?: string;
   onCohortFilter?: (next: string) => void;
+  /**
+   * Narrative-first S1.6: when provided, a pinned "Study overview" node
+   * renders above the visit list. `studySelected` marks it active (the
+   * parent tracks study-vs-visit selection via its sentinel).
+   */
+  onSelectStudy?: () => void;
+  studySelected?: boolean;
 }
 
 export default function VisitNavigator({
@@ -53,6 +62,8 @@ export default function VisitNavigator({
   cohorts = [],
   cohortFilter = 'all',
   onCohortFilter,
+  onSelectStudy,
+  studySelected = false,
 }: Props) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
@@ -94,6 +105,39 @@ export default function VisitNavigator({
           </div>
         )}
       </div>
+
+      {/* Narrative-first S1.6: pinned study-level entry — the reading one
+          level up. Rendered only when the parent wires it; sits above the
+          visit list but does NOT steal the default selection. */}
+      {onSelectStudy && (
+        <button
+          type="button"
+          onClick={onSelectStudy}
+          aria-current={studySelected ? 'true' : undefined}
+          data-testid="vew-navigator-study"
+          data-selected={studySelected}
+          className={`w-full text-left px-4 py-3 border-l-[3px] border-b transition-colors flex items-center gap-2 ${
+            isLight ? 'border-b-[#E2E8F0]' : 'border-b-white/5'
+          } ${
+            studySelected
+              ? isLight
+                ? 'bg-white border-l-[#1E293B]'
+                : 'bg-white/[0.06] border-l-white'
+              : isLight
+                ? 'border-l-transparent hover:bg-[#F2F2F2]'
+                : 'border-l-transparent hover:bg-white/[0.02]'
+          }`}
+        >
+          <MapIcon size={13} aria-hidden className="text-brand-500 flex-shrink-0" />
+          <span
+            className={`text-sm font-semibold ${
+              studySelected ? 'text-fg-heading' : 'text-fg-body'
+            }`}
+          >
+            Study overview
+          </span>
+        </button>
+      )}
 
       <ol className="py-2">
         {workspaces.map((ws) => {
