@@ -45,6 +45,13 @@ interface Props {
    * embeds) keep their current behavior.
    */
   derivedConfidence?: VisitConfidenceState;
+  /**
+   * Narrative-first S1: when the VisitBriefBlock renders directly below this
+   * card, the brief's orient line IS the purpose prose — rendering it here
+   * too would say the same sentence twice on one screen. The attribution
+   * moves with it (the brief carries its own "PIQC drafted" label).
+   */
+  hidePurpose?: boolean;
 }
 
 interface Chip {
@@ -108,6 +115,7 @@ export default function VisitSnapshotCard({
   reviewedCount,
   totalItems,
   derivedConfidence,
+  hidePurpose = false,
 }: Props) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
@@ -156,15 +164,19 @@ export default function VisitSnapshotCard({
               product_vew_workspace_vs_worksheet_model.md) — same words,
               just designed position instead of feeling grafted onto the
               start of the sentence. Reads as section-label → body. */}
-          <p
-            className="text-fg-label text-[10px] uppercase tracking-wider font-semibold mt-2"
-            data-testid="vew-snapshot-attribution"
-          >
-            PIQC drafted
-          </p>
-          <p className="text-fg-body text-sm leading-relaxed mt-1">
-            {snapshot.purpose}
-          </p>
+          {!hidePurpose && (
+            <>
+              <p
+                className="text-fg-label text-[10px] uppercase tracking-wider font-semibold mt-2"
+                data-testid="vew-snapshot-attribution"
+              >
+                PIQC drafted
+              </p>
+              <p className="text-fg-body text-sm leading-relaxed mt-1">
+                {snapshot.purpose}
+              </p>
+            </>
+          )}
         </div>
       </div>
 
