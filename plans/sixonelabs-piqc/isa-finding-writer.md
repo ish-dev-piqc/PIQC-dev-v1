@@ -24,6 +24,8 @@ S1 (PR #498) gave `ISA_CONDUCT` the notes pad. S2 is the payoff: PIQC reads the 
 - src/lib/audit/isaFindingsApi.ts
 - src/lib/audit/__tests__/isaFindingsApi.test.ts
 - src/lib/audit/__tests__/isaFindingGates.test.ts
+- src/lib/audit/__tests__/isaNotesApi.test.ts
+  (mechanical compile fix: AuditNoteObject gained required promoted_finding_id; the S1 fixture needs the field)
 - src/components/dashboard/audit/stages/investigator/IsaConductWorkspace.tsx
 
 ## Out of scope (files forbidden)

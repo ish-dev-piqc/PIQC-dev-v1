@@ -26,6 +26,9 @@ import type {
   EndpointTier,
   ImpactSurface,
   IsaDomain,
+  IsaFindingOrigin,
+  IsaResponseOwner,
+  IsaSeverity,
   MaturityPosture,
   ProtocolVersionStatus,
   ProvisionalClassification,
@@ -494,6 +497,40 @@ export interface AuditNoteObject {
   isa_domain: IsaDomain | null;      // optional tag; S2 infers when absent
   is_positive: boolean;              // feeds the report's positive-observations section
   deleted_at: string | null;
+  /** Set when a finding's evidence cites this note (S2). Promoted notes are
+   *  excluded from later drafting rounds. */
+  promoted_finding_id: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// One evidence instance under a finding: a specific fact, traced to the pad
+// notes it came from. The generalized deficiency lives in `observation`;
+// evidence carries the instances (Observation Form contract).
+export interface IsaFindingEvidence {
+  text: string;
+  source_note_ids: string[];
+}
+
+// Formal ISA finding. Append-only (update-with-delta, no delete), like the
+// vendor lane's workspace entries but site-shaped. 1:1 with
+// isa_finding_objects (20260724000000_audit_mode_isa_findings_schema.sql).
+export interface IsaFindingObject {
+  id: string;
+  audit_id: string;
+  title: string;
+  isa_domain: IsaDomain;
+  subcategory: string | null;
+  severity: IsaSeverity;
+  /** Which severity decision/escalation rule fired — auditable rating. */
+  severity_rule: string | null;
+  observation: string;               // generalized deficiency statement
+  evidence: IsaFindingEvidence[];    // JSONB column; instances with note trail
+  /** Closed-world regulatory citation (citationMap.ts) or null. */
+  reference: string | null;
+  response_owner: IsaResponseOwner;
+  origin: IsaFindingOrigin;
   created_by: string;
   created_at: string;
   updated_at: string;
