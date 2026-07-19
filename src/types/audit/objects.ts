@@ -514,6 +514,20 @@ export interface IsaFindingEvidence {
   source_note_ids: string[];
 }
 
+// A citation of the site's OWN uploaded protocol — the requirement the
+// finding breaches, quoted from the document itself (S4 bridge). SNAPSHOT
+// semantics: quote/section/pages are denormalized at attach time and never
+// re-resolved; chunk_id/document_id are provenance breadcrumbs, not live FKs
+// (a protocol re-parse must not orphan a finding's citation).
+export interface IsaProtocolRef {
+  chunk_id: string | null;
+  document_id: string | null;
+  quote: string;
+  section_heading: string | null;
+  page_start: number | null;
+  page_end: number | null;
+}
+
 // Formal ISA finding. Append-only (update-with-delta, no delete), like the
 // vendor lane's workspace entries but site-shaped. 1:1 with
 // isa_finding_objects (20260724000000_audit_mode_isa_findings_schema.sql).
@@ -530,6 +544,8 @@ export interface IsaFindingObject {
   evidence: IsaFindingEvidence[];    // JSONB column; instances with note trail
   /** Closed-world regulatory citation (citationMap.ts) or null. */
   reference: string | null;
+  /** Citations of the site's own protocol (S4 bridge). JSONB column. */
+  protocol_refs: IsaProtocolRef[];
   response_owner: IsaResponseOwner;
   origin: IsaFindingOrigin;
   created_by: string;

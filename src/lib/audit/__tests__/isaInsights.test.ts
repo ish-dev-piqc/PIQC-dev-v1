@@ -42,6 +42,7 @@ function finding(domain: IsaDomain, severity: IsaSeverity): IsaFindingObject {
     observation: 'o',
     evidence: [],
     reference: null,
+    protocol_refs: [],
     response_owner: 'SITE',
     origin: 'AUDITOR',
     created_by: 'user-1',

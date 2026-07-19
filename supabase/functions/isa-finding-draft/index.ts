@@ -3,11 +3,23 @@
 //
 // Takes { audit_id, note_ids? }, fetches the live un-promoted pad notes
 // server-side under the caller's JWT (RLS-gated), asks OpenAI to cluster them
-// into draft findings (one finding = one root cause), then applies two
+// into draft findings (one finding = one root cause), then applies three
 // server-side gates before anything is returned:
 //   Gate 1 cite-or-drop      — untraceable drafts are withheld, not rendered
 //   Gate 2 closed-world cite — references not in the curated E6(R3)/CFR map
 //                              are stripped (see citationMap.ts)
+//   Gate 3 protocol cite     — a protocol_ref must name a passage actually
+//                              sent to the model AND quote it verbatim, or it
+//                              is stripped (see protocolCandidates.ts). The
+//                              closed world here is the site's own protocol.
+//
+// Protocol retrieval (S4): the audit's protocol shares a protocols row with
+// SOTR's parsed documents (audits.protocol_id = documents.protocol_id).
+// Chunk RLS is owner-only and the auditor is usually not the uploader, so
+// candidate passages are fetched with the SERVICE ROLE — but only AFTER the
+// JWT-scoped audit fetch has proven the caller owns the audit (the
+// dashboard-chat precedent), and only from ready documents of that audit's
+// protocol.
 //
 // Forked from /functions/audit-summary/ — same JWT passthrough, rate limit,
 // body guards, abort timeout, counts-only logging.
@@ -16,7 +28,9 @@
 //   - write to the database. Drafts are proposals; the auditor accepts each
 //     one explicitly via audit_mode_create_isa_finding (D-008).
 //   - send sponsor/client names, site personnel names, or the PI's name.
-//     Context is note bodies + domains, protocol title, audit type only.
+//     Context is note bodies + domains, protocol title, audit type — plus,
+//     since S4, passages of the uploaded protocol document itself: the same
+//     data class the dashboard-chat (Sponsor Ask) function already sends.
 //   - draft from positive notes (they feed the report's positive section,
 //     not findings) or from already-promoted notes (no re-proposing).
 // =============================================================================
@@ -25,6 +39,12 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { CITATION_MAP } from "./citationMap.ts";
 import { gateDrafts } from "./gates.ts";
+import {
+  labelCandidates,
+  MAX_QUOTE_CHARS,
+  type ProtocolCandidate,
+  type ProtocolChunkRow,
+} from "./protocolCandidates.ts";
 
 // -----------------------------------------------------------------------------
 // CORS + constants
@@ -43,6 +63,10 @@ const MAX_BODY_BYTES       = 20_000;
 const OPENAI_TIMEOUT_MS    = 60_000;
 const MAX_NOTE_CHARS       = 1_000;     // truncate per-note body in prompt
 const MAX_NOTES_IN_PROMPT  = 60;
+const MAX_PASSAGE_CHARS    = 700;       // truncate per-passage content in prompt
+const MAX_DOMAIN_GROUPS    = 6;         // retrieval queries per request
+const CANDIDATES_PER_GROUP = 4;
+const EMBEDDING_MODEL      = "text-embedding-3-small";
 
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 
@@ -115,6 +139,11 @@ REGISTER (site-audit report conventions):
 CITATIONS:
 - Set "reference" ONLY to one exact string from the ALLOWED CITATIONS list for the finding's domain. Copy it verbatim. If none fits, set reference to null. NEVER compose your own citation.
 
+PROTOCOL CITATIONS (when PROTOCOL PASSAGES are provided):
+- The passages are excerpts of THIS study's own protocol. If one states the requirement a finding breaches, cite it: set "protocol_ref" to {"passage":"<its label, e.g. P3>","quote":"<a verbatim contiguous excerpt of that passage, max ${MAX_QUOTE_CHARS} characters>"}.
+- The quote must be copied EXACTLY from the labeled passage — no paraphrase, no stitching, no quoting from memory. If no provided passage states the requirement, set protocol_ref to null. A missing protocol_ref is normal; a wrong one is a serious error.
+- At most one protocol_ref per finding.
+
 HARD RULES:
 - Sponsor, client, and site personnel names must NOT appear anywhere in your output.
 - Do NOT invent findings, facts, or citations. Every evidence item must cite the note ids that support it.
@@ -122,7 +151,7 @@ HARD RULES:
 - Positive observations are not findings; ignore praise-only content.
 
 OUTPUT — a single JSON object, no markdown:
-{"drafts":[{"title":"...","isa_domain":"<one of the domain keys>","subcategory":"... or null","severity":"CRITICAL|MAJOR|MINOR|RECOMMENDATION","severity_rule":"which rule fired","observation":"...","evidence":[{"text":"...","source_note_ids":["<note id>"]}],"reference":"<exact allowed citation or null>"}]}`;
+{"drafts":[{"title":"...","isa_domain":"<one of the domain keys>","subcategory":"... or null","severity":"CRITICAL|MAJOR|MINOR|RECOMMENDATION","severity_rule":"which rule fired","observation":"...","evidence":[{"text":"...","source_note_ids":["<note id>"]}],"reference":"<exact allowed citation or null>","protocol_ref":{"passage":"P1","quote":"..."} or null}]}`;
 
 interface NoteContext {
   id: string;
@@ -134,6 +163,7 @@ function buildUserMessage(
   notes: NoteContext[],
   protocolTitle: string | null,
   auditType: string | null,
+  candidates: ProtocolCandidate[],
 ): string {
   const lines: string[] = [];
   lines.push(`Protocol: ${protocolTitle ?? "(unspecified)"}`);
@@ -146,6 +176,20 @@ function buildUserMessage(
   }
   lines.push("");
 
+  if (candidates.length > 0) {
+    lines.push(`PROTOCOL PASSAGES (${candidates.length}; protocol_ref may cite these labels only):`);
+    for (const c of candidates) {
+      const where = [
+        c.section_heading ? `§ ${c.section_heading}` : null,
+        c.page_start !== null
+          ? `p. ${c.page_start}${c.page_end !== null && c.page_end !== c.page_start ? `–${c.page_end}` : ""}`
+          : null,
+      ].filter(Boolean).join(", ");
+      lines.push(`[${c.label}]${where ? ` (${where})` : ""} ${c.content.slice(0, MAX_PASSAGE_CHARS)}`);
+    }
+    lines.push("");
+  }
+
   lines.push(`Fieldwork notes (${notes.length}; cite ids exactly as given):`);
   for (const n of notes) {
     const tag = n.isa_domain ? ` (auditor tagged: ${n.isa_domain})` : "";
@@ -154,6 +198,83 @@ function buildUserMessage(
   lines.push("");
   lines.push("Cluster these notes into draft findings now. Output the JSON object only.");
   return lines.join("\n");
+}
+
+// -----------------------------------------------------------------------------
+// Protocol-passage retrieval (Gate 3's candidate set).
+//
+// Notes are grouped by auditor-tagged domain so a multi-domain visit doesn't
+// dilute the query vector (consent notes swamping IP-accountability notes);
+// each group embeds once and pulls its own top passages via hybrid_search,
+// scoped to the audit protocol's ready documents. Any failure here degrades
+// to "no candidates" — drafting proceeds without the bridge, never 500s.
+// -----------------------------------------------------------------------------
+
+async function embedText(
+  openaiKey: string,
+  text: string,
+  signal: AbortSignal,
+): Promise<number[] | null> {
+  const res = await fetch("https://api.openai.com/v1/embeddings", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ input: text.slice(0, 8_000), model: EMBEDDING_MODEL }),
+    signal,
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const embedding = data?.data?.[0]?.embedding;
+  return Array.isArray(embedding) ? (embedding as number[]) : null;
+}
+
+async function retrieveProtocolCandidates(
+  serviceClient: ReturnType<typeof createClient>,
+  openaiKey: string,
+  docIds: string[],
+  notes: NoteContext[],
+  signal: AbortSignal,
+  requestId: string,
+): Promise<ProtocolCandidate[]> {
+  try {
+    const groups = new Map<string, string[]>();
+    for (const n of notes) {
+      const key = n.isa_domain ?? "GENERAL";
+      const bodies = groups.get(key) ?? [];
+      bodies.push(n.body);
+      groups.set(key, bodies);
+    }
+    const ranked = [...groups.entries()]
+      .sort((a, b) => b[1].length - a[1].length)
+      .slice(0, MAX_DOMAIN_GROUPS);
+
+    const perGroup = await Promise.all(ranked.map(async ([, bodies]) => {
+      const queryText = bodies.join("\n").slice(0, 4_000);
+      const embedding = await embedText(openaiKey, queryText, signal);
+      if (!embedding) return [] as ProtocolChunkRow[];
+      const { data, error } = await serviceClient.rpc("hybrid_search", {
+        query_embedding: embedding,
+        query_text: queryText,
+        match_count: CANDIDATES_PER_GROUP,
+        filter_document_ids: docIds,
+      });
+      if (error || !Array.isArray(data)) return [] as ProtocolChunkRow[];
+      return (data as Record<string, unknown>[]).map((row) => ({
+        id: String(row.id),
+        document_id: String(row.document_id),
+        content: String(row.content ?? ""),
+        section_heading: (row.section_heading as string | null) ?? null,
+        page_start: typeof row.page_start === "number" ? row.page_start : null,
+        page_end: typeof row.page_end === "number" ? row.page_end : null,
+      }));
+    }));
+
+    return labelCandidates(perGroup.flat());
+  } catch (err) {
+    log("warn", "isa_finding_draft.protocol_retrieval_failed", {
+      request_id: requestId, error: String(err),
+    });
+    return [];
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -233,7 +354,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: audit, error: auditErr } = await supabase
     .from("audits")
-    .select(`id, audit_type, workflow_type, protocol:protocols(title)`)
+    .select(`id, audit_type, workflow_type, protocol_id, protocol:protocols(title)`)
     .eq("id", auditId)
     .maybeSingle();
 
@@ -286,13 +407,49 @@ Deno.serve(async (req: Request) => {
     filtered: noteIdFilter !== null,
   });
 
-  // ---------------------------------------------------------------------------
-  // OpenAI call — JSON mode, low temperature for structured clustering.
-  // ---------------------------------------------------------------------------
-
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
   req.signal.addEventListener("abort", () => controller.abort());
+
+  // ---------------------------------------------------------------------------
+  // Protocol-passage retrieval — service role, but ONLY after the JWT-scoped
+  // audit fetch above proved the caller owns this audit. Missing service key
+  // or no ready parsed documents → the bridge is silently unavailable;
+  // drafting itself is unaffected.
+  // ---------------------------------------------------------------------------
+
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  let candidates: ProtocolCandidate[] = [];
+  let protocolSource: "ready" | "unavailable" = "unavailable";
+
+  if (serviceRoleKey && audit.protocol_id) {
+    const serviceClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false },
+    });
+    const { data: docRows } = await serviceClient
+      .from("documents")
+      .select("id")
+      .eq("protocol_id", audit.protocol_id as string)
+      .eq("status", "ready");
+    const docIds = (docRows ?? []).map((d) => String(d.id));
+    if (docIds.length > 0) {
+      protocolSource = "ready";
+      candidates = await retrieveProtocolCandidates(
+        serviceClient, openaiKey, docIds, notes, controller.signal, requestId,
+      );
+    }
+  }
+
+  log("info", "isa_finding_draft.protocol_candidates", {
+    request_id: requestId,
+    audit_id: auditId,
+    protocol_source: protocolSource,
+    candidate_count: candidates.length,
+  });
+
+  // ---------------------------------------------------------------------------
+  // OpenAI call — JSON mode, low temperature for structured clustering.
+  // ---------------------------------------------------------------------------
 
   let openaiRes: Response;
   try {
@@ -309,7 +466,7 @@ Deno.serve(async (req: Request) => {
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: FINDING_WRITER_PROMPT },
-          { role: "user", content: buildUserMessage(notes, protocolTitle, (audit.audit_type as string | null) ?? null) },
+          { role: "user", content: buildUserMessage(notes, protocolTitle, (audit.audit_type as string | null) ?? null, candidates) },
         ],
       }),
       signal: controller.signal,
@@ -352,8 +509,8 @@ Deno.serve(async (req: Request) => {
   // ---------------------------------------------------------------------------
 
   const liveNoteIds = new Set(notes.map((n) => n.id));
-  const { accepted, withheldCount, strippedReferenceCount } =
-    gateDrafts(parsed.drafts, liveNoteIds);
+  const { accepted, withheldCount, strippedReferenceCount, strippedProtocolRefCount } =
+    gateDrafts(parsed.drafts, liveNoteIds, candidates);
 
   log("info", "isa_finding_draft.response", {
     request_id: requestId,
@@ -362,12 +519,16 @@ Deno.serve(async (req: Request) => {
     draft_count: accepted.length,
     withheld_count: withheldCount,
     stripped_reference_count: strippedReferenceCount,
+    stripped_protocol_ref_count: strippedProtocolRefCount,
+    protocol_source: protocolSource,
   });
 
   return new Response(JSON.stringify({
     drafts: accepted,
     withheld_count: withheldCount,
     stripped_reference_count: strippedReferenceCount,
+    stripped_protocol_ref_count: strippedProtocolRefCount,
+    protocol_source: protocolSource,
     note_count: notes.length,
   }), { status: 200, headers: jsonHeaders });
 });

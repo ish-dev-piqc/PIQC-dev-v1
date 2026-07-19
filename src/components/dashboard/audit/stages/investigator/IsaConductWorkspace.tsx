@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, NotebookPen, Pencil, Presentation, ThumbsUp, Trash2, X as XIcon } from 'lucide-react';
+import { ArrowRight, BookOpen, NotebookPen, Pencil, Presentation, ThumbsUp, Trash2, X as XIcon } from 'lucide-react';
 import { useTheme } from '../../../../../context/ThemeContext';
 import { useAudit } from '../../../../../context/AuditContext';
 import { ISA_DOMAIN_LABELS } from '../../../../../lib/audit/labels';
@@ -12,16 +12,22 @@ import {
 import {
   createIsaFinding,
   fetchIsaFindings,
+  fetchIsaProtocolBridgeStatus,
   requestIsaFindingDrafts,
+  searchIsaProtocolChunks,
+  updateIsaFinding,
   type IsaFindingDraft,
+  type IsaProtocolChunkHit,
 } from '../../../../../lib/audit/isaFindingsApi';
 import { coverageByDomain, escalationSignals } from '../../../../../lib/audit/isaInsights';
+import { formatProtocolRefWhere } from '../../../../../lib/audit/isaReportModel';
 import IsaClosingMeetingView from './IsaClosingMeetingView';
 import PiqcMark from '../../PiqcMark';
 import type {
   AuditNoteObject,
   IsaDomain,
   IsaFindingObject,
+  IsaProtocolRef,
   IsaSeverity,
 } from '../../../../../types/audit';
 
@@ -63,6 +69,20 @@ interface DraftStash {
   drafts: ReviewDraft[];
   withheld_count: number;
   stripped_reference_count: number;
+  /** Optional: stashes written before S4 don't carry it. */
+  stripped_protocol_ref_count?: number;
+}
+
+/** Manual-attach quote: the hit's snippet, capped to the ref quote limit. */
+function hitToRef(hit: IsaProtocolChunkHit): IsaProtocolRef {
+  return {
+    chunk_id: hit.chunk_id,
+    document_id: hit.document_id,
+    quote: hit.snippet.slice(0, 300),
+    section_heading: hit.section_heading,
+    page_start: hit.page_start,
+    page_end: hit.page_end,
+  };
 }
 
 function noteTimestamp(iso: string): string {
@@ -125,10 +145,21 @@ export default function IsaConductWorkspace() {
   const [drafts, setDrafts] = useState<ReviewDraft[]>([]);
   const [withheldCount, setWithheldCount] = useState(0);
   const [strippedCount, setStrippedCount] = useState(0);
+  const [strippedProtoCount, setStrippedProtoCount] = useState(0);
   const [drafting, setDrafting] = useState(false);
   const [draftScope, setDraftScope] = useState<IsaDomain | ''>('');
   const [draftNote, setDraftNote] = useState<string | null>(null);
   const [acceptingKey, setAcceptingKey] = useState<string | null>(null);
+
+  // Protocol-citation bridge (S4). null = status unknown (hide everything,
+  // including the nudge — silent until we know); false = no parsed protocol.
+  const [bridgeReady, setBridgeReady] = useState<boolean | null>(null);
+  const [pickerFor, setPickerFor] = useState<
+    { kind: 'draft'; key: string } | { kind: 'finding'; id: string } | null
+  >(null);
+  const [pickerQuery, setPickerQuery] = useState('');
+  const [pickerHits, setPickerHits] = useState<IsaProtocolChunkHit[] | null>(null);
+  const [pickerBusy, setPickerBusy] = useState(false);
 
   // Insights (S2.5)
   const [showClosing, setShowClosing] = useState(false);
@@ -150,11 +181,15 @@ export default function IsaConductWorkspace() {
         setLoading(false);
       },
     );
+    void fetchIsaProtocolBridgeStatus(auditId).then((res) => {
+      if (!cancelled) setBridgeReady(res.ok ? res.data > 0 : false);
+    });
     const stash = readStash(auditId);
     if (stash) {
       setDrafts(stash.drafts);
       setWithheldCount(stash.withheld_count);
       setStrippedCount(stash.stripped_reference_count);
+      setStrippedProtoCount(stash.stripped_protocol_ref_count ?? 0);
     }
     return () => {
       cancelled = true;
@@ -304,12 +339,14 @@ export default function IsaConductWorkspace() {
     next: ReviewDraft[],
     withheld = withheldCount,
     stripped = strippedCount,
+    strippedProto = strippedProtoCount,
   ) => {
     setDrafts(next);
     writeStash(activeAudit.id, {
       drafts: next,
       withheld_count: withheld,
       stripped_reference_count: stripped,
+      stripped_protocol_ref_count: strippedProto,
     });
   };
 
@@ -329,7 +366,13 @@ export default function IsaConductWorkspace() {
       }));
       setWithheldCount(res.withheld_count);
       setStrippedCount(res.stripped_reference_count);
-      persistDrafts(next, res.withheld_count, res.stripped_reference_count);
+      setStrippedProtoCount(res.stripped_protocol_ref_count ?? 0);
+      persistDrafts(
+        next,
+        res.withheld_count,
+        res.stripped_reference_count,
+        res.stripped_protocol_ref_count ?? 0,
+      );
       if (next.length === 0) {
         setDraftNote(
           res.withheld_count > 0
@@ -367,6 +410,7 @@ export default function IsaConductWorkspace() {
       subcategory: draft.subcategory,
       severityRule: draft.severity_rule,
       reference: draft.reference,
+      protocolRefs: draft.protocol_ref ? [draft.protocol_ref] : [],
     });
     setAcceptingKey(null);
     if (res.ok) {
@@ -383,6 +427,122 @@ export default function IsaConductWorkspace() {
       setError('The finding was not saved. Its notes may have changed — re-run drafting.');
     }
   };
+
+  // -------------------------------------------------------------------------
+  // Protocol-citation bridge (S4) — manual picker: the override affordance.
+  // PIQC proposes during drafting; this is how the auditor replaces or adds a
+  // citation by searching the protocol's own parsed text.
+  // -------------------------------------------------------------------------
+
+  const openPicker = (target: NonNullable<typeof pickerFor>) => {
+    setPickerFor(target);
+    setPickerQuery('');
+    setPickerHits(null);
+  };
+
+  const closePicker = () => {
+    setPickerFor(null);
+    setPickerHits(null);
+  };
+
+  const runPickerSearch = async () => {
+    if (pickerBusy || pickerQuery.trim().length === 0) return;
+    setPickerBusy(true);
+    const res = await searchIsaProtocolChunks(activeAudit.id, pickerQuery.trim());
+    setPickerHits(res.ok ? res.data : []);
+    setPickerBusy(false);
+  };
+
+  const attachRef = async (hit: IsaProtocolChunkHit) => {
+    if (!pickerFor) return;
+    const ref = hitToRef(hit);
+    if (pickerFor.kind === 'draft') {
+      patchDraft(pickerFor.key, { protocol_ref: ref });
+      closePicker();
+      return;
+    }
+    const res = await updateIsaFinding(pickerFor.id, { protocolRefs: [ref] });
+    if (res.ok) {
+      setFindings((prev) => prev.map((f) => (f.id === res.data.id ? res.data : f)));
+      setError(null);
+    } else {
+      setError('The protocol citation was not saved. Retry.');
+    }
+    closePicker();
+  };
+
+  const removeFindingRef = async (findingId: string) => {
+    const res = await updateIsaFinding(findingId, { protocolRefs: [] });
+    if (res.ok) {
+      setFindings((prev) => prev.map((f) => (f.id === res.data.id ? res.data : f)));
+    } else {
+      setError('The protocol citation was not removed. Retry.');
+    }
+  };
+
+  const renderPicker = () => (
+    <div
+      className={`rounded-md border ${rowBorder} ${
+        isLight ? 'bg-[#F8FAFC]' : 'bg-white/[0.02]'
+      } p-2.5 space-y-2`}
+    >
+      <div className="flex items-center gap-2">
+        <input
+          value={pickerQuery}
+          onChange={(e) => setPickerQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void runPickerSearch();
+            }
+          }}
+          placeholder="Search the protocol text…"
+          className={`flex-1 rounded-md border px-2.5 py-1.5 text-xs text-fg-body outline-none ${inputBase}`}
+          aria-label="Search the protocol"
+          autoFocus
+        />
+        <button
+          type="button"
+          onClick={() => void runPickerSearch()}
+          disabled={pickerBusy || pickerQuery.trim().length === 0}
+          className={`rounded-md px-2.5 py-1.5 text-xs font-semibold disabled:opacity-40 ${primaryBtn}`}
+        >
+          {pickerBusy ? 'Searching…' : 'Search'}
+        </button>
+        <button
+          type="button"
+          onClick={closePicker}
+          className="text-fg-muted hover:text-fg-body p-1"
+          aria-label="Close protocol search"
+        >
+          <XIcon size={13} />
+        </button>
+      </div>
+      {pickerHits !== null &&
+        (pickerHits.length === 0 ? (
+          <p className="text-fg-muted text-xs">No protocol passages matched.</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {pickerHits.map((h) => (
+              <li key={h.chunk_id}>
+                <button
+                  type="button"
+                  onClick={() => void attachRef(h)}
+                  className={`w-full rounded-md border px-2.5 py-2 text-left transition-colors ${rowBorder} ${
+                    isLight ? 'bg-white hover:bg-brand-600/[0.04]' : 'bg-white/[0.02] hover:bg-white/[0.05]'
+                  }`}
+                >
+                  <span className={`text-[10px] font-semibold ${brandText}`}>
+                    {formatProtocolRefWhere(hitToRef(h))}
+                  </span>
+                  <p className="text-fg-sub text-[11px] mt-0.5 line-clamp-3">{h.snippet}</p>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ))}
+    </div>
+  );
 
   // -------------------------------------------------------------------------
   // Render
@@ -737,13 +897,22 @@ export default function IsaConductWorkspace() {
 
           {draftNote && <p className="text-fg-sub text-sm">{draftNote}</p>}
 
-          {(withheldCount > 0 || strippedCount > 0) && drafts.length > 0 && (
+          {(withheldCount > 0 || strippedCount > 0 || strippedProtoCount > 0) &&
+            drafts.length > 0 && (
             <p className="text-fg-sub text-xs">
               {withheldCount > 0 &&
-                `${withheldCount} ${withheldCount === 1 ? 'proposal was' : 'proposals were'} withheld — ${withheldCount === 1 ? 'it' : 'they'} couldn't be traced to your notes.`}
-              {withheldCount > 0 && strippedCount > 0 && ' '}
+                `${withheldCount} ${withheldCount === 1 ? 'proposal was' : 'proposals were'} withheld — ${withheldCount === 1 ? 'it' : 'they'} couldn't be traced to your notes. `}
               {strippedCount > 0 &&
-                `${strippedCount} regulatory ${strippedCount === 1 ? 'citation' : 'citations'} outside the verified map ${strippedCount === 1 ? 'was' : 'were'} removed.`}
+                `${strippedCount} regulatory ${strippedCount === 1 ? 'citation' : 'citations'} outside the verified map ${strippedCount === 1 ? 'was' : 'were'} removed. `}
+              {strippedProtoCount > 0 &&
+                `${strippedProtoCount} protocol ${strippedProtoCount === 1 ? 'citation' : 'citations'} that couldn't be verified against the protocol text ${strippedProtoCount === 1 ? 'was' : 'were'} removed.`}
+            </p>
+          )}
+
+          {bridgeReady === false && (
+            <p className="text-fg-muted text-xs">
+              Parse this study's protocol in the library to unlock protocol
+              citations — findings can then quote the protocol's own text.
             </p>
           )}
 
@@ -816,6 +985,46 @@ export default function IsaConductWorkspace() {
                     </button>
                   </div>
                 )}
+
+                {/* Protocol citation (S4) — the site's own protocol, quoted.
+                    Post-Gate-3: the quote is verified verbatim protocol text. */}
+                {d.protocol_ref ? (
+                  <div
+                    className={`rounded-md border ${rowBorder} ${
+                      isLight ? 'bg-brand-600/[0.04]' : 'bg-brand-300/[0.05]'
+                    } px-3 py-2`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <BookOpen size={11} className={brandText} />
+                      <span className={`text-[10px] font-semibold ${brandText}`}>
+                        Protocol requirement · {formatProtocolRefWhere(d.protocol_ref)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => patchDraft(d.key, { protocol_ref: null })}
+                        className="ml-auto text-fg-muted hover:text-fg-body"
+                        aria-label="Remove protocol citation"
+                      >
+                        <XIcon size={11} />
+                      </button>
+                    </div>
+                    <p className="text-fg-sub text-[11px] mt-1 italic">
+                      “{d.protocol_ref.quote}”
+                    </p>
+                  </div>
+                ) : (
+                  bridgeReady === true && (
+                    <button
+                      type="button"
+                      onClick={() => openPicker({ kind: 'draft', key: d.key })}
+                      className={`flex items-center gap-1.5 text-[11px] ${brandText} hover:underline`}
+                    >
+                      <BookOpen size={11} />
+                      Cite the protocol…
+                    </button>
+                  )
+                )}
+                {pickerFor?.kind === 'draft' && pickerFor.key === d.key && renderPicker()}
 
                 {/* Evidence — side by side with the cited notes, default
                     visible: verifying the claim against the auditor's own
@@ -945,7 +1154,34 @@ export default function IsaConductWorkspace() {
                     {f.evidence.length} evidence {f.evidence.length === 1 ? 'item' : 'items'}
                   </span>
                   {f.reference && <span>· {f.reference}</span>}
+                  {(f.protocol_refs ?? []).map((ref, i) => (
+                    <span key={i} className={`flex items-center gap-1 ${brandText}`}>
+                      <BookOpen size={10} />
+                      {formatProtocolRefWhere(ref)}
+                      <button
+                        type="button"
+                        onClick={() => void removeFindingRef(f.id)}
+                        className="text-fg-muted hover:text-fg-body"
+                        aria-label="Remove protocol citation"
+                      >
+                        <XIcon size={10} />
+                      </button>
+                    </span>
+                  ))}
+                  {bridgeReady === true && (f.protocol_refs ?? []).length === 0 && (
+                    <button
+                      type="button"
+                      onClick={() => openPicker({ kind: 'finding', id: f.id })}
+                      className={`flex items-center gap-1 ${brandText} hover:underline`}
+                    >
+                      <BookOpen size={10} />
+                      Cite the protocol…
+                    </button>
+                  )}
                 </div>
+                {pickerFor?.kind === 'finding' && pickerFor.id === f.id && (
+                  <div className="mt-2">{renderPicker()}</div>
+                )}
               </li>
             ))}
           </ul>

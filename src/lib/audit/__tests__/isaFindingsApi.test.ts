@@ -13,8 +13,10 @@ import { supabase } from '../../supabase';
 import {
   createIsaFinding,
   fetchIsaFindings,
+  fetchIsaProtocolBridgeStatus,
   IsaFindingDraftError,
   requestIsaFindingDrafts,
+  searchIsaProtocolChunks,
   updateIsaFinding,
 } from '../isaFindingsApi';
 
@@ -36,6 +38,7 @@ function makeFinding(overrides: Partial<IsaFindingObject> = {}): IsaFindingObjec
     observation: 'Delegation of trial-related activities was not consistently documented.',
     evidence: [{ text: 'Two staff absent from the log.', source_note_ids: [NOTE_A] }],
     reference: 'ICH E6(R3) 2.3.3',
+    protocol_refs: [],
     response_owner: 'SITE',
     origin: 'PIQC_DRAFTED',
     created_by: 'user-1',
@@ -98,6 +101,7 @@ describe('createIsaFinding', () => {
       p_severity_rule: finding.severity_rule,
       p_reference: finding.reference,
       p_response_owner: 'SITE',
+      p_protocol_refs: [],
     });
     expect(res).toEqual({ ok: true, data: finding });
   });
@@ -142,7 +146,51 @@ describe('updateIsaFinding', () => {
       p_reference: null,
       p_clear_reference: true,
       p_response_owner: null,
+      p_protocol_refs: null,
     });
+  });
+
+  it('passes protocolRefs as a full replacement ([] clears)', async () => {
+    rpcMock.mockResolvedValue({ data: makeFinding(), error: null } as never);
+
+    await updateIsaFinding('finding-1', { protocolRefs: [] });
+
+    const params = rpcMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(params.p_protocol_refs).toEqual([]);
+  });
+});
+
+describe('protocol-citation bridge RPCs', () => {
+  it('searchIsaProtocolChunks maps params and returns hits', async () => {
+    const hit = {
+      chunk_id: 'c1',
+      document_id: 'd1',
+      snippet: 'Accountability records must be maintained per dispensing event.',
+      section_heading: '6.3 Investigational Product',
+      page_start: 47,
+      page_end: 47,
+    };
+    rpcMock.mockResolvedValue({ data: [hit], error: null } as never);
+
+    const res = await searchIsaProtocolChunks('audit-1', 'accountability');
+
+    expect(rpcMock).toHaveBeenCalledWith('audit_mode_search_isa_protocol_chunks', {
+      p_audit_id: 'audit-1',
+      p_query: 'accountability',
+      p_limit: 8,
+    });
+    expect(res).toEqual({ ok: true, data: [hit] });
+  });
+
+  it('fetchIsaProtocolBridgeStatus returns the ready-doc count and maps errors', async () => {
+    rpcMock.mockResolvedValueOnce({ data: 2, error: null } as never);
+    expect(await fetchIsaProtocolBridgeStatus('audit-1')).toEqual({ ok: true, data: 2 });
+    expect(rpcMock).toHaveBeenCalledWith('audit_mode_isa_protocol_bridge_status', {
+      p_audit_id: 'audit-1',
+    });
+
+    rpcMock.mockResolvedValueOnce({ data: null, error: { message: 'nope' } } as never);
+    expect(await fetchIsaProtocolBridgeStatus('audit-1')).toEqual({ ok: false, error: 'nope' });
   });
 });
 

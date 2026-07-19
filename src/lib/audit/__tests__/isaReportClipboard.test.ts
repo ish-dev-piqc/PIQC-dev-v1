@@ -38,6 +38,7 @@ const FINDING: IsaFindingObject = {
     { text: 'Dispensing log entries for 03–05 Mar were absent.', source_note_ids: ['n1'] },
   ],
   reference: 'ICH E6(R3) 2.10.4',
+  protocol_refs: [],
   response_owner: 'SITE',
   origin: 'PIQC_EDITED',
   created_by: 'u1',
@@ -99,6 +100,35 @@ describe('per-finding builders', () => {
     expect(buildFindingHtml(FINDING, GENERATED)).toContain('DRAFT — PIQC drafted');
     expect(buildFindingPlain(FINDING, GENERATED)).toContain('DRAFT — PIQC drafted');
     expect(buildFindingPlain(FINDING, GENERATED)).toContain('[Major] IP accountability records incomplete');
+  });
+});
+
+describe('protocol citations (S4 bridge)', () => {
+  const REF = {
+    chunk_id: 'c1',
+    document_id: 'd1',
+    quote: 'Accountability records must be maintained for each dispensing event.',
+    section_heading: '6.3 Investigational Product',
+    page_start: 47,
+    page_end: 48,
+  };
+  const withRef = () =>
+    buildIsaReportPacket(META, null, [{ ...FINDING, protocol_refs: [REF] }], []);
+
+  it('renders the protocol-requirement line in every artifact, escaped', () => {
+    const html = buildReportHtml(withRef());
+    expect(html).toContain('Protocol requirement: § 6.3 Investigational Product (p. 47–48)');
+    expect(html).toContain('“Accountability records must be maintained for each dispensing event.”');
+    expect(buildReportPlain(withRef())).toContain('Protocol requirement: § 6.3 Investigational Product (p. 47–48)');
+    expect(buildObservationFormHtml(withRef())).toContain('Protocol requirement:');
+    expect(buildObservationFormPlain(withRef())).toContain('Protocol requirement:');
+    expect(buildFindingHtml({ ...FINDING, protocol_refs: [REF] }, GENERATED)).toContain('Protocol requirement:');
+    expect(buildFindingPlain({ ...FINDING, protocol_refs: [REF] }, GENERATED)).toContain('Protocol requirement:');
+  });
+
+  it('emits nothing protocol-shaped when a finding has no refs', () => {
+    expect(buildReportHtml(packet())).not.toContain('Protocol requirement:');
+    expect(buildReportPlain(packet())).not.toContain('Protocol requirement:');
   });
 });
 

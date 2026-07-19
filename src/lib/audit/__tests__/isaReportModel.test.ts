@@ -32,6 +32,7 @@ function finding(
     observation: 'Observed condition.',
     evidence: [{ text: 'Instance.', source_note_ids: ['n1'] }],
     reference: null,
+    protocol_refs: [],
     response_owner: 'SITE',
     origin: 'AUDITOR',
     created_by: 'u1',

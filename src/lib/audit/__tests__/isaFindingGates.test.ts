@@ -5,6 +5,7 @@ import { describe, it, expect } from 'vitest';
 // coverage rather than only end-to-end faith.
 import { gateDrafts } from '../../../../supabase/functions/isa-finding-draft/gates';
 import { CITATION_MAP } from '../../../../supabase/functions/isa-finding-draft/citationMap';
+import { labelCandidates } from '../../../../supabase/functions/isa-finding-draft/protocolCandidates';
 
 const NOTE_A = 'aaaaaaaa-0000-0000-0000-000000000001';
 const NOTE_B = 'aaaaaaaa-0000-0000-0000-000000000002';
@@ -128,5 +129,85 @@ describe('gateDrafts — gate 2: closed-world citation', () => {
     const res = gateDrafts([validDraft({ reference: null })], live());
     expect(res.accepted[0].reference).toBeNull();
     expect(res.strippedReferenceCount).toBe(0);
+  });
+});
+
+describe('gateDrafts — gate 3: protocol citation (S4 bridge)', () => {
+  const CANDIDATES = labelCandidates([
+    {
+      id: 'chunk-1',
+      document_id: 'doc-1',
+      content:
+        'Investigational product accountability records must be maintained for each dispensing event,\n   including date, quantity dispensed, and subject number.',
+      section_heading: '6.3 Investigational Product',
+      page_start: 47,
+      page_end: 47,
+    },
+  ]);
+  const VERBATIM =
+    'accountability records must be maintained for each dispensing event, including date';
+
+  it('materializes a valid ref: quote from the model, provenance from the DB row', () => {
+    const res = gateDrafts(
+      [validDraft({ protocol_ref: { passage: 'P1', quote: VERBATIM } })],
+      live(),
+      CANDIDATES,
+    );
+    expect(res.accepted[0].protocol_ref).toEqual({
+      chunk_id: 'chunk-1',
+      document_id: 'doc-1',
+      quote: VERBATIM,
+      section_heading: '6.3 Investigational Product',
+      page_start: 47,
+      page_end: 47,
+    });
+    expect(res.strippedProtocolRefCount).toBe(0);
+  });
+
+  it('strips a ref citing a passage that was never sent', () => {
+    const res = gateDrafts(
+      [validDraft({ protocol_ref: { passage: 'P9', quote: VERBATIM } })],
+      live(),
+      CANDIDATES,
+    );
+    expect(res.accepted).toHaveLength(1); // strip, never withhold
+    expect(res.accepted[0].protocol_ref).toBeNull();
+    expect(res.strippedProtocolRefCount).toBe(1);
+  });
+
+  it('strips a paraphrased quote — verbatim means verbatim', () => {
+    const res = gateDrafts(
+      [
+        validDraft({
+          protocol_ref: {
+            passage: 'P1',
+            quote: 'IP accountability logs should be kept for every dispensing',
+          },
+        }),
+      ],
+      live(),
+      CANDIDATES,
+    );
+    expect(res.accepted[0].protocol_ref).toBeNull();
+    expect(res.strippedProtocolRefCount).toBe(1);
+  });
+
+  it('strips any volunteered ref when the bridge sent no candidates', () => {
+    const res = gateDrafts(
+      [validDraft({ protocol_ref: { passage: 'P1', quote: VERBATIM } })],
+      live(),
+    );
+    expect(res.accepted[0].protocol_ref).toBeNull();
+    expect(res.strippedProtocolRefCount).toBe(1);
+  });
+
+  it('accepts a null/absent protocol_ref without counting a strip', () => {
+    const res = gateDrafts(
+      [validDraft({ protocol_ref: null }), validDraft()],
+      live(),
+      CANDIDATES,
+    );
+    expect(res.accepted.every((d) => d.protocol_ref === null)).toBe(true);
+    expect(res.strippedProtocolRefCount).toBe(0);
   });
 });

@@ -13,11 +13,22 @@
 //   null (the draft survives; the field is left for the auditor). A wrong
 //   regulatory cite must be impossible, not unlikely.
 //
-// Pure module — no Deno APIs, no imports beyond the citation map types. Unit
+//   Gate 3 (protocol citation, S4): `protocol_ref` must name a passage from
+//   the candidate set actually sent to the model AND carry a verbatim quote
+//   of it (whitespace-tolerant substring). Fails → the ref is stripped, the
+//   draft survives, the honesty counter increments. Same closed-world
+//   doctrine as Gate 2 — except the closed world is the site's own protocol.
+//
+// Pure module — no Deno APIs, no imports beyond sibling pure modules. Unit
 // tested from src/lib/audit/__tests__/isaFindingGates.test.ts.
 // =============================================================================
 
 import { CITATION_MAP, ISA_DOMAINS, type IsaDomainKey } from "./citationMap.ts";
+import {
+  materializeRef,
+  type ProtocolCandidate,
+  type ProtocolRefSnapshot,
+} from "./protocolCandidates.ts";
 
 const SEVERITIES = ["CRITICAL", "MAJOR", "MINOR", "RECOMMENDATION"] as const;
 export type IsaSeverityKey = (typeof SEVERITIES)[number];
@@ -36,6 +47,7 @@ export interface RawDraft {
   observation?: unknown;
   evidence?: unknown;
   reference?: unknown;
+  protocol_ref?: unknown;
 }
 
 export interface GatedEvidence {
@@ -52,12 +64,14 @@ export interface GatedDraft {
   observation: string;
   evidence: GatedEvidence[];
   reference: string | null;
+  protocol_ref: ProtocolRefSnapshot | null;
 }
 
 export interface GateResult {
   accepted: GatedDraft[];
   withheldCount: number;
   strippedReferenceCount: number;
+  strippedProtocolRefCount: number;
 }
 
 const MAX_TITLE_CHARS = 200;
@@ -82,19 +96,28 @@ function isSeverity(v: unknown): v is IsaSeverityKey {
 }
 
 /**
- * Apply both gates to the model's raw drafts.
+ * Apply the gates to the model's raw drafts.
  *
  * @param rawDrafts   whatever the model returned under `drafts`
  * @param liveNoteIds the note ids that were actually sent in the prompt —
  *                    the only ids evidence is allowed to cite
+ * @param candidates  the protocol passages actually sent in the prompt — the
+ *                    only passages protocol_ref is allowed to cite. Empty
+ *                    when the bridge is unavailable (no parsed protocol):
+ *                    any ref the model volunteers anyway is stripped.
  */
-export function gateDrafts(rawDrafts: unknown, liveNoteIds: Set<string>): GateResult {
+export function gateDrafts(
+  rawDrafts: unknown,
+  liveNoteIds: Set<string>,
+  candidates: ProtocolCandidate[] = [],
+): GateResult {
   const accepted: GatedDraft[] = [];
   let withheldCount = 0;
   let strippedReferenceCount = 0;
+  let strippedProtocolRefCount = 0;
 
   if (!Array.isArray(rawDrafts)) {
-    return { accepted, withheldCount, strippedReferenceCount };
+    return { accepted, withheldCount, strippedReferenceCount, strippedProtocolRefCount };
   }
 
   for (const raw of rawDrafts.slice(0, MAX_DRAFTS) as RawDraft[]) {
@@ -145,6 +168,18 @@ export function gateDrafts(rawDrafts: unknown, liveNoteIds: Set<string>): GateRe
       strippedReferenceCount++;
     }
 
+    // Gate 3 — protocol citation: candidate-set membership + verbatim quote.
+    // Strip-not-withhold, like Gate 2: a bad protocol cite must be
+    // impossible, but it never costs the auditor the draft itself.
+    let protocolRef: ProtocolRefSnapshot | null = null;
+    if (raw.protocol_ref !== undefined && raw.protocol_ref !== null) {
+      const claim = raw.protocol_ref as { passage?: unknown; quote?: unknown };
+      protocolRef = typeof claim === "object"
+        ? materializeRef(claim.passage, claim.quote, candidates)
+        : null;
+      if (protocolRef === null) strippedProtocolRefCount++;
+    }
+
     accepted.push({
       title,
       isa_domain: raw.isa_domain,
@@ -154,8 +189,9 @@ export function gateDrafts(rawDrafts: unknown, liveNoteIds: Set<string>): GateRe
       observation,
       evidence,
       reference,
+      protocol_ref: protocolRef,
     });
   }
 
-  return { accepted, withheldCount, strippedReferenceCount };
+  return { accepted, withheldCount, strippedReferenceCount, strippedProtocolRefCount };
 }
