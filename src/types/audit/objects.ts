@@ -553,18 +553,28 @@ export interface IsaFindingObject {
   updated_at: string;
 }
 
+// Provenance of a STORED prose section (S5). NULL prose ⇒ NULL source
+// (templated); stored prose carries who authored it — the ladder is
+// templated → llm → auditor_edited and the chip never lies.
+export type IsaStoredSectionSource = 'llm' | 'auditor_edited';
+
 // Auditor-owned pieces of the ISA report; everything else derives at render
 // time. NULL prose columns mean "still templated" — the client renders the
 // derived template until the auditor takes the pen (see the schema migration
 // header). 1:1 with isa_report_draft_objects
-// (20260725000000_audit_mode_isa_report_schema.sql).
+// (20260725000000_audit_mode_isa_report_schema.sql; source columns from
+// 20260728000000_audit_mode_isa_report_narrative.sql).
 export interface IsaReportDraftObject {
   id: string;
   audit_id: string;                  // 1:1 with Audit
   exec_summary: string | null;
+  exec_summary_source: IsaStoredSectionSource | null;
   auditee_background: string | null;
+  auditee_background_source: IsaStoredSectionSource | null;
   opening_meeting: string | null;
+  opening_meeting_source: IsaStoredSectionSource | null;
   closing_meeting: string | null;
+  closing_meeting_source: IsaStoredSectionSource | null;
   site_verdict: IsaSiteVerdict | null;
   site_verdict_text: string | null;
   response_due_days: number;

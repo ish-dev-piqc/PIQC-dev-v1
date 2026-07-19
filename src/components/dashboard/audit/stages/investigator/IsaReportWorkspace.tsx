@@ -14,7 +14,10 @@ import { fetchIsaNotes } from '../../../../../lib/audit/isaNotesApi';
 import { fetchIsaFindings } from '../../../../../lib/audit/isaFindingsApi';
 import {
   fetchIsaReportDraft,
+  IsaReportSectionError,
+  requestIsaReportSection,
   upsertIsaReportDraft,
+  type IsaReportSectionKey,
   type UpsertIsaReportDraftInput,
 } from '../../../../../lib/audit/isaReportApi';
 import {
@@ -129,6 +132,13 @@ export default function IsaReportWorkspace() {
   const [savingField, setSavingField] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
+  // PIQC section drafts (S5) — one proposal at a time; nothing persists
+  // until Apply (D-008). sectionNote carries the server's honest refusals
+  // (verdict not set, empty pad, anchor withheld) next to the section.
+  const [proposal, setProposal] = useState<{ field: IsaReportSectionKey; text: string } | null>(null);
+  const [requestingSection, setRequestingSection] = useState<IsaReportSectionKey | null>(null);
+  const [sectionNote, setSectionNote] = useState<{ field: IsaReportSectionKey; message: string } | null>(null);
+
   const auditId = activeAudit?.id;
 
   useEffect(() => {
@@ -210,6 +220,100 @@ export default function IsaReportWorkspace() {
     setTimeout(() => setCopied((c) => (c === key ? null : c)), 2000);
   };
 
+  // -------------------------------------------------------------------------
+  // PIQC section drafts (S5)
+  // -------------------------------------------------------------------------
+
+  const requestSection = async (field: IsaReportSectionKey) => {
+    if (requestingSection) return;
+    setRequestingSection(field);
+    setSectionNote(null);
+    setProposal(null);
+    try {
+      const res = await requestIsaReportSection(activeAudit.id, field);
+      setProposal({ field, text: res.section_text });
+    } catch (e) {
+      setSectionNote({
+        field,
+        message:
+          e instanceof IsaReportSectionError
+            ? e.message
+            : 'Drafting isn’t available right now — try again in a moment.',
+      });
+    }
+    setRequestingSection(null);
+  };
+
+  const applyProposal = async () => {
+    if (!proposal) return;
+    const { field, text } = proposal;
+    let ok = false;
+    if (field === 'exec_summary') {
+      ok = await save('exec', { execSummary: text, execSummarySource: 'llm' });
+      if (ok) setExecEditing(false);
+    } else if (field === 'auditee_background') {
+      ok = await save(field, { auditeeBackground: text, auditeeBackgroundSource: 'llm' });
+      if (ok) setBackground(text);
+    } else if (field === 'opening_meeting') {
+      ok = await save(field, { openingMeeting: text, openingMeetingSource: 'llm' });
+      if (ok) setOpening(text);
+    } else {
+      ok = await save(field, { closingMeeting: text, closingMeetingSource: 'llm' });
+      if (ok) setClosing(text);
+    }
+    if (ok) setProposal(null);
+  };
+
+  /** Proposal card + honest-refusal note for one section. */
+  const proposalBlock = (field: IsaReportSectionKey) => (
+    <>
+      {sectionNote?.field === field && (
+        <p className="text-fg-sub text-xs">{sectionNote.message}</p>
+      )}
+      {proposal?.field === field && (
+        <div className={`rounded-md border ${rowBorder} ${isLight ? 'bg-brand-600/[0.04]' : 'bg-brand-300/[0.05]'} p-3 space-y-2`}>
+          <div className="flex items-center gap-1.5">
+            <PiqcMark size={11} className={brandText} />
+            <span className={`text-[10px] uppercase tracking-wider font-semibold ${brandText}`}>
+              PIQC drafted — review before applying
+            </span>
+          </div>
+          <p className="text-fg-body text-sm whitespace-pre-wrap">{proposal.text}</p>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setProposal(null)}
+              className="text-fg-muted text-xs hover:text-fg-body"
+            >
+              Dismiss
+            </button>
+            <button
+              type="button"
+              onClick={() => void applyProposal()}
+              disabled={savingField !== null}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40 ${primaryBtn}`}
+            >
+              Apply
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  const draftSectionButton = (field: IsaReportSectionKey, label: string, disabledHint?: string) => (
+    <button
+      type="button"
+      onClick={() => void requestSection(field)}
+      disabled={requestingSection !== null || !!disabledHint}
+      title={disabledHint}
+      className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs text-fg-body transition-colors disabled:opacity-40 ${inputBase}`}
+    >
+      <PiqcMark size={11} className={brandText} />
+      {requestingSection === field ? 'Drafting…' : label}
+    </button>
+  );
+
   const copyReport = async () => {
     if (await copyRich(buildReportHtml(packet), buildReportPlain(packet))) {
       flashCopied('report');
@@ -269,16 +373,21 @@ export default function IsaReportWorkspace() {
     clearKey: keyof UpsertIsaReportDraftInput,
   ) => {
     const stored = draft?.[field] ?? null;
+    const storedSource = draft?.[`${field}_source`] ?? null;
     const dirty = value !== (stored ?? '');
     return (
       <section className={`rounded-lg border ${cardBase}`}>
-        <div className={`flex items-center justify-between px-4 py-3 border-b ${rowBorder}`}>
+        <div className={`flex items-center gap-2 px-4 py-3 border-b ${rowBorder}`}>
           <h3 className="text-fg-heading text-sm font-semibold">{title}</h3>
-          <span className={`rounded border px-1.5 py-0.5 text-[10px] ${stored ? chipBase : `text-fg-muted ${isLight ? 'border-[#CBD5E1]' : 'border-white/15'}`}`}>
-            {stored ? 'Auditor written' : 'Awaiting prose'}
-          </span>
+          <div className="ml-auto flex items-center gap-2">
+            {draftSectionButton(field, 'Draft with PIQC')}
+            <span className={`rounded border px-1.5 py-0.5 text-[10px] ${stored ? chipBase : `text-fg-muted ${isLight ? 'border-[#CBD5E1]' : 'border-white/15'}`}`}>
+              {!stored ? 'Awaiting prose' : storedSource === 'llm' ? 'PIQC drafted' : 'Auditor written'}
+            </span>
+          </div>
         </div>
         <div className="p-4 space-y-2">
+          {proposalBlock(field)}
           <textarea
             value={value}
             onChange={(e) => setValue(e.target.value)}
@@ -429,18 +538,31 @@ export default function IsaReportWorkspace() {
             <div className={`flex items-center gap-2 px-4 py-3 border-b ${rowBorder}`}>
               <FileText size={15} className={brandText} />
               <h3 className="text-fg-heading text-sm font-semibold">Executive summary</h3>
-              <span className={`ml-auto flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] ${chipBase}`}>
-                {packet.execSummary.source === 'templated' ? (
-                  <>
-                    <PiqcMark size={9} />
-                    Derives live from findings
-                  </>
-                ) : (
-                  'Auditor edited'
+              <div className="ml-auto flex items-center gap-2">
+                {draftSectionButton(
+                  'exec_summary',
+                  'Refine with PIQC',
+                  verdictSet ? undefined : 'Set the site verdict first — it is one of the summary’s sentences',
                 )}
-              </span>
+                <span className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] ${chipBase}`}>
+                  {packet.execSummary.source === 'templated' ? (
+                    <>
+                      <PiqcMark size={9} />
+                      Derives live from findings
+                    </>
+                  ) : packet.execSummary.source === 'llm' ? (
+                    <>
+                      <PiqcMark size={9} />
+                      PIQC drafted
+                    </>
+                  ) : (
+                    'Auditor edited'
+                  )}
+                </span>
+              </div>
             </div>
             <div className="p-4 space-y-2">
+              {proposalBlock('exec_summary')}
               {execEditing ? (
                 <>
                   <textarea
@@ -470,12 +592,12 @@ export default function IsaReportWorkspace() {
                 <>
                   <p className="text-fg-body text-sm whitespace-pre-wrap">{packet.execSummary.text}</p>
                   <div className="flex items-center justify-end gap-2">
-                    {packet.execSummary.source === 'auditor_edited' && (
+                    {packet.execSummary.source !== 'templated' && (
                       <button
                         type="button"
                         onClick={() => void save('exec', { clearExecSummary: true })}
                         className="text-fg-muted text-xs hover:text-fg-body"
-                        title="Discard your edit and derive from findings again"
+                        title="Discard the stored text and derive from findings again"
                       >
                         Return to template
                       </button>

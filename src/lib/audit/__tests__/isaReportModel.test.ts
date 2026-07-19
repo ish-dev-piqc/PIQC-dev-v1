@@ -47,9 +47,13 @@ function draft(overrides: Partial<IsaReportDraftObject> = {}): IsaReportDraftObj
     id: 'draft-1',
     audit_id: 'audit-1',
     exec_summary: null,
+    exec_summary_source: null,
     auditee_background: null,
+    auditee_background_source: null,
     opening_meeting: null,
+    opening_meeting_source: null,
     closing_meeting: null,
+    closing_meeting_source: null,
     site_verdict: null,
     site_verdict_text: null,
     response_due_days: 30,
@@ -100,6 +104,14 @@ describe('buildExecSummary — the six-beat formula', () => {
   it('returns the auditor text verbatim once edited', () => {
     const res = buildExecSummary(draft({ exec_summary: 'My own summary.' }), []);
     expect(res).toMatchObject({ text: 'My own summary.', source: 'auditor_edited' });
+  });
+
+  it('carries the llm rung of the provenance ladder through to the packet', () => {
+    const res = buildExecSummary(
+      draft({ exec_summary: 'PIQC-refined summary.', exec_summary_source: 'llm' }),
+      [],
+    );
+    expect(res).toMatchObject({ text: 'PIQC-refined summary.', source: 'llm' });
   });
 
   it('recommendations never appear in the category list', () => {
