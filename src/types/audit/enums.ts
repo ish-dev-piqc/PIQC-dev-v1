@@ -167,6 +167,20 @@ export type IsaDomain =
   | 'SOP_REVIEW'
   | 'OTHER';
 
+// ISA finding severity — the templates' 4-tier axis. Deliberately NOT
+// ProvisionalImpact: site-audit reports rate Critical/Major/Minor/
+// Recommendation on one axis; reusing the vendor 5-value enum would leave
+// dead values and split Recommendation across two columns. 1:1 with Postgres
+// isa_severity (20260724000000_audit_mode_isa_findings_schema.sql).
+export type IsaSeverity = 'CRITICAL' | 'MAJOR' | 'MINOR' | 'RECOMMENDATION';
+
+// Provenance honesty for ISA findings: PIQC_DRAFTED means accepted verbatim;
+// ANY content edit (pre- or post-accept) flips to PIQC_EDITED.
+export type IsaFindingOrigin = 'AUDITOR' | 'PIQC_DRAFTED' | 'PIQC_EDITED';
+
+// Who owns the response to a finding (from the Audit Observation Form).
+export type IsaResponseOwner = 'SITE' | 'CLIENT' | 'CRO';
+
 // Polymorphic discriminator for state_history_deltas.
 export type TrackedObjectType =
   | 'PROTOCOL_RISK_OBJECT'
@@ -177,6 +191,7 @@ export type TrackedObjectType =
   | 'QUESTIONNAIRE_RESPONSE_OBJECT'
   | 'AUDIT_WORKSPACE_ENTRY_OBJECT'
   | 'AUDIT_NOTE_OBJECT'
+  | 'ISA_FINDING_OBJECT'
   | 'AUDIT'
   | 'AMENDMENT_ALERT'
   | 'VENDOR_RISK_SUMMARY_OBJECT'

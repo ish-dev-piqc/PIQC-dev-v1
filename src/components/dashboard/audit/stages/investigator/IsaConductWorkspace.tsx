@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { NotebookPen, Pencil, ThumbsUp, Trash2, X as XIcon } from 'lucide-react';
+import { ArrowRight, NotebookPen, Pencil, ThumbsUp, Trash2, X as XIcon } from 'lucide-react';
 import { useTheme } from '../../../../../context/ThemeContext';
 import { useAudit } from '../../../../../context/AuditContext';
 import { ISA_DOMAIN_LABELS } from '../../../../../lib/audit/labels';
@@ -9,25 +9,59 @@ import {
   fetchIsaNotes,
   updateIsaNote,
 } from '../../../../../lib/audit/isaNotesApi';
-import type { AuditNoteObject, IsaDomain } from '../../../../../types/audit';
+import {
+  createIsaFinding,
+  fetchIsaFindings,
+  requestIsaFindingDrafts,
+  type IsaFindingDraft,
+} from '../../../../../lib/audit/isaFindingsApi';
+import PiqcMark from '../../PiqcMark';
+import type {
+  AuditNoteObject,
+  IsaDomain,
+  IsaFindingObject,
+  IsaSeverity,
+} from '../../../../../types/audit';
 
 // =============================================================================
-// IsaConductWorkspace — ISA_CONDUCT stage center pane: the notes pad.
+// IsaConductWorkspace — ISA_CONDUCT stage center pane: notes pad + finding
+// writer.
 //
-// Fast freeform capture during the site visit — optimized for typing while
-// someone is talking: Enter appends, nothing is required beyond the text.
-// Notes are working papers (editable, soft-deletable), NOT findings; the S2
-// finding writer reads this pad and proposes draft findings the auditor
-// reviews. Domain tag and positive marker are optional enrichments that feed
-// the coverage strip and the report's positive-observations section later in
-// the arc.
+// S1: fast freeform capture (Enter appends; nothing required beyond text).
+// S2: "Draft findings" — PIQC clusters the un-promoted notes into draft
+// findings (one finding = one root cause) which the auditor reviews in cards
+// that show each evidence line SIDE-BY-SIDE with the source notes it cites.
+// Nothing persists until Accept (D-008); accepting stamps the cited notes as
+// promoted so re-runs only propose new ground.
 //
-// PHI rule (S1 hard requirement): the pad instructs subject numbers only —
-// no participant names, initials, or DOBs. Note bodies will be sent to an
-// LLM in S2; the guidance keeps identifiers out at the source.
+// Draft cards are stashed in localStorage (`piq-isa-drafts-v1:<audit>`) so a
+// reload doesn't lose an evening of review to a nondeterministic re-run.
+// PHI rule: the pad instructs subject numbers only — bodies go to an LLM.
 // =============================================================================
 
 const DOMAIN_OPTIONS = Object.entries(ISA_DOMAIN_LABELS) as [IsaDomain, string][];
+
+const SEVERITY_OPTIONS: IsaSeverity[] = ['CRITICAL', 'MAJOR', 'MINOR', 'RECOMMENDATION'];
+const SEVERITY_LABELS: Record<IsaSeverity, string> = {
+  CRITICAL: 'Critical',
+  MAJOR: 'Major',
+  MINOR: 'Minor',
+  RECOMMENDATION: 'Recommendation',
+};
+
+const DRAFT_STASH_PREFIX = 'piq-isa-drafts-v1:';
+
+/** Draft plus client-side review state. */
+interface ReviewDraft extends IsaFindingDraft {
+  key: string;
+  dirty: boolean;
+}
+
+interface DraftStash {
+  drafts: ReviewDraft[];
+  withheld_count: number;
+  stripped_reference_count: number;
+}
 
 function noteTimestamp(iso: string): string {
   const d = new Date(iso);
@@ -37,12 +71,37 @@ function noteTimestamp(iso: string): string {
   return sameDay ? time : `${d.toLocaleDateString([], { day: '2-digit', month: 'short' })} ${time}`;
 }
 
+function readStash(auditId: string): DraftStash | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_STASH_PREFIX + auditId);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as DraftStash;
+    if (!Array.isArray(parsed.drafts)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeStash(auditId: string, stash: DraftStash | null) {
+  try {
+    if (!stash || stash.drafts.length === 0) {
+      localStorage.removeItem(DRAFT_STASH_PREFIX + auditId);
+    } else {
+      localStorage.setItem(DRAFT_STASH_PREFIX + auditId, JSON.stringify(stash));
+    }
+  } catch {
+    // Stash is best-effort crash insurance; never let it break the flow.
+  }
+}
+
 export default function IsaConductWorkspace() {
   const { theme } = useTheme();
   const { activeAudit } = useAudit();
   const isLight = theme === 'light';
 
   const [notes, setNotes] = useState<AuditNoteObject[]>([]);
+  const [findings, setFindings] = useState<IsaFindingObject[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,12 +112,21 @@ export default function IsaConductWorkspace() {
   const [saving, setSaving] = useState(false);
   const captureRef = useRef<HTMLTextAreaElement>(null);
 
-  // Inline edit + two-tap delete
+  // Inline edit + two-tap delete (notes)
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState('');
   const [editDomain, setEditDomain] = useState<IsaDomain | ''>('');
   const [editPositive, setEditPositive] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // Finding drafts (S2)
+  const [drafts, setDrafts] = useState<ReviewDraft[]>([]);
+  const [withheldCount, setWithheldCount] = useState(0);
+  const [strippedCount, setStrippedCount] = useState(0);
+  const [drafting, setDrafting] = useState(false);
+  const [draftScope, setDraftScope] = useState<IsaDomain | ''>('');
+  const [draftNote, setDraftNote] = useState<string | null>(null);
+  const [acceptingKey, setAcceptingKey] = useState<string | null>(null);
 
   const auditId = activeAudit?.id;
 
@@ -66,20 +134,48 @@ export default function IsaConductWorkspace() {
     if (!auditId) return;
     let cancelled = false;
     setLoading(true);
-    fetchIsaNotes(auditId).then((res) => {
-      if (cancelled) return;
-      if (res.ok) {
-        setNotes(res.data);
-        setError(null);
-      } else {
-        setError('Notes could not be loaded. Retry by reopening the stage.');
-      }
-      setLoading(false);
-    });
+    Promise.all([fetchIsaNotes(auditId), fetchIsaFindings(auditId)]).then(
+      ([notesRes, findingsRes]) => {
+        if (cancelled) return;
+        if (notesRes.ok) setNotes(notesRes.data);
+        if (findingsRes.ok) setFindings(findingsRes.data);
+        if (!notesRes.ok || !findingsRes.ok) {
+          setError('Some data could not be loaded. Retry by reopening the stage.');
+        }
+        setLoading(false);
+      },
+    );
+    const stash = readStash(auditId);
+    if (stash) {
+      setDrafts(stash.drafts);
+      setWithheldCount(stash.withheld_count);
+      setStrippedCount(stash.stripped_reference_count);
+    }
     return () => {
       cancelled = true;
     };
   }, [auditId]);
+
+  // Drop stashed drafts whose cited notes are gone or already promoted — an
+  // Accept on them would (rightly) fail the DB evidence gate.
+  useEffect(() => {
+    if (!auditId || drafts.length === 0 || loading) return;
+    const citable = new Set(
+      notes.filter((n) => !n.promoted_finding_id).map((n) => n.id),
+    );
+    const still = drafts.filter((d) =>
+      d.evidence.every((e) => e.source_note_ids.every((id) => citable.has(id))),
+    );
+    if (still.length !== drafts.length) {
+      setDrafts(still);
+      writeStash(auditId, {
+        drafts: still,
+        withheld_count: withheldCount,
+        stripped_reference_count: strippedCount,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auditId, notes, loading]);
 
   if (!activeAudit) return null;
 
@@ -93,6 +189,43 @@ export default function IsaConductWorkspace() {
   const chipBase = isLight
     ? 'bg-brand-600/[0.07] text-brand-700 border-brand-600/20'
     : 'bg-brand-300/[0.08] text-brand-300 border-brand-300/20';
+  const brandText = isLight ? 'text-brand-600' : 'text-brand-300';
+  const primaryBtn = isLight
+    ? 'bg-brand-600 text-white hover:bg-brand-700'
+    : 'bg-brand-300/20 text-brand-300 hover:bg-brand-300/30';
+
+  const severityChip = (s: IsaSeverity) => {
+    switch (s) {
+      case 'CRITICAL':
+        return isLight
+          ? 'bg-red-50 text-red-700 border-red-200'
+          : 'bg-red-500/10 text-red-300 border-red-500/25';
+      case 'MAJOR':
+        return isLight
+          ? 'bg-amber-50 text-amber-700 border-amber-200'
+          : 'bg-amber-500/10 text-amber-300 border-amber-500/25';
+      case 'MINOR':
+        return isLight
+          ? 'bg-sky-50 text-sky-700 border-sky-200'
+          : 'bg-sky-500/10 text-sky-300 border-sky-500/25';
+      case 'RECOMMENDATION':
+        return isLight
+          ? 'bg-white text-fg-sub border-[#E2E8F0]'
+          : 'bg-white/[0.04] text-fg-sub border-white/10';
+    }
+  };
+
+  const notesById = new Map(notes.map((n) => [n.id, n]));
+  const draftableNotes = notes.filter(
+    (n) =>
+      !n.is_positive &&
+      !n.promoted_finding_id &&
+      (draftScope === '' || n.isa_domain === draftScope),
+  );
+
+  // -------------------------------------------------------------------------
+  // Notes (S1)
+  // -------------------------------------------------------------------------
 
   const submitNote = async () => {
     const trimmed = body.trim();
@@ -154,6 +287,98 @@ export default function IsaConductWorkspace() {
     setConfirmDeleteId(null);
   };
 
+  // -------------------------------------------------------------------------
+  // Finding drafts (S2)
+  // -------------------------------------------------------------------------
+
+  const persistDrafts = (
+    next: ReviewDraft[],
+    withheld = withheldCount,
+    stripped = strippedCount,
+  ) => {
+    setDrafts(next);
+    writeStash(activeAudit.id, {
+      drafts: next,
+      withheld_count: withheld,
+      stripped_reference_count: stripped,
+    });
+  };
+
+  const runDrafting = async () => {
+    if (drafting || draftableNotes.length === 0) return;
+    setDrafting(true);
+    setDraftNote(null);
+    try {
+      const res = await requestIsaFindingDrafts(
+        activeAudit.id,
+        draftScope === '' ? undefined : draftableNotes.map((n) => n.id),
+      );
+      const next: ReviewDraft[] = res.drafts.map((d, i) => ({
+        ...d,
+        key: `${Date.now()}-${i}`,
+        dirty: false,
+      }));
+      setWithheldCount(res.withheld_count);
+      setStrippedCount(res.stripped_reference_count);
+      persistDrafts(next, res.withheld_count, res.stripped_reference_count);
+      if (next.length === 0) {
+        setDraftNote(
+          res.withheld_count > 0
+            ? 'Every proposal was withheld — none could be traced to your notes. Add detail to the notes and retry.'
+            : 'PIQC found nothing to propose from these notes.',
+        );
+      }
+    } catch {
+      // Invitational framing — the auditor doesn't need the failure anatomy.
+      setDraftNote('Drafting isn’t available right now — your notes are safe. Try again in a moment.');
+    }
+    setDrafting(false);
+  };
+
+  const patchDraft = (key: string, patch: Partial<IsaFindingDraft>) => {
+    persistDrafts(
+      drafts.map((d) => (d.key === key ? { ...d, ...patch, dirty: true } : d)),
+    );
+  };
+
+  const dismissDraft = (key: string) => {
+    persistDrafts(drafts.filter((d) => d.key !== key));
+  };
+
+  const acceptDraft = async (draft: ReviewDraft) => {
+    if (acceptingKey) return;
+    setAcceptingKey(draft.key);
+    const res = await createIsaFinding(activeAudit.id, {
+      title: draft.title,
+      isaDomain: draft.isa_domain,
+      severity: draft.severity,
+      observation: draft.observation,
+      evidence: draft.evidence,
+      origin: draft.dirty ? 'PIQC_EDITED' : 'PIQC_DRAFTED',
+      subcategory: draft.subcategory,
+      severityRule: draft.severity_rule,
+      reference: draft.reference,
+    });
+    setAcceptingKey(null);
+    if (res.ok) {
+      setFindings((prev) => [...prev, res.data]);
+      const promoted = new Set(draft.evidence.flatMap((e) => e.source_note_ids));
+      setNotes((prev) =>
+        prev.map((n) =>
+          promoted.has(n.id) ? { ...n, promoted_finding_id: res.data.id } : n,
+        ),
+      );
+      persistDrafts(drafts.filter((d) => d.key !== draft.key));
+      setError(null);
+    } else {
+      setError('The finding was not saved. Its notes may have changed — re-run drafting.');
+    }
+  };
+
+  // -------------------------------------------------------------------------
+  // Render
+  // -------------------------------------------------------------------------
+
   return (
     // Container + type scale match the other stage workspaces (p-6 max-w-4xl,
     // text-xl heading) so the pipelines read as siblings in the same shell.
@@ -166,8 +391,8 @@ export default function IsaConductWorkspace() {
         <h2 className="text-fg-heading text-xl font-semibold mt-1">Fieldwork notes</h2>
         <p className="text-fg-sub text-sm mt-1.5 leading-relaxed max-w-2xl">
           Capture what you see as you see it — shorthand is fine. PIQC drafts findings
-          from these notes at the end of the day; you review every draft before
-          anything becomes a finding.
+          from these notes when you ask; you review every draft against your own words
+          before anything becomes a finding.
         </p>
       </div>
 
@@ -194,7 +419,7 @@ export default function IsaConductWorkspace() {
       {/* Capture */}
       <section className={`rounded-lg border ${cardBase}`}>
         <div className={`flex items-center gap-2 px-4 py-3 border-b ${rowBorder}`}>
-          <NotebookPen size={15} className={isLight ? 'text-brand-600' : 'text-brand-300'} />
+          <NotebookPen size={15} className={brandText} />
           <h3 className="text-fg-heading text-sm font-semibold">New note</h3>
         </div>
         <div className="p-4 space-y-3">
@@ -241,11 +466,7 @@ export default function IsaConductWorkspace() {
               type="button"
               onClick={() => void submitNote()}
               disabled={!body.trim() || saving}
-              className={`ml-auto rounded-md px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40 ${
-                isLight
-                  ? 'bg-brand-600 text-white hover:bg-brand-700'
-                  : 'bg-brand-300/20 text-brand-300 hover:bg-brand-300/30'
-              }`}
+              className={`ml-auto rounded-md px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40 ${primaryBtn}`}
             >
               {saving ? 'Adding…' : 'Add note'}
             </button>
@@ -324,11 +545,7 @@ export default function IsaConductWorkspace() {
                           type="button"
                           onClick={() => void saveEdit()}
                           disabled={!editBody.trim()}
-                          className={`rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40 ${
-                            isLight
-                              ? 'bg-brand-600 text-white hover:bg-brand-700'
-                              : 'bg-brand-300/20 text-brand-300 hover:bg-brand-300/30'
-                          }`}
+                          className={`rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40 ${primaryBtn}`}
                         >
                           Save
                         </button>
@@ -355,6 +572,15 @@ export default function IsaConductWorkspace() {
                         >
                           <ThumbsUp size={10} />
                           Positive
+                        </span>
+                      )}
+                      {n.promoted_finding_id && (
+                        <span
+                          className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] ${chipBase}`}
+                          title="Cited as evidence by an accepted finding"
+                        >
+                          <ArrowRight size={10} />
+                          Finding
                         </span>
                       )}
                       <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
@@ -390,20 +616,246 @@ export default function IsaConductWorkspace() {
                             >
                               <Pencil size={13} />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => setConfirmDeleteId(n.id)}
-                              className="text-fg-muted hover:text-fg-body p-1"
-                              aria-label="Delete note"
-                            >
-                              <Trash2 size={13} />
-                            </button>
+                            {/* Promoted notes are part of a finding's evidence
+                                chain — the delete RPC refuses them anyway. */}
+                            {!n.promoted_finding_id && (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(n.id)}
+                                className="text-fg-muted hover:text-fg-body p-1"
+                                aria-label="Delete note"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
                           </>
                         )}
                       </div>
                     </div>
                   </div>
                 )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* PIQC finding drafts */}
+      <section className={`rounded-lg border ${cardBase}`}>
+        <div className={`flex flex-wrap items-center gap-2 px-4 py-3 border-b ${rowBorder}`}>
+          <PiqcMark size={15} className={brandText} />
+          <h3 className="text-fg-heading text-sm font-semibold">Draft findings</h3>
+          <div className="ml-auto flex items-center gap-2">
+            <select
+              value={draftScope}
+              onChange={(e) => setDraftScope(e.target.value as IsaDomain | '')}
+              className={`rounded-md border px-2 py-1.5 text-xs text-fg-body outline-none ${inputBase}`}
+              aria-label="Drafting scope"
+            >
+              <option value="">All un-promoted notes</option>
+              {DOMAIN_OPTIONS.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label} only
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => void runDrafting()}
+              disabled={drafting || draftableNotes.length === 0}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40 ${primaryBtn}`}
+            >
+              {drafting
+                ? 'Drafting…'
+                : `Draft from ${draftableNotes.length} ${draftableNotes.length === 1 ? 'note' : 'notes'}`}
+            </button>
+          </div>
+        </div>
+
+        <div className="px-4 py-3 space-y-3">
+          <p className="text-fg-muted text-xs">
+            PIQC groups notes that share one root cause into a single draft finding.
+            Every evidence line cites the notes it came from — shown side by side so
+            you verify against your own words. Drafts save nothing until you accept.
+          </p>
+
+          {draftNote && <p className="text-fg-sub text-sm">{draftNote}</p>}
+
+          {(withheldCount > 0 || strippedCount > 0) && drafts.length > 0 && (
+            <p className="text-fg-sub text-xs">
+              {withheldCount > 0 &&
+                `${withheldCount} ${withheldCount === 1 ? 'proposal was' : 'proposals were'} withheld — ${withheldCount === 1 ? 'it' : 'they'} couldn't be traced to your notes.`}
+              {withheldCount > 0 && strippedCount > 0 && ' '}
+              {strippedCount > 0 &&
+                `${strippedCount} regulatory ${strippedCount === 1 ? 'citation' : 'citations'} outside the verified map ${strippedCount === 1 ? 'was' : 'were'} removed.`}
+            </p>
+          )}
+
+          {drafts.map((d) => (
+            <div key={d.key} className={`rounded-lg border ${cardBase}`}>
+              <div className={`flex flex-wrap items-center gap-2 px-3 py-2 border-b ${rowBorder}`}>
+                <PiqcMark size={12} className={brandText} />
+                <span className={`text-[10px] uppercase tracking-wider font-semibold ${brandText}`}>
+                  {d.dirty ? 'PIQC drafted · edited' : 'PIQC drafted'}
+                </span>
+                <div className="ml-auto flex items-center gap-2">
+                  <select
+                    value={d.severity}
+                    onChange={(e) => patchDraft(d.key, { severity: e.target.value as IsaSeverity })}
+                    className={`rounded border px-1.5 py-1 text-[11px] outline-none ${severityChip(d.severity)}`}
+                    aria-label="Severity"
+                  >
+                    {SEVERITY_OPTIONS.map((s) => (
+                      <option key={s} value={s}>
+                        {SEVERITY_LABELS[s]}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={d.isa_domain}
+                    onChange={(e) => patchDraft(d.key, { isa_domain: e.target.value as IsaDomain })}
+                    className={`rounded-md border px-2 py-1 text-[11px] text-fg-body outline-none ${inputBase}`}
+                    aria-label="Domain"
+                  >
+                    {DOMAIN_OPTIONS.map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="p-3 space-y-2.5">
+                <input
+                  value={d.title}
+                  onChange={(e) => patchDraft(d.key, { title: e.target.value })}
+                  className={`w-full rounded-md border px-3 py-1.5 text-sm font-semibold text-fg-heading outline-none ${inputBase}`}
+                  aria-label="Finding title"
+                />
+                <textarea
+                  value={d.observation}
+                  onChange={(e) => patchDraft(d.key, { observation: e.target.value })}
+                  rows={3}
+                  className={`w-full rounded-md border px-3 py-2 text-sm text-fg-body outline-none resize-y ${inputBase}`}
+                  aria-label="Observation"
+                />
+                {d.severity_rule && (
+                  <p className="text-fg-muted text-xs italic">
+                    Severity rationale: {d.severity_rule}
+                  </p>
+                )}
+                {d.reference && (
+                  <div className="flex items-center gap-1.5">
+                    <span className={`rounded border px-1.5 py-0.5 text-[10px] ${chipBase}`}>
+                      {d.reference}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => patchDraft(d.key, { reference: null })}
+                      className="text-fg-muted hover:text-fg-body"
+                      aria-label="Remove citation"
+                    >
+                      <XIcon size={11} />
+                    </button>
+                  </div>
+                )}
+
+                {/* Evidence — side by side with the cited notes, default
+                    visible: verifying the claim against the auditor's own
+                    words IS the review act. */}
+                <div className="space-y-2">
+                  {d.evidence.map((ev, i) => (
+                    <div
+                      key={i}
+                      className={`rounded-md border ${rowBorder} ${
+                        isLight ? 'bg-[#F8FAFC]' : 'bg-white/[0.02]'
+                      } px-3 py-2`}
+                    >
+                      <p className="text-fg-body text-xs">{ev.text}</p>
+                      {ev.source_note_ids.map((id) => {
+                        const src = notesById.get(id);
+                        return src ? (
+                          <p
+                            key={id}
+                            className={`text-fg-muted text-[11px] mt-1 pl-2 border-l-2 ${
+                              isLight ? 'border-[#CBD5E1]' : 'border-white/15'
+                            }`}
+                          >
+                            <span className="font-medium">
+                              Your note ({noteTimestamp(src.created_at)}):
+                            </span>{' '}
+                            {src.body}
+                          </p>
+                        ) : null;
+                      })}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => dismissDraft(d.key)}
+                    className="text-fg-muted text-xs hover:text-fg-body"
+                  >
+                    Dismiss
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void acceptDraft(d)}
+                    disabled={acceptingKey !== null || !d.title.trim() || !d.observation.trim()}
+                    className={`rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40 ${primaryBtn}`}
+                  >
+                    {acceptingKey === d.key ? 'Accepting…' : 'Accept as finding'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Findings */}
+      <section className={`rounded-lg border ${cardBase}`}>
+        <div className={`flex items-center justify-between px-4 py-3 border-b ${rowBorder}`}>
+          <h3 className="text-fg-heading text-sm font-semibold">Findings</h3>
+          <span className="text-fg-muted text-xs">
+            {findings.length} {findings.length === 1 ? 'finding' : 'findings'}
+          </span>
+        </div>
+        {findings.length === 0 ? (
+          <p className="text-fg-sub text-sm px-4 py-6">
+            No findings yet. Accepted drafts collect here for the report stage.
+          </p>
+        ) : (
+          <ul>
+            {findings.map((f) => (
+              <li key={f.id} className={`px-4 py-3 border-t ${rowBorder} first:border-t-0`}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${severityChip(f.severity)}`}
+                  >
+                    {SEVERITY_LABELS[f.severity]}
+                  </span>
+                  <span className="text-fg-heading text-sm font-semibold">{f.title}</span>
+                  <span className={`rounded border px-1.5 py-0.5 text-[10px] ${chipBase}`}>
+                    {ISA_DOMAIN_LABELS[f.isa_domain]}
+                  </span>
+                  {f.origin !== 'AUDITOR' && (
+                    <span className={`flex items-center gap-1 text-[10px] ${brandText}`}>
+                      <PiqcMark size={10} />
+                      {f.origin === 'PIQC_DRAFTED' ? 'PIQC drafted' : 'PIQC drafted · edited'}
+                    </span>
+                  )}
+                </div>
+                <p className="text-fg-body text-sm mt-1.5">{f.observation}</p>
+                <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-fg-muted">
+                  <span>
+                    {f.evidence.length} evidence {f.evidence.length === 1 ? 'item' : 'items'}
+                  </span>
+                  {f.reference && <span>· {f.reference}</span>}
+                </div>
               </li>
             ))}
           </ul>
