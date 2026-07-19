@@ -3,6 +3,7 @@ import type {
   AuditNoteObject,
   IsaDomain,
   IsaFindingObject,
+  IsaProtocolRef,
   IsaReportDraftObject,
   IsaSeverity,
   IsaSiteVerdict,
@@ -157,6 +158,24 @@ export function formatReportDate(d: Date): string {
 export function buildResponseClause(days: number, basis: 'CALENDAR' | 'BUSINESS'): string {
   const unit = basis === 'CALENDAR' ? 'calendar' : 'business';
   return `A written response to the audit observations must be submitted within ${days} ${unit} days of receipt of this report.`;
+}
+
+/**
+ * "§ 6.3 Investigational Product (p. 47–48)" — the locator part of a
+ * protocol citation. One formatter shared by every renderer so the report,
+ * observation form, docx and clipboard flavors can never disagree.
+ */
+export function formatProtocolRefWhere(ref: IsaProtocolRef): string {
+  const parts: string[] = [];
+  if (ref.section_heading) parts.push(`§ ${ref.section_heading}`);
+  if (ref.page_start !== null) {
+    const pages = ref.page_end !== null && ref.page_end !== ref.page_start
+      ? `${ref.page_start}–${ref.page_end}`
+      : `${ref.page_start}`;
+    parts.push(`p. ${pages}`);
+  }
+  if (parts.length === 0) return 'Protocol';
+  return parts.length === 2 ? `${parts[0]} (${parts[1]})` : parts[0];
 }
 
 // -----------------------------------------------------------------------------

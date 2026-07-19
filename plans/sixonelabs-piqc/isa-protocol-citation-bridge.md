@@ -42,7 +42,9 @@ for the client picker. Roger's RLS is not touched.
 - src/lib/audit/__tests__/isaProtocolCandidates.test.ts
 - src/lib/audit/__tests__/isaFindingsApi.test.ts
 - src/lib/audit/__tests__/isaReportClipboard.test.ts
-- src/lib/audit/__tests__/isaReportDocx.test.ts
+- src/lib/audit/__tests__/isaInsights.test.ts (mechanical compile fix only —
+  finding fixtures gain the now-required `protocol_refs: []`)
+- src/lib/audit/__tests__/isaReportModel.test.ts (same mechanical fix)
 
 ## Out of scope (files forbidden)
 

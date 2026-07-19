@@ -1,6 +1,6 @@
 import { ISA_DOMAIN_LABELS } from './labels';
-import { formatReportDate, type IsaReportPacket } from './isaReportModel';
-import type { IsaFindingObject } from '../../types/audit';
+import { formatProtocolRefWhere, formatReportDate, type IsaReportPacket } from './isaReportModel';
+import type { IsaFindingObject, IsaProtocolRef } from '../../types/audit';
 
 // =============================================================================
 // ISA report clipboard builders — paste-ready HTML + plain text.
@@ -78,6 +78,9 @@ function findingHtml(f: IsaFindingObject, severityLabel: string): string {
       .join('');
     parts.push(`<ul style="margin:0 0 6pt 18pt;padding:0;">${items}</ul>`);
   }
+  for (const ref of f.protocol_refs ?? []) {
+    parts.push(`<p style="${SMALL}">${esc(protocolRefLine(ref))}</p>`);
+  }
   if (f.reference) {
     parts.push(`<p style="${SMALL}">Reference: ${esc(f.reference)}</p>`);
   }
@@ -91,8 +94,16 @@ function findingPlain(f: IsaFindingObject, severityLabel: string): string {
   );
   lines.push(f.observation);
   for (const ev of f.evidence) lines.push(`  - ${ev.text}`);
+  for (const ref of f.protocol_refs ?? []) lines.push(protocolRefLine(ref));
   if (f.reference) lines.push(`Reference: ${f.reference}`);
   return lines.join('\n');
+}
+
+/** "Protocol requirement: § 6.3 (p. 47) — “…”" — the S4 bridge line. Sits
+ *  ABOVE the regulatory reference: the site's own commitment first, the
+ *  external norm second. */
+function protocolRefLine(ref: IsaProtocolRef): string {
+  return `Protocol requirement: ${formatProtocolRefWhere(ref)} — “${ref.quote}”`;
 }
 
 const SEVERITY_LABELS: Record<string, string> = {
@@ -387,6 +398,9 @@ export function buildObservationFormHtml(packet: IsaReportPacket): string {
               .map((ev) => `<li style="${P}margin:0 0 2pt 0;">${escMultiline(ev.text)}</li>`)
               .join('')}</ul>`
           : '';
+      const protocolRefs = (f.protocol_refs ?? [])
+        .map((ref) => `<p style="${SMALL}margin:4pt 0 0 0;">${esc(protocolRefLine(ref))}</p>`)
+        .join('');
       const reference = f.reference
         ? `<p style="${SMALL}margin:4pt 0 0 0;">Reference: ${esc(f.reference)}</p>`
         : '';
@@ -395,7 +409,7 @@ export function buildObservationFormHtml(packet: IsaReportPacket): string {
           `<td style="${TD}">${index}</td>` +
           `<td style="${TD}"><strong>${esc(SEVERITY_LABELS[f.severity])}</strong><br>Owner: ${esc(OWNER_LABELS[f.response_owner])}</td>` +
           `<td style="${TD}">${category}</td>` +
-          `<td style="${TD}"><strong>${esc(f.title)}</strong><br>${escMultiline(f.observation)}${evidence}${reference}</td>` +
+          `<td style="${TD}"><strong>${esc(f.title)}</strong><br>${escMultiline(f.observation)}${evidence}${protocolRefs}${reference}</td>` +
           `<td style="${TD}"><p style="${SMALL}margin:0;">${esc(RESPONSE_REQUIREMENTS[f.severity])}</p><br><br><br></td>` +
           `</tr>`,
       );
@@ -451,6 +465,7 @@ export function buildObservationFormPlain(packet: IsaReportPacket): string {
       );
       lines.push(f.observation);
       for (const ev of f.evidence) lines.push(`  - ${ev.text}`);
+      for (const ref of f.protocol_refs ?? []) lines.push(protocolRefLine(ref));
       if (f.reference) lines.push(`Reference: ${f.reference}`);
       lines.push(`Response (${RESPONSE_REQUIREMENTS[f.severity]})`);
       lines.push('  Root cause:');

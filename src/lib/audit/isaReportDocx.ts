@@ -12,9 +12,9 @@ import {
   WidthType,
 } from 'docx';
 import { ISA_DOMAIN_LABELS } from './labels';
-import { formatReportDate, type IsaReportPacket } from './isaReportModel';
+import { formatProtocolRefWhere, formatReportDate, type IsaReportPacket } from './isaReportModel';
 import { RESPONSE_REQUIREMENTS } from './isaReportClipboard';
-import type { IsaFindingObject } from '../../types/audit';
+import type { IsaFindingObject, IsaProtocolRef } from '../../types/audit';
 
 // =============================================================================
 // ISA report .docx builder — renders the IsaReportPacket (isaReportModel.ts)
@@ -99,8 +99,18 @@ function findingParagraphs(f: IsaFindingObject): Paragraph[] {
   );
   out.push(p(f.observation));
   for (const ev of f.evidence) out.push(bullet(ev.text));
+  for (const ref of f.protocol_refs ?? []) {
+    out.push(p(protocolRefText(ref), { italics: true }));
+  }
   if (f.reference) out.push(p(`Reference: ${f.reference}`, { italics: true }));
   return out;
+}
+
+/** "Protocol requirement: § 6.3 (p. 47) — “…”" — the S4 bridge line, above
+ *  the regulatory reference (the site's own commitment first). Same wording
+ *  as the clipboard flavors via the shared formatter. */
+function protocolRefText(ref: IsaProtocolRef): string {
+  return `Protocol requirement: ${formatProtocolRefWhere(ref)} — “${ref.quote}”`;
 }
 
 export function buildIsaReportDocx(packet: IsaReportPacket): Promise<Blob> {
@@ -379,6 +389,9 @@ export function buildIsaObservationFormDocx(packet: IsaReportPacket): Promise<Bl
       index++;
       const obsParas: Paragraph[] = [smallP(f.title, { bold: true }), smallP(f.observation)];
       for (const ev of f.evidence) obsParas.push(smallP(`– ${ev.text}`));
+      for (const ref of f.protocol_refs ?? []) {
+        obsParas.push(smallP(protocolRefText(ref), { italics: true }));
+      }
       if (f.reference) obsParas.push(smallP(`Reference: ${f.reference}`, { italics: true }));
 
       bodyRows.push(

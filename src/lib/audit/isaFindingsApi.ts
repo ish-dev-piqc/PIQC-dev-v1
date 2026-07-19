@@ -5,6 +5,7 @@ import type {
   IsaFindingEvidence,
   IsaFindingObject,
   IsaFindingOrigin,
+  IsaProtocolRef,
   IsaResponseOwner,
   IsaSeverity,
 } from '../../types/audit';
@@ -52,6 +53,7 @@ export interface CreateIsaFindingInput {
   severityRule?: string | null;
   reference?: string | null;
   responseOwner?: IsaResponseOwner;
+  protocolRefs?: IsaProtocolRef[];
 }
 
 export async function createIsaFinding(
@@ -70,6 +72,7 @@ export async function createIsaFinding(
     p_severity_rule: input.severityRule ?? null,
     p_reference: input.reference ?? null,
     p_response_owner: input.responseOwner ?? 'SITE',
+    p_protocol_refs: input.protocolRefs ?? [],
   });
 
   if (error) {
@@ -93,6 +96,8 @@ export interface UpdateIsaFindingInput {
   reference?: string;
   clearReference?: boolean;
   responseOwner?: IsaResponseOwner;
+  /** Full replacement; pass [] to clear. Omit to leave unchanged. */
+  protocolRefs?: IsaProtocolRef[];
 }
 
 export async function updateIsaFinding(
@@ -113,6 +118,7 @@ export async function updateIsaFinding(
     p_reference: input.reference ?? null,
     p_clear_reference: input.clearReference ?? false,
     p_response_owner: input.responseOwner ?? null,
+    p_protocol_refs: input.protocolRefs ?? null,
   });
 
   if (error) {
@@ -137,6 +143,8 @@ export interface IsaFindingDraft {
   observation: string;
   evidence: IsaFindingEvidence[];
   reference: string | null;
+  /** Proposed protocol citation — post-Gate-3, quote verified verbatim. */
+  protocol_ref: IsaProtocolRef | null;
 }
 
 export interface IsaFindingDraftResponse {
@@ -145,6 +153,11 @@ export interface IsaFindingDraftResponse {
   withheld_count: number;
   /** References stripped for being outside the closed citation map. */
   stripped_reference_count: number;
+  /** Protocol citations stripped for failing candidate membership or the
+   *  verbatim-quote check (Gate 3). */
+  stripped_protocol_ref_count: number;
+  /** Whether the audit's protocol has ready parsed documents to cite. */
+  protocol_source: 'ready' | 'unavailable';
   note_count: number;
 }
 
@@ -192,4 +205,58 @@ export async function requestIsaFindingDrafts(
   }
 
   return (await res.json()) as IsaFindingDraftResponse;
+}
+
+// ============================================================================
+// Protocol-citation bridge (S4) — manual picker search + availability signal.
+//
+// Both RPCs are SECURITY DEFINER behind a lead_auditor_id gate: chunk RLS is
+// owner-only and the auditor is usually not the document uploader, so the
+// client cannot query chunks directly. The search only ever returns chunks
+// of THIS audit's protocol's ready documents.
+// ============================================================================
+
+/** One search hit from the audit protocol's parsed documents. */
+export interface IsaProtocolChunkHit {
+  chunk_id: string;
+  document_id: string;
+  snippet: string;
+  section_heading: string | null;
+  page_start: number | null;
+  page_end: number | null;
+}
+
+export async function searchIsaProtocolChunks(
+  auditId: string,
+  query: string,
+  limit = 8,
+): Promise<Result<IsaProtocolChunkHit[]>> {
+  const { data, error } = await supabase.rpc('audit_mode_search_isa_protocol_chunks', {
+    p_audit_id: auditId,
+    p_query: query,
+    p_limit: limit,
+  });
+
+  if (error) {
+    console.error('[isaFindingsApi] searchIsaProtocolChunks error:', error);
+    return { ok: false, error: error.message };
+  }
+
+  return { ok: true, data: (data ?? []) as IsaProtocolChunkHit[] };
+}
+
+/** Ready parsed-document count for the audit's protocol. 0 → bridge hidden. */
+export async function fetchIsaProtocolBridgeStatus(
+  auditId: string,
+): Promise<Result<number>> {
+  const { data, error } = await supabase.rpc('audit_mode_isa_protocol_bridge_status', {
+    p_audit_id: auditId,
+  });
+
+  if (error) {
+    console.error('[isaFindingsApi] fetchIsaProtocolBridgeStatus error:', error);
+    return { ok: false, error: error.message };
+  }
+
+  return { ok: true, data: (data ?? 0) as number };
 }
