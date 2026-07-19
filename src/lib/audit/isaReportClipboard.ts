@@ -300,3 +300,169 @@ export function buildFindingHtml(f: IsaFindingObject, generatedAt: Date): string
 export function buildFindingPlain(f: IsaFindingObject, generatedAt: Date): string {
   return `${DRAFT_BANNER_PLAIN(generatedAt)}\n\n${findingPlain(f, SEVERITY_LABELS[f.severity])}`;
 }
+
+// -----------------------------------------------------------------------------
+// Audit observation form — the auditee-facing response vehicle.
+//
+// Distinct artifact from the report: per-finding response cells the auditee
+// fills in, severity-keyed response requirements, and the signature loop.
+// Same packet, same payload rules (inline styles, tables, banner inside).
+// -----------------------------------------------------------------------------
+
+/** Severity-keyed response requirements (the templates' response ladder). */
+export const RESPONSE_REQUIREMENTS: Record<string, string> = {
+  CRITICAL:
+    'Response required: root cause, correction, and a corrective action plan with responsible person(s) and target completion date. Immediate response with an aggressive timeline.',
+  MAJOR:
+    'Response required: root cause, correction, and a corrective action plan with responsible person(s) and target completion date, within a defined timeline.',
+  MINOR:
+    'Correction expected. A documented root cause analysis is not required.',
+  RECOMMENDATION: 'Response optional — provided as an opportunity for improvement.',
+};
+
+const OWNER_LABELS: Record<string, string> = {
+  SITE: 'Site',
+  CLIENT: 'Client',
+  CRO: 'CRO',
+};
+
+const RESPONSE_PROCESS_INTRO =
+  'The audit observations and/or recommendations listed below were found during the audit. ' +
+  'For each observation, provide: the root cause (required for Critical and Major observations), ' +
+  'what was done to correct the issue, and a corrective action plan describing how recurrence ' +
+  'will be prevented, the responsible person(s), and the estimated date of completion. ' +
+  'Root cause analysis and corrective actions should address the observation itself, rather ' +
+  'than only the specific examples cited as objective evidence.';
+
+export function buildObservationFormHtml(packet: IsaReportPacket): string {
+  const { meta } = packet;
+  const parts: string[] = [];
+
+  parts.push(draftBanner(meta.generatedAt));
+  parts.push(`<h1 style="${H1}">Audit Observation Form</h1>`);
+
+  const metaRows: [string, string][] = [
+    ['Auditee', meta.auditeeName],
+    ...(meta.siteNumber ? ([['Site number', meta.siteNumber]] as [string, string][]) : []),
+    ...(meta.principalInvestigator
+      ? ([['Principal investigator', meta.principalInvestigator]] as [string, string][])
+      : []),
+    ...(meta.protocolCode ? ([['Protocol', meta.protocolCode]] as [string, string][]) : []),
+    ...(meta.auditDate ? ([['Audit date(s)', meta.auditDate]] as [string, string][]) : []),
+    ['Form generated', formatReportDate(meta.generatedAt)],
+    ['Response due', packet.responseClause],
+  ];
+  parts.push(
+    `<table style="${TABLE}">` +
+      metaRows
+        .map(
+          ([k, v]) =>
+            `<tr><td style="${TD}width:30%;"><strong>${esc(k)}</strong></td><td style="${TD}">${esc(v)}</td></tr>`,
+        )
+        .join('') +
+      '</table>',
+  );
+
+  parts.push(`<h2 style="${H2}">Auditee response process</h2>`);
+  parts.push(`<p style="${P}">${esc(RESPONSE_PROCESS_INTRO)}</p>`);
+
+  parts.push(`<h2 style="${H2}">Observation classifications</h2>`);
+  for (const def of packet.severityDefinitions) {
+    parts.push(`<p style="${P}"><strong>${esc(def.label)}:</strong> ${esc(def.text)}</p>`);
+  }
+
+  parts.push(`<h2 style="${H2}">Observations</h2>`);
+  const rows: string[] = [];
+  rows.push(
+    `<tr><th style="${TH}width:4%;">#</th><th style="${TH}width:12%;">Classification</th><th style="${TH}width:18%;">Category</th><th style="${TH}width:38%;">Observation &amp; evidence</th><th style="${TH}width:28%;">Response</th></tr>`,
+  );
+  let index = 0;
+  for (const group of packet.groups) {
+    for (const f of group.findings) {
+      index++;
+      const category = `${ISA_DOMAIN_LABELS[f.isa_domain]}${f.subcategory ? ` – ${esc(f.subcategory)}` : ''}`;
+      const evidence =
+        f.evidence.length > 0
+          ? `<ul style="margin:4pt 0 0 14pt;padding:0;">${f.evidence
+              .map((ev) => `<li style="${P}margin:0 0 2pt 0;">${escMultiline(ev.text)}</li>`)
+              .join('')}</ul>`
+          : '';
+      const reference = f.reference
+        ? `<p style="${SMALL}margin:4pt 0 0 0;">Reference: ${esc(f.reference)}</p>`
+        : '';
+      rows.push(
+        `<tr>` +
+          `<td style="${TD}">${index}</td>` +
+          `<td style="${TD}"><strong>${esc(SEVERITY_LABELS[f.severity])}</strong><br>Owner: ${esc(OWNER_LABELS[f.response_owner])}</td>` +
+          `<td style="${TD}">${category}</td>` +
+          `<td style="${TD}"><strong>${esc(f.title)}</strong><br>${escMultiline(f.observation)}${evidence}${reference}</td>` +
+          `<td style="${TD}"><p style="${SMALL}margin:0;">${esc(RESPONSE_REQUIREMENTS[f.severity])}</p><br><br><br></td>` +
+          `</tr>`,
+      );
+    }
+  }
+  parts.push(`<table style="${TABLE}">${rows.join('')}</table>`);
+
+  parts.push(`<h2 style="${H2}">Signatures</h2>`);
+  const sigRow = (label: string) =>
+    `<tr><td style="${TD}width:40%;">${esc(label)}</td><td style="${TD}width:35%;"></td><td style="${TD}width:25%;"></td></tr>`;
+  parts.push(
+    `<table style="${TABLE}">` +
+      `<tr><th style="${TH}">Role</th><th style="${TH}">Name / signature</th><th style="${TH}">Date</th></tr>` +
+      sigRow('Auditor') +
+      sigRow('Auditee representative completing response') +
+      sigRow('Response accepted by') +
+      '</table>',
+  );
+
+  return `<div style="${FONT}">${parts.join('')}</div>`;
+}
+
+export function buildObservationFormPlain(packet: IsaReportPacket): string {
+  const { meta } = packet;
+  const lines: string[] = [];
+
+  lines.push(DRAFT_BANNER_PLAIN(meta.generatedAt));
+  lines.push('');
+  lines.push('AUDIT OBSERVATION FORM');
+  lines.push('');
+  lines.push(`Auditee: ${meta.auditeeName}`);
+  if (meta.siteNumber) lines.push(`Site number: ${meta.siteNumber}`);
+  if (meta.principalInvestigator) lines.push(`Principal investigator: ${meta.principalInvestigator}`);
+  if (meta.protocolCode) lines.push(`Protocol: ${meta.protocolCode}`);
+  if (meta.auditDate) lines.push(`Audit date(s): ${meta.auditDate}`);
+  lines.push(`Form generated: ${formatReportDate(meta.generatedAt)}`);
+  lines.push(`Response due: ${packet.responseClause}`);
+  lines.push('');
+  lines.push('AUDITEE RESPONSE PROCESS');
+  lines.push(RESPONSE_PROCESS_INTRO);
+  lines.push('');
+  lines.push('OBSERVATION CLASSIFICATIONS');
+  for (const def of packet.severityDefinitions) lines.push(`${def.label}: ${def.text}`);
+  lines.push('');
+  lines.push('OBSERVATIONS');
+  let index = 0;
+  for (const group of packet.groups) {
+    for (const f of group.findings) {
+      index++;
+      lines.push('');
+      lines.push(
+        `${index}. [${SEVERITY_LABELS[f.severity]}] ${f.title} — ${ISA_DOMAIN_LABELS[f.isa_domain]}${f.subcategory ? ` – ${f.subcategory}` : ''} (Owner: ${OWNER_LABELS[f.response_owner]})`,
+      );
+      lines.push(f.observation);
+      for (const ev of f.evidence) lines.push(`  - ${ev.text}`);
+      if (f.reference) lines.push(`Reference: ${f.reference}`);
+      lines.push(`Response (${RESPONSE_REQUIREMENTS[f.severity]})`);
+      lines.push('  Root cause:');
+      lines.push('  Correction:');
+      lines.push('  Corrective action plan / responsible / target date:');
+    }
+  }
+  lines.push('');
+  lines.push('SIGNATURES');
+  lines.push('Auditor: ____________________  Date: ________');
+  lines.push('Auditee representative completing response: ____________________  Date: ________');
+  lines.push('Response accepted by: ____________________  Date: ________');
+
+  return lines.join('\n');
+}

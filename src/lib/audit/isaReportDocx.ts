@@ -13,6 +13,7 @@ import {
 } from 'docx';
 import { ISA_DOMAIN_LABELS } from './labels';
 import { formatReportDate, type IsaReportPacket } from './isaReportModel';
+import { RESPONSE_REQUIREMENTS } from './isaReportClipboard';
 import type { IsaFindingObject } from '../../types/audit';
 
 // =============================================================================
@@ -262,6 +263,189 @@ export function buildIsaReportDocx(packet: IsaReportPacket): Promise<Blob> {
         },
       ],
     },
+    sections: [
+      {
+        properties: { page: { size: { width: PAGE.width, height: PAGE.height } } },
+        children,
+      },
+    ],
+  });
+  return Packer.toBlob(doc);
+}
+
+// -----------------------------------------------------------------------------
+// Audit observation form — the auditee-facing response vehicle as .docx.
+// Same packet; response cells are left empty for the auditee, with the
+// severity-keyed requirement stated inside each cell.
+// -----------------------------------------------------------------------------
+
+const OWNER_LABELS: Record<string, string> = {
+  SITE: 'Site',
+  CLIENT: 'Client',
+  CRO: 'CRO',
+};
+
+const FORM_RESPONSE_INTRO =
+  'The audit observations and/or recommendations listed below were found during the audit. ' +
+  'For each observation, provide: the root cause (required for Critical and Major observations), ' +
+  'what was done to correct the issue, and a corrective action plan describing how recurrence ' +
+  'will be prevented, the responsible person(s), and the estimated date of completion. ' +
+  'Root cause analysis and corrective actions should address the observation itself, rather ' +
+  'than only the specific examples cited as objective evidence.';
+
+function richCell(paragraphs: Paragraph[], widthDxa: number): TableCell {
+  return new TableCell({
+    width: { size: widthDxa, type: WidthType.DXA },
+    children: paragraphs.length > 0 ? paragraphs : [new Paragraph('')],
+  });
+}
+
+function smallP(text: string, opts: { bold?: boolean; italics?: boolean } = {}): Paragraph {
+  return new Paragraph({
+    children: [new TextRun({ text, bold: opts.bold, italics: opts.italics, size: 18 })],
+    spacing: { after: 60 },
+  });
+}
+
+export function buildIsaObservationFormDocx(packet: IsaReportPacket): Promise<Blob> {
+  const { meta } = packet;
+  const children: (Paragraph | Table)[] = [];
+
+  children.push(
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 240 },
+      children: [
+        new TextRun({
+          text: `DRAFT — PIQC drafted · requires human review · generated ${formatReportDate(meta.generatedAt)}`,
+          bold: true,
+          color: '8A6D00',
+        }),
+      ],
+    }),
+  );
+  children.push(h('Audit Observation Form', HeadingLevel.HEADING_1));
+
+  const metaRows: [string, string][] = [
+    ['Auditee', meta.auditeeName],
+    ...(meta.siteNumber ? ([['Site number', meta.siteNumber]] as [string, string][]) : []),
+    ...(meta.principalInvestigator
+      ? ([['Principal investigator', meta.principalInvestigator]] as [string, string][])
+      : []),
+    ...(meta.protocolCode ? ([['Protocol', meta.protocolCode]] as [string, string][]) : []),
+    ...(meta.auditDate ? ([['Audit date(s)', meta.auditDate]] as [string, string][]) : []),
+    ['Form generated', formatReportDate(meta.generatedAt)],
+    ['Response due', packet.responseClause],
+  ];
+  children.push(metaTable(metaRows));
+
+  children.push(h('Auditee response process', HeadingLevel.HEADING_2));
+  children.push(p(FORM_RESPONSE_INTRO));
+
+  children.push(h('Observation classifications', HeadingLevel.HEADING_2));
+  for (const def of packet.severityDefinitions) {
+    children.push(
+      new Paragraph({
+        spacing: { after: 120 },
+        children: [
+          new TextRun({ text: `${def.label}: `, bold: true }),
+          new TextRun(def.text),
+        ],
+      }),
+    );
+  }
+
+  children.push(h('Observations', HeadingLevel.HEADING_2));
+  const wNum = Math.round(CONTENT_DXA * 0.05);
+  const wClass = Math.round(CONTENT_DXA * 0.14);
+  const wCat = Math.round(CONTENT_DXA * 0.18);
+  const wObs = Math.round(CONTENT_DXA * 0.38);
+  const wResp = CONTENT_DXA - wNum - wClass - wCat - wObs;
+
+  const headerRow = new TableRow({
+    children: [
+      cell('#', wNum, true),
+      cell('Classification', wClass, true),
+      cell('Category', wCat, true),
+      cell('Observation & evidence', wObs, true),
+      cell('Response', wResp, true),
+    ],
+  });
+
+  const bodyRows: TableRow[] = [];
+  let index = 0;
+  for (const group of packet.groups) {
+    for (const f of group.findings) {
+      index++;
+      const obsParas: Paragraph[] = [smallP(f.title, { bold: true }), smallP(f.observation)];
+      for (const ev of f.evidence) obsParas.push(smallP(`– ${ev.text}`));
+      if (f.reference) obsParas.push(smallP(`Reference: ${f.reference}`, { italics: true }));
+
+      bodyRows.push(
+        new TableRow({
+          children: [
+            richCell([smallP(String(index))], wNum),
+            richCell(
+              [
+                smallP(SEVERITY_LABELS[f.severity], { bold: true }),
+                smallP(`Owner: ${OWNER_LABELS[f.response_owner]}`),
+              ],
+              wClass,
+            ),
+            richCell(
+              [
+                smallP(
+                  `${ISA_DOMAIN_LABELS[f.isa_domain]}${f.subcategory ? ` – ${f.subcategory}` : ''}`,
+                ),
+              ],
+              wCat,
+            ),
+            richCell(obsParas, wObs),
+            richCell(
+              [
+                smallP(RESPONSE_REQUIREMENTS[f.severity], { italics: true }),
+                new Paragraph(''),
+                new Paragraph(''),
+                new Paragraph(''),
+              ],
+              wResp,
+            ),
+          ],
+        }),
+      );
+    }
+  }
+  children.push(
+    new Table({
+      columnWidths: [wNum, wClass, wCat, wObs, wResp],
+      width: { size: CONTENT_DXA, type: WidthType.DXA },
+      rows: [headerRow, ...bodyRows],
+    }),
+  );
+
+  children.push(h('Signatures', HeadingLevel.HEADING_2));
+  const wRole = Math.round(CONTENT_DXA * 0.4);
+  const wSig = Math.round(CONTENT_DXA * 0.35);
+  const wDate = CONTENT_DXA - wRole - wSig;
+  children.push(
+    new Table({
+      columnWidths: [wRole, wSig, wDate],
+      width: { size: CONTENT_DXA, type: WidthType.DXA },
+      rows: [
+        new TableRow({
+          children: [cell('Role', wRole, true), cell('Name / signature', wSig, true), cell('Date', wDate, true)],
+        }),
+        ...['Auditor', 'Auditee representative completing response', 'Response accepted by'].map(
+          (role) =>
+            new TableRow({
+              children: [richCell([smallP(role)], wRole), richCell([], wSig), richCell([], wDate)],
+            }),
+        ),
+      ],
+    }),
+  );
+
+  const doc = new Document({
     sections: [
       {
         properties: { page: { size: { width: PAGE.width, height: PAGE.height } } },
