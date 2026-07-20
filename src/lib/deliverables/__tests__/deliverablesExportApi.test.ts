@@ -722,3 +722,55 @@ describe('downloadDeliverable — per-artifact filename dispatch', () => {
     expect(triggered).toHaveLength(1);
   });
 });
+
+// ===========================================================================
+// winAnsiSafe at the deliverables PDF boundary (ported from the VEW
+// worksheet fix, PR #520 — the shared helper lives in src/lib/winAnsiSafe.ts)
+// ===========================================================================
+
+describe('buildDeliverablePdf — winAnsiSafe at the PDF text boundary', () => {
+  it('transliterates non-WinAnsi glyphs in packet-derived text', () => {
+    const doc = buildDeliverablePdf(
+      makePacket({
+        title: 'Checklist → Draft',
+        blocks: [
+          block({
+            id: 'w-1',
+            section_key: 'eligibility_verification',
+            display_text: 'dose ≤ 50 µg × 3 → titrate ≥ 25',
+            source_section: '§5.1 ✓ Eligibility',
+            source_page_number: 12,
+            sort_order: 0,
+          }),
+        ],
+      }),
+    );
+    const text = docText(doc);
+    // Body Item cell + traceability-appendix Item cell both transliterate.
+    expect(countOccurrences(text, 'dose <= 50 ug x 3 -> titrate >= 25')).toBe(2);
+    expect(text).toContain('Checklist -> Draft');
+    // ✓ is outside CP1252 → visible '?'; § is CP1252 and passes through.
+    expect(text).toContain('§5.1 ? Eligibility');
+  });
+
+  it('keeps CP1252 typography and maps true minus to an ASCII hyphen', () => {
+    const doc = buildDeliverablePdf(
+      makePacket({
+        protocol_title: 'Study — Compound X',
+        protocol_version: 'v2.0 ± amendment',
+        blocks: [
+          block({
+            id: 'w-2',
+            section_key: 'eligibility_verification',
+            display_text: 'Window −3 days',
+            sort_order: 0,
+          }),
+        ],
+      }),
+    );
+    const text = docText(doc);
+    expect(text).toContain('Study — Compound X · ONC-4021');
+    expect(text).toContain('Protocol version: v2.0 ± amendment');
+    expect(text).toContain('Window -3 days');
+  });
+});
