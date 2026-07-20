@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: isa-observation-form
-status: active
+status: merged
 started: 2026-07-19
-target_pr:
+target_pr: 506
+merged: 2026-07-19
 ---
 
 # ISA observation form — S3.5 of the notes → findings → report arc

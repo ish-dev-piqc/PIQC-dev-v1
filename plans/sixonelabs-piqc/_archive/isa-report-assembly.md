@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: isa-report-assembly
-status: active
+status: merged
 started: 2026-07-19
-target_pr:
+target_pr: 504
+merged: 2026-07-19
 ---
 
 # ISA report assembly — S3 of the notes → findings → report arc

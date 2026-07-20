@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: deliverable-engine-ui-gate
-status: in-review
+status: merged
 started: 2026-07-08
-target_pr:
+target_pr: 486
+merged: 2026-07-08
 ---
 
 # Deliverable Engine — UI gate alignment

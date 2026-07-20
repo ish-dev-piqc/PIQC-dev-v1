@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: ISA report narrative sections — LLM draft/refine on the provenance ladder (S5)
-status: active
+status: merged
 started: 2026-07-19
-target_pr:
+target_pr: 510
+merged: 2026-07-19
 ---
 
 # ISA report narrative sections — S5

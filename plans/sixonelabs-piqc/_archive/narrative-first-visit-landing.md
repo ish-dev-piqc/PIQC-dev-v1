@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: Narrative-first visit landing — the brief + the day in order (slice 1, deterministic)
-status: active
+status: merged
 started: 2026-07-19
-target_pr:
+target_pr: 512
+merged: 2026-07-19
 ---
 
 # Narrative-first visit landing (S1 — deterministic)

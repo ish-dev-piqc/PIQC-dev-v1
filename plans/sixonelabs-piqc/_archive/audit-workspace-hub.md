@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: audit-workspace-hub
-status: in-review
+status: merged
 started: 2026-07-02
-target_pr:
+target_pr: 393
+merged: 2026-07-02
 ---
 
 # Audit Workspace hub — workflow chooser + workload cockpit
