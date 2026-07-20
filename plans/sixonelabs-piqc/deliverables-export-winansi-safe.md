@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: deliverables-export-winansi-safe
-status: active
+status: in-review
 started: 2026-07-19
 target_pr:
 ---
@@ -63,6 +63,6 @@ none
 
 ## Verification
 
-- [ ] `npm run typecheck` (`tsc --noEmit -p tsconfig.app.json`) clean
-- [ ] `vitest run` green on: src/lib/__tests__/winAnsiSafe.test.ts, src/lib/deliverables/__tests__/deliverablesExportApi.test.ts, src/lib/deliverables/__tests__/buildSivDeck.test.ts, and src/lib/visit-execution/__tests__/visitExecutionExportApi.test.ts (existing describe block passes against the re-export)
-- [ ] New boundary tests prove: a packet containing `dose ≤ 50 µg × 3 → titrate ≥ 25` renders `dose <= 50 ug x 3 -> titrate >= 25` in BOTH builders; ✓/⚠ become `?`; CP1252 typography (— · § ± °) passes through untouched
+- [x] `npm run typecheck` (`tsc --noEmit -p tsconfig.app.json`) clean — exit 0, 2026-07-19
+- [x] `vitest run` green on: src/lib/__tests__/winAnsiSafe.test.ts, src/lib/deliverables/__tests__/deliverablesExportApi.test.ts, src/lib/deliverables/__tests__/buildSivDeck.test.ts, and src/lib/visit-execution/__tests__/visitExecutionExportApi.test.ts (existing describe block passes against the re-export); full suite 1568/1568 across 125 files, 2026-07-19
+- [x] New boundary tests prove: a packet containing `dose ≤ 50 µg × 3 → titrate ≥ 25` renders `dose <= 50 ug x 3 -> titrate >= 25` in BOTH builders; ✓/⚠ become `?`; CP1252 typography (— · § ± °) passes through untouched
