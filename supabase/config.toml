@@ -58,3 +58,13 @@ verify_jwt = true
 # checks the REDUCTO_WEBHOOK_SECRET passed as ?token= on the registered URL.
 [functions.reducto-webhook]
 verify_jwt = false
+
+# Stripe billing webhook. Stripe POSTs subscription / cancellation / pilot-expiry
+# events here server-to-server and can only present its `Stripe-Signature` header —
+# it structurally cannot mint a Supabase JWT — so this must be unverified at the
+# gateway. The handler enforces its own auth by verifying that signature against
+# STRIPE_WEBHOOK_SECRET (stripe.webhooks.constructEventAsync) and 400s on mismatch.
+# Without this entry the function inherits verify_jwt=true and the gateway 401s
+# every Stripe delivery before the handler runs.
+[functions.stripe-webhook]
+verify_jwt = false
