@@ -58,6 +58,8 @@ export interface MockQuestionnaireInstance {
   completed_at: string | null;
   approved_at: string | null;
   approved_by_name: string | null;
+  // Row version from the touch trigger; approve compare-and-swaps on this.
+  updated_at: string;
 }
 
 // -----------------------------------------------------------------------------
@@ -271,6 +273,7 @@ export const MOCK_QUESTIONNAIRES: Record<string, MockQuestionnaireBundle | null>
       completed_at: null,
       approved_at: null,
       approved_by_name: null,
+      updated_at: '2026-04-23T11:30:00Z',
     },
     questions: [...TEMPLATE_QUESTIONS, ...BRIGHTEN_ADDENDA],
     responses: {
@@ -327,6 +330,7 @@ export const MOCK_QUESTIONNAIRES: Record<string, MockQuestionnaireBundle | null>
       completed_at: '2026-04-25T10:20:00Z',
       approved_at: '2026-04-26T08:30:00Z',
       approved_by_name: 'Kiara Patel',
+      updated_at: '2026-04-26T08:30:00Z',
     },
     questions: [...TEMPLATE_QUESTIONS, ...IMMUNE_ADDENDA],
     responses: Object.fromEntries(

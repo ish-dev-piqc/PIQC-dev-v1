@@ -111,21 +111,33 @@ export async function upsertRiskSummary(
   return flattenRiskSummary(data as RiskSummaryRow);
 }
 
+/** Result for the risk-summary readiness-latch approval. On failure
+ *  `errorHint` carries MISSING_EXPECTED_VERSION | STALE_CONTENT when present. */
+export type RiskSummaryApproveResult =
+  | { ok: true; data: MockRiskSummary }
+  | { ok: false; error: string; errorHint?: string };
+
 export async function approveRiskSummary(
   summaryId: string,
+  expectedUpdatedAt: string,
   reason?: string
-): Promise<MockRiskSummary | null> {
+): Promise<RiskSummaryApproveResult> {
   const { data, error } = await supabase.rpc('audit_mode_approve_risk_summary', {
     p_id: summaryId,
     p_reason: reason ?? null,
+    p_expected_updated_at: expectedUpdatedAt,
   });
 
   if (error) {
     console.error('[riskSummaryApi] approveRiskSummary error:', error);
-    return null;
+    return {
+      ok: false,
+      error: error.message,
+      errorHint: (error as unknown as { hint?: string }).hint,
+    };
   }
 
-  return flattenRiskSummary(data as RiskSummaryRow);
+  return { ok: true, data: await flattenRiskSummary(data as RiskSummaryRow) };
 }
 
 export async function revokeRiskSummaryApproval(

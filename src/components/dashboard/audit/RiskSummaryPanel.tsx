@@ -167,9 +167,16 @@ export default function RiskSummaryPanel({
 
   const approve = async () => {
     if (!summary) return;
-    const persisted = await approveRiskSummary(summary.id, 'Risk summary approved');
-    if (persisted) {
-      setSummaries((prev) => ({ ...prev, [auditId]: persisted }));
+    // CAS on the row version this panel rendered — the readiness latch attests
+    // to exactly the narrative/focus areas the reviewer saw.
+    const result = await approveRiskSummary(summary.id, summary.updated_at, 'Risk summary approved');
+    if (result.ok) {
+      setSummaries((prev) => ({ ...prev, [auditId]: result.data }));
+    } else {
+      // STALE_CONTENT: the summary changed since render — reload server truth.
+      console.error('[RiskSummaryPanel] Approve rejected:', result.error);
+      const fresh = await fetchRiskSummary(auditId);
+      if (fresh) setSummaries((prev) => ({ ...prev, [auditId]: fresh }));
     }
     setConfirmingApprove(false);
   };

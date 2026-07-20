@@ -151,6 +151,15 @@ export default function PreAuditDraftingWorkspace() {
     setBundles((prev) => ({ ...prev, [auditId]: next }));
   };
 
+  // Approve rejected by the server's compare-and-swap (STALE_CONTENT): the
+  // deliverable changed since this tab rendered it. Reload server truth so
+  // the reviewer looks at the current text — invitational, not an alarm.
+  const reloadAfterStaleApprove = async (scope: string, error: string) => {
+    console.error(`[PreAuditDraftingWorkspace] ${scope} rejected:`, error);
+    const fresh = await fetchPreAuditDeliverables(auditId);
+    setBundles((prevBundles) => ({ ...prevBundles, [auditId]: fresh }));
+  };
+
   const persistConfirmationLetter = async (
     prev: MockConfirmationLetter | null,
     next: MockConfirmationLetter | null,
@@ -162,10 +171,19 @@ export default function PreAuditDraftingWorkspace() {
         prev.approval_status !== 'APPROVED' &&
         next.approval_status === 'APPROVED';
 
-      const persisted = isApprovalTransition
-        ? await approveConfirmationLetter(prev.id)
-        : await upsertConfirmationLetter(auditId, next.content);
+      if (isApprovalTransition) {
+        // CAS on the row version this tab rendered — the latch attests to
+        // exactly the content the reviewer saw.
+        const result = await approveConfirmationLetter(prev.id, prev.updated_at);
+        if (result.ok) {
+          setBundle({ ...bundle, confirmation_letter: result.data });
+        } else {
+          await reloadAfterStaleApprove('approveConfirmationLetter', result.error);
+        }
+        return;
+      }
 
+      const persisted = await upsertConfirmationLetter(auditId, next.content);
       if (persisted) {
         setBundle({ ...bundle, confirmation_letter: persisted });
       }
@@ -186,10 +204,17 @@ export default function PreAuditDraftingWorkspace() {
         prev.approval_status !== 'APPROVED' &&
         next.approval_status === 'APPROVED';
 
-      const persisted = isApprovalTransition
-        ? await approveAgenda(prev.id)
-        : await upsertAgenda(auditId, next.content);
+      if (isApprovalTransition) {
+        const result = await approveAgenda(prev.id, prev.updated_at);
+        if (result.ok) {
+          setBundle({ ...bundle, agenda: result.data });
+        } else {
+          await reloadAfterStaleApprove('approveAgenda', result.error);
+        }
+        return;
+      }
 
+      const persisted = await upsertAgenda(auditId, next.content);
       if (persisted) {
         setBundle({ ...bundle, agenda: persisted });
       }
@@ -210,10 +235,17 @@ export default function PreAuditDraftingWorkspace() {
         prev.approval_status !== 'APPROVED' &&
         next.approval_status === 'APPROVED';
 
-      const persisted = isApprovalTransition
-        ? await approveChecklist(prev.id)
-        : await upsertChecklist(auditId, next.content);
+      if (isApprovalTransition) {
+        const result = await approveChecklist(prev.id, prev.updated_at);
+        if (result.ok) {
+          setBundle({ ...bundle, checklist: result.data });
+        } else {
+          await reloadAfterStaleApprove('approveChecklist', result.error);
+        }
+        return;
+      }
 
+      const persisted = await upsertChecklist(auditId, next.content);
       if (persisted) {
         setBundle({ ...bundle, checklist: persisted });
       }
@@ -545,6 +577,9 @@ function ConfirmationLetterTab({ deliverable, isLight, onChange }: ConfirmationL
       approval_status: 'DRAFT',
       approved_by_name: null,
       approved_at: null,
+      // Optimistic placeholder; the persist round-trip replaces this with the
+      // server row (whose updated_at the approve CAS then uses).
+      updated_at: deliverable?.updated_at ?? new Date().toISOString(),
     });
     setEditing(false);
   };
@@ -686,6 +721,7 @@ function AgendaTab({ deliverable, isLight, onChange }: AgendaTabProps) {
       approval_status: 'DRAFT',
       approved_by_name: null,
       approved_at: null,
+      updated_at: deliverable?.updated_at ?? new Date().toISOString(),
     });
     setEditing(false);
   };
@@ -894,6 +930,7 @@ function ChecklistTab({ deliverable, isLight, onChange }: ChecklistTabProps) {
       approval_status: 'DRAFT',
       approved_by_name: null,
       approved_at: null,
+      updated_at: deliverable?.updated_at ?? new Date().toISOString(),
     });
     setEditing(false);
   };
@@ -1488,6 +1525,7 @@ function createConfirmationStub(auditId: string): MockConfirmationLetter {
     approval_status: 'DRAFT',
     approved_by_name: null,
     approved_at: null,
+    updated_at: new Date().toISOString(),
   };
 }
 
@@ -1516,6 +1554,7 @@ function createAgendaStub(auditId: string): MockAgenda {
     approval_status: 'DRAFT',
     approved_by_name: null,
     approved_at: null,
+    updated_at: new Date().toISOString(),
   };
 }
 
@@ -1536,5 +1575,6 @@ function createChecklistStub(auditId: string): MockChecklist {
     approval_status: 'DRAFT',
     approved_by_name: null,
     approved_at: null,
+    updated_at: new Date().toISOString(),
   };
 }

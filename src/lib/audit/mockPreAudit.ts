@@ -30,6 +30,8 @@ export interface MockConfirmationLetter {
   approval_status: DeliverableApprovalStatus;
   approved_by_name: string | null;
   approved_at: string | null;
+  // Row version from the touch trigger; approve compare-and-swaps on this.
+  updated_at: string;
   // Prefill provenance — set when the deliverable was agent-bootstrapped from
   // approved Stage 3 + Stage 4 context.
   source_risk_summary_id?: string | null;
@@ -59,6 +61,8 @@ export interface MockAgenda {
   approval_status: DeliverableApprovalStatus;
   approved_by_name: string | null;
   approved_at: string | null;
+  // Row version from the touch trigger; approve compare-and-swaps on this.
+  updated_at: string;
   // Prefill provenance — set when the deliverable was agent-bootstrapped from
   // the approved Stage 4 risk summary.
   source_risk_summary_id?: string | null;
@@ -86,6 +90,8 @@ export interface MockChecklist {
   approval_status: DeliverableApprovalStatus;
   approved_by_name: string | null;
   approved_at: string | null;
+  // Row version from the touch trigger; approve compare-and-swaps on this.
+  updated_at: string;
   // Prefill provenance — set when the deliverable was agent-bootstrapped from
   // the approved Stage 3 questionnaire.
   source_questionnaire_instance_id?: string | null;
@@ -140,6 +146,7 @@ export const MOCK_PRE_AUDIT: Record<string, MockPreAuditBundle> = {
       approval_status: 'APPROVED',
       approved_by_name: 'Kiara Patel',
       approved_at: '2026-04-26T14:18:00Z',
+      updated_at: '2026-04-26T14:18:00Z',
     },
     agenda: {
       id: 'ag-003',
@@ -186,6 +193,7 @@ export const MOCK_PRE_AUDIT: Record<string, MockPreAuditBundle> = {
       approval_status: 'APPROVED',
       approved_by_name: 'Kiara Patel',
       approved_at: '2026-04-27T10:42:00Z',
+      updated_at: '2026-04-27T10:42:00Z',
     },
     checklist: {
       id: 'ch-003',
@@ -228,6 +236,7 @@ export const MOCK_PRE_AUDIT: Record<string, MockPreAuditBundle> = {
       approval_status: 'DRAFT',
       approved_by_name: null,
       approved_at: null,
+      updated_at: '2026-04-27T16:05:00Z',
     },
   },
 };
