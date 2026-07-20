@@ -43,6 +43,24 @@ function extractIds(body: unknown): { documentId: string | null; jobId: string |
   return { documentId, jobId, status };
 }
 
+// Timing-safe shared-secret check: compare SHA-256 digests instead of the raw
+// strings, so string comparison's early-exit timing can't be used to recover
+// the expected secret byte-by-byte. Comparing digests with a full-width XOR
+// fold keeps the comparison itself constant-time too. No new imports needed.
+async function secretMatches(provided: string | null, expected: string): Promise<boolean> {
+  if (provided === null) return false;
+  const enc = new TextEncoder();
+  const [a, b] = await Promise.all([
+    crypto.subtle.digest("SHA-256", enc.encode(provided)),
+    crypto.subtle.digest("SHA-256", enc.encode(expected)),
+  ]);
+  const av = new Uint8Array(a);
+  const bv = new Uint8Array(b);
+  let diff = 0;
+  for (let i = 0; i < av.length; i++) diff |= av[i] ^ bv[i];
+  return diff === 0;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: jsonHeaders });
@@ -51,7 +69,7 @@ Deno.serve(async (req: Request) => {
   // Shared-secret gate (the function runs with verify_jwt=false).
   const expected = Deno.env.get("REDUCTO_WEBHOOK_SECRET");
   const token = new URL(req.url).searchParams.get("token");
-  if (!expected || token !== expected) {
+  if (!expected || !(await secretMatches(token, expected))) {
     return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers: jsonHeaders });
   }
 
