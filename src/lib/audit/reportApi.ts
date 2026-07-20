@@ -20,6 +20,11 @@ interface ReportDraftRow {
   approval_status: DeliverableApprovalStatus;
   approved_by: string | null;
   approved_at: string | null;
+  updated_at: string;
+  // Server-sealed digest of what was marked ready (exec summary + conclusions
+  // + entry set). Written by the approve RPC, cleared on content change.
+  // Optional for rows fetched before 20260730000000 applied.
+  readiness_fingerprint?: string | null;
   final_signed_off_by: string | null;
   final_signed_off_at: string | null;
   exported_at: string | null;
@@ -59,6 +64,7 @@ async function flattenRow(row: ReportDraftRow): Promise<MockReportDraft> {
     approval_status: row.approval_status,
     approved_at: row.approved_at,
     approved_by_name: approvedByName,
+    updated_at: row.updated_at,
     final_signed_off_at: row.final_signed_off_at,
     final_signed_off_by_name: finalSignedOffByName,
     exported_at: row.exported_at,
@@ -198,20 +204,36 @@ export async function requestLlmConclusions(auditId: string): Promise<string> {
   return requestLlmSection(auditId, 'conclusions');
 }
 
+/** Result for the readiness-latch mutations (approve / sign-off). On failure,
+ *  `errorHint` carries the server gate code when present:
+ *  MISSING_EXPECTED_VERSION | STALE_CONTENT | GATE_REPORT_NOT_APPROVED |
+ *  GATE_ENTRIES_UNCLASSIFIED | GATE_REPORT_DIVERGED. */
+export type ReadinessMutationResult =
+  | { ok: true; data: MockReportDraft }
+  | { ok: false; error: string; errorHint?: string };
+
 export async function approveReportDraft(
   id: string,
+  expectedUpdatedAt: string,
   reason?: string,
-): Promise<MockReportDraft | null> {
+): Promise<ReadinessMutationResult> {
   const { data, error } = await supabase.rpc('audit_mode_approve_report_draft', {
     p_id: id,
     p_reason: reason ?? null,
+    p_expected_updated_at: expectedUpdatedAt,
   });
   if (error) {
     console.error('[reportApi] approveReportDraft error:', error);
-    return null;
+    return {
+      ok: false,
+      error: error.message,
+      errorHint: (error as unknown as { hint?: string }).hint,
+    };
   }
-  if (!data) return null;
-  return flattenRow(data as ReportDraftRow);
+  if (!data) {
+    return { ok: false, error: 'Approve did not return the updated draft.' };
+  }
+  return { ok: true, data: await flattenRow(data as ReportDraftRow) };
 }
 
 // ============================================================================
@@ -221,17 +243,42 @@ export async function approveReportDraft(
 export async function finalSignOffReport(
   id: string,
   reason?: string,
-): Promise<MockReportDraft | null> {
+): Promise<ReadinessMutationResult> {
   const { data, error } = await supabase.rpc('audit_mode_final_sign_off_report', {
     p_id: id,
     p_reason: reason ?? null,
   });
   if (error) {
     console.error('[reportApi] finalSignOffReport error:', error);
+    return {
+      ok: false,
+      error: error.message,
+      errorHint: (error as unknown as { hint?: string }).hint,
+    };
+  }
+  if (!data) {
+    return { ok: false, error: 'Sign-off did not return the updated draft.' };
+  }
+  return { ok: true, data: await flattenRow(data as ReportDraftRow) };
+}
+
+/** Server re-check of the three readiness conditions, called by the export
+ *  buttons right before generating the download so the blob is built only
+ *  from verified-fresh state. `null` = probe itself failed (treat as not
+ *  ready). Reasons carry the GATE_* codes. */
+export async function verifyExportReadiness(
+  auditId: string,
+): Promise<{ ready: boolean; reasons: string[] } | null> {
+  const { data, error } = await supabase.rpc('audit_mode_verify_export_readiness', {
+    p_audit_id: auditId,
+  });
+  if (error) {
+    console.error('[reportApi] verifyExportReadiness error:', error);
     return null;
   }
-  if (!data) return null;
-  return flattenRow(data as ReportDraftRow);
+  const parsed = data as { ready?: boolean; reasons?: string[] } | null;
+  if (!parsed || typeof parsed.ready !== 'boolean') return null;
+  return { ready: parsed.ready, reasons: parsed.reasons ?? [] };
 }
 
 // ============================================================================

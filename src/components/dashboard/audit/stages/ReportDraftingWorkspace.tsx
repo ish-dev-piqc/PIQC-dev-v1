@@ -89,6 +89,9 @@ export default function ReportDraftingWorkspace({
   // conclusions). The auto-refine paths keep the sanctioned silent-with-signal
   // fallback (llmFallback) since they are background, not user-initiated.
   const [saveError, setSaveError] = useState<string | null>(null);
+  // In-flight guard for the readiness latch — prevents double-fire and lets
+  // the button reflect the pending compare-and-swap.
+  const [approving, setApproving] = useState(false);
   // Independent in-flight + fallback state for the conclusions section. The
   // two refinements run in parallel from the same useEffect but each has its
   // own UI surface — the chip, body dim, Edit-disabled, and dismissable
@@ -183,6 +186,13 @@ export default function ReportDraftingWorkspace({
               if (!current) {
                 throw new Error('Pre-write refetch returned null; refusing to write to avoid stale clobber');
               }
+              // The human's latch wins over the agent: if the auditor marked
+              // the report ready while this refine was in flight, discard the
+              // refinement rather than silently demoting their approval.
+              if (current.approval_status !== 'DRAFT') {
+                console.info('[ReportDraftingWorkspace] exec-summary refinement discarded — report was approved mid-refine');
+                return;
+              }
               const refined = await upsertReportDraft(
                 id,
                 narrative,
@@ -228,6 +238,11 @@ export default function ReportDraftingWorkspace({
               const current = await fetchReportDraft(id);
               if (!current) {
                 throw new Error('Pre-write refetch returned null; refusing to write to avoid stale clobber');
+              }
+              // Same human-latch-wins contract as the exec-summary branch.
+              if (current.approval_status !== 'DRAFT') {
+                console.info('[ReportDraftingWorkspace] conclusions refinement discarded — report was approved mid-refine');
+                return;
               }
               const refined = await upsertReportDraft(
                 id,
@@ -379,9 +394,26 @@ export default function ReportDraftingWorkspace({
   };
 
   const approve = async () => {
-    if (!report || !auditId) return;
-    const updated = await approveReportDraft(report.id);
-    if (updated) setReports((prev) => ({ ...prev, [auditId]: updated }));
+    if (!report || !auditId || approving) return;
+    setApproving(true);
+    // Compare-and-swap on the row version the auditor is looking at — the
+    // readiness latch attests to exactly this content (spec: audit-export-
+    // readiness). On STALE_CONTENT the row moved underneath us (LLM refine
+    // landing, a concurrent edit): refresh and invite a re-review.
+    const result = await approveReportDraft(report.id, report.updated_at);
+    if (result.ok) {
+      setSaveError(null);
+      setReports((prev) => ({ ...prev, [auditId]: result.data }));
+    } else {
+      const fresh = await fetchReportDraft(auditId);
+      if (fresh) setReports((prev) => ({ ...prev, [auditId]: fresh }));
+      setSaveError(
+        result.errorHint === 'STALE_CONTENT' || result.errorHint === 'MISSING_EXPECTED_VERSION'
+          ? 'This draft changed since you last reviewed it — refreshed for another look.'
+          : result.error,
+      );
+    }
+    setApproving(false);
   };
 
   // ---------------------------------------------------------------------------
@@ -967,11 +999,17 @@ export default function ReportDraftingWorkspace({
               <button
                 type="button"
                 onClick={approve}
-                disabled={unclassifiedCount > 0}
+                // Gated on: unclassified entries, either LLM refine in flight
+                // (the text on screen may be about to change), and the latch
+                // call itself being in flight. Doctrine: the latch attests to
+                // what the human saw, so nothing may be mutating while it arms.
+                disabled={
+                  unclassifiedCount > 0 || llmRefining || llmConclusionsRefining || approving
+                }
                 className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${buttonApprove}`}
               >
                 <CheckCircle2 size={14} />
-                Approve report
+                {approving ? 'Marking ready…' : 'Mark ready to export'}
               </button>
             )}
             <button

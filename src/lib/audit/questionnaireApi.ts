@@ -124,6 +124,7 @@ async function flattenInstance(row: QuestionnaireInstanceRow): Promise<MockQuest
     completed_at: row.completed_at,
     approved_at: row.approved_at,
     approved_by_name: approvedByName,
+    updated_at: row.updated_at,
   };
 }
 
@@ -242,21 +243,33 @@ export async function transitionQuestionnaireStatus(
   return flattenInstance(data as QuestionnaireInstanceRow);
 }
 
+/** Result for the questionnaire readiness-latch approval. On failure
+ *  `errorHint` carries MISSING_EXPECTED_VERSION | STALE_CONTENT when present. */
+export type QuestionnaireApproveResult =
+  | { ok: true; data: MockQuestionnaireInstance }
+  | { ok: false; error: string; errorHint?: string };
+
 export async function approveQuestionnaire(
   instanceId: string,
+  expectedUpdatedAt: string,
   reason?: string
-): Promise<MockQuestionnaireInstance | null> {
+): Promise<QuestionnaireApproveResult> {
   const { data, error } = await supabase.rpc('audit_mode_approve_questionnaire', {
     p_instance_id: instanceId,
     p_reason: reason ?? null,
+    p_expected_updated_at: expectedUpdatedAt,
   });
 
   if (error) {
     console.error('[questionnaireApi] approveQuestionnaire error:', error);
-    return null;
+    return {
+      ok: false,
+      error: error.message,
+      errorHint: (error as unknown as { hint?: string }).hint,
+    };
   }
 
-  return flattenInstance(data as QuestionnaireInstanceRow);
+  return { ok: true, data: await flattenInstance(data as QuestionnaireInstanceRow) };
 }
 
 export async function upsertResponse(

@@ -34,7 +34,7 @@
 //     which we control via the useAuditData mock's reports record.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import type { MockReportDraft } from '../../../../../lib/audit/mockReport';
 
 // -----------------------------------------------------------------------------
@@ -128,6 +128,7 @@ import {
   fetchReportDraft,
   prefillReportDraft,
   upsertReportDraft,
+  approveReportDraft,
   requestLlmExecutiveSummary,
   requestLlmConclusions,
 } from '../../../../../lib/audit/reportApi';
@@ -135,6 +136,7 @@ import {
 const mockFetch = fetchReportDraft as ReturnType<typeof vi.fn>;
 const mockPrefill = prefillReportDraft as ReturnType<typeof vi.fn>;
 const mockUpsert = upsertReportDraft as ReturnType<typeof vi.fn>;
+const mockApprove = approveReportDraft as ReturnType<typeof vi.fn>;
 const mockRequestLlm = requestLlmExecutiveSummary as ReturnType<typeof vi.fn>;
 const mockRequestLlmConclusions = requestLlmConclusions as ReturnType<typeof vi.fn>;
 
@@ -151,6 +153,7 @@ function makeReportDraft(overrides: Partial<MockReportDraft> = {}): MockReportDr
     approval_status: 'DRAFT',
     approved_at: null,
     approved_by_name: null,
+    updated_at: '2026-05-16T00:00:00Z',
     final_signed_off_at: null,
     final_signed_off_by_name: null,
     exported_at: null,
@@ -777,5 +780,89 @@ describe('ReportDraftingWorkspace — PIQC write-back landing note (PR #80)', ()
     expect(screen.getByTestId('piqc-landing-note-conclusions')).toBeInTheDocument();
     expect(screen.queryByTestId('piqc-landing-note-dismiss-conclusions'))
       .not.toBeInTheDocument();
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Readiness latch (audit-export-readiness spec)
+//
+// The "Mark ready to export" latch attests to exactly the content the reviewer
+// saw: it must not arm while either LLM refine is mutating the text, it must
+// thread the row version (updated_at) into the server CAS, and a STALE_CONTENT
+// rejection must refetch + surface the invitational re-review note.
+// -----------------------------------------------------------------------------
+
+describe('ReportDraftingWorkspace — readiness latch (export-readiness spec)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPrefill.mockResolvedValue(null);
+  });
+
+  it('DISABLED DURING REFINE: latch is disabled while the exec-summary LLM is in flight', async () => {
+    const templated = makeReportDraft({ executive_summary_source: 'templated' });
+    setupContext(templated);
+    mockFetch.mockResolvedValue(templated);
+    // Never-resolving LLM call keeps llmRefining=true for the whole test.
+    mockRequestLlm.mockReturnValue(new Promise(() => {}));
+
+    render(<ReportDraftingWorkspace />);
+
+    await waitFor(() => expect(mockRequestLlm).toHaveBeenCalled());
+    const latch = screen.getByRole('button', { name: /mark ready to export/i });
+    expect(latch).toBeDisabled();
+  });
+
+  it('CAS THREADING: latch passes the rendered row version to approveReportDraft', async () => {
+    // source='llm' keeps both auto-fire branches off — the latch is enabled.
+    const draft = makeReportDraft({
+      executive_summary_source: 'llm',
+      conclusions_source: 'llm',
+      updated_at: '2026-05-20T12:34:56Z',
+    });
+    setupContext(draft);
+    mockFetch.mockResolvedValue(draft);
+    mockApprove.mockResolvedValue({
+      ok: true,
+      data: makeReportDraft({ approval_status: 'APPROVED' }),
+    });
+
+    render(<ReportDraftingWorkspace />);
+
+    const latch = await screen.findByRole('button', { name: /mark ready to export/i });
+    await waitFor(() => expect(latch).not.toBeDisabled());
+    fireEvent.click(latch);
+
+    await waitFor(() => {
+      expect(mockApprove).toHaveBeenCalledWith('rd-1', '2026-05-20T12:34:56Z');
+    });
+  });
+
+  it('STALE RECOVERY: STALE_CONTENT rejection refetches and shows the re-review note', async () => {
+    const draft = makeReportDraft({
+      executive_summary_source: 'llm',
+      conclusions_source: 'llm',
+    });
+    setupContext(draft);
+    mockFetch.mockResolvedValue(draft);
+    mockApprove.mockResolvedValue({
+      ok: false,
+      error: 'Report changed since it was last reviewed',
+      errorHint: 'STALE_CONTENT',
+    });
+
+    render(<ReportDraftingWorkspace />);
+
+    const latch = await screen.findByRole('button', { name: /mark ready to export/i });
+    await waitFor(() => expect(latch).not.toBeDisabled());
+    const fetchCallsBeforeApprove = mockFetch.mock.calls.length;
+    fireEvent.click(latch);
+
+    // Recovery contract: refetch server truth, then the invitational note.
+    await waitFor(() => {
+      expect(mockFetch.mock.calls.length).toBeGreaterThan(fetchCallsBeforeApprove);
+    });
+    expect(
+      await screen.findByText(/changed since you last reviewed it/i),
+    ).toBeInTheDocument();
   });
 });

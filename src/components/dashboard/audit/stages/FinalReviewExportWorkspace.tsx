@@ -16,6 +16,7 @@ import {
   fetchReportDraft,
   finalSignOffReport,
   markReportExported,
+  verifyExportReadiness,
 } from '../../../../lib/audit/reportApi';
 import {
   PROVISIONAL_IMPACT_LABELS,
@@ -49,6 +50,9 @@ export default function FinalReviewExportWorkspace() {
 
   const [confirmingSignoff, setConfirmingSignoff] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  // Set when the pre-export server verify rejects — the draft moved since
+  // sign-off. Cleared on the next export attempt.
+  const [exportBlocked, setExportBlocked] = useState<string | null>(null);
 
   useEffect(() => {
     if (!activeAudit?.id) return;
@@ -121,39 +125,73 @@ export default function FinalReviewExportWorkspace() {
   // ---------------------------------------------------------------------------
   const finalSignOff = async () => {
     if (!report || !allPassed) return;
-    const updated = await finalSignOffReport(report.id);
-    if (updated) {
-      setReports((prev) => ({ ...prev, [auditId]: updated }));
+    const result = await finalSignOffReport(report.id);
+    if (result.ok) {
+      setReports((prev) => ({ ...prev, [auditId]: result.data }));
+      setConfirmingSignoff(false);
+    } else {
+      // Server readiness gate rejected — the report moved since this pane
+      // rendered (demoted approval, new/edited entries). Reload so the gate
+      // checklist above shows the current truth.
+      const fresh = await fetchReportDraft(auditId);
+      setReports((prev) => ({ ...prev, [auditId]: fresh }));
       setConfirmingSignoff(false);
     }
   };
 
-  const exportMarkdown = async () => {
+  // What exports must be what was marked ready: server-verify readiness, then
+  // build the blob from a fresh fetch (not the possibly-stale pane state).
+  // markReportExported is itself gated server-side, so a race between verify
+  // and mark still fails closed.
+  const runVerifiedExport = async (
+    generate: (fresh: MockReportDraft) => Promise<void> | void,
+  ) => {
     if (!report) return;
-    const updated = await markReportExported(report.id);
-    if (updated) setReports((prev) => ({ ...prev, [auditId]: updated }));
-    const md = buildMarkdown(activeAudit, report, riskSummary, entries);
-    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${activeAudit.audit_name.replace(/[^a-z0-9]/gi, '_')}_draft.md`;
-    a.click();
-    URL.revokeObjectURL(url);
+    setExportBlocked(null);
+    const readiness = await verifyExportReadiness(auditId);
+    if (!readiness?.ready) {
+      const fresh = await fetchReportDraft(auditId);
+      setReports((prev) => ({ ...prev, [auditId]: fresh }));
+      setExportBlocked('The draft changed since sign-off — review the readiness checklist above.');
+      return;
+    }
+    const fresh = await fetchReportDraft(auditId);
+    if (!fresh) {
+      setExportBlocked('Could not refresh the draft — try the export again.');
+      return;
+    }
+    const marked = await markReportExported(fresh.id);
+    if (!marked) {
+      setReports((prev) => ({ ...prev, [auditId]: fresh }));
+      setExportBlocked('The draft changed since sign-off — review the readiness checklist above.');
+      return;
+    }
+    setReports((prev) => ({ ...prev, [auditId]: marked }));
+    await generate(marked);
   };
 
-  const exportDocx = async () => {
-    if (!report) return;
-    const updated = await markReportExported(report.id);
-    if (updated) setReports((prev) => ({ ...prev, [auditId]: updated }));
-    const blob = await buildDocx(activeAudit, report, riskSummary, entries);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${activeAudit.audit_name.replace(/[^a-z0-9]/gi, '_')}_draft.docx`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const exportMarkdown = () =>
+    runVerifiedExport((fresh) => {
+      const md = buildMarkdown(activeAudit, fresh, riskSummary, entries);
+      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${activeAudit.audit_name.replace(/[^a-z0-9]/gi, '_')}_draft.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+  const exportDocx = () =>
+    runVerifiedExport(async (fresh) => {
+      const blob = await buildDocx(activeAudit, fresh, riskSummary, entries);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${activeAudit.audit_name.replace(/[^a-z0-9]/gi, '_')}_draft.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
 
   // ---------------------------------------------------------------------------
   // Theme tokens
@@ -363,7 +401,10 @@ export default function FinalReviewExportWorkspace() {
           <button
             type="button"
             onClick={exportMarkdown}
-            disabled={!finalSignedOff}
+            // Both the sign-off latch AND the live gate checklist must hold —
+            // a post-sign-off edit demotes upstream approvals, and the export
+            // must not ride the stale latch (spec: audit-export-readiness H4).
+            disabled={!finalSignedOff || !allPassed}
             className={`inline-flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-md transition-colors ${buttonPrimary} disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             <Download size={14} />
@@ -372,7 +413,7 @@ export default function FinalReviewExportWorkspace() {
           <button
             type="button"
             onClick={exportDocx}
-            disabled={!finalSignedOff}
+            disabled={!finalSignedOff || !allPassed}
             className={`inline-flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-md transition-colors ${buttonSecondary} disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             <FileText size={14} />
@@ -382,6 +423,18 @@ export default function FinalReviewExportWorkspace() {
             <span className={`text-[11px] flex items-center gap-1.5 ${mutedColor}`}>
               <AlertTriangle size={11} />
               Sign off before exporting.
+            </span>
+          )}
+          {finalSignedOff && !allPassed && (
+            <span className={`text-[11px] flex items-center gap-1.5 ${mutedColor}`}>
+              <FileText size={11} />
+              The draft changed after sign-off — clear the checklist above to export.
+            </span>
+          )}
+          {exportBlocked && (
+            <span className={`text-[11px] flex items-center gap-1.5 ${mutedColor}`}>
+              <FileText size={11} />
+              {exportBlocked}
             </span>
           )}
         </div>

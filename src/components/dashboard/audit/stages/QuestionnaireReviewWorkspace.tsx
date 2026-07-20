@@ -235,13 +235,21 @@ export default function QuestionnaireReviewWorkspace() {
     if (!bundle) return;
 
     try {
-      const updated = await approveQuestionnaire(bundle.instance.id);
-      if (updated) {
+      // CAS on the instance version this pane rendered — the readiness latch
+      // attests to exactly what the reviewer saw.
+      const result = await approveQuestionnaire(bundle.instance.id, bundle.instance.updated_at);
+      if (result.ok) {
         setBundles((prev) => {
           const cur = prev[auditId];
           if (!cur) return prev;
-          return { ...prev, [auditId]: { ...cur, instance: updated } };
+          return { ...prev, [auditId]: { ...cur, instance: result.data } };
         });
+      } else {
+        // STALE_CONTENT: responses changed since render — reload server truth
+        // so the reviewer looks at the current questionnaire.
+        console.error('[QuestionnaireReviewWorkspace] Approve rejected:', result.error);
+        const fresh = await fetchQuestionnaireBundle(auditId);
+        if (fresh) setBundles((prev) => ({ ...prev, [auditId]: fresh }));
       }
     } catch (err) {
       console.error('[QuestionnaireReviewWorkspace] Approve error:', err);

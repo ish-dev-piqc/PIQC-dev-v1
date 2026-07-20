@@ -27,6 +27,7 @@ interface DeliverableRow<TContent> {
   approval_status: DeliverableApprovalStatus;
   approved_by: string | null;
   approved_at: string | null;
+  updated_at: string;
   // Prefill provenance — present after the deliverable was agent-bootstrapped.
   // See 20260515020000_audit_mode_stage5_prefill.sql.
   source_risk_summary_id?: string | null;
@@ -54,6 +55,7 @@ async function flattenConfirmationLetter(
     approval_status: row.approval_status,
     approved_at: row.approved_at,
     approved_by_name: await resolveApprovedByName(row.approved_by),
+    updated_at: row.updated_at,
     source_risk_summary_id: row.source_risk_summary_id ?? null,
     source_questionnaire_instance_id: row.source_questionnaire_instance_id ?? null,
     prefilled_at: row.prefilled_at ?? null,
@@ -70,6 +72,7 @@ async function flattenAgenda(
     approval_status: row.approval_status,
     approved_at: row.approved_at,
     approved_by_name: await resolveApprovedByName(row.approved_by),
+    updated_at: row.updated_at,
     source_risk_summary_id: row.source_risk_summary_id ?? null,
     prefilled_at: row.prefilled_at ?? null,
   };
@@ -85,6 +88,7 @@ async function flattenChecklist(
     approval_status: row.approval_status,
     approved_at: row.approved_at,
     approved_by_name: await resolveApprovedByName(row.approved_by),
+    updated_at: row.updated_at,
     source_questionnaire_instance_id: row.source_questionnaire_instance_id ?? null,
     prefilled_at: row.prefilled_at ?? null,
   };
@@ -145,19 +149,38 @@ export async function upsertConfirmationLetter(
   return flattenConfirmationLetter(data as DeliverableRow<MockConfirmationLetterContent>);
 }
 
+/** Result for deliverable readiness-latch approvals. On failure `errorHint`
+ *  carries the server code when present: MISSING_EXPECTED_VERSION (client bug
+ *  or stale bundle) | STALE_CONTENT (row changed since it was reviewed —
+ *  refetch and re-review). */
+export type DeliverableApproveResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: string; errorHint?: string };
+
+function approveFailure(scope: string, error: { message: string; hint?: string }) {
+  console.error(`[preAuditApi] ${scope} error:`, error);
+  return {
+    ok: false as const,
+    error: error.message,
+    errorHint: (error as { hint?: string }).hint,
+  };
+}
+
 export async function approveConfirmationLetter(
   id: string,
+  expectedUpdatedAt: string,
   reason?: string
-): Promise<MockConfirmationLetter | null> {
+): Promise<DeliverableApproveResult<MockConfirmationLetter>> {
   const { data, error } = await supabase.rpc('audit_mode_approve_confirmation_letter', {
     p_id: id,
     p_reason: reason ?? null,
+    p_expected_updated_at: expectedUpdatedAt,
   });
-  if (error) {
-    console.error('[preAuditApi] approveConfirmationLetter error:', error);
-    return null;
-  }
-  return flattenConfirmationLetter(data as DeliverableRow<MockConfirmationLetterContent>);
+  if (error) return approveFailure('approveConfirmationLetter', error);
+  return {
+    ok: true,
+    data: await flattenConfirmationLetter(data as DeliverableRow<MockConfirmationLetterContent>),
+  };
 }
 
 // ============================================================================
@@ -183,17 +206,16 @@ export async function upsertAgenda(
 
 export async function approveAgenda(
   id: string,
+  expectedUpdatedAt: string,
   reason?: string
-): Promise<MockAgenda | null> {
+): Promise<DeliverableApproveResult<MockAgenda>> {
   const { data, error } = await supabase.rpc('audit_mode_approve_agenda', {
     p_id: id,
     p_reason: reason ?? null,
+    p_expected_updated_at: expectedUpdatedAt,
   });
-  if (error) {
-    console.error('[preAuditApi] approveAgenda error:', error);
-    return null;
-  }
-  return flattenAgenda(data as DeliverableRow<MockAgendaContent>);
+  if (error) return approveFailure('approveAgenda', error);
+  return { ok: true, data: await flattenAgenda(data as DeliverableRow<MockAgendaContent>) };
 }
 
 // ============================================================================
@@ -219,17 +241,16 @@ export async function upsertChecklist(
 
 export async function approveChecklist(
   id: string,
+  expectedUpdatedAt: string,
   reason?: string
-): Promise<MockChecklist | null> {
+): Promise<DeliverableApproveResult<MockChecklist>> {
   const { data, error } = await supabase.rpc('audit_mode_approve_checklist', {
     p_id: id,
     p_reason: reason ?? null,
+    p_expected_updated_at: expectedUpdatedAt,
   });
-  if (error) {
-    console.error('[preAuditApi] approveChecklist error:', error);
-    return null;
-  }
-  return flattenChecklist(data as DeliverableRow<MockChecklistContent>);
+  if (error) return approveFailure('approveChecklist', error);
+  return { ok: true, data: await flattenChecklist(data as DeliverableRow<MockChecklistContent>) };
 }
 
 // ============================================================================

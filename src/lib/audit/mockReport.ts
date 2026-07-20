@@ -19,6 +19,9 @@ export interface MockReportDraft {
   approval_status: DeliverableApprovalStatus;
   approved_at: string | null;
   approved_by_name: string | null;
+  // Row version from the touch trigger. Approve compare-and-swaps on this so
+  // the readiness latch attests to the exact content the reviewer saw.
+  updated_at: string;
   // Final-export bookkeeping (Stage 8). null until the auditor signs off.
   final_signed_off_at: string | null;
   final_signed_off_by_name: string | null;
@@ -52,6 +55,7 @@ export const MOCK_REPORTS: Record<string, MockReportDraft | null> = {
     approval_status: 'DRAFT',
     approved_at: null,
     approved_by_name: null,
+    updated_at: '2026-05-01T00:00:00Z',
     final_signed_off_at: null,
     final_signed_off_by_name: null,
     exported_at: null,
