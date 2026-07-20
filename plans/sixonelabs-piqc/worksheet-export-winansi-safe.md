@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: worksheet-export-winansi-safe
-status: active
+status: in-review
 started: 2026-07-19
 target_pr:
 ---
@@ -52,6 +52,6 @@ Overlap note: `plans/ishika/demo-protocols-swap.md` (status: active) also lists 
 
 ## Verification
 
-- [ ] `tsc --noEmit -p tsconfig.app.json` clean (the real typecheck; bare `tsc --noEmit` is a no-op in this repo)
-- [ ] `vitest run src/lib/visit-execution/__tests__/visitExecutionExportApi.test.ts` — new `winAnsiSafe` unit tests + reading-section sanitization tests + the existing ASCII label-map regressions all green
+- [x] `tsc --noEmit -p tsconfig.app.json` clean (the real typecheck; bare `tsc --noEmit` is a no-op in this repo)
+- [x] `vitest run` — full suite 1559/1559 green (124 files), incl. the new `winAnsiSafe` unit tests, reading-section sanitization tests, and the existing ASCII label-map regressions
 - [ ] Manual: export a worksheet whose brief/divergence text contains ≤ ≥ µ → prints `<=` `>=` `u`; CP1252 typography (— – · § ± “ ” …) intact; DRAFT chrome unchanged
