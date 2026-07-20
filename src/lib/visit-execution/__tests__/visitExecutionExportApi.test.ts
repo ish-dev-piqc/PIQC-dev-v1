@@ -12,6 +12,7 @@ import {
   downloadVisitWorksheet,
   fetchVisitWorksheetPacket,
   slugifyForFilename,
+  winAnsiSafe,
 } from '../visitExecutionExportApi';
 import { MOCK_TOGGLE_KEY } from '../visitExecutionApi';
 import { supabase } from '../../supabase';
@@ -413,6 +414,25 @@ describe('buildVisitWorksheetPdf — pure function', () => {
     });
     expect(() => buildVisitWorksheetPdf(packet, 'pharmacy')).not.toThrow();
   });
+
+  it('builds without throwing when packet text carries non-WinAnsi glyphs (data-driven path)', () => {
+    const base = makePacket();
+    const packet = makePacket({
+      protocol_title: 'BRIGHTEN-2 (dose ≤ 50 µg)',
+      snapshot: {
+        ...base.snapshot,
+        visit_name: 'Week 6 → Week 8 bridge',
+        purpose: 'Confirm exposure ≥ target; repeat labs × 2 on deviation.',
+      },
+      items: base.items.map((i) => ({
+        ...i,
+        label: `${i.label} ≤ 30 min`,
+        description: 'Repeat × 2 if variance ≥ 10%.',
+        traceability: { ...i.traceability, protocol_section: '7.2 ≤ thresholds' },
+      })),
+    });
+    expect(() => buildVisitWorksheetPdf(packet)).not.toThrow();
+  });
 });
 
 // ===========================================================================
@@ -443,6 +463,38 @@ describe('print labels — WinAnsi glyph safety', () => {
     expect(CLASSIFICATION_LABEL.safety_critical).toBe('! Safety Critical');
     expect(REVIEW_LABEL.needs_review).toBe('! Needs review');
     expect(REVIEW_LABEL.reviewed).toBe('Reviewed [x]');
+  });
+});
+
+describe('winAnsiSafe — data-driven text at the PDF boundary', () => {
+  it('transliterates the clinically common non-WinAnsi symbols to ASCII', () => {
+    expect(winAnsiSafe('dose ≤ 50 µg × 3 → titrate ≥ 25')).toBe(
+      'dose <= 50 ug x 3 -> titrate >= 25',
+    );
+  });
+
+  it('maps both mu variants (micro sign + Greek mu) to "u"', () => {
+    expect(winAnsiSafe('µg/μL')).toBe('ug/uL');
+  });
+
+  it('maps true minus (U+2212) to an ASCII hyphen — same fix as the label pass', () => {
+    expect(winAnsiSafe('−3 days')).toBe('-3 days');
+  });
+
+  it('keeps CP1252-representable typography intact', () => {
+    const typography = '— – · § ± “quoted” ‘x’ … ° • ™ café';
+    expect(winAnsiSafe(typography)).toBe(typography);
+  });
+
+  it("replaces anything else outside CP1252 with '?' (visible beats mojibake)", () => {
+    expect(winAnsiSafe('⚠ ✓ ☑')).toBe('? ? ?');
+    // Astral glyphs collapse to a single '?', not one per surrogate half.
+    expect(winAnsiSafe('\u{1f48a}')).toBe('?');
+  });
+
+  it('passes pure ASCII through untouched, including autotable \\n cell breaks', () => {
+    expect(winAnsiSafe('Vitals (BP, HR)\nIf: fever')).toBe('Vitals (BP, HR)\nIf: fever');
+    expect(winAnsiSafe('')).toBe('');
   });
 });
 
@@ -733,6 +785,33 @@ describe('buildWorksheetReadingSection — divergence blocks', () => {
     const section = buildWorksheetReadingSection({ briefLines: [], divergences: many });
     expect(section.divergences).toHaveLength(READING_DIVERGENCE_CAP);
     expect(section.moreDivergencesNote).toContain('2 more open divergences');
+  });
+});
+
+describe('buildWorksheetReadingSection — WinAnsi safety on data-driven text', () => {
+  it('transliterates claim text while leaving the § ref addresses intact', () => {
+    const section = buildWorksheetReadingSection({
+      briefLines: [
+        makeBriefLine({ text: 'Hold dosing if QTcF ≥ 480 ms → repeat ECG × 2' }),
+      ],
+      divergences: [],
+    });
+    expect(section.claims[0].text).toBe('Hold dosing if QTcF >= 480 ms -> repeat ECG x 2');
+    expect(section.claims[0].where).toBe('§7.3.2 · p 43');
+  });
+
+  it('transliterates divergence quotes without touching the curly-quote frame', () => {
+    const section = buildWorksheetReadingSection({
+      briefLines: [],
+      divergences: [
+        makeReadingDivergence({
+          reading_a: { source: 'soa_grid', quote: 'dose ≤ 50 µg', verbatim: true, section: 'Appendix 2', page: 96 },
+        }),
+      ],
+    });
+    expect(section.divergences[0].readingA).toBe(
+      'SoA grid: “dose <= 50 ug” (verbatim) — Appendix 2 · p 96',
+    );
   });
 });
 

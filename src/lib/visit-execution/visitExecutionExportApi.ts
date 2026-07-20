@@ -92,6 +92,61 @@ export const WORKSHEET_PLACEHOLDER_PURPOSE =
   'Per-protocol visit. Detailed execution requirements pending structured ingest extraction.';
 
 // ---------------------------------------------------------------------------
+// WinAnsi (CP1252) text boundary
+// ---------------------------------------------------------------------------
+
+/**
+ * ASCII transliterations for glyphs that appear routinely in clinical
+ * protocol text. ≤ / ≥ / → and Greek mu are outside CP1252 entirely;
+ * the micro sign (U+00B5) and multiplication sign (U+00D7) are technically
+ * CP1252-representable but map to the same ASCII anyway, so the two
+ * visually-identical mu variants can never behave differently. U+2212
+ * (true minus) gets the same ASCII hyphen the hardcoded-label fix used.
+ * Escaped keys on purpose: the mu twins are indistinguishable by eye.
+ */
+const WINANSI_TRANSLITERATIONS: ReadonlyMap<string, string> = new Map([
+  ['\u2264', '<='], // ≤ less-than-or-equal
+  ['\u2265', '>='], // ≥ greater-than-or-equal
+  ['\u00b5', 'u'],  // µ micro sign
+  ['\u03bc', 'u'],  // μ Greek small mu
+  ['\u00d7', 'x'],  // × multiplication sign
+  ['\u2192', '->'], // → rightwards arrow
+  ['\u2212', '-'],  // − minus sign
+]);
+
+/** Codepoints CP1252 maps into its 0x80-0x9F band (curly quotes, dashes, ellipsis, bullet, etc.). */
+const CP1252_EXTENSION = new Set<number>([
+  0x20ac, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021, 0x02c6,
+  0x2030, 0x0160, 0x2039, 0x0152, 0x017d, 0x2018, 0x2019, 0x201c,
+  0x201d, 0x2022, 0x2013, 0x2014, 0x02dc, 0x2122, 0x0161, 0x203a,
+  0x0153, 0x017e, 0x0178,
+]);
+
+/**
+ * jsPDF's built-in helvetica is WinAnsi (CP1252)-only: glyphs outside that
+ * codepage silently print as mojibake ('⚠' -> '&', '✓' -> "'"). The
+ * hardcoded labels were fixed in the pdf-safe-glyphs pass (PR #518); this
+ * guards the DATA-DRIVEN strings — divergence quotes, brief lines, item
+ * labels / descriptions, section names — at the point they reach
+ * doc.text() / autotable cells.
+ *
+ * CP1252-representable typography (em/en dashes, middle dot, section sign,
+ * plus-minus, curly quotes, ellipsis, degree, Latin-1 accents) passes
+ * through untouched; anything else outside CP1252 becomes '?' — a visible
+ * unknown beats silent mojibake that could misread as data on a printed
+ * worksheet.
+ */
+export function winAnsiSafe(text: string): string {
+  return text.replace(/[^\x00-\x7f]/gu, (ch) => {
+    const mapped = WINANSI_TRANSLITERATIONS.get(ch);
+    if (mapped !== undefined) return mapped;
+    const cp = ch.codePointAt(0) ?? 0;
+    if ((cp >= 0xa0 && cp <= 0xff) || CP1252_EXTENSION.has(cp)) return ch;
+    return '?';
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Narrative-first S1.5 — the reading travels with the deliverable.
 //
 // The workspace computes the Visit Brief + the visit-scoped divergences once
@@ -165,8 +220,8 @@ export function buildWorksheetReadingSection(
   const claims: WorksheetReadingClaim[] = reading.briefLines
     .filter((l) => l.kind !== 'orient' && l.kind !== 'clock' && l.kind !== 'watchout')
     .map((l) => ({
-      text: l.text,
-      where: l.refs.map((r) => r.label).join(' · '),
+      text: winAnsiSafe(l.text),
+      where: winAnsiSafe(l.refs.map((r) => r.label).join(' · ')),
     }));
 
   const live = reading.divergences.filter(
@@ -175,11 +230,11 @@ export function buildWorksheetReadingSection(
   const divergences: WorksheetReadingDivergence[] = live
     .slice(0, READING_DIVERGENCE_CAP)
     .map((d) => ({
-      title: `${DIVERGENCE_CLASS_LABELS[d.divergence_class]} — ${
+      title: winAnsiSafe(`${DIVERGENCE_CLASS_LABELS[d.divergence_class]} — ${
         d.procedure_label ?? 'this visit'
-      }`,
-      readingA: formatDivergenceReading('SoA grid', d.reading_a),
-      readingB: formatDivergenceReading('Narrative', d.reading_b),
+      }`),
+      readingA: winAnsiSafe(formatDivergenceReading('SoA grid', d.reading_a)),
+      readingB: winAnsiSafe(formatDivergenceReading('Narrative', d.reading_b)),
       status: `Status: ${DIVERGENCE_STATUS_LABELS[d.status]}`,
     }));
 
@@ -610,7 +665,7 @@ export function buildVisitWorksheetPdf(
 
   doc.setTextColor(20);
   doc.setFontSize(18);
-  doc.text(packet.snapshot.visit_name, margin, cursorY);
+  doc.text(winAnsiSafe(packet.snapshot.visit_name), margin, cursorY);
   cursorY += 22;
 
   doc.setFont('helvetica', 'normal');
@@ -625,7 +680,7 @@ export function buildVisitWorksheetPdf(
   const codeLabel = packet.protocol_code
     ? `${packet.protocol_title} · ${packet.protocol_code}`
     : packet.protocol_title;
-  doc.text(codeLabel, margin, cursorY);
+  doc.text(winAnsiSafe(codeLabel), margin, cursorY);
   cursorY += 16;
 
   // Sprint 6: filtered-view subtitle. Only renders when a role lens is
@@ -723,7 +778,7 @@ export function buildVisitWorksheetPdf(
   } else {
     doc.setFontSize(10);
     doc.setTextColor(40);
-    const purposeLines = doc.splitTextToSize(packet.snapshot.purpose, pageWidth - margin * 2);
+    const purposeLines = doc.splitTextToSize(winAnsiSafe(packet.snapshot.purpose), pageWidth - margin * 2);
     doc.text(purposeLines, margin, cursorY);
     cursorY += purposeLines.length * 12 + 14;
   }
@@ -846,7 +901,7 @@ export function buildVisitWorksheetPdf(
 
   if (packet.snapshot.amendment_version) {
     const widthSoFar = baseWidth + doc.getTextWidth(`${statsNeedsReviewCount} to review`);
-    doc.text(` · ${packet.snapshot.amendment_version}`, margin + widthSoFar, cursorY);
+    doc.text(winAnsiSafe(` · ${packet.snapshot.amendment_version}`), margin + widthSoFar, cursorY);
   }
   cursorY += 18;
 
@@ -910,10 +965,10 @@ export function buildVisitWorksheetPdf(
       head: [['#', 'Requirement', 'Classification', 'Role', 'Timing', 'Status']],
       body: phaseItems.map((row, i) => [
         String(i + 1),
-        formatRequirementCell(row),
+        winAnsiSafe(formatRequirementCell(row)),
         CLASSIFICATION_LABEL[row.classification],
-        row.role_hint ?? '—',
-        formatTiming(row),
+        winAnsiSafe(row.role_hint ?? '—'),
+        winAnsiSafe(formatTiming(row)),
         REVIEW_LABEL[row.review_status],
       ]),
       theme: 'grid',
@@ -974,10 +1029,10 @@ export function buildVisitWorksheetPdf(
       head: [['#', 'Requirement', 'Protocol section', 'Page', 'Amendment']],
       body: traceableItems.map((row, i) => [
         String(i + 1),
-        row.label,
-        row.traceability.protocol_section ?? '—',
+        winAnsiSafe(row.label),
+        winAnsiSafe(row.traceability.protocol_section ?? '—'),
         row.traceability.protocol_page !== null ? String(row.traceability.protocol_page) : '—',
-        row.traceability.amendment_version ?? '—',
+        winAnsiSafe(row.traceability.amendment_version ?? '—'),
       ]),
       theme: 'grid',
       styles: {
@@ -1055,7 +1110,7 @@ export function buildVisitWorksheetPdf(
       doc.text(WORKSHEET_HEADER_LABEL, margin, margin - 12);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(140);
-      doc.text(packet.snapshot.visit_name, pageWidth - margin, margin - 12, { align: 'right' });
+      doc.text(winAnsiSafe(packet.snapshot.visit_name), pageWidth - margin, margin - 12, { align: 'right' });
     }
 
     // Footer band — disclaimer left, generated_at + pagination right.
