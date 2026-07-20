@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: deliverables-export-winansi-safe
-status: in-review
+status: merged
+merged: 2026-07-20
 started: 2026-07-19
-target_pr:
+target_pr: #522
 ---
 
 # Deliverables export — winAnsiSafe guards data-driven text at the PDF boundary
