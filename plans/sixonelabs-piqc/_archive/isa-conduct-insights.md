@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: isa-conduct-insights
-status: active
+status: merged
 started: 2026-07-19
-target_pr:
+target_pr: 502
+merged: 2026-07-19
 ---
 
 # ISA conduct insights — S2.5 of the notes → findings → report arc

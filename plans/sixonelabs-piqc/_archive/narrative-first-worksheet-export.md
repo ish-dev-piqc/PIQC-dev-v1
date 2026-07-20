@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: Narrative-first worksheet export — the reading travels with the deliverable (S1.5)
-status: active
+status: merged
 started: 2026-07-19
-target_pr:
+target_pr: 514
+merged: 2026-07-19
 ---
 
 # Narrative-first worksheet export (S1.5 — deterministic)
