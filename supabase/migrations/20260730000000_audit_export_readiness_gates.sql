@@ -174,18 +174,23 @@ BEGIN
       USING ERRCODE = 'P0002';
   END IF;
 
-  IF v_before.updated_at IS DISTINCT FROM p_expected_updated_at THEN
-    RAISE EXCEPTION 'Questionnaire changed since it was last reviewed'
-      USING ERRCODE = '40001', HINT = 'STALE_CONTENT';
-  END IF;
-
+  -- Atomic CAS: the version predicate lives in the UPDATE itself, so Postgres
+  -- re-evaluates it against the latest committed row at lock time. A separate
+  -- pre-check would leave a check-then-update window where a concurrent edit
+  -- still gets stamped.
   UPDATE questionnaire_instances SET
     status       = 'COMPLETE',
     completed_at = COALESCE(completed_at, v_now),
     approved_at  = v_now,
     approved_by  = v_user
   WHERE id = p_instance_id
+    AND updated_at = p_expected_updated_at
   RETURNING * INTO v_after;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Questionnaire changed since it was last reviewed'
+      USING ERRCODE = '40001', HINT = 'STALE_CONTENT';
+  END IF;
 
   v_diff := audit_mode_diff_jsonb(
     jsonb_build_object(
@@ -245,17 +250,19 @@ BEGIN
     RAISE EXCEPTION 'Risk summary % not found', p_id USING ERRCODE = 'P0002';
   END IF;
 
-  IF v_before.updated_at IS DISTINCT FROM p_expected_updated_at THEN
-    RAISE EXCEPTION 'Risk summary changed since it was last reviewed'
-      USING ERRCODE = '40001', HINT = 'STALE_CONTENT';
-  END IF;
-
+  -- Atomic CAS in the UPDATE predicate (see approve_questionnaire).
   UPDATE vendor_risk_summary_objects SET
     approval_status = 'APPROVED',
     approved_at     = v_now,
     approved_by     = v_user
   WHERE id = p_id
+    AND updated_at = p_expected_updated_at
   RETURNING * INTO v_after;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Risk summary changed since it was last reviewed'
+      USING ERRCODE = '40001', HINT = 'STALE_CONTENT';
+  END IF;
 
   v_diff := audit_mode_diff_jsonb(
     jsonb_build_object(
@@ -312,17 +319,19 @@ BEGIN
     RAISE EXCEPTION 'Confirmation letter % not found', p_id USING ERRCODE = 'P0002';
   END IF;
 
-  IF v_before.updated_at IS DISTINCT FROM p_expected_updated_at THEN
-    RAISE EXCEPTION 'Confirmation letter changed since it was last reviewed'
-      USING ERRCODE = '40001', HINT = 'STALE_CONTENT';
-  END IF;
-
+  -- Atomic CAS in the UPDATE predicate (see approve_questionnaire).
   UPDATE confirmation_letter_objects SET
     approval_status = 'APPROVED',
     approved_at     = NOW(),
     approved_by     = v_user
   WHERE id = p_id
+    AND updated_at = p_expected_updated_at
   RETURNING * INTO v_after;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Confirmation letter changed since it was last reviewed'
+      USING ERRCODE = '40001', HINT = 'STALE_CONTENT';
+  END IF;
 
   v_diff := audit_mode_diff_jsonb(
     jsonb_build_object('approval_status', v_before.approval_status, 'approved_at', v_before.approved_at, 'approved_by', v_before.approved_by),
@@ -371,17 +380,19 @@ BEGIN
     RAISE EXCEPTION 'Agenda % not found', p_id USING ERRCODE = 'P0002';
   END IF;
 
-  IF v_before.updated_at IS DISTINCT FROM p_expected_updated_at THEN
-    RAISE EXCEPTION 'Agenda changed since it was last reviewed'
-      USING ERRCODE = '40001', HINT = 'STALE_CONTENT';
-  END IF;
-
+  -- Atomic CAS in the UPDATE predicate (see approve_questionnaire).
   UPDATE agenda_objects SET
     approval_status = 'APPROVED',
     approved_at     = NOW(),
     approved_by     = v_user
   WHERE id = p_id
+    AND updated_at = p_expected_updated_at
   RETURNING * INTO v_after;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Agenda changed since it was last reviewed'
+      USING ERRCODE = '40001', HINT = 'STALE_CONTENT';
+  END IF;
 
   v_diff := audit_mode_diff_jsonb(
     jsonb_build_object('approval_status', v_before.approval_status, 'approved_at', v_before.approved_at, 'approved_by', v_before.approved_by),
@@ -430,17 +441,19 @@ BEGIN
     RAISE EXCEPTION 'Checklist % not found', p_id USING ERRCODE = 'P0002';
   END IF;
 
-  IF v_before.updated_at IS DISTINCT FROM p_expected_updated_at THEN
-    RAISE EXCEPTION 'Checklist changed since it was last reviewed'
-      USING ERRCODE = '40001', HINT = 'STALE_CONTENT';
-  END IF;
-
+  -- Atomic CAS in the UPDATE predicate (see approve_questionnaire).
   UPDATE checklist_objects SET
     approval_status = 'APPROVED',
     approved_at     = NOW(),
     approved_by     = v_user
   WHERE id = p_id
+    AND updated_at = p_expected_updated_at
   RETURNING * INTO v_after;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Checklist changed since it was last reviewed'
+      USING ERRCODE = '40001', HINT = 'STALE_CONTENT';
+  END IF;
 
   v_diff := audit_mode_diff_jsonb(
     jsonb_build_object('approval_status', v_before.approval_status, 'approved_at', v_before.approved_at, 'approved_by', v_before.approved_by),
@@ -476,7 +489,6 @@ DECLARE
   v_before      report_draft_objects;
   v_after       report_draft_objects;
   v_diff        jsonb;
-  v_fingerprint text;
 BEGIN
   IF v_user IS NULL THEN
     RAISE EXCEPTION 'Not authenticated' USING ERRCODE = '42501';
@@ -492,21 +504,24 @@ BEGIN
     RAISE EXCEPTION 'Report draft not found' USING ERRCODE = 'P0002';
   END IF;
 
-  IF v_before.updated_at IS DISTINCT FROM p_expected_updated_at THEN
-    RAISE EXCEPTION 'Report changed since it was last reviewed'
-      USING ERRCODE = '40001', HINT = 'STALE_CONTENT';
-  END IF;
-
-  v_fingerprint := audit_mode_report_readiness_fingerprint(
-    v_before.audit_id, v_before.executive_summary, v_before.conclusions);
-
+  -- Atomic CAS in the UPDATE predicate (see approve_questionnaire). The
+  -- fingerprint is computed inside the SET from the row's own columns, so the
+  -- seal is bound to exactly the version the predicate just admitted — not to
+  -- a snapshot read before the lock.
   UPDATE report_draft_objects SET
     approval_status       = 'APPROVED',
     approved_at           = NOW(),
     approved_by           = v_user,
-    readiness_fingerprint = v_fingerprint
+    readiness_fingerprint = audit_mode_report_readiness_fingerprint(
+                              audit_id, executive_summary, conclusions)
   WHERE id = p_id
+    AND updated_at = p_expected_updated_at
   RETURNING * INTO v_after;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Report changed since it was last reviewed'
+      USING ERRCODE = '40001', HINT = 'STALE_CONTENT';
+  END IF;
 
   v_diff := audit_mode_diff_jsonb(
     jsonb_build_object('approval_status', v_before.approval_status, 'approved_at', v_before.approved_at, 'readiness_fingerprint', v_before.readiness_fingerprint),
@@ -690,7 +705,11 @@ BEGIN
     RAISE EXCEPTION 'Not authenticated' USING ERRCODE = '42501';
   END IF;
 
-  SELECT * INTO v_before FROM report_draft_objects WHERE id = p_id;
+  -- FOR UPDATE serializes against upsert_report_draft's row UPDATE, so the
+  -- readiness check below runs on locked truth — no check-then-stamp window.
+  -- (Entry edits aren't row-locked here; a racing entry change persists as a
+  -- fingerprint mismatch and every later boundary still catches it.)
+  SELECT * INTO v_before FROM report_draft_objects WHERE id = p_id FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Report draft not found' USING ERRCODE = 'P0002';
   END IF;
@@ -748,7 +767,8 @@ BEGIN
     RAISE EXCEPTION 'Not authenticated' USING ERRCODE = '42501';
   END IF;
 
-  SELECT * INTO v_before FROM report_draft_objects WHERE id = p_id;
+  -- FOR UPDATE: same locked-truth rationale as final_sign_off_report.
+  SELECT * INTO v_before FROM report_draft_objects WHERE id = p_id FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Report draft not found' USING ERRCODE = 'P0002';
   END IF;
@@ -919,6 +939,9 @@ BEGIN
     -- that's correct: the lead-auditor ownership check above already scoped
     -- access, and the checker only reads this audit's rows.
     IF p_to_stage = 'FINAL_REVIEW_EXPORT' THEN
+      -- Lock the report row first so the readiness check runs on locked truth
+      -- (serializes with upsert_report_draft; see final_sign_off_report).
+      PERFORM 1 FROM report_draft_objects WHERE audit_id = p_audit_id FOR UPDATE;
       v_readiness_reasons := audit_mode_check_report_readiness(p_audit_id);
       IF array_length(v_readiness_reasons, 1) > 0 THEN
         RAISE EXCEPTION 'Cannot enter FINAL_REVIEW_EXPORT: report is not ready (%)',

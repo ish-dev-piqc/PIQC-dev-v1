@@ -69,4 +69,15 @@ none (existing seeded demo literals gain the new required `updated_at` field onl
 
 ## Deploy step (dev-team-owned)
 
-Migration only — `supabase db push` after merge. No edge-function deploy. TS mirrors updated in-diff (ReportDraftRow + Mock types).
+Migration only — `supabase db push` after merge. No edge-function deploy.
+
+**Type mirror note:** no type impact in `src/types/audit/` — the vendor report/deliverable row mirrors live in `src/lib/audit/` (`ReportDraftRow`, `DeliverableRow`, the `Mock*` interfaces), and all of them are updated in this diff (`updated_at` threading + `readiness_fingerprint`).
+
+## Self-review (Fable adversarial pass, pre-PR)
+
+Post-build expert review on the committed branch caught and fixed, PR #62-style:
+1. **Check-then-update TOCTOU in all six approve CAS blocks** — the version compare ran on an unlocked SELECT before an unconditional UPDATE, leaving a millisecond window where a concurrent edit still got stamped. Fixed: the predicate now lives in the UPDATE's WHERE (`AND updated_at = p_expected_updated_at`; re-evaluated by Postgres against the latest row version at lock time), STALE_CONTENT raised on zero rows.
+2. **Fingerprint snapshot binding** — the report seal was computed from the pre-lock snapshot; now computed inside the UPDATE's SET from the row's own columns, bound to exactly the version the CAS admits.
+3. **Boundary stampers now lock the row** — `final_sign_off_report` and `mark_report_exported` SELECT … FOR UPDATE, and the advance RPC's FINAL_REVIEW_EXPORT gate locks the report row before the readiness check, serializing all three against `upsert_report_draft`.
+
+Accepted residuals (documented, fail-closed): an entry edit racing a report approve seals a pre-race fingerprint — the divergence persists and trips `GATE_REPORT_DIVERGED` at the next boundary; the entry digest's string concatenation is theoretically ambiguous but only self-collidable by the audit's own author against their own latch.
