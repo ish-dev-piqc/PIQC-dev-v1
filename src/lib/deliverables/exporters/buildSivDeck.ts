@@ -45,6 +45,7 @@ import {
   SIV_SECTION_ORDER,
   groupBlocksBySection,
 } from '../../../types/deliverables';
+import { winAnsiSafe } from '../../winAnsiSafe';
 
 // ---------------------------------------------------------------------------
 // SIV deck prose constants (exported for tests + UI reuse). Deliberately NOT
@@ -169,7 +170,7 @@ export function buildSivDeck(packet: DeliverableExportPacket): jsPDF {
   let cursorY = pageHeight * 0.34;
   doc.setTextColor(20);
   doc.setFontSize(26);
-  const titleLines = doc.splitTextToSize(packet.title, contentWidth);
+  const titleLines = doc.splitTextToSize(winAnsiSafe(packet.title), contentWidth);
   doc.text(titleLines, MARGIN, cursorY);
   cursorY += titleLines.length * 28 + 8;
 
@@ -180,7 +181,7 @@ export function buildSivDeck(packet: DeliverableExportPacket): jsPDF {
   const protocolLine = packet.protocol_code
     ? `${packet.protocol_title} · ${packet.protocol_code}`
     : packet.protocol_title;
-  const protocolLines = doc.splitTextToSize(protocolLine, contentWidth);
+  const protocolLines = doc.splitTextToSize(winAnsiSafe(protocolLine), contentWidth);
   doc.text(protocolLines, MARGIN, cursorY);
   cursorY += protocolLines.length * 15 + 6;
 
@@ -189,7 +190,7 @@ export function buildSivDeck(packet: DeliverableExportPacket): jsPDF {
   doc.setTextColor(110);
   doc.text(
     packet.protocol_version
-      ? `Protocol version: ${packet.protocol_version}`
+      ? `Protocol version: ${winAnsiSafe(packet.protocol_version)}`
       : 'Protocol version: not extracted',
     MARGIN,
     cursorY,
@@ -214,7 +215,7 @@ export function buildSivDeck(packet: DeliverableExportPacket): jsPDF {
     doc.setFontSize(9);
     const noteTextWidth = contentWidth - 16;
     const noteLineChunks: string[][] = notes.map((n) =>
-      doc.splitTextToSize(n.display_text, noteTextWidth),
+      doc.splitTextToSize(winAnsiSafe(n.display_text), noteTextWidth),
     );
     const noteLineCount = noteLineChunks.reduce((sum, lines) => sum + lines.length, 0);
     const bandHeight =
@@ -239,7 +240,7 @@ export function buildSivDeck(packet: DeliverableExportPacket): jsPDF {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(11);
       doc.setTextColor(70);
-      const lines = doc.splitTextToSize(intro.display_text, contentWidth);
+      const lines = doc.splitTextToSize(winAnsiSafe(intro.display_text), contentWidth);
       if (y + lines.length * 14 > bodyBottom) y = startSlide(true);
       doc.text(lines, MARGIN, y);
       y += lines.length * 14 + 8;
@@ -250,7 +251,7 @@ export function buildSivDeck(packet: DeliverableExportPacket): jsPDF {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(10.5);
       doc.setTextColor(30);
-      const lines = doc.splitTextToSize(formatBulletText(bullet), contentWidth - 14);
+      const lines = doc.splitTextToSize(winAnsiSafe(formatBulletText(bullet)), contentWidth - 14);
       if (y + lines.length * 13 > bodyBottom) y = startSlide(true);
       doc.text('•', MARGIN, y);
       doc.text(lines, MARGIN + 14, y);
@@ -301,8 +302,8 @@ export function buildSivDeck(packet: DeliverableExportPacket): jsPDF {
       head: [['#', 'Item', 'Protocol section', 'Page']],
       body: factBlocks.map((block, i) => [
         String(i + 1),
-        truncateForAppendix(block.display_text),
-        block.source_section ?? '—',
+        winAnsiSafe(truncateForAppendix(block.display_text)),
+        winAnsiSafe(block.source_section ?? '—'),
         block.source_page_number !== null ? String(block.source_page_number) : '—',
       ]),
       theme: 'grid',
@@ -361,7 +362,7 @@ export function buildSivDeck(packet: DeliverableExportPacket): jsPDF {
       doc.text(SIV_DECK_HEADER_LABEL, MARGIN, MARGIN - 12);
       if (packet.protocol_code) {
         doc.setFont('helvetica', 'normal');
-        doc.text(packet.protocol_code, pageWidth - MARGIN, MARGIN - 12, { align: 'right' });
+        doc.text(winAnsiSafe(packet.protocol_code), pageWidth - MARGIN, MARGIN - 12, { align: 'right' });
       }
     }
 

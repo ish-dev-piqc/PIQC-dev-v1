@@ -181,3 +181,38 @@ describe('buildSivDeck', () => {
     expect(SIV_DECK_EXPORT_DISCLAIMER).not.toMatch(/approved/i);
   });
 });
+
+describe('buildSivDeck — winAnsiSafe at the PDF text boundary', () => {
+  it('transliterates non-WinAnsi glyphs across slides, notes band, and appendix', () => {
+    const doc = buildSivDeck({
+      ...makeSivPacket(),
+      title: 'SIV Package → Draft',
+      blocks: [
+        block({
+          section_key: 'study_overview',
+          display_text: 'dose ≤ 50 µg × 3 → titrate ≥ 25',
+          source_section: '§4.1 ✓ Design',
+        }),
+        block({
+          section_key: 'study_overview',
+          block_type: 'speaker_note',
+          content_origin: 'derived_operational_framing',
+          display_text: 'Storage at −20 °C until dosing',
+          source_evidence_id: null,
+          source_quote: null,
+          source_page_number: null,
+          source_section: null,
+          confidence_state: null,
+        }),
+      ],
+    });
+    const text = docText(doc);
+    // Slide bullet + traceability-appendix Item cell both transliterate.
+    expect(text).toContain('dose <= 50 ug x 3 -> titrate >= 25');
+    expect(text).toContain('SIV Package -> Draft');
+    // Speaker-notes band: true minus → hyphen; degree sign is CP1252, kept.
+    expect(text).toContain('Storage at -20 °C until dosing');
+    // ✓ is outside CP1252 → visible '?'; § passes through.
+    expect(text).toContain('§4.1 ? Design');
+  });
+});

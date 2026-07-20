@@ -53,6 +53,7 @@ import {
   isExportableArtifactType,
 } from './deliverableExportConfig';
 import { buildSivDeck } from './exporters/buildSivDeck';
+import { winAnsiSafe } from '../winAnsiSafe';
 
 /**
  * jspdf-autotable patches the jsPDF instance with `lastAutoTable` after each
@@ -301,7 +302,7 @@ export function buildDeliverablePdf(packet: DeliverableExportPacket): jsPDF {
 
   doc.setTextColor(20);
   doc.setFontSize(18);
-  const titleLines = doc.splitTextToSize(packet.title, pageWidth - margin * 2);
+  const titleLines = doc.splitTextToSize(winAnsiSafe(packet.title), pageWidth - margin * 2);
   doc.text(titleLines, margin, cursorY);
   cursorY += titleLines.length * 20 + 2;
 
@@ -312,7 +313,7 @@ export function buildDeliverablePdf(packet: DeliverableExportPacket): jsPDF {
   const codeLabel = packet.protocol_code
     ? `${packet.protocol_title} · ${packet.protocol_code}`
     : packet.protocol_title;
-  const codeLines = doc.splitTextToSize(codeLabel, pageWidth - margin * 2);
+  const codeLines = doc.splitTextToSize(winAnsiSafe(codeLabel), pageWidth - margin * 2);
   doc.text(codeLines, margin, cursorY);
   cursorY += codeLines.length * 12 + 2;
 
@@ -320,7 +321,7 @@ export function buildDeliverablePdf(packet: DeliverableExportPacket): jsPDF {
   // reader must know whether version-stamping happened, not guess.
   doc.text(
     packet.protocol_version
-      ? `Protocol version: ${packet.protocol_version}`
+      ? `Protocol version: ${winAnsiSafe(packet.protocol_version)}`
       : 'Protocol version: not extracted',
     margin,
     cursorY,
@@ -359,7 +360,7 @@ export function buildDeliverablePdf(packet: DeliverableExportPacket): jsPDF {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(20);
-    doc.text(config.sectionLabels[sectionKey] ?? sectionKey, margin, cursorY);
+    doc.text(winAnsiSafe(config.sectionLabels[sectionKey] ?? sectionKey), margin, cursorY);
     cursorY += 4;
 
     autoTable(doc, {
@@ -367,7 +368,7 @@ export function buildDeliverablePdf(packet: DeliverableExportPacket): jsPDF {
       margin: { left: margin, right: margin },
       head: [['Item', 'Origin', 'Confidence', 'Review']],
       body: blocks.map((block) => [
-        formatItemCell(block),
+        winAnsiSafe(formatItemCell(block)),
         CONTENT_ORIGIN_LABELS[block.content_origin],
         formatConfidenceCell(block),
         REVIEW_STATE_LABELS[block.review_state],
@@ -425,8 +426,8 @@ export function buildDeliverablePdf(packet: DeliverableExportPacket): jsPDF {
       head: [['#', 'Item', 'Protocol section', 'Page']],
       body: factBlocks.map((block, i) => [
         String(i + 1),
-        truncateForAppendixItem(block.display_text),
-        block.source_section ?? '—',
+        winAnsiSafe(truncateForAppendixItem(block.display_text)),
+        winAnsiSafe(block.source_section ?? '—'),
         block.source_page_number !== null ? String(block.source_page_number) : '—',
       ]),
       theme: 'grid',
@@ -484,7 +485,7 @@ export function buildDeliverablePdf(packet: DeliverableExportPacket): jsPDF {
       doc.text(config.headerLabel, margin, margin - 12);
       if (packet.protocol_code) {
         doc.setFont('helvetica', 'normal');
-        doc.text(packet.protocol_code, pageWidth - margin, margin - 12, { align: 'right' });
+        doc.text(winAnsiSafe(packet.protocol_code), pageWidth - margin, margin - 12, { align: 'right' });
       }
     }
 
