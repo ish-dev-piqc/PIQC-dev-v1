@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: worksheet-export-winansi-safe
-status: in-review
+status: merged
+merged: 2026-07-20
 started: 2026-07-19
-target_pr:
+target_pr: #520
 ---
 
 # Worksheet export — WinAnsi-safe data-driven text
