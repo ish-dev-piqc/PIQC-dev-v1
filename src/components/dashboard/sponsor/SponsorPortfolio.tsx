@@ -5,81 +5,23 @@ import { listMySponsorPortfolio } from '../../../lib/sponsor/sponsorApi';
 import type { SponsorPortfolioEntry } from '../../../types/sponsor';
 import SponsorComingSoonPage from '../SponsorComingSoonPage';
 import SponsorProtocolDrawer from './SponsorProtocolDrawer';
-import ProtocolIntelligenceTab from './deliverables/ProtocolIntelligenceTab';
 
 // =============================================================================
-// SponsorPage — read-only portfolio view for Sponsor Mode.
+// SponsorPortfolio — read-only cross-site portfolio view. Extracted from the
+// old SponsorPage.tsx during the 2026-08-02 CRA+Sponsor merge so it could be
+// mounted as a sub-tab inside the merged CraWorkspaceShell rather than its
+// own top-level dashboard tab.
 //
-// Loads the user's sponsor portfolio via list_my_sponsor_portfolio(). If
-// the RPC returns zero rows (the user isn't yet a sponsor in any
-// relationship), the page falls through to the existing
-// SponsorComingSoonPage so prospects still see the marketing surface +
-// notify-me form.
+// Loads the user's sponsor portfolio via list_my_sponsor_portfolio(). If the
+// RPC returns zero rows (the user isn't yet a sponsor in any relationship),
+// falls through to the existing SponsorComingSoonPage so prospects still see
+// the marketing surface + notify-me form.
 //
-// Cards are read-only in v1. "View details" is a stub — the drill-in
-// drawer lands in v2.
+// Cards are read-only in v1. "View details" is a stub — the drill-in drawer
+// lands in v2.
 // =============================================================================
 
-// ---------------------------------------------------------------------------
-// SponsorPage — sub-tab shell: "Portfolio" (existing portfolio view, default)
-// | "Protocol Intelligence" (Protocol Deliverable Engine mount). The strip
-// renders above whichever surface is active; the portfolio branches
-// (loading / coming-soon / cards) are untouched inside SponsorPortfolio.
-// ---------------------------------------------------------------------------
-
-export default function SponsorPage() {
-  const { theme } = useTheme();
-  const isLight = theme === 'light';
-  const [activeTab, setActiveTab] = useState<'portfolio' | 'intelligence'>('portfolio');
-
-  return (
-    <div>
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-6">
-        <div
-          role="tablist"
-          aria-label="Sponsor views"
-          className={`inline-flex items-center gap-1 rounded-lg border p-1 ${
-            isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/10'
-          }`}
-        >
-          {(
-            [
-              ['portfolio', 'Portfolio'],
-              ['intelligence', 'Protocol Intelligence'],
-            ] as const
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === key}
-              onClick={() => setActiveTab(key)}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold ${
-                activeTab === key
-                  ? isLight
-                    ? 'bg-[#534AB7] text-white'
-                    : 'bg-[#7F77DD] text-white'
-                  : 'text-fg-sub hover:text-fg-body'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {activeTab === 'portfolio' ? (
-        <SponsorPortfolio />
-      ) : (
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-          <ProtocolIntelligenceTab />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SponsorPortfolio() {
+export default function SponsorPortfolio() {
   const { theme } = useTheme();
   const isLight = theme === 'light';
 

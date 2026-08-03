@@ -84,7 +84,6 @@ const VALID_DASHBOARD_TABS: ReadonlySet<DashboardTab> = new Set<DashboardTab>([
   'visits',
   'reports',
   'organization',
-  'sponsor',
   'cra-workspace',
   'settings',
 ]);
@@ -376,12 +375,11 @@ function AppContent() {
     reports: 'Reports',
     'visit-execution': 'Visit execution',
     'audit-overview': 'Audit overview',
-    'cra-workspace': 'CRA workspace',
+    'cra-workspace': 'Protocol Intelligence',
     chat: 'Chat',
     knowledge: 'Knowledge base',
     workflows: 'Workflows',
     organization: 'Workspace',
-    sponsor: 'Sponsor mode',
     settings: 'Settings',
   };
   // `undefined` (not "Dashboard") when there's no remembered prior tab —
@@ -458,8 +456,9 @@ function AppContent() {
             }}
             onMobileWorkspaceNavigate={(key) => {
               // Mirrors LeftRail's handleClick + routes through the
-              // confirm-leave guard for mode/workspace/sponsor (Chat
-              // overlay is intentionally not guarded).
+              // confirm-leave guard for mode/workspace (Chat overlay is
+              // intentionally not guarded). Sponsor merged into 'cra'
+              // 2026-08-02 — no separate case needed.
               if (key === 'chat') {
                 setChatOverlayFilter(undefined);
                 setChatOverlayOpen((v) => !v);
@@ -481,9 +480,6 @@ function AppContent() {
                   case 'cra':
                     setMode('cra');
                     if (!CRA_TAB_SET.has(dashboardTab)) setDashboardTab('cra-workspace');
-                    return;
-                  case 'sponsor':
-                    setDashboardTab('sponsor');
                     return;
                 }
               });

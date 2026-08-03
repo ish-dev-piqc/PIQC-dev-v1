@@ -3,7 +3,6 @@ import {
   LayoutGrid,
   ClipboardList,
   ShieldCheck,
-  Building2,
   Hash,
   SearchCheck,
   type LucideIcon,
@@ -16,19 +15,24 @@ import type { DashboardTab } from './Dashboard';
 
 // =============================================================================
 // LeftRail — persistent 56px navigation rail mounted on every dashboard
-// view. Five icons + avatar:
+// view. Four mode icons + Workspace + Chat + avatar:
 //
-//   Workspace   (purple) → OrganizationPage (current org hub destination)
-//   Site mode   (blue)   → Site Mode dashboard
-//   Audit mode  (teal)   → Audit Mode dashboard
-//   Sponsor     (purple) → Coming-soon placeholder; full page lands in PR 3
-//   Chat        (coral)  → Stub (no-op); overlay wires in PR 4
+//   Workspace              (purple) → OrganizationPage (current org hub destination)
+//   Site mode              (blue)   → Site Mode dashboard
+//   Audit mode             (teal)   → Audit Mode dashboard
+//   Protocol Intelligence  (amber)  → merged CRA+Sponsor workspace (CraWorkspaceShell)
+//   Chat                   (coral)  → Stub (no-op); overlay wires in PR 4
 //
 // Active icon picked from current dashboardTab + mode:
 //   - dashboardTab === 'organization' → workspace active
-//   - dashboardTab === 'sponsor'      → sponsor active
 //   - mode === 'site'                 → site active
 //   - mode === 'audit'                → audit active
+//   - mode === 'cra'                  → Protocol Intelligence active
+//
+// Sponsor Mode was merged into the 'cra' mode/rail entry 2026-08-02 — CRA
+// and Sponsor were the same deliverable-engine system underneath (one
+// entitlement, one DeliverablePanel), so they're now one workspace with two
+// internal tabs (Workspace / Portfolio) instead of two separate rail icons.
 //
 // Hover shows a label tooltip to the right of each icon.
 // =============================================================================
@@ -50,7 +54,7 @@ interface LeftRailProps {
   chatOverlayOpen?: boolean;
 }
 
-type RailKey = 'workspace' | 'site' | 'audit' | 'cra' | 'sponsor' | 'chat';
+type RailKey = 'workspace' | 'site' | 'audit' | 'cra' | 'chat';
 
 interface RailItem {
   key: RailKey;
@@ -64,8 +68,7 @@ const ITEMS: ReadonlyArray<RailItem> = [
   { key: 'workspace', label: 'Workspace', icon: LayoutGrid },
   { key: 'site', label: 'Site mode', icon: ClipboardList },
   { key: 'audit', label: 'Audit mode', icon: ShieldCheck },
-  { key: 'cra', label: 'CRA mode', icon: SearchCheck },
-  { key: 'sponsor', label: 'Sponsor mode (coming soon)', icon: Building2, soon: true },
+  { key: 'cra', label: 'Protocol Intelligence', icon: SearchCheck },
   { key: 'chat', label: 'Chat', icon: Hash },
 ];
 
@@ -76,7 +79,6 @@ const PALETTE: Record<RailKey, { activeBg: string; activeFg: string }> = {
   site: { activeBg: '#E6F1FB', activeFg: '#0C447C' },
   audit: { activeBg: '#E1F5EE', activeFg: '#085041' },
   cra: { activeBg: '#FDF3E7', activeFg: '#8A4B0F' },
-  sponsor: { activeBg: '#EEEDFE', activeFg: '#3C3489' },
   chat: { activeBg: '#FAECE7', activeFg: '#993C1D' },
 };
 
@@ -102,7 +104,6 @@ const CRA_TABS: ReadonlySet<DashboardTab> = new Set<DashboardTab>([
 
 function activeKey(dashboardTab: DashboardTab, mode: DashboardMode): RailKey | null {
   if (dashboardTab === 'organization') return 'workspace';
-  if (dashboardTab === 'sponsor') return 'sponsor';
   if (SITE_TABS.has(dashboardTab) || mode === 'site') return 'site';
   if (AUDIT_TABS.has(dashboardTab) || mode === 'audit') return 'audit';
   if (CRA_TABS.has(dashboardTab) || mode === 'cra') return 'cra';
@@ -172,9 +173,6 @@ export default function LeftRail({
       case 'cra':
         setMode('cra');
         if (!CRA_TABS.has(dashboardTab)) onDashboardTabChange('cra-workspace');
-        return;
-      case 'sponsor':
-        onDashboardTabChange('sponsor');
         return;
       case 'chat':
         if (chatDimmed) return;
@@ -247,8 +245,8 @@ export default function LeftRail({
                 {item.label}
               </span>
             </button>
-            {/* Visual dividers after Workspace and after Sponsor. The rail
-                splits into: Workspace · Modes · Tool (Chat). */}
+            {/* Visual dividers after Workspace and after the mode icons. The
+                rail splits into: Workspace · Modes · Tool (Chat). */}
             {(idx === 0 || idx === 3) && (
               <span
                 className={`block w-6 h-px ${dividerBg} my-1`}

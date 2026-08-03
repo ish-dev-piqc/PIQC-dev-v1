@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Menu, X, LogOut, ChevronDown, ChevronRight, User, Home, Sun, Moon, ClipboardList, Flame, UserCircle2, CreditCard, Beaker, Building2, Plus, Users, Bell, LayoutGrid, ShieldCheck, Hash } from 'lucide-react';
+import { Menu, X, LogOut, ChevronDown, ChevronRight, User, Home, Sun, Moon, ClipboardList, Flame, UserCircle2, CreditCard, Beaker, Building2, Plus, Users, Bell, LayoutGrid, ShieldCheck, SearchCheck, Hash } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useMode } from '../context/ModeContext';
@@ -32,7 +32,7 @@ interface NavbarProps {
    *  (workspace / site / audit / cra / sponsor / chat) for phone viewports
    *  where the rail is hidden. App.tsx routes each key to the same state
    *  changes the rail would. Keep in sync with LeftRail's RailKey. */
-  onMobileWorkspaceNavigate?: (key: 'workspace' | 'site' | 'audit' | 'cra' | 'sponsor' | 'chat') => void;
+  onMobileWorkspaceNavigate?: (key: 'workspace' | 'site' | 'audit' | 'cra' | 'chat') => void;
 }
 
 export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSettingsSection, onOpenOrganization, onOpenChatOverlayMentions, onMobileWorkspaceNavigate }: NavbarProps) {
@@ -810,16 +810,11 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
                     Audit mode
                   </button>
                   <button
-                    onClick={() => { onMobileWorkspaceNavigate('sponsor'); setMobileOpen(false); }}
-                    className={`flex items-center justify-between gap-2.5 w-full px-3 py-2.5 text-sm font-medium opacity-70 ${isLight ? 'text-[#334155]/70 hover:bg-[#0F172A]/[0.06]' : 'text-[#CBD5E1]/70 hover:bg-white/[0.06]'} rounded-lg transition-colors`}
+                    onClick={() => { onMobileWorkspaceNavigate('cra'); setMobileOpen(false); }}
+                    className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm font-medium ${isLight ? 'text-[#334155]/70 hover:text-[#0F172A] hover:bg-[#0F172A]/[0.06]' : 'text-[#CBD5E1]/70 hover:text-white hover:bg-white/[0.06]'} rounded-lg transition-colors`}
                   >
-                    <span className="inline-flex items-center gap-2.5">
-                      <Building2 size={14} />
-                      Sponsor mode
-                    </span>
-                    <span className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${isLight ? 'bg-[#EEEDFE] text-[#3C3489]' : 'bg-[rgba(127,119,221,0.18)] text-[#AFA9EC]'}`}>
-                      Soon
-                    </span>
+                    <SearchCheck size={14} />
+                    Protocol Intelligence
                   </button>
                   <button
                     onClick={() => { onMobileWorkspaceNavigate('chat'); setMobileOpen(false); }}

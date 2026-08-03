@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  BookMarked,
   ChevronDown,
   ChevronRight,
   Clock,
@@ -8,6 +9,7 @@ import {
   GitFork,
   Info,
   MoreHorizontal,
+  Quote,
   User,
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
@@ -23,15 +25,17 @@ import {
   type VisitExecutionWorkspace,
 } from '../../../types/visit-execution';
 import { itemMatchesRoleFilter } from '../../../lib/visit-execution/parseRoleHint';
+import { formatBriefWhere } from '../../../lib/visit-execution/visitBriefModel';
 import ExecutionItemClassificationBadge from './ExecutionItemClassificationBadge';
 import ExecutionReviewStatusBadge from './ExecutionReviewStatusBadge';
 import VisitConfidenceBadge from './VisitConfidenceBadge';
 
 // =============================================================================
-// ExecutionChecklist — the main surface. Renders all items grouped by
-// ExecutionPhase, in EXECUTION_PHASE_ORDER. Phases with zero items are
-// hidden entirely (no empty section headers). 1-2 phases auto-expand on
-// mount via defaultExpandedPhases(); the rest start collapsed.
+// ExecutionChecklist — the main (and, since the 2026-08-02 merge, ONLY)
+// surface for working a visit. Renders all items grouped by ExecutionPhase,
+// in EXECUTION_PHASE_ORDER. Phases with zero items are hidden entirely (no
+// empty section headers). 1-2 phases auto-expand on mount via
+// defaultExpandedPhases(); the rest start collapsed.
 //
 // Per item:
 //   - Single click on the row toggles review_status not_reviewed ↔ reviewed
@@ -39,7 +43,11 @@ import VisitConfidenceBadge from './VisitConfidenceBadge';
 //   - Conditional rules render INLINE as collapsed amber callouts beneath
 //     the item label — not in a separate section
 //   - Source field count + timing render inline if non-empty
-//   - Traceability link button (§) opens the drawer scoped to that item
+//   - The protocol's verbatim source quote (+ section/page) renders inline
+//     when present — carried over from the retired VisitSequenceBlock
+//     ("The visit, in order") reading view so nothing was lost in the merge
+//   - Traceability link button (§) opens the drawer scoped to that item, for
+//     the full source context beyond the inline quote
 // =============================================================================
 
 /**
@@ -69,6 +77,13 @@ interface Props {
    * matching mutation API call or drawer-open handler. */
   onItemAction: (item: VisitExecutionItem, action: ChecklistItemAction) => void;
   onOpenTraceability: (item: VisitExecutionItem) => void;
+  /** Opens the SoA Footnotes drawer (header button in VisitExecutionTab).
+   * Generic, not row-specific — footnote letters aren't linked to individual
+   * requirements yet (no data model for that linkage exists). Surfaced per
+   * row anyway so a coordinator can jump straight there without hunting for
+   * the header button. Optional so callers without footnotes wired up (none
+   * today) don't have to pass a no-op. */
+  onOpenFootnotes?: () => void;
   /**
    * Sprint 6: role-filter lens. `'all'` is the no-op default; selecting a
    * specific role narrows the visible checklist to items matching that role
@@ -89,6 +104,7 @@ export default function ExecutionChecklist({
   onToggleReviewed,
   onItemAction,
   onOpenTraceability,
+  onOpenFootnotes,
   roleFilter = 'all',
   divergentLabels,
 }: Props) {
@@ -244,6 +260,7 @@ export default function ExecutionChecklist({
                     onToggleReviewed={onToggleReviewed}
                     onItemAction={onItemAction}
                     onOpenTraceability={onOpenTraceability}
+                    onOpenFootnotes={onOpenFootnotes}
                   />
                 ))}
               </ul>
@@ -306,6 +323,7 @@ interface RowProps {
   onToggleReviewed: (itemId: string) => void;
   onItemAction: (item: VisitExecutionItem, action: ChecklistItemAction) => void;
   onOpenTraceability: (item: VisitExecutionItem) => void;
+  onOpenFootnotes?: () => void;
 }
 
 function ChecklistItemRow({
@@ -315,6 +333,7 @@ function ChecklistItemRow({
   onToggleReviewed,
   onItemAction,
   onOpenTraceability,
+  onOpenFootnotes,
 }: RowProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
@@ -328,6 +347,10 @@ function ChecklistItemRow({
 
   const hasConditions = item.conditions.length > 0;
   const isReviewed = status === 'reviewed';
+  const sourceWhere = formatBriefWhere(
+    item.traceability.protocol_section,
+    item.traceability.protocol_page,
+  );
   /**
    * Sprint 4b drift detection: label is COALESCE(current_text, derived_text)
    * from the v3 RPC. When current_text is set AND differs from derived_text,
@@ -444,6 +467,26 @@ function ChecklistItemRow({
                 the protocol source.
               </p>
             )
+          )}
+
+          {item.traceability.source_quote && (
+            /* Carried over from VisitSequenceBlock's SequenceNode (retired
+               2026-08-02 merge): the protocol's verbatim words, inline,
+               rather than a click behind the traceability drawer. */
+            <blockquote
+              data-testid="vew-checklist-quote"
+              className={`mt-2 border-l-2 pl-3 py-0.5 ${
+                isLight ? 'border-brand-300' : 'border-brand-400/40'
+              }`}
+            >
+              <p className="text-fg-body text-sm flex items-start gap-1.5">
+                <Quote size={11} aria-hidden className="mt-0.5 flex-shrink-0 text-fg-muted" />
+                <span>&ldquo;{item.traceability.source_quote}&rdquo;</span>
+              </p>
+              {sourceWhere && (
+                <p className="text-fg-muted font-mono text-[10px] mt-1">{sourceWhere}</p>
+              )}
+            </blockquote>
           )}
 
           {hasDrift && item.derived_text && (
@@ -585,6 +628,20 @@ function ChecklistItemRow({
 
         {/* Right-side action cluster */}
         <div className="flex items-center gap-1 flex-shrink-0">
+          {onOpenFootnotes && (
+            <button
+              type="button"
+              onClick={onOpenFootnotes}
+              aria-label="Open Schedule of Activities footnotes"
+              title="Open SoA footnotes — not yet linked to this specific requirement"
+              className={`inline-flex items-center justify-center w-6 h-6 rounded-md text-fg-sub ${
+                isLight ? 'hover:bg-[#E2E8F0] hover:text-fg-body' : 'hover:bg-white/[0.06] hover:text-fg-body'
+              }`}
+              data-testid="vew-checklist-open-footnotes"
+            >
+              <BookMarked size={13} aria-hidden />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onOpenTraceability(item)}

@@ -56,7 +56,7 @@ interface OrganizationPageProps {
    *  to "Dashboard" when omitted. */
   exitLabel?: string;
   /** Routed from App.tsx so mode-tile clicks inside Today can switch to
-   *  the chosen dashboard tab (e.g. Sponsor → 'sponsor'). */
+   *  the chosen dashboard tab (e.g. Protocol Intelligence → 'cra-workspace'). */
   onDashboardTabChange?: (tab: DashboardTab) => void;
 }
 

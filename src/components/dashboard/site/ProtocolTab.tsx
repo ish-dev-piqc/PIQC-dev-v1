@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Building2, CalendarRange, FileText, FlaskConical, RefreshCw, Tag, Upload } from 'lucide-react';
+import { Building2, CalendarRange, ExternalLink, FileText, FlaskConical, Loader2, RefreshCw, Tag, Upload } from 'lucide-react';
 import { useProtocol } from '../../../context/ProtocolContext';
 import { useSiteData } from '../../../context/SiteDataContext';
 import { useTheme } from '../../../context/ThemeContext';
 import { fetchVisitTemplates, materializeVisits } from '../../../lib/site/siteApi';
+import { fetchProtocolPdfUrl } from '../../../lib/site/protocolPdfApi';
 import type { ProtocolVisitTemplate } from '../../../lib/site/types';
 import AnchorDateModal from './AnchorDateModal';
-import WorksheetItemsList from '../../sotr/WorksheetItemsList';
+// SOTR worksheet review hidden 2026-08-02 pending demo (too advanced for the
+// user right now) — this tab is now the "open the PDF to compare" surface
+// instead. Not deleted: re-import and restore the <WorksheetItemsList /> call
+// below to bring it back.
+// import WorksheetItemsList from '../../sotr/WorksheetItemsList';
 
 // =============================================================================
 // ProtocolTab — Protocol metadata + documents tagged to this protocol.
@@ -28,6 +33,7 @@ export default function ProtocolTab() {
   const [showAnchorModal, setShowAnchorModal] = useState(false);
   const [materializing, setMaterializing] = useState(false);
   const [statusToast, setStatusToast] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const pageBg = isLight ? 'bg-[#F8FAFC]' : 'bg-[#020617]';
   const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
@@ -76,17 +82,57 @@ export default function ProtocolTab() {
     refresh();
   };
 
+  // Opens the parsed protocol PDF in a new tab so the user can compare it
+  // side-by-side with what PIQC displays — no download/print step. Signs a
+  // fresh short-lived URL right before opening (the helper's URLs expire in
+  // 60s, so we never store one). Picks the most recent successfully-parsed
+  // document; falls back to the newest doc of any status if none is 'ready'
+  // yet (so the toast can say *why* there's nothing to show).
+  const handleViewPdf = async () => {
+    const doc = docs.find((d) => d.status === 'ready') ?? docs[0];
+    if (!doc) {
+      setStatusToast('No protocol document uploaded yet.');
+      return;
+    }
+    setPdfLoading(true);
+    setStatusToast(null);
+    const r = await fetchProtocolPdfUrl(activeProtocol.id, doc.id);
+    setPdfLoading(false);
+    if (!r.ok) {
+      setStatusToast(`Failed: ${r.error}`);
+      return;
+    }
+    window.open(r.data, '_blank', 'noopener,noreferrer');
+  };
+
   return (
     <div className={`${pageBg} h-full overflow-y-auto`}>
       <div className="p-6 max-w-3xl mx-auto space-y-6">
 
         {/* Header */}
-        <div>
-          <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold">
-            {activeProtocol.code}
-          </p>
-          <h2 className="text-fg-heading text-xl font-semibold mt-0.5">Protocol</h2>
-          <p className={`${subColor} text-sm mt-1`}>{activeProtocol.name}</p>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold">
+              {activeProtocol.code}
+            </p>
+            <h2 className="text-fg-heading text-xl font-semibold mt-0.5">Protocol</h2>
+            <p className={`${subColor} text-sm mt-1`}>{activeProtocol.name}</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleViewPdf}
+            disabled={pdfLoading}
+            className={`inline-flex items-center gap-1.5 text-xs font-semibold rounded-md px-3 py-1.5 text-white transition-colors disabled:opacity-50 flex-shrink-0 ${
+              isLight ? 'bg-brand-600 hover:bg-brand-800' : 'bg-brand-300 hover:bg-brand-400'
+            }`}
+          >
+            {pdfLoading ? (
+              <Loader2 size={13} className="animate-spin" aria-hidden />
+            ) : (
+              <ExternalLink size={13} aria-hidden />
+            )}
+            {pdfLoading ? 'Opening…' : 'View PDF'}
+          </button>
         </div>
 
         {error && (
@@ -236,8 +282,12 @@ export default function ProtocolTab() {
           )}
         </div>
 
-        {/* Parsed protocol items — Source Truth Reviewer (PR-3, PR-6 export) */}
-        <WorksheetItemsList studyId={activeProtocol.id} studyCode={activeProtocol.code} />
+        {/* Parsed protocol items — Source Truth Reviewer (PR-3, PR-6 export).
+            Hidden 2026-08-02: too advanced for this stage of onboarding; "View
+            PDF" above covers the same "compare against the source" need.
+            Restore by re-adding the WorksheetItemsList import above and this
+            line. */}
+        {/* <WorksheetItemsList studyId={activeProtocol.id} studyCode={activeProtocol.code} /> */}
 
         {/* Documents */}
         <div className={`${cardBg} border rounded-xl overflow-hidden`}>
