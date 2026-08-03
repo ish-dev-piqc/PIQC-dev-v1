@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: visit-prep-ui-cleanup-and-cra-sponsor-merge
-status: active
+status: merged
+merged: 2026-08-03
 started: 2026-08-02
-target_pr: TBD
+target_pr: #533
 ---
 
 # Visit Prep UI cleanup + CRA/Sponsor merge
