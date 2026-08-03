@@ -17,6 +17,21 @@ import type { SoaFootnote } from '../../../types/visit-execution';
 // the grid parser drops so a coordinator can read them.
 // =============================================================================
 
+// The PDF text extraction behind `chunks` preserves the source's hard line
+// breaks (one per visual line in the original SoA table), not paragraph
+// breaks. Rendering that raw with `whitespace-pre-wrap` reproduces those
+// mid-sentence breaks and reads as fragmented. Collapse run-on whitespace
+// (including single newlines) to a single space so the browser reflows the
+// legend as normal prose; a real paragraph break in the source (blank line /
+// double newline) is preserved.
+function normalizeFootnoteText(raw: string): string {
+  return raw
+    .split(/\n\s*\n/)
+    .map((para) => para.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n\n');
+}
+
 interface Props {
   protocolId: string;
   isOpen: boolean;
@@ -174,8 +189,8 @@ export default function FootnotesDrawer({ protocolId, isOpen, onClose }: Props) 
                         <FileText size={10} aria-hidden /> p. {f.page}
                       </p>
                     )}
-                    <p className="text-fg-body text-xs leading-relaxed whitespace-pre-wrap">
-                      {f.content}
+                    <p className="text-fg-body text-xs leading-relaxed whitespace-pre-line">
+                      {normalizeFootnoteText(f.content)}
                     </p>
                   </div>
                 ))}

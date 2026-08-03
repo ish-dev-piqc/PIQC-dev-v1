@@ -4,7 +4,7 @@ import {
   Clock,
   ClipboardList,
   ShieldCheck,
-  Building2,
+  SearchCheck,
   AlertTriangle,
   ChevronRight,
   CheckCircle2,
@@ -260,20 +260,19 @@ export default function HubTodayTab({ onChangeDashboardTab }: HubTodayTabProps) 
     return m;
   }, [visits]);
 
-  // Mode tile click — enters the mode + lands on a sensible tab.
-  const enterMode = (target: 'site' | 'audit' | 'sponsor') => {
-    if (target === 'sponsor') {
-      onChangeDashboardTab('sponsor');
-      return;
-    }
+  // Mode tile click — enters the mode + lands on a sensible tab. 'cra' is
+  // the merged Protocol Intelligence workspace (Sponsor Mode folded in
+  // 2026-08-02).
+  const enterMode = (target: 'site' | 'audit' | 'cra') => {
     setMode(target);
-    onChangeDashboardTab(target === 'site' ? 'today' : 'audit-overview');
+    if (target === 'site') onChangeDashboardTab('today');
+    else if (target === 'audit') onChangeDashboardTab('audit-overview');
+    else onChangeDashboardTab('cra-workspace');
   };
 
   // --- Styling tokens ----------------------------------------------------
   const tileBorderBase = isLight ? 'border-[#E2E8F0]' : 'border-white/10';
   const cardBg = isLight ? 'bg-white' : 'bg-[#0F172A]';
-  const rowBg = isLight ? 'bg-[#F8FAFC]' : 'bg-white/[0.02]';
 
   // ----------------------------------------------------------------------
 
@@ -369,22 +368,13 @@ export default function HubTodayTab({ onChangeDashboardTab }: HubTodayTabProps) 
         </button>
         <button
           type="button"
-          onClick={() => enterMode('sponsor')}
-          className={`text-left rounded-md p-3 border ${tileBorderBase} ${rowBg} hover:shadow-sm transition-shadow`}
-          style={{ borderLeftColor: '#7F77DD', borderLeftWidth: '3px' }}
+          onClick={() => enterMode('cra')}
+          className={`text-left rounded-md p-3 border ${tileBorderBase} ${cardBg} hover:shadow-sm transition-shadow`}
+          style={{ borderLeftColor: '#8A4B0F', borderLeftWidth: '3px' }}
         >
-          <Building2 size={16} style={{ color: '#534AB7' }} className="mb-1.5" />
-          <p className="text-fg-heading text-sm font-medium">Sponsor mode</p>
-          <p className="text-fg-sub text-[11px] mt-0.5">Cross-site roll-ups</p>
-          <span
-            className="inline-block text-[10px] px-2 py-0.5 rounded-full mt-1.5"
-            style={{
-              backgroundColor: isLight ? '#EEEDFE' : 'rgba(127,119,221,0.15)',
-              color: isLight ? '#3C3489' : '#AFA9EC',
-            }}
-          >
-            Coming soon
-          </span>
+          <SearchCheck size={16} style={{ color: '#8A4B0F' }} className="mb-1.5" />
+          <p className="text-fg-heading text-sm font-medium">Protocol Intelligence</p>
+          <p className="text-fg-sub text-[11px] mt-0.5">Deliverables, monitoring, cross-site roll-ups</p>
         </button>
       </div>
 

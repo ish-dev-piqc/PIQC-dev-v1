@@ -7,30 +7,22 @@ import {
 } from '../../../../types/deliverables';
 
 // =============================================================================
-// craDeliverables — the CRA workspace's role lens IS this subset. These tests
-// pin the PR-B decision: the monitor sees exactly the two operational
-// deliverables, focus first, and every one of them can actually mount in the
-// shared panel. If someone later adds risk/SIV here (re-forking the sponsor
-// tab) or drops focus from first, these fail.
+// craDeliverables — merged 2026-08-02: the workspace shows all five
+// deliverable types (the former CRA-only two-item subset was folded into
+// Sponsor's five-item picker order when the two modes merged into one
+// Protocol Intelligence workspace). These tests pin: checklist leads, every
+// type is real and mountable, and no duplicates.
 // =============================================================================
 
 const ALL_ARTIFACT_TYPES = Object.keys(ARTIFACT_TYPE_LABELS) as DeliverableArtifactType[];
 
 describe('CRA_ARTIFACT_ORDER', () => {
-  it('leads with monitoring focus (the workspace default)', () => {
-    expect(CRA_ARTIFACT_ORDER[0]).toBe('cra_monitoring_focus');
+  it('leads with the monitoring prep checklist (the workspace default)', () => {
+    expect(CRA_ARTIFACT_ORDER[0]).toBe('monitoring_prep_checklist');
   });
 
-  it('is exactly the monitor operational pair — focus + checklist', () => {
-    expect([...CRA_ARTIFACT_ORDER]).toEqual([
-      'cra_monitoring_focus',
-      'monitoring_prep_checklist',
-    ]);
-  });
-
-  it('excludes the sponsor-facing deliverables (risk overview, SIV)', () => {
-    expect(CRA_ARTIFACT_ORDER).not.toContain('risk_overview');
-    expect(CRA_ARTIFACT_ORDER).not.toContain('siv_package');
+  it('includes every deliverable type — nothing lost in the merge', () => {
+    expect([...CRA_ARTIFACT_ORDER].sort()).toEqual([...ALL_ARTIFACT_TYPES].sort());
   });
 
   it('lists only real artifact types, with no duplicates', () => {

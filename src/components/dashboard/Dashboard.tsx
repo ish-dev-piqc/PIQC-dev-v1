@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { MessageSquare, LayoutDashboard, Activity, FileText, Database, UserCircle2, Users, CalendarCheck, CreditCard, Bell, Loader2, CheckCircle2, AlertCircle, ClipboardList, SearchCheck, type LucideIcon } from 'lucide-react';
+import { MessageSquare, LayoutDashboard, Activity, FileText, Database, UserCircle2, CreditCard, Bell, Loader2, CheckCircle2, AlertCircle, ClipboardList, SearchCheck, type LucideIcon } from 'lucide-react';
 import NotificationsSettings from './NotificationsSettings';
-import SponsorPage from './sponsor/SponsorPage';
 import CraWorkspaceShell from './cra/CraWorkspaceShell';
 import DashboardChat from './DashboardChat';
 import KnowledgeBase from './KnowledgeBase';
@@ -16,6 +15,10 @@ import ProtocolRequiredGate from './site/ProtocolRequiredGate';
 import ProtocolOnboarding from './site/ProtocolOnboarding';
 import VisitExecutionTab from './visit-execution/VisitExecutionTab';
 import AuditWorkspaceShell from './audit/AuditWorkspaceShell';
+// SponsorPage deleted in the 2026-08-02 CRA+Sponsor merge — Sponsor Mode's
+// two responsibilities (Protocol Intelligence, Portfolio) now live inside
+// CraWorkspaceShell as internal tabs. The 'sponsor' DashboardTab is gone;
+// see the mode === 'cra' branch below.
 import { useTheme } from '../../context/ThemeContext';
 import { useMode } from '../../context/ModeContext';
 import { useProtocol } from '../../context/ProtocolContext';
@@ -47,10 +50,6 @@ export type DashboardTab =
   // Shared
   | 'reports'
   | 'organization'
-  // Coming-soon placeholder — content lands in PR 3 of the workspace-first
-  // refactor. Renders a small stub today so the LeftRail's Sponsor icon
-  // has somewhere to route.
-  | 'sponsor'
   | 'settings';
 export type SettingsSection = 'account' | 'security' | 'billing' | 'notifications';
 
@@ -63,14 +62,18 @@ interface TabConfig {
 const SITE_TABS: TabConfig[] = [
   // Visit Prep is the primary Site Mode landing surface — protocol-level
   // execution workspace, available before any participants are enrolled.
-  // Today moves to the second slot for participant-day operations.
   { id: 'visit-execution', label: 'Visit Prep', icon: ClipboardList },
-  { id: 'today', label: 'Today', icon: LayoutDashboard },
-  { id: 'participants', label: 'Participants', icon: Users },
-  { id: 'visits', label: 'Visits', icon: CalendarCheck },
+  // Today / Participants / Visits / Reports hidden 2026-08-02 pending demo —
+  // these matter once a user has mastered Visit Prep. Re-enable by
+  // uncommenting (re-add Users + CalendarCheck to the lucide-react import
+  // above — LayoutDashboard/FileText are still imported for other tabs);
+  // renderContent() cases + routing are untouched.
+  // { id: 'today', label: 'Today', icon: LayoutDashboard },
+  // { id: 'participants', label: 'Participants', icon: Users },
+  // { id: 'visits', label: 'Visits', icon: CalendarCheck },
   // Team moved to the Organization page (top-level dashboard tab). See
   // src/components/dashboard/organization/OrganizationPage.tsx.
-  { id: 'reports', label: 'Reports', icon: FileText },
+  // { id: 'reports', label: 'Reports', icon: FileText },
 ];
 
 const AUDIT_TABS: TabConfig[] = [
@@ -806,8 +809,6 @@ export default function Dashboard({
             }}
           />
         );
-      case 'sponsor':
-        return <SponsorPage />;
       case 'settings':
         return (
           <SettingsTab

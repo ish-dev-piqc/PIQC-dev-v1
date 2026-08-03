@@ -219,16 +219,21 @@ export function canInviteViewer(
 // RPC/RLS enforces — see #479's ENT-1/MAC-1). The server is the real boundary;
 // these functions only decide whether to render the surface or the gate card.
 //
-// Kept as two SEPARATE pure functions even though they share behavior today —
-// entitlements are product levers, and coupling them would couple future
-// pricing decisions.
+// Merged 2026-08-02: CRA/Monitor Mode and Sponsor Mode's Protocol
+// Intelligence surface were two gates over the exact same capability
+// (`deliverable_engine`) with different copy — the workspaces themselves
+// were merged into one (CraWorkspaceShell) the same day, so a single
+// entitlement function replaces canUseSponsorMode/canUseCraMode. If a real
+// pricing divergence between monitor/sponsor seats ever emerges, split this
+// back into two functions then — don't speculatively couple/decouple ahead
+// of an actual product decision.
 // =============================================================================
 
 /**
- * Can the caller use the Sponsor Mode Protocol Intelligence surface?
+ * Can the caller use the (merged) Protocol Intelligence workspace?
  * `hasDeliverableEngine` is the org's `deliverable_engine` capability grant.
  */
-export function canUseSponsorMode(
+export function canUseProtocolIntelligence(
   hasDeliverableEngine: boolean,
 ): EntitlementDecision {
   if (hasDeliverableEngine) {
@@ -237,25 +242,7 @@ export function canUseSponsorMode(
   return {
     allowed: false,
     reason:
-      'Sponsor Mode isn’t enabled for this workspace yet. Talk to PIQC to turn on Protocol Intelligence.',
-    addonProductKind: null,
-  };
-}
-
-/**
- * Can the caller use the CRA/Monitor Mode workspace?
- * `hasDeliverableEngine` is the org's `deliverable_engine` capability grant.
- */
-export function canUseCraMode(
-  hasDeliverableEngine: boolean,
-): EntitlementDecision {
-  if (hasDeliverableEngine) {
-    return { allowed: true };
-  }
-  return {
-    allowed: false,
-    reason:
-      'CRA Mode isn’t enabled for this workspace yet. Talk to PIQC to turn it on.',
+      'Protocol Intelligence isn’t enabled for this workspace yet. Talk to PIQC to turn it on.',
     addonProductKind: null,
   };
 }

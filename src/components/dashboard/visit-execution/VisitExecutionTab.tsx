@@ -41,7 +41,6 @@ import StudyOverviewPanel from './StudyOverviewPanel';
 import VisitNavigator from './VisitNavigator';
 import VisitSnapshotCard from './VisitSnapshotCard';
 import VisitBriefBlock from './VisitBriefBlock';
-import VisitSequenceBlock from './VisitSequenceBlock';
 import ExecutionChecklist, { type ChecklistItemAction } from './ExecutionChecklist';
 import TraceabilityDrawer from './TraceabilityDrawer';
 import ExportWorksheetButton from './ExportWorksheetButton';
@@ -51,7 +50,6 @@ import RequirementTextDrawer, {
 } from './RequirementTextDrawer';
 import CompletenessSignalsPanel from './CompletenessSignalsPanel';
 import EditLogDrawer from './EditLogDrawer';
-import RoleFilterBar from './RoleFilterBar';
 import CohortDetailPanel from './CohortDetailPanel';
 import FootnotesDrawer from './FootnotesDrawer';
 
@@ -178,12 +176,14 @@ export default function VisitExecutionTab() {
   // checklist within a visit). 'all' or a cohort label (SAD/MAD/CSF/…).
   const [cohortFilter, setCohortFilter] = useState<string>('all');
 
-  // Narrative-first S1: the acting layer ("Work the visit" — add-requirement,
-  // role lens, checklist, export) starts collapsed so the visit OPENS on the
-  // reading (brief + sequence). Resets on visit change; auto-opens whenever a
-  // mutation lands a row the coordinator must be able to see (add requirement,
-  // promote signal) — a new row must never be born invisible.
-  const [workOpen, setWorkOpen] = useState(false);
+  // 2026-08-02 merge: "The visit, in order" (VisitSequenceBlock) and "Work
+  // the visit" (ExecutionChecklist) were two presentations of the same rows
+  // — a read-only timeline above a collapsed acting checklist. Merged into
+  // one: ExecutionChecklist now carries the reading's verbatim source-quote
+  // depth on every row, so there's a single list with checkboxes, menus, and
+  // the full narrative. It starts OPEN (it's the only content now, not a
+  // supplementary acting layer) and stays open across visit switches.
+  const [workOpen, setWorkOpen] = useState(true);
 
   // Sprint 4b: RequirementTextDrawer state. Sprint 4c extends to three modes.
   // textDrawerSubject is the generic display payload (title + initial draft
@@ -398,9 +398,6 @@ export default function VisitExecutionTab() {
   useEffect(() => {
     setMutationError(null);
     setRoleFilter('all');
-    // Narrative-first S1: each visit opens on its reading; the acting layer
-    // re-collapses on navigation.
-    setWorkOpen(false);
   }, [selectedId]);
 
   // Narrative↔grid divergences scoped to the visit in view (+ protocol-wide
@@ -1183,10 +1180,10 @@ export default function VisitExecutionTab() {
                 hidePurpose={briefLines.length > 0}
               />
 
-              {/* Narrative-first S1: the visit opens on its READING — the
-                  brief (what/who/when/gates/watch-outs, every claim carrying
-                  its protocol address), then the watch-out panels, then the
-                  day in order. The acting layer is behind "Work the visit". */}
+              {/* The visit opens on its brief (what/who/when/gates/watch-outs,
+                  every claim carrying its protocol address), then the
+                  watch-out panels, then "The visit" — the single merged list
+                  below (see 2026-08-02 merge note above it). */}
               <VisitBriefBlock lines={briefLines} />
 
               <DivergencePanel
@@ -1234,12 +1231,6 @@ export default function VisitExecutionTab() {
                 />
               )}
 
-              <VisitSequenceBlock
-                workspace={selectedWorkspace}
-                onOpenTraceability={setTraceabilityItem}
-                divergentLabels={divergentLabels}
-              />
-
               {mutationError && (
                 <div
                   role="alert"
@@ -1285,14 +1276,15 @@ export default function VisitExecutionTab() {
                 </div>
               )}
 
-              {/* Narrative-first S1 — "Work the visit": the ACTING layer.
-                  The reading above shows every requirement; this section holds
-                  the same rows with their checkboxes, menus, role lens, and
-                  export. Collapsed by default so the visit opens on the
-                  reading; one gesture away, count on the toggle, nothing
-                  subtracted. The mutation-error banner deliberately lives
-                  ABOVE this section so a failed save is never hidden by the
-                  collapse. */}
+              {/* 2026-08-02 merge — "The visit": one list, not two. Every
+                  requirement with its full narrative (description, verbatim
+                  source quote, conditions), checkbox, and action menu.
+                  Formerly split across a read-only "Visit, in order" timeline
+                  above a collapsed "Work the visit" checklist below; the
+                  checklist row now carries the reading's narrative depth, so
+                  the separate timeline was retired. The mutation-error banner
+                  deliberately lives ABOVE this section so a failed save is
+                  never hidden by the collapse. */}
               <section
                 data-testid="vew-work-section"
                 className={`rounded-xl border overflow-hidden ${
@@ -1317,7 +1309,7 @@ export default function VisitExecutionTab() {
                     )}
                     <ClipboardCheck size={14} className="text-brand-500 flex-shrink-0" aria-hidden />
                     <span className="text-fg-heading text-[15px] font-semibold tracking-tight">
-                      Work the visit
+                      The visit
                     </span>
                   </div>
                   <span className="text-fg-sub text-xs font-medium tabular-nums flex-shrink-0">
@@ -1341,16 +1333,15 @@ export default function VisitExecutionTab() {
                       isLight ? 'border-[#F2F2F2]' : 'border-white/[0.04]'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-3 pt-4">
-                      {/* Sprint 6 role lens — narrows the acting checklist +
-                          export only; the reading above always shows the full
-                          set. */}
-                      <RoleFilterBar
-                        filter={roleFilter}
-                        onSelect={setRoleFilter}
-                        totalCount={selectedWorkspace.items.length}
-                        filteredCount={roleFilteredCount}
-                      />
+                    <div className="flex items-center justify-end gap-3 pt-4">
+                      {/* Role lens hidden 2026-08-02 pending demo — roleFilter
+                          stays 'all' (its default) so the checklist/export
+                          below are unaffected. Re-enable by re-adding
+                          `import RoleFilterBar from './RoleFilterBar'` above,
+                          restoring the <RoleFilterBar filter={roleFilter}
+                          onSelect={setRoleFilter} totalCount={...}
+                          filteredCount={roleFilteredCount} /> element here,
+                          and switching the row back to justify-between. */}
                       <button
                         type="button"
                         onClick={handleOpenAdd}
@@ -1370,6 +1361,7 @@ export default function VisitExecutionTab() {
                       onToggleReviewed={handleToggleReviewed}
                       onItemAction={handleItemAction}
                       onOpenTraceability={setTraceabilityItem}
+                      onOpenFootnotes={() => setFootnotesOpen(true)}
                       divergentLabels={divergentLabels}
                       roleFilter={roleFilter}
                     />
