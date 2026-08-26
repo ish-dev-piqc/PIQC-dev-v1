@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: Audit hardening batch — seed-fn lockdown + timing-safe webhook secret (audit D2-2 + EDG-R1-3)
-status: active
+status: merged
 started: 2026-07-20
-target_pr:
+target_pr: 531
+merged: 2026-07-20
 ---
 
 # Audit hardening batch (D2-2 + EDG-R1-3)
