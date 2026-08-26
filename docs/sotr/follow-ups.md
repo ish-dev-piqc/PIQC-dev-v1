@@ -1,6 +1,6 @@
 # Source of Truth Reviewer (SOTR) — Follow-ups
 
-_Last updated: 2026-05-09 (PR-7 hardening pass)._
+_Last updated: 2026-08-26 (F-003 Audit Mode wiring done; F-011 added)._
 
 This document tracks deferred work that came out of the PR-1 → PR-7 build.
 Items here are **intentionally not built** — flagged so they don't get
@@ -57,23 +57,46 @@ viewer. Pairs with F-001.
 
 ---
 
-### F-003 · Audit Mode wiring
+### F-003 · Audit Mode wiring — ✓ DONE
 
-**Status:** SOTR is currently surfaced only in Site Mode (the Protocol
-tab). Components in `src/components/sotr/` are mode-agnostic by design
-— no Site Mode imports — so wiring into Audit Mode is purely additive.
+**Status:** Done. `WorksheetItemsList` is embedded in Stage 4
+(`ScopeReviewWorkspace`, VENDOR_AUDIT workflow — the only workflow that
+stage mounts under), "Protocol worksheet — draft extracted items" section,
+passing `studyId={activeAudit.protocol_id}`. `audits.protocol_id` is a
+direct `NOT NULL` FK to `protocols(id)` — the same id space SOTR uses —
+and was already surfaced on `AuditContext.AuditWithContext` (added for
+unrelated auditee/site display work), so no join via
+`protocol_version_id` was needed. The component gained an optional
+`emptyStateMessage` prop so Audit Mode shows ownership-aware empty copy
+(Site Mode copy unchanged). A per-stage side-panel / shell-drawer
+placement was considered and not taken (body embed is the smallest
+slice; revisit if more stages need it).
 
-**What's needed:**
-- Decide where in the audit workspace shell SOTR fits (likely a per-stage
-  side panel inside `AuditWorkspaceShell`, gated by stage).
-- The active audit's `protocol_version_id` joins back to a protocol; pass
-  the protocol's UUID as `studyId` to `<WorksheetItemsList>` /
-  `<SourceTruthDrawer>`.
-- Update `plan.md`'s Audit Mode table to reflect SOTR availability.
+**Remaining:** reads are owner-scoped — see F-011 below.
 
-**Why deferred:** Site Mode was the natural first home (ProtocolTab had a
-`documents-pending` placeholder ready to replace). Audit Mode wiring is
-straightforward but each audit stage has its own UX context to consider.
+---
+
+### F-011 · Auditor read access to SOTR (owner-scoped auth debt)
+
+**Status:** Named decision debt from the F-003 embed.
+
+- **Decision made now:** Audit Mode reads SOTR through the existing
+  owner-scoped model (`documents.user_id = auth.uid()` across the
+  existing RLS policies, RPCs, and the storage bucket); no migration,
+  no new RPC.
+- **Decision deferred:** an auditor-facing read path — e.g. a
+  `SECURITY DEFINER` RPC authorized by audit assignment
+  (`audits.lead_auditor_id = auth.uid() AND audits.protocol_id = p_study_id`)
+  — so a non-uploader auditor can see worksheet items and export the packet.
+- **Why deferral is acceptable:** the current deployment is single-account —
+  the auditor's account is the uploader, so the embed is fully functional
+  today, and the empty-state copy is honest about the visibility rule.
+- **Risk if deferred too long:** in a multi-user deployment auditors
+  silently see an empty worksheet (RLS hides items without an error, by
+  design), and `DownloadDraftPacketButton` fails loudly with 42501
+  "Study not found or access denied".
+- **Trigger for revisiting:** the first deployment where any auditor
+  account ≠ the protocol-uploading account.
 
 ---
 

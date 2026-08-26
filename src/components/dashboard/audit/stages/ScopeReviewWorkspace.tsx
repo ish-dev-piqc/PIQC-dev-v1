@@ -23,6 +23,10 @@ import {
 import { fetchQuestionnaireBundle } from '../../../../lib/audit/questionnaireApi';
 import { fetchRiskSummary } from '../../../../lib/audit/riskSummaryApi';
 import { getStageReadout } from '../../../../lib/audit/auditApi';
+import WorksheetItemsList from '../../../sotr/WorksheetItemsList';
+
+const AUDIT_EMPTY_STATE_MESSAGE =
+  'No worksheet items are visible for this protocol. Extracted items are visible only to the account that uploaded the protocol PDF — if the protocol was processed under a different account, or no PDF has been processed yet, nothing will appear here.';
 
 // =============================================================================
 // ScopeReviewWorkspace — SCOPE_AND_RISK_REVIEW stage center pane.
@@ -356,6 +360,15 @@ export default function ScopeReviewWorkspace() {
             )}
           </div>
         )}
+      </Section>
+
+      {/* Protocol worksheet (SOTR) */}
+      <Section title="Protocol worksheet — draft extracted items" sectionHeader={sectionHeader}>
+        <WorksheetItemsList
+          studyId={activeAudit.protocol_id}
+          studyCode={activeAudit.protocol_code}
+          emptyStateMessage={AUDIT_EMPTY_STATE_MESSAGE}
+        />
       </Section>
 
       {/* Advance */}
