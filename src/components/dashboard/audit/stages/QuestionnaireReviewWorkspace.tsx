@@ -27,6 +27,7 @@ import {
   upsertResponse,
   setResponseInconsistency,
 } from '../../../../lib/audit/questionnaireApi';
+import { getStageReadout } from '../../../../lib/audit/auditApi';
 import {
   QUESTIONNAIRE_INSTANCE_STATUS_LABELS,
   QUESTIONNAIRE_INSTANCE_STATUS_ORDER,
@@ -91,7 +92,8 @@ export default function QuestionnaireReviewWorkspace() {
   const isLight = theme === 'light';
 
   // Shared store across stages — Scope Review's gate reads from here.
-  const { questionnaires: bundles, setQuestionnaires: setBundles } = useAuditData();
+  const { questionnaires: bundles, setQuestionnaires: setBundles, setStageReadouts } =
+    useAuditData();
   const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
@@ -225,6 +227,14 @@ export default function QuestionnaireReviewWorkspace() {
           if (!cur) return prev;
           return { ...prev, [auditId]: { ...cur, instance: updated } };
         });
+        // A transition can change gate state server-side (moving out of
+        // COMPLETE revokes the approval stamp), so refresh the shared gate
+        // readout the same way approve() below does.
+        if (auditId) {
+          getStageReadout(auditId).then((readout) => {
+            setStageReadouts((prev) => ({ ...prev, [auditId]: readout }));
+          });
+        }
       }
     } catch (err) {
       console.error('[QuestionnaireReviewWorkspace] Transition status error:', err);
@@ -244,6 +254,13 @@ export default function QuestionnaireReviewWorkspace() {
           if (!cur) return prev;
           return { ...prev, [auditId]: { ...cur, instance: result.data } };
         });
+        // Keep Scope Review / Final Review's shared gate readout current — it's
+        // consumed there, not re-derived from this store.
+        if (auditId) {
+          getStageReadout(auditId).then((readout) => {
+            setStageReadouts((prev) => ({ ...prev, [auditId]: readout }));
+          });
+        }
       } else {
         // STALE_CONTENT: responses changed since render — reload server truth
         // so the reviewer looks at the current questionnaire.

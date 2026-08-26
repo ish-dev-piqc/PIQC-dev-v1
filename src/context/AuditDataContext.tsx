@@ -10,6 +10,7 @@ import type { MockQuestionnaireBundle } from '../lib/audit/mockQuestionnaire';
 import type { MockPreAuditBundle } from '../lib/audit/mockPreAudit';
 import type { MockWorkspaceEntry } from '../lib/audit/mockWorkspaceEntries';
 import type { MockReportDraft } from '../lib/audit/mockReport';
+import type { StageReadout } from '../lib/audit/auditApi';
 
 // =============================================================================
 // AuditDataContext — the shared in-session store for Audit Mode mock data.
@@ -73,6 +74,16 @@ interface AuditDataContextValue {
   setReports: React.Dispatch<
     React.SetStateAction<Record<string, MockReportDraft | null>>
   >;
+
+  // Server's single source of truth for gate status (audit_mode_get_stage_readout).
+  // Stage workspaces read gate/blockedReason from here instead of re-deriving it
+  // from raw questionnaire/risk-summary/etc. stores, which can disagree with the
+  // server (e.g. after a CAS rejection). Approval actions refresh their audit's
+  // entry so the readout stays current across stages.
+  stageReadouts: Record<string, StageReadout | null>;
+  setStageReadouts: React.Dispatch<
+    React.SetStateAction<Record<string, StageReadout | null>>
+  >;
 }
 
 const noop = () => {};
@@ -96,6 +107,8 @@ const AuditDataContext = createContext<AuditDataContextValue>({
   setWorkspaceEntries: noop,
   reports: {},
   setReports: noop,
+  stageReadouts: {},
+  setStageReadouts: noop,
 });
 
 export function AuditDataProvider({ children }: { children: React.ReactNode }) {
@@ -126,6 +139,7 @@ export function AuditDataProvider({ children }: { children: React.ReactNode }) {
     Record<string, MockWorkspaceEntry[]>
   >({});
   const [reports, setReports] = useState<Record<string, MockReportDraft | null>>({});
+  const [stageReadouts, setStageReadouts] = useState<Record<string, StageReadout | null>>({});
 
   return (
     <AuditDataContext.Provider
@@ -148,6 +162,8 @@ export function AuditDataProvider({ children }: { children: React.ReactNode }) {
         setWorkspaceEntries,
         reports,
         setReports,
+        stageReadouts,
+        setStageReadouts,
       }}
     >
       {children}

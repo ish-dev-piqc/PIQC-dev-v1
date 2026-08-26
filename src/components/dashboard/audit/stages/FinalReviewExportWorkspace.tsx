@@ -18,6 +18,7 @@ import {
   markReportExported,
   verifyExportReadiness,
 } from '../../../../lib/audit/reportApi';
+import { getStageReadout } from '../../../../lib/audit/auditApi';
 import {
   PROVISIONAL_IMPACT_LABELS,
   PROVISIONAL_CLASSIFICATION_LABELS,
@@ -60,46 +61,54 @@ export default function FinalReviewExportWorkspace() {
     fetchReportDraft(id).then((draft) => {
       setReports((prev) => ({ ...prev, [id]: draft }));
     });
+    getStageReadout(id).then((readout) => {
+      data.setStageReadouts((prev) => ({ ...prev, [id]: readout }));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAudit?.id, setReports]);
 
   if (!activeAudit) return null;
 
   const auditId = activeAudit.id;
-  const questionnaire = data.questionnaires[auditId] ?? null;
+  // Still needed below: riskSummary's narrative/focus areas are pulled into
+  // the exported markdown/docx (buildMarkdown/buildDocx). preAuditBundles is
+  // no longer read directly here — its 3 approval booleans now come from
+  // stageReadout instead.
   const riskSummary = data.riskSummaries[auditId] ?? null;
-  const preAudit = data.preAuditBundles[auditId] ?? {
-    confirmation_letter: null,
-    agenda: null,
-    checklist: null,
-  };
   const entries = data.workspaceEntries[auditId] ?? [];
   const report = reports[auditId] ?? null;
+  // Single source of truth for the 5 gates the RPC covers — not re-derived
+  // from the raw questionnaire/risk-summary/preAudit stores, which can
+  // disagree with the server. The remaining 2 gates (below) aren't part of
+  // audit_mode_get_stage_readout, so they stay hand-derived. Fails closed
+  // (unpassed) while the readout hasn't loaded.
+  const stageReadout = data.stageReadouts[auditId] ?? null;
 
   // Compute gates
   const gates: GateItem[] = [
     {
       label: 'Risk summary approved',
-      passed: riskSummary?.approval_status === 'APPROVED',
+      passed: stageReadout?.riskSummaryApproved ?? false,
       detail: 'From Stage 4 — auditor confirms scope and approves the risk summary.',
     },
     {
       label: 'Questionnaire approved',
-      passed: !!questionnaire?.instance.approved_at,
+      passed: stageReadout?.questionnaireApproved ?? false,
       detail: 'From Stage 3 — vendor responses reviewed, finalised, and approved.',
     },
     {
       label: 'Confirmation letter approved',
-      passed: preAudit.confirmation_letter?.approval_status === 'APPROVED',
+      passed: stageReadout?.letterApproved ?? false,
       detail: 'From Stage 5 — sent to vendor before audit.',
     },
     {
       label: 'Agenda approved',
-      passed: preAudit.agenda?.approval_status === 'APPROVED',
+      passed: stageReadout?.agendaApproved ?? false,
       detail: 'From Stage 5 — audit-day plan.',
     },
     {
       label: 'Checklist approved',
-      passed: preAudit.checklist?.approval_status === 'APPROVED',
+      passed: stageReadout?.checklistApproved ?? false,
       detail: "From Stage 5 — auditor's working checklist.",
     },
     {
@@ -130,11 +139,16 @@ export default function FinalReviewExportWorkspace() {
       setReports((prev) => ({ ...prev, [auditId]: result.data }));
       setConfirmingSignoff(false);
     } else {
-      // Server readiness gate rejected — the report moved since this pane
-      // rendered (demoted approval, new/edited entries). Reload so the gate
-      // checklist above shows the current truth.
-      const fresh = await fetchReportDraft(auditId);
+      // Server readiness gate rejected — the state moved since this pane
+      // rendered (demoted approval, new/edited entries). Reload both feeds
+      // of the checklist above — the report draft (gates 6–7) and the stage
+      // readout (gates 1–5) — so it shows the current truth.
+      const [fresh, readout] = await Promise.all([
+        fetchReportDraft(auditId),
+        getStageReadout(auditId),
+      ]);
       setReports((prev) => ({ ...prev, [auditId]: fresh }));
+      data.setStageReadouts((prev) => ({ ...prev, [auditId]: readout }));
       setConfirmingSignoff(false);
     }
   };
@@ -256,6 +270,14 @@ export default function FinalReviewExportWorkspace() {
 
       {/* Pre-export gate checklist */}
       <div className={`${cardBg} border rounded-xl p-5`}>
+        {/* A failed readout fetch is indistinguishable from 5 unpassed gates
+            — say so explicitly instead of letting the auditor read "approval
+            pending" on gates they know they approved. */}
+        {!stageReadout && (
+          <p className={`${subColor} text-xs mb-3`}>
+            Gate status unavailable — reload to retry.
+          </p>
+        )}
         <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
           <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
             Pre-export checklist

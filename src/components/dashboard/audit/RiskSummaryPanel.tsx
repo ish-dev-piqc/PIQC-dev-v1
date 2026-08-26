@@ -18,6 +18,7 @@ import {
   upsertRiskSummary,
   approveRiskSummary,
 } from '../../../lib/audit/riskSummaryApi';
+import { getStageReadout } from '../../../lib/audit/auditApi';
 
 // =============================================================================
 // RiskSummaryPanel — right rail of the audit workspace.
@@ -52,7 +53,8 @@ export default function RiskSummaryPanel({
   const isLight = theme === 'light';
 
   // Shared store — Scope Review's approval gate reads the same data.
-  const { riskSummaries: summaries, setRiskSummaries: setSummaries } = useAuditData();
+  const { riskSummaries: summaries, setRiskSummaries: setSummaries, setStageReadouts } =
+    useAuditData();
   const summary = summaries[auditId] ?? null;
 
   const [editing, setEditing] = useState(false);
@@ -154,6 +156,13 @@ export default function RiskSummaryPanel({
     );
     if (persisted) {
       setSummaries((prev) => ({ ...prev, [auditId]: persisted }));
+      // Editing can change gate state server-side (demote-on-edit,
+      // 20260826000000), so refresh the shared gate readout the same way
+      // approve() below does — Stage 4's gate card and Stage 8's checklist
+      // read from it, and both can be on screen alongside this rail.
+      getStageReadout(auditId).then((readout) => {
+        setStageReadouts((prev) => ({ ...prev, [auditId]: readout }));
+      });
     }
     setEditing(false);
   };
@@ -172,6 +181,11 @@ export default function RiskSummaryPanel({
     const result = await approveRiskSummary(summary.id, summary.updated_at, 'Risk summary approved');
     if (result.ok) {
       setSummaries((prev) => ({ ...prev, [auditId]: result.data }));
+      // Keep Scope Review / Final Review's shared gate readout current — it's
+      // consumed there, not re-derived from this store.
+      getStageReadout(auditId).then((readout) => {
+        setStageReadouts((prev) => ({ ...prev, [auditId]: readout }));
+      });
     } else {
       // STALE_CONTENT: the summary changed since render — reload server truth.
       console.error('[RiskSummaryPanel] Approve rejected:', result.error);
