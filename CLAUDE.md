@@ -25,7 +25,7 @@ Source of truth: [docs/CODEOWNERS.md](docs/CODEOWNERS.md). Summary:
 
 | Area | Owner |
 |---|---|
-| `src/lib/sotr/`, `src/components/dashboard/sotr/`, `src/types/sotr/` | Ishika |
+| `src/lib/sotr/`, `src/components/sotr/`, `src/types/sotr/` | Ishika |
 | `src/lib/site/`, `src/components/dashboard/site/` | Kiara |
 | `src/lib/audit/`, `src/components/dashboard/audit/`, `src/types/audit/` | Karl |
 | `supabase/`, `src/lib/supabase.ts` | Roger |
@@ -75,4 +75,4 @@ When in doubt, copy the pattern from:
 - Pure adapter with edge-case handling — [src/lib/sotr/sourceEvidenceAdapter.ts](src/lib/sotr/sourceEvidenceAdapter.ts)
 - Context cache + realtime + mock toggle — [src/context/SiteDataContext.tsx](src/context/SiteDataContext.tsx)
 - `Result<T>` + RPC error extraction — [src/lib/audit/auditApi.ts](src/lib/audit/auditApi.ts)
-- Drawer pattern (`useOverlay` + `useSwipeDismiss`) — [src/components/dashboard/sotr/SourceTruthDrawer.tsx](src/components/dashboard/sotr/SourceTruthDrawer.tsx)
+- Drawer pattern (`useOverlay` + `useSwipeDismiss`) — [src/components/sotr/SourceTruthDrawer.tsx](src/components/sotr/SourceTruthDrawer.tsx)
