@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: Audit Mode approval-latch follow-ups (questionnaire lock + risk-link demote)
-status: active
+status: merged
+merged: 2026-08-27
 started: 2026-08-26
-target_pr:
+target_pr: #539
 ---
 
 # Audit Mode approval-latch follow-ups
