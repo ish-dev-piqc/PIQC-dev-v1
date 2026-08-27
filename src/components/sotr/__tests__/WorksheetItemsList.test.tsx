@@ -103,4 +103,20 @@ describe('WorksheetItemsList', () => {
     });
     expect(screen.getByText(/No worksheet items have been generated/)).toBeInTheDocument();
   });
+
+  it('renders emptyStateMessage instead of the default copy when provided', async () => {
+    mockList.mockResolvedValue([]);
+    render(
+      <WorksheetItemsList
+        studyId="study-1"
+        emptyStateMessage="Custom ownership-aware copy for this caller."
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sotr-list-empty')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Custom ownership-aware copy for this caller.')).toBeInTheDocument();
+    expect(screen.queryByText(/No worksheet items have been generated/)).toBeNull();
+  });
 });

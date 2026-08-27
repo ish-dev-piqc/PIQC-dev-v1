@@ -1,7 +1,8 @@
 // Single-source-of-truth check: the two approval gates, the advance decision,
 // and the blocked reason must come from the server's stage readout
 // (audit_mode_get_stage_readout via the shared stageReadouts store) — NOT be
-// re-derived locally from raw questionnaire/risk-summary objects.
+// re-derived locally from raw questionnaire/risk-summary objects. Also covers
+// the F-003 SOTR worksheet embed added to this stage.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useState } from 'react';
@@ -15,6 +16,8 @@ const mockAdvanceStage = vi.fn();
 let mockActiveAudit: {
   id: string;
   current_stage: string;
+  protocol_id: string;
+  protocol_code: string;
 } | null = null;
 let mockAdvanceStageError: string | null = null;
 vi.mock('../../../../../context/AuditContext', () => ({
@@ -75,6 +78,23 @@ vi.mock('../../../../../lib/audit/auditApi', () => ({
   getStageReadout: vi.fn(() => Promise.resolve(mockReadoutForFetch)),
 }));
 
+// Stub the SOTR embed: this suite only asserts the wiring (which studyId and
+// empty-state copy the workspace passes), not SOTR's own behavior.
+// NOTE: this path is relative to THIS test file (one level deeper than the
+// component), so it needs four ../ where the component's import has three.
+// A wrong level here doesn't error — vitest registers the mock under the
+// unresolved id and the REAL component renders, firing live network calls.
+vi.mock('../../../../sotr/WorksheetItemsList', () => ({
+  default: (props: { studyId: string; studyCode?: string | null; emptyStateMessage?: string }) => (
+    <div
+      data-testid="mock-worksheet-items-list"
+      data-study-id={props.studyId}
+      data-study-code={props.studyCode ?? ''}
+      data-empty-message={props.emptyStateMessage}
+    />
+  ),
+}));
+
 import ScopeReviewWorkspace from '../ScopeReviewWorkspace';
 
 const AUDIT_ID = 'audit-1';
@@ -106,6 +126,8 @@ describe('ScopeReviewWorkspace gate feed', () => {
     mockActiveAudit = {
       id: AUDIT_ID,
       current_stage: 'SCOPE_AND_RISK_REVIEW',
+      protocol_id: 'protocol-1',
+      protocol_code: 'PROTO-001',
     };
     mockAdvanceStageError = null;
     initialStageReadouts = {};
@@ -172,6 +194,8 @@ describe('ScopeReviewWorkspace gate feed', () => {
     mockActiveAudit = {
       id: AUDIT_ID,
       current_stage: 'QUESTIONNAIRE_REVIEW',
+      protocol_id: 'protocol-1',
+      protocol_code: 'PROTO-001',
     };
     mockReadoutForFetch = makeReadout({
       currentStage: 'QUESTIONNAIRE_REVIEW',
@@ -193,6 +217,23 @@ describe('ScopeReviewWorkspace gate feed', () => {
       ).toBeInTheDocument();
     });
     expect(advanceButton()).toBeDisabled();
+  });
+
+  it('embeds the SOTR worksheet keyed by protocol_id with ownership-aware empty copy', async () => {
+    mockReadoutForFetch = makeReadout();
+
+    render(<ScopeReviewWorkspace />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('mock-worksheet-items-list')).toBeInTheDocument();
+    });
+    const embed = screen.getByTestId('mock-worksheet-items-list');
+    // studyId must be the protocol UUID, never the audit id.
+    expect(embed.getAttribute('data-study-id')).toBe('protocol-1');
+    expect(embed.getAttribute('data-study-code')).toBe('PROTO-001');
+    expect(embed.getAttribute('data-empty-message')).toMatch(
+      /visible only to the account that uploaded/,
+    );
   });
 
   it('surfaces a refused advancement instead of staying silent', async () => {

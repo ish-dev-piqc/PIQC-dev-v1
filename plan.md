@@ -335,7 +335,8 @@ Each PR is independently reviewable. They merge in order into `sotr/base`. The d
 | Ingest patches | (1) passes Reducto citations through, (2) uploads PDF to bucket | `supabase/functions/ingest/index.ts` |
 | TypeScript wrappers | One per concern: read, review, PDF URL, export | `src/lib/sotr/*Api.ts` |
 | Mode-agnostic UI | 10 components in `src/components/sotr/` | `WorksheetItemsList`, `SourceTruthDrawer`, `ReviewActionBar`, `DownloadDraftPacketButton`, etc. |
-| Site Mode wiring | Single line added to ProtocolTab; Audit Mode wiring is an open question (see below) | `src/components/dashboard/site/ProtocolTab.tsx` |
+| Site Mode wiring | Single line added to ProtocolTab | `src/components/dashboard/site/ProtocolTab.tsx` |
+| Audit Mode wiring | Stage 4 (`ScopeReviewWorkspace`) embed, keyed by `protocol_id` — see S-002 / F-003 | `src/components/dashboard/audit/stages/ScopeReviewWorkspace.tsx` |
 | Tests | 90+ cases across 15 test files + smoke T13–T40 | `src/**/__tests__/`, `scripts/smoke-rpcs.sh` |
 | Docs | Architecture map + 10-item follow-ups list | `docs/sotr/architecture.md`, `docs/sotr/follow-ups.md` |
 
@@ -356,7 +357,7 @@ For each `sotr/pr-N` branch, the commit message documents acceptance criteria + 
 | ID | Question | Options | Recommendation |
 |---|---|---|---|
 | **S-001** | Should the embedded PDF viewer ship now or be a separate PR? | (a) build PR-8 with `react-pdf` + page jump now; (b) ship the stack as-is — "View cited page" opens a new tab; defer the viewer to a later sprint | **(b)** — the storage foundation is in place; the viewer is meaningful work and should not block the rest of the stack |
-| **S-002** | Audit Mode wiring of the SOTR drawer — when? | (a) include in this stack as PR-8; (b) defer to a dedicated PR after Audit Mode stage UX is reviewed | **(b)** — components are mode-agnostic by design; wiring is purely additive but each audit stage has its own context |
+| **S-002** | Audit Mode wiring of the SOTR drawer — when? | (a) include in this stack as PR-8; (b) defer to a dedicated PR after Audit Mode stage UX is reviewed | **Resolved (b), done 2026-08-26** — `WorksheetItemsList` embedded in Stage 4 (`ScopeReviewWorkspace`), keyed by `audits.protocol_id`. See F-003 in `docs/sotr/follow-ups.md`. |
 | **S-003** | Reducto coordinate system for highlights | unverified — top-left vs. bottom-left origin, points vs. normalized | upload a known protocol, inspect raw response, write the conversion helper, verify against viewer **before** rendering any highlights |
 | **S-004** | Backfill `documents.storage_path` for pre-PR-4 documents | (a) accept the gap and document; (b) re-ingest from source; (c) bulk-delete pre-PR-4 docs in dev/staging | dev-team call. Production: probably (a). Staging: probably (c) |
 | **S-005** | Review history display in the SOTR drawer | events are stored + exported; not yet shown in UI | low-priority follow-up — events are durable in DB and visible via the CSV |

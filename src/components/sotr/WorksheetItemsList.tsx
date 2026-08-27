@@ -17,6 +17,8 @@ interface Props {
   studyCode?: string | null;
   /** When provided, each row renders an "Attach" affordance for picker workflows. */
   onPick?: (item: ExtractedItemRecord) => void;
+  /** Overrides the default empty-state copy — e.g. Audit Mode's ownership-aware message. */
+  emptyStateMessage?: string;
 }
 
 const FIELD_TYPE_LABELS: Record<string, string> = {
@@ -30,7 +32,7 @@ const FIELD_TYPE_LABELS: Record<string, string> = {
   other:               'Other',
 };
 
-export default function WorksheetItemsList({ studyId, studyCode, onPick }: Props) {
+export default function WorksheetItemsList({ studyId, studyCode, onPick, emptyStateMessage }: Props) {
   const [items, setItems] = useState<ExtractedItemRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -119,9 +121,16 @@ export default function WorksheetItemsList({ studyId, studyCode, onPick }: Props
       )}
 
       {!loading && !error && items.length === 0 && (
-        <p className="px-5 py-8 text-center text-fg-sub text-sm leading-relaxed max-w-md mx-auto">
-          No worksheet items have been generated for this protocol yet. Upload
-          a protocol PDF to extract draft items.
+        <p
+          data-testid="sotr-list-empty"
+          className="px-5 py-8 text-center text-fg-sub text-sm leading-relaxed max-w-md mx-auto"
+        >
+          {emptyStateMessage ?? (
+            <>
+              No worksheet items have been generated for this protocol yet. Upload
+              a protocol PDF to extract draft items.
+            </>
+          )}
         </p>
       )}
 
