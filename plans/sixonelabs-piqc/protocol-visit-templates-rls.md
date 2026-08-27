@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: RLS on protocol_visit_templates (audit blocker B1)
-status: active
+status: merged
 started: 2026-07-20
 target_pr:
 ---

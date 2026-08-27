@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: Audit export-readiness integrity (audit Theme A + H4)
-status: active
+status: merged
 started: 2026-07-20
 target_pr:
 ---
