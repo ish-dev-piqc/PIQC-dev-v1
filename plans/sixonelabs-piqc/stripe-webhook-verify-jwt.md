@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: stripe-webhook verify_jwt=false (audit high D1)
-status: active
+status: merged
 started: 2026-07-20
 target_pr:
 ---

@@ -32,7 +32,11 @@ jobs:
           fail=0
           for domain in audit site sotr; do
             others=$(echo "audit site sotr" | tr ' ' '\n' | grep -v "^${domain}$" | tr '\n' '|' | sed 's/|$//')
-            for base in src/lib src/components/dashboard src/types; do
+            # SOTR components live at src/components/sotr (no dashboard/
+            # segment); audit/site live under src/components/dashboard/.
+            # Both bases are scanned — the [ -d ] guard skips whichever
+            # combination doesn't exist for a given domain.
+            for base in src/lib src/components src/components/dashboard src/types; do
               dir="${base}/${domain}"
               [ -d "$dir" ] || continue
               hits=$(grep -rnE "from ['\"][^'\"]*\b(${others})\b[^'\"]*['\"]" "$dir" 2>/dev/null \
