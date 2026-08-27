@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: F-003 — embed the SOTR protocol worksheet in Audit Mode Stage 4
-status: active
+status: merged
+merged: 2026-08-27
 started: 2026-08-26
-target_pr:
+target_pr: #543
 ---
 
 # SOTR protocol-worksheet embed in Audit Mode
