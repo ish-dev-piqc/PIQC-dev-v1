@@ -17,7 +17,7 @@
 ```text
 # SOTR — Ishika
 /src/lib/sotr/                    @ish-dev-piqc
-/src/components/dashboard/sotr/   @ish-dev-piqc
+/src/components/sotr/             @ish-dev-piqc
 /src/types/sotr/                  @ish-dev-piqc
 
 # Visit Execution Workspace — Ishika
