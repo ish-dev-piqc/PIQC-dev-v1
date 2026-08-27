@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: Audit stage-gate consolidation — single source of truth + non-silent advance failures
-status: active
+status: merged
+merged: 2026-08-27
 started: 2026-08-26
-target_pr:
+target_pr: #541
 ---
 
 # Audit stage-gate consolidation
