@@ -22,6 +22,7 @@ import {
 } from '../../../../lib/audit/vendorEnrichmentApi';
 import { fetchQuestionnaireBundle } from '../../../../lib/audit/questionnaireApi';
 import { fetchRiskSummary } from '../../../../lib/audit/riskSummaryApi';
+import { getStageReadout } from '../../../../lib/audit/auditApi';
 
 // =============================================================================
 // ScopeReviewWorkspace — SCOPE_AND_RISK_REVIEW stage center pane.
@@ -60,14 +61,16 @@ export default function ScopeReviewWorkspace() {
     let cancelled = false;
 
     void (async () => {
-      const [risks, service, mappings, trust, questionnaire, riskSummary] = await Promise.all([
-        fetchProtocolRisksForAudit(auditId),
-        fetchVendorService(auditId),
-        fetchServiceMappingsByAudit(auditId),
-        fetchTrustAssessment(auditId),
-        fetchQuestionnaireBundle(auditId),
-        fetchRiskSummary(auditId),
-      ]);
+      const [risks, service, mappings, trust, questionnaire, riskSummary, readout] =
+        await Promise.all([
+          fetchProtocolRisksForAudit(auditId),
+          fetchVendorService(auditId),
+          fetchServiceMappingsByAudit(auditId),
+          fetchTrustAssessment(auditId),
+          fetchQuestionnaireBundle(auditId),
+          fetchRiskSummary(auditId),
+          getStageReadout(auditId),
+        ]);
       if (cancelled) return;
       data.setProtocolRisks((prev) => ({ ...prev, [auditId]: risks }));
       data.setVendorServices((prev) => ({ ...prev, [auditId]: service }));
@@ -75,13 +78,16 @@ export default function ScopeReviewWorkspace() {
       data.setTrustAssessments((prev) => ({ ...prev, [auditId]: trust }));
       data.setQuestionnaires((prev) => ({ ...prev, [auditId]: questionnaire }));
       data.setRiskSummaries((prev) => ({ ...prev, [auditId]: riskSummary }));
+      data.setStageReadouts((prev) => ({ ...prev, [auditId]: readout }));
     })();
 
     return () => {
       cancelled = true;
     };
+    // current_stage is a dep so the readout refreshes after this audit
+    // advances (its canAdvance/blockedReason are stage-relative).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAudit?.id]);
+  }, [activeAudit?.id, activeAudit?.current_stage]);
 
   if (!activeAudit) return null;
 
@@ -90,20 +96,32 @@ export default function ScopeReviewWorkspace() {
   const vendorService = data.vendorServices[auditId] ?? null;
   const mappings = data.serviceMappings[auditId] ?? [];
   const trustAssessment = data.trustAssessments[auditId] ?? null;
-  const questionnaire = data.questionnaires[auditId] ?? null;
-  const riskSummary = data.riskSummaries[auditId] ?? null;
-
-  // Gate signals
-  const questionnaireApproved = !!questionnaire?.instance.approved_at;
-  const riskSummaryApproved = riskSummary?.approval_status === 'APPROVED';
-  const canAdvance = questionnaireApproved && riskSummaryApproved;
-  const blockedReason = !questionnaireApproved && !riskSummaryApproved
-    ? 'Approve the questionnaire and risk summary before advancing.'
-    : !questionnaireApproved
-    ? 'Approve the questionnaire in Stage 3 before advancing.'
-    : !riskSummaryApproved
-    ? 'Approve the risk summary in the right-hand panel before advancing.'
-    : null;
+  // Gate signals — read from the server's stage readout (single source of
+  // truth), not re-derived from the raw questionnaire/risk-summary stores
+  // above. Those stores can disagree with the server (e.g. after a CAS
+  // rejection elsewhere), so trusting them here would risk showing "ready to
+  // advance" when the RPC would actually refuse. Fails closed when the
+  // readout hasn't loaded yet.
+  //
+  // The readout's canAdvance/blockedReason describe the audit's CURRENT
+  // stage transition. StageNav lets the auditor preview one stage ahead, so
+  // this pane can be mounted while the audit is still at QUESTIONNAIRE_REVIEW
+  // — where the RPC reports the ungated Stage 3→4 transition (canAdvance
+  // TRUE). Trusting that here would enable a +2 jump the server refuses, so
+  // those two fields are only used when the audit is actually at this stage.
+  // The two approval booleans are stage-independent and safe either way.
+  const stageReadout = data.stageReadouts[auditId] ?? null;
+  const readoutAtThisStage =
+    stageReadout !== null && stageReadout.currentStage === 'SCOPE_AND_RISK_REVIEW';
+  const questionnaireApproved = stageReadout?.questionnaireApproved ?? false;
+  const riskSummaryApproved = stageReadout?.riskSummaryApproved ?? false;
+  const canAdvance = readoutAtThisStage && stageReadout.canAdvance;
+  const blockedReason =
+    stageReadout === null
+      ? 'Gate status unavailable — reload to retry.'
+      : !readoutAtThisStage
+      ? 'The audit has not reached this stage yet — advance from its current stage first.'
+      : stageReadout.blockedReason;
 
   const alreadyAdvanced = activeAudit.current_stage !== 'SCOPE_AND_RISK_REVIEW' &&
     ['PRE_AUDIT_DRAFTING', 'AUDIT_CONDUCT', 'REPORT_DRAFTING', 'FINAL_REVIEW_EXPORT'].includes(activeAudit.current_stage);
