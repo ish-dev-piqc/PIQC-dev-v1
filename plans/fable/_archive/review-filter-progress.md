@@ -1,9 +1,10 @@
 ---
 owner: fable-dev-piqc
 feature: review-filter-progress
-status: in-review
+status: merged
+merged: 2026-07-06
 started: 2026-07-05
-target_pr:
+target_pr: #439
 ---
 
 # Review-loop efficiency — panel filter + progress
