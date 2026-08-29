@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: security-fixes-enterprise-access
-status: active
+status: merged
+merged: 2026-07-07
 started: 2026-07-07
-target_pr:
+target_pr: #479
 ---
 
 # Security remediation — SEC-ebc361e-enterprise-access findings
