@@ -1,9 +1,10 @@
 ---
 owner: fable-dev-piqc
 feature: protocol-awareness-layer
-status: in-review
+status: merged
+merged: 2026-07-09
 started: 2026-07-08
-target_pr:
+target_pr: #488
 ---
 
 # Protocol Awareness Layer (v1) — "What PIQC noticed"
