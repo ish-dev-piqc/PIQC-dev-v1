@@ -1,9 +1,10 @@
 ---
 owner: fable-dev-piqc
 feature: sponsor-ask
-status: in-review
+status: merged
+merged: 2026-07-07
 started: 2026-07-07
-target_pr:
+target_pr: #464
 ---
 
 # Sponsor Ask — protocol assistant in the Sponsor surface
