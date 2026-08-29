@@ -1,10 +1,11 @@
 ---
 owner: fable
 feature: living-protocol-s1-taxonomy
-status: active
+status: merged
+merged: 2026-07-19
 started: 2026-07-09
 branch: fable/living-protocol
-target_pr:
+target_pr: #496
 approved_by: "@rv61 (supabase/ migration)"
 ---
 
