@@ -211,3 +211,8 @@ export type TrackedObjectType =
   | 'REPORT_DRAFT_OBJECT'
   | 'ISSUE_OBJECT'
   | 'CAPA_OBJECT';
+
+// 1:1 with Postgres document_kind (20260830000000_audit_evidence_register.sql).
+// PROTOCOL is the default for every pre-existing row; AUDIT_EVIDENCE rows are
+// paste-ingested for the audit evidence register and never carry a protocol_id.
+export type DocumentKind = 'PROTOCOL' | 'AUDIT_EVIDENCE';

@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useAudit } from '../../../context/AuditContext';
 import type { AuditStage, AuditWorkflowType } from '../../../types/audit';
 import { STAGE_LABELS, AUDIT_TYPE_LABELS, AUDIT_STATUS_LABELS } from '../../../lib/audit/labels';
-import { ChevronDown, Sparkles, FileSearch, Plus, GitBranch, AlertOctagon } from 'lucide-react';
+import { ChevronDown, Sparkles, FileSearch, Plus, GitBranch, AlertOctagon, Paperclip } from 'lucide-react';
 import StageNav from './StageNav';
 import AuditRequiredGate from './AuditRequiredGate';
 import RiskSummaryPanel from './RiskSummaryPanel';
@@ -11,6 +11,8 @@ import SourceTruthListDrawer from '../../sotr/SourceTruthListDrawer';
 import NewAuditDrawer from './onboarding/NewAuditDrawer';
 import TraceabilityDrawer from './TraceabilityDrawer';
 import IssuesCapaDrawer from './IssuesCapaDrawer';
+import EvidenceDrawer from './EvidenceDrawer';
+import { EvidenceOpenContext } from './evidenceDrawerContext';
 import AuditChatPanel from './AuditChatPanel';
 import PiqcDock from './PiqcDock';
 import type { AuditChatMessage } from '../../../lib/audit/chatApi';
@@ -94,6 +96,12 @@ export default function AuditWorkspaceShell() {
   // through review to export. Cross-stage: issues surface during conduct
   // (Stage 6) but CAPAs are accepted/exported around Stages 7–8.
   const [issuesCapaOpen, setIssuesCapaOpen] = useState(false);
+  // Source evidence slide-over — the audit's evidence register. Cross-stage:
+  // evidence (most importantly the vendor's returned questionnaire file)
+  // arrives by email at any stage and gets filed the moment it lands.
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
+  // Stable identity: handed to stage workspaces via EvidenceOpenContext.
+  const openEvidence = useCallback(() => setEvidenceOpen(true), []);
   // New-audit drawer — reachable from the header on any stage so returning
   // auditors can start a new audit without leaving the workspace.
   const [newAuditOpen, setNewAuditOpen] = useState(false);
@@ -163,6 +171,7 @@ export default function AuditWorkspaceShell() {
     setProtocolSourceOpen(false);
     setTraceabilityOpen(false);
     setIssuesCapaOpen(false);
+    setEvidenceOpen(false);
     setChatOpen(false);
     setChatThreads((prev) => {
       if (!activeAudit) return {};
@@ -252,11 +261,13 @@ export default function AuditWorkspaceShell() {
                 </span>
               </p>
             </div>
-            {/* flex-wrap: five labeled buttons overflow below md — wrapping
-                beats clipping and keeps every label legible. This row is at
-                its ceiling; grouping the record surfaces (Protocol source /
-                Traceability / Issues & CAPA) is flagged decision-debt in
-                plans/sixonelabs-piqc/audit-issue-capa.md. */}
+            {/* flex-wrap: six labeled buttons overflow below md — wrapping
+                beats clipping and keeps every label legible. The Evidence
+                button pushed this row PAST its documented ceiling: the
+                grouping pass over the record surfaces (Protocol source /
+                Traceability / Issues & CAPA / Evidence) flagged in
+                plans/sixonelabs-piqc/audit-issue-capa.md is now due as its
+                own follow-up PR. */}
             <div className="flex items-center gap-2 flex-wrap justify-end flex-shrink-0 self-start">
               {/* Mobile-only stage picker — replaces the StageNav rail below md: */}
               <MobileStagePicker
@@ -352,6 +363,23 @@ export default function AuditWorkspaceShell() {
                 <AlertOctagon size={12} />
                 Issues &amp; CAPA
               </button>
+              {/* Evidence — the audit's source evidence register. Peer of the
+                  other record surfaces: evidence files arrive by email at any
+                  stage and get filed here the moment they land. */}
+              <button
+                type="button"
+                onClick={() => setEvidenceOpen(true)}
+                title="Attach and manage source evidence for this audit"
+                data-testid="audit-evidence-button"
+                className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors ${
+                  isLight
+                    ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+                    : 'bg-[#0F172A] border-white/[0.08] text-[#CBD5E1] hover:bg-white/[0.04]'
+                }`}
+              >
+                <Paperclip size={12} />
+                Evidence
+              </button>
               {/* PIQC is summoned from the PiqcDock (bottom-right). The old
                   header "Ask" button was deliberately removed in the rename +
                   skin pass: two summon paths = cognitive load violation, and
@@ -385,12 +413,15 @@ export default function AuditWorkspaceShell() {
             classification grid, ReportDrafting two-column editor) would
             force the auditor to scroll past the dock to read content. */}
         <div className="flex-1 overflow-y-auto pb-20" style={{ minHeight: 0 }}>
+          <EvidenceOpenContext.Provider value={openEvidence}>
           {(() => {
             // REPORT_DRAFTING is specialized so the shell can hand it the
             // transient PIQC write-back landing notice. Every other stage
-            // dispatches through the no-props record below. If a second
-            // stage ever needs shell-injected state, hoist this into a
-            // dedicated context rather than growing the if-ladder.
+            // dispatches through the no-props record below. Further
+            // shell-injected state goes through a dedicated context, never
+            // by growing this if-ladder — EvidenceOpenContext (wrapping this
+            // dispatch) is the pattern to copy. Migrating landingNotice into
+            // a context of its own is deliberately out of scope here.
             if (activeAudit.workflow_type === 'VENDOR_AUDIT' && viewedStage === 'REPORT_DRAFTING') {
               return (
                 <ReportDraftingWorkspace
@@ -407,6 +438,7 @@ export default function AuditWorkspaceShell() {
             }
             return <Workspace />;
           })()}
+          </EvidenceOpenContext.Provider>
         </div>
       </main>
 
@@ -456,6 +488,14 @@ export default function AuditWorkspaceShell() {
         <IssuesCapaDrawer
           audit={activeAudit}
           onClose={() => setIssuesCapaOpen(false)}
+        />
+      )}
+
+      {/* Evidence drawer — the audit's source evidence register. */}
+      {evidenceOpen && (
+        <EvidenceDrawer
+          audit={activeAudit}
+          onClose={() => setEvidenceOpen(false)}
         />
       )}
 

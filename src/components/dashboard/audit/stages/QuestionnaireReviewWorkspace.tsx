@@ -39,6 +39,7 @@ import type {
   ResponseSource,
 } from '../../../../types/audit';
 import HistoryDrawer from '../HistoryDrawer';
+import { useOpenEvidence } from '../evidenceDrawerContext';
 
 // =============================================================================
 // QuestionnaireReviewWorkspace — QUESTIONNAIRE_REVIEW stage center pane.
@@ -95,6 +96,8 @@ export default function QuestionnaireReviewWorkspace() {
   const { questionnaires: bundles, setQuestionnaires: setBundles, setStageReadouts } =
     useAuditData();
   const [historyOpen, setHistoryOpen] = useState(false);
+  // Audit-level evidence drawer opener (null when no shell provider above).
+  const openEvidence = useOpenEvidence();
 
   useEffect(() => {
     if (!activeAudit) return;
@@ -400,6 +403,25 @@ export default function QuestionnaireReviewWorkspace() {
           Pre-fill from public research, generate service-specific addenda, send to vendor for
           the remaining items, then review and approve.
         </p>
+        {/* Evidence invitation — this is where the auditor sits when the
+            vendor's completed questionnaire lands as an email attachment.
+            The FILE is provenance + grounding; the structured questionnaire
+            below stays the workflow source of truth. */}
+        {openEvidence && (
+          <p className={`${subColor} text-xs mt-1.5`}>
+            Vendor returned the questionnaire as a file?{' '}
+            <button
+              type="button"
+              onClick={openEvidence}
+              data-testid="stage3-evidence-line"
+              className={`underline underline-offset-2 font-medium ${
+                isLight ? 'text-brand-600 hover:text-brand-800' : 'text-brand-300 hover:text-brand-700'
+              }`}
+            >
+              Attach it as evidence
+            </button>
+          </p>
+        )}
       </div>
 
       {/* Lifecycle stepper + counts */}

@@ -21,6 +21,7 @@ Auditors receive source evidence — most importantly the vendor's completed que
 - src/lib/audit/evidenceApi.ts (new)
 - src/lib/audit/__tests__/evidenceApi.test.ts (new)
 - src/components/dashboard/audit/EvidenceDrawer.tsx (new)
+- src/components/dashboard/audit/evidenceDrawerContext.ts (new — the shell's dispatch comment forbids growing the REPORT_DRAFTING if-ladder for shell-injected state and prescribes a dedicated context; this is that hoist, audit-mode-internal)
 - src/components/dashboard/audit/__tests__/EvidenceDrawer.test.tsx (new)
 - src/components/dashboard/audit/AuditWorkspaceShell.tsx (6th header button, drawer mount, onOpenEvidence prop)
 - src/components/dashboard/audit/stages/PreAuditDraftingWorkspace.tsx (evidence summary chip)
