@@ -76,6 +76,10 @@ export default function FinalReviewExportWorkspace() {
     if (!activeAudit?.id) return;
     const id = activeAudit.id;
     let cancelled = false;
+    // Reset before fetching: a lingering verdict from the PREVIOUS audit must
+    // never show under a new one (slow or failed fetch would otherwise leave
+    // it standing — a false verdict across audits).
+    setGroundingCurrency(null);
     void (async () => {
       try {
         const [bundle, register] = await Promise.all([
