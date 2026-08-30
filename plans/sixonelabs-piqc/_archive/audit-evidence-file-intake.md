@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: Evidence file intake (PR-B2) — .docx/.xlsx extraction into the paste flow
-status: in-review
+status: merged
+merged: 2026-08-30
 started: 2026-08-30
-target_pr:
+target_pr: #553
 ---
 
 # Evidence file intake (PR-B2)
