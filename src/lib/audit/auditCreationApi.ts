@@ -77,6 +77,7 @@ export interface AuditRow {
   protocol_id: string;
   protocol_version_id: string;
   scheduled_date: string | null;
+  scheduled_end_date: string | null;
   lead_auditor_id: string;
 }
 
@@ -336,6 +337,7 @@ export async function createAudit(input: {
   protocolVersionId: string;
   auditType: AuditType;
   scheduledDate?: string | null;
+  scheduledEndDate?: string | null; // null/absent = single-day audit
 }): Promise<Result<AuditRow>> {
   const { data, error } = await supabase.rpc('audit_mode_create_audit', {
     p_audit_name: input.auditName,
@@ -345,6 +347,7 @@ export async function createAudit(input: {
     p_scheduled_date: input.scheduledDate ?? null,
     p_workflow_type: input.workflowType,
     p_site_id: input.siteId ?? null,
+    p_scheduled_end_date: input.scheduledEndDate ?? null,
   });
   // Preserve the RPC's specific reason ("Protocol version % not found", auditee
   // mismatch, etc.) so the drawer can show it instead of a flat failure line.

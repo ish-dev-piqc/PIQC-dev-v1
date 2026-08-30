@@ -318,6 +318,66 @@ describe('NewAuditDrawer — orphan-document retry (PR #61)', () => {
   });
 });
 
+describe('NewAuditDrawer — scheduled window (PR-UX1)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockListVendors.mockResolvedValue({ ok: true, data: VENDORS });
+    mockListSites.mockResolvedValue({ ok: true, data: [] });
+    mockListLibrary.mockResolvedValue({ ok: true, data: [] });
+  });
+
+  // The two date inputs render in DOM order: scheduled date, then end date.
+  function dateInputs(): [HTMLInputElement, HTMLInputElement] {
+    const inputs = document.querySelectorAll('input[type="date"]');
+    return [inputs[0] as HTMLInputElement, inputs[1] as HTMLInputElement];
+  }
+
+  it('submits both dates; end date stays disabled until a start date exists', async () => {
+    mockUploadPdf.mockResolvedValueOnce({ document_id: 'doc-1' });
+    mockCreateProtocol.mockResolvedValueOnce({
+      id: 'pv-1',
+      protocol_id: 'protocol-1',
+      title: 'Test Protocol Title',
+    });
+    mockCreateAudit.mockResolvedValueOnce({ ok: true, data: { id: 'audit-1' } });
+
+    const user = userEvent.setup();
+    render(<NewAuditDrawer onClose={vi.fn()} onCreated={vi.fn()} />);
+    await fillRequiredFieldsForUploadFlow(user);
+
+    const [start, end] = dateInputs();
+    // End-without-start is rejected by the RPC; the UI never offers it.
+    expect(end).toBeDisabled();
+    fireEvent.change(start, { target: { value: '2026-09-15' } });
+    expect(end).not.toBeDisabled();
+    fireEvent.change(end, { target: { value: '2026-09-17' } });
+
+    await user.click(screen.getByRole('button', { name: /create audit/i }));
+
+    await waitFor(() => expect(mockCreateAudit).toHaveBeenCalledTimes(1));
+    expect(mockCreateAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scheduledDate: '2026-09-15',
+        scheduledEndDate: '2026-09-17',
+      }),
+    );
+  });
+
+  it('clearing the start date clears and re-disables the end date', async () => {
+    const user = userEvent.setup();
+    render(<NewAuditDrawer onClose={vi.fn()} onCreated={vi.fn()} />);
+    await fillRequiredFieldsForUploadFlow(user);
+
+    const [start, end] = dateInputs();
+    fireEvent.change(start, { target: { value: '2026-09-15' } });
+    fireEvent.change(end, { target: { value: '2026-09-17' } });
+    fireEvent.change(start, { target: { value: '' } });
+
+    expect(end.value).toBe('');
+    expect(end).toBeDisabled();
+  });
+});
+
 describe('NewAuditDrawer — bootstrap load failure', () => {
   beforeEach(() => {
     vi.clearAllMocks();

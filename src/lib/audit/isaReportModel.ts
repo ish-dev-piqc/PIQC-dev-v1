@@ -43,7 +43,7 @@ export interface IsaReportMeta {
   protocolCode: string | null;
   protocolTitle: string | null;
   auditTypeLabel: string;
-  auditDate: string | null;   // scheduled_date, yyyy-mm-dd
+  auditDate: string | null;   // pre-formatted scheduled window ("Sep 15 – 17, 2026"); exports interpolate as-is
   generatedAt: Date;
 }
 

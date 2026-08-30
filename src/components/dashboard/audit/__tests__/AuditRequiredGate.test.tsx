@@ -50,6 +50,69 @@ beforeEach(() => {
   mockError = null;
 });
 
+// Local yyyy-mm-dd relative to today — mirrors the component's todayLocalIso
+// so these tests are date-independent.
+function isoDaysFromToday(offset: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  return d.toLocaleDateString('en-CA');
+}
+
+function makeAudit(overrides: Partial<AuditWithContext>): AuditWithContext {
+  return {
+    id: 'audit-1',
+    audit_name: 'Windowed audit',
+    audit_type: 'REMOTE',
+    workflow_type: 'VENDOR_AUDIT',
+    status: 'IN_PROGRESS',
+    current_stage: 'AUDIT_CONDUCT',
+    scheduled_date: null,
+    scheduled_end_date: null,
+    vendor_name: 'Acme CRO',
+    auditee_name: 'Acme CRO',
+    site_number: null,
+    principal_investigator: null,
+    site_country: null,
+    protocol_code: 'STU-1',
+    protocol_title: 'A study',
+    clinical_trial_phase: 'NOT_APPLICABLE',
+    protocol_id: 'protocol-1',
+    protocol_version_id: 'pv-1',
+    ...overrides,
+  };
+}
+
+describe('AuditRequiredGate — overdue respects the scheduled window (PR-UX1)', () => {
+  it('an in-window multi-day audit is NOT overdue', () => {
+    // Started yesterday, ends tomorrow — on schedule until the END date.
+    mockAudits = [
+      makeAudit({
+        scheduled_date: isoDaysFromToday(-1),
+        scheduled_end_date: isoDaysFromToday(1),
+      }),
+    ];
+    render(<AuditRequiredGate />);
+    expect(screen.queryByText(/Overdue/)).not.toBeInTheDocument();
+  });
+
+  it('an audit whose window has fully passed is overdue', () => {
+    mockAudits = [
+      makeAudit({
+        scheduled_date: isoDaysFromToday(-3),
+        scheduled_end_date: isoDaysFromToday(-1),
+      }),
+    ];
+    render(<AuditRequiredGate />);
+    expect(screen.getByText(/Overdue/)).toBeInTheDocument();
+  });
+
+  it('a past single-date audit (no end date) is still overdue', () => {
+    mockAudits = [makeAudit({ scheduled_date: isoDaysFromToday(-1) })];
+    render(<AuditRequiredGate />);
+    expect(screen.getByText(/Overdue/)).toBeInTheDocument();
+  });
+});
+
 describe('AuditRequiredGate — load error state', () => {
   it('renders the error message + a Retry control, and NOT the empty state', () => {
     mockError = 'boom';
