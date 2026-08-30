@@ -3,7 +3,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useAudit } from '../../../context/AuditContext';
 import type { AuditStage, AuditWorkflowType } from '../../../types/audit';
 import { STAGE_LABELS, AUDIT_TYPE_LABELS, AUDIT_STATUS_LABELS } from '../../../lib/audit/labels';
-import { ChevronDown, Sparkles, FileSearch, Plus, GitBranch, AlertOctagon, Paperclip } from 'lucide-react';
+import { ChevronDown, Sparkles, FileSearch, Plus, GitBranch, AlertOctagon, Paperclip, FolderOpen } from 'lucide-react';
 import StageNav from './StageNav';
 import AuditRequiredGate from './AuditRequiredGate';
 import RiskSummaryPanel from './RiskSummaryPanel';
@@ -102,6 +102,10 @@ export default function AuditWorkspaceShell() {
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   // Stable identity: handed to stage workspaces via EvidenceOpenContext.
   const openEvidence = useCallback(() => setEvidenceOpen(true), []);
+  // Records menu (header IA pass) — one dropdown for the four record
+  // surfaces. Transient UI: closes on selection, Escape, outside click,
+  // and audit switch.
+  const [recordsOpen, setRecordsOpen] = useState(false);
   // New-audit drawer — reachable from the header on any stage so returning
   // auditors can start a new audit without leaving the workspace.
   const [newAuditOpen, setNewAuditOpen] = useState(false);
@@ -172,6 +176,7 @@ export default function AuditWorkspaceShell() {
     setTraceabilityOpen(false);
     setIssuesCapaOpen(false);
     setEvidenceOpen(false);
+    setRecordsOpen(false);
     setChatOpen(false);
     setChatThreads((prev) => {
       if (!activeAudit) return {};
@@ -261,13 +266,12 @@ export default function AuditWorkspaceShell() {
                 </span>
               </p>
             </div>
-            {/* flex-wrap: six labeled buttons overflow below md — wrapping
-                beats clipping and keeps every label legible. The Evidence
-                button pushed this row PAST its documented ceiling: the
-                grouping pass over the record surfaces (Protocol source /
-                Traceability / Issues & CAPA / Evidence) flagged in
-                plans/sixonelabs-piqc/audit-issue-capa.md is now due as its
-                own follow-up PR. */}
+            {/* The grouping pass landed: the four record surfaces (Protocol
+                source / Traceability / Issues & CAPA / Evidence) live in the
+                Records dropdown, so the row is stage picker (mobile) ·
+                New audit · Records · Risk summary (xl-hidden, vendor).
+                flex-wrap kept for narrow viewports. A new always-on button
+                here should justify itself against the menu first. */}
             <div className="flex items-center gap-2 flex-wrap justify-end flex-shrink-0 self-start">
               {/* Mobile-only stage picker — replaces the StageNav rail below md: */}
               <MobileStagePicker
@@ -277,14 +281,9 @@ export default function AuditWorkspaceShell() {
                 onSelectStage={setViewedStage}
                 isLight={isLight}
               />
-              {/* Protocol source button — visible on every viewport.
-                  The auditor needs source-of-truth verification across all
-                  stages, not just where the right rail collapses.
-                  The `disabled` branch is defensive — audits.protocol_id is
-                  NOT NULL per schema (20260427120000_audit_mode_phase_1_schema),
-                  so this state is unreachable today. Kept as cheap insurance
-                  against future partial-fetch or data-migration failure modes;
-                  do not refactor away without revisiting the schema constraint. */}
+              {/* New-audit drawer trigger — reachable on any stage so
+                  returning auditors can start a new audit without leaving
+                  the workspace. */}
               <button
                 type="button"
                 onClick={() => setNewAuditOpen(true)}
@@ -298,88 +297,124 @@ export default function AuditWorkspaceShell() {
                 <Plus size={12} />
                 New audit
               </button>
-              {/* Protocol source — pure navigation affordance.
-                  Previously carried an amber review-queue badge that
-                  duplicated PIQC's dock dot (both surfaced the same SOTR
-                  backlog signal). The badge was retired in PR #77 so PIQC
-                  owns SOTR signaling exclusively — single intelligence
-                  surface, no double-amber-affordance violation of the
-                  cognitive-load doctrine.
-                  The SOTR count now flows through usePiqcSignals (which
-                  fetches the count itself) → dock dot + panel "Worth a
-                  look:" + "Take me there →" shortcut. Hover tooltip kept
-                  its always-on copy (no per-count branching) — hover is
-                  not a visual conflict with the dock. */}
-              <button
-                type="button"
-                onClick={() => setProtocolSourceOpen(true)}
-                disabled={!activeAudit.protocol_id}
-                title={
-                  activeAudit.protocol_id
-                    ? 'View what the parser extracted from the protocol PDF'
-                    : 'No protocol associated with this audit'
-                }
-                data-testid="audit-protocol-source-button"
-                className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                  isLight
-                    ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
-                    : 'bg-[#0F172A] border-white/[0.08] text-[#CBD5E1] hover:bg-white/[0.04]'
-                }`}
+              {/* Records — one dropdown for the four record surfaces (all
+                  answer "show me this audit's records/provenance"). Drawer
+                  state and mounts are unchanged — this is trigger-only IA.
+                  Lightweight local menu pattern: backdrop for outside click,
+                  wrapper Escape — deliberately NOT useOverlay (its scroll
+                  lock + focus trap are drawer semantics). */}
+              <div
+                className="relative flex-shrink-0"
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setRecordsOpen(false);
+                }}
               >
-                <FileSearch size={12} />
-                Protocol source
-              </button>
-              {/* Traceability — the audit's seed→tree lineage. Read-only
-                  provenance surface; peer of Protocol source (both answer
-                  "where did this come from?" — source text vs record lineage). */}
-              <button
-                type="button"
-                onClick={() => setTraceabilityOpen(true)}
-                title="Trace every record in this audit back to its seed"
-                data-testid="audit-traceability-button"
-                className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors ${
-                  isLight
-                    ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
-                    : 'bg-[#0F172A] border-white/[0.08] text-[#CBD5E1] hover:bg-white/[0.04]'
-                }`}
-              >
-                <GitBranch size={12} />
-                Traceability
-              </button>
-              {/* Issues & CAPA — the finding → issue → CAPA triage loop.
-                  Draft-only surface: Accepted = ready to export; formal
-                  finalization happens in the QMS. */}
-              <button
-                type="button"
-                onClick={() => setIssuesCapaOpen(true)}
-                title="Triage findings into issues and draft CAPAs for review"
-                data-testid="audit-issues-capa-button"
-                className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors ${
-                  isLight
-                    ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
-                    : 'bg-[#0F172A] border-white/[0.08] text-[#CBD5E1] hover:bg-white/[0.04]'
-                }`}
-              >
-                <AlertOctagon size={12} />
-                Issues &amp; CAPA
-              </button>
-              {/* Evidence — the audit's source evidence register. Peer of the
-                  other record surfaces: evidence files arrive by email at any
-                  stage and get filed here the moment they land. */}
-              <button
-                type="button"
-                onClick={() => setEvidenceOpen(true)}
-                title="Attach and manage source evidence for this audit"
-                data-testid="audit-evidence-button"
-                className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors ${
-                  isLight
-                    ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
-                    : 'bg-[#0F172A] border-white/[0.08] text-[#CBD5E1] hover:bg-white/[0.04]'
-                }`}
-              >
-                <Paperclip size={12} />
-                Evidence
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setRecordsOpen((o) => !o)}
+                  aria-haspopup="menu"
+                  aria-expanded={recordsOpen}
+                  title="Protocol source, traceability, issues & CAPA, evidence"
+                  data-testid="audit-records-button"
+                  className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors ${
+                    isLight
+                      ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+                      : 'bg-[#0F172A] border-white/[0.08] text-[#CBD5E1] hover:bg-white/[0.04]'
+                  }`}
+                >
+                  <FolderOpen size={12} />
+                  Records
+                  <ChevronDown size={12} className={recordsOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
+                </button>
+                {recordsOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setRecordsOpen(false)} />
+                    <div
+                      role="menu"
+                      aria-label="Audit records"
+                      className={`absolute right-0 top-full mt-1 z-40 w-60 rounded-lg border shadow-lg py-1 ${
+                        isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/10'
+                      }`}
+                    >
+                      {/* Protocol source — the `disabled` branch is defensive:
+                          audits.protocol_id is NOT NULL per schema
+                          (20260427120000), so this state is unreachable today.
+                          Kept as cheap insurance, same as the button it
+                          replaces — do not refactor away without revisiting
+                          the schema constraint. */}
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={!activeAudit.protocol_id}
+                        onClick={() => {
+                          setRecordsOpen(false);
+                          setProtocolSourceOpen(true);
+                        }}
+                        title={
+                          activeAudit.protocol_id
+                            ? 'View what the parser extracted from the protocol PDF'
+                            : 'No protocol associated with this audit'
+                        }
+                        data-testid="audit-protocol-source-button"
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                          isLight ? 'text-[#334155] hover:bg-[#F8FAFC]' : 'text-[#CBD5E1] hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <FileSearch size={12} />
+                        Protocol source
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setRecordsOpen(false);
+                          setTraceabilityOpen(true);
+                        }}
+                        title="Trace every record in this audit back to its seed"
+                        data-testid="audit-traceability-button"
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-left transition-colors ${
+                          isLight ? 'text-[#334155] hover:bg-[#F8FAFC]' : 'text-[#CBD5E1] hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <GitBranch size={12} />
+                        Traceability
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setRecordsOpen(false);
+                          setIssuesCapaOpen(true);
+                        }}
+                        title="Triage findings into issues and draft CAPAs for review"
+                        data-testid="audit-issues-capa-button"
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-left transition-colors ${
+                          isLight ? 'text-[#334155] hover:bg-[#F8FAFC]' : 'text-[#CBD5E1] hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <AlertOctagon size={12} />
+                        Issues &amp; CAPA
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setRecordsOpen(false);
+                          setEvidenceOpen(true);
+                        }}
+                        title="Attach and manage source evidence for this audit"
+                        data-testid="audit-evidence-button"
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-left transition-colors ${
+                          isLight ? 'text-[#334155] hover:bg-[#F8FAFC]' : 'text-[#CBD5E1] hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <Paperclip size={12} />
+                        Evidence
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
               {/* PIQC is summoned from the PiqcDock (bottom-right). The old
                   header "Ask" button was deliberately removed in the rename +
                   skin pass: two summon paths = cognitive load violation, and
