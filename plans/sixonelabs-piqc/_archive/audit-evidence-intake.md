@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: Audit evidence intake (PR-B) — audit-level source evidence register, text/paste slice
-status: in-review
+status: merged
+merged: 2026-08-30
 started: 2026-08-30
-target_pr:
+target_pr: #545
 ---
 
 # Audit evidence intake (PR-B)
