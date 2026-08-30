@@ -26,6 +26,7 @@ The evidence register (PR-B, #545) is inert until generation grounds in it. PR-C
 - src/lib/audit/mockPreAudit.ts (MockChecklist: three optional generation fields)
 - src/lib/audit/preAuditApi.ts (DeliverableRow + flattenChecklist pass-through of the three new columns ONLY — templated prefill logic untouched)
 - src/lib/audit/__tests__/isaProtocolCandidates.test.ts (import path follows the protocolCandidates.ts move)
+- src/lib/audit/__tests__/isaFindingGates.test.ts (same — import path only)
 - plans/sixonelabs-piqc/audit-checklist-grounded-generation.md (this file)
 - plans/sixonelabs-piqc/_archive/* (step-0 hygiene: 5 provably-merged plans moved; audit-evidence-intake.md deliberately left for the archive bot)
 
