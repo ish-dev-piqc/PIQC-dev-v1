@@ -5,6 +5,7 @@ import type { AuditWithContext } from '../../../context/AuditContext';
 import { useOverlay } from '../../../hooks/useOverlay';
 import type { AuditEvidenceListRow } from '../../../types/audit';
 import {
+  extractEvidenceFile,
   ingestAuditEvidence,
   listAuditEvidence,
   removeAuditEvidence,
@@ -328,12 +329,35 @@ function AddEvidenceForm({
   const [title, setTitle] = useState('');
   const [locator, setLocator] = useState('');
   const [content, setContent] = useState('');
+  // File extraction (PR-B2): the picked file's text lands in the textarea
+  // below for review — attach still goes through the same paste flow.
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const [extractWarnings, setExtractWarnings] = useState<string[]>([]);
+
+  const onPickFile = async (file: File | null) => {
+    if (!file) return;
+    setExtracting(true);
+    setExtractError(null);
+    setExtractWarnings([]);
+    const res = await extractEvidenceFile(file);
+    setExtracting(false);
+    if (!res.ok) {
+      setExtractError(res.error);
+      return;
+    }
+    setContent(res.data.text);
+    setExtractWarnings(res.data.warnings);
+    // Suggest a title from the filename only while the auditor hasn't set one.
+    const stem = file.name.replace(/\.(docx|xlsx)$/i, '');
+    setTitle((t) => (t.trim() === '' || SOURCE_TYPE_PRESETS.includes(t) ? stem : t));
+  };
 
   const labelCls = 'text-fg-label text-[10px] uppercase tracking-wider font-semibold';
   const inputCls = `w-full text-sm rounded-md border px-2.5 py-1.5 outline-none transition-colors text-fg-body ${inputStyles}`;
   const chipBase = 'text-xs font-medium px-2 py-1 rounded-full border transition-colors';
   const canSubmit =
-    !busy && sourceType.trim().length > 0 && content.trim().length > 0;
+    !busy && !extracting && sourceType.trim().length > 0 && content.trim().length > 0;
 
   return (
     <div className={`${cardBg} border rounded-xl px-4 py-4 space-y-3`}>
@@ -398,12 +422,43 @@ function AddEvidenceForm({
       </div>
 
       <div className="space-y-1.5">
+        <p className={labelCls}>Attach the file (Word / Excel)</p>
+        <input
+          type="file"
+          accept=".docx,.xlsx"
+          disabled={busy || extracting}
+          aria-label="Evidence file"
+          onChange={(e) => {
+            void onPickFile(e.target.files?.[0] ?? null);
+            // Allow re-picking the same file after a failure.
+            e.target.value = '';
+          }}
+          className={`w-full text-xs ${isLight ? 'text-[#334155]' : 'text-[#CBD5E1]'} file:mr-3 file:rounded-md file:border-0 file:px-2.5 file:py-1.5 file:text-xs file:font-semibold ${
+            isLight
+              ? 'file:bg-brand-600/10 file:text-brand-600'
+              : 'file:bg-brand-600/20 file:text-brand-300'
+          }`}
+        />
+        {extracting && (
+          <p className={`text-xs ${isLight ? 'text-[#334155]/70' : 'text-[#CBD5E1]/70'}`}>
+            Extracting the document text…
+          </p>
+        )}
+        {extractError && <p className="text-xs text-rose-500">{extractError}</p>}
+        {extractWarnings.map((w, i) => (
+          <p key={`${i}-${w}`} className={`text-xs ${isLight ? 'text-amber-700' : 'text-amber-300'}`}>
+            {w}
+          </p>
+        ))}
+      </div>
+
+      <div className="space-y-1.5">
         <p className={labelCls}>Document text</p>
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
           rows={8}
-          placeholder="Paste the document’s text here — open the Word/Excel file, select all, copy, paste. Direct file upload is coming."
+          placeholder="Attach a file above, or paste the document’s text here — review it before attaching."
           aria-label="Document text"
           className={`${inputCls} resize-y font-mono text-xs leading-relaxed`}
         />
