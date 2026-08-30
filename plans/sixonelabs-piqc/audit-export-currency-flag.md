@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: Export currency flag (PR-C3) — Stage-8 surfaces grounding drift for PIQC-drafted deliverables; flag, never block
-status: active
+status: in-review
 started: 2026-08-30
 target_pr:
 ---
