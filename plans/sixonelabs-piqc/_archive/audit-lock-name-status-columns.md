@@ -1,9 +1,9 @@
 ---
 owner: sixonelabs-piqc
 feature: Lock audits.audit_name + audits.status columns (V1 residue)
-status: in-review
+status: merged
 started: 2026-08-30
-target_pr:
+target_pr: 557
 ---
 
 # Lock audits.audit_name + audits.status columns (V1 residue)
