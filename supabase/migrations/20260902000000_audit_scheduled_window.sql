@@ -93,20 +93,19 @@ BEGIN
    WHERE id = p_audit_id
   RETURNING * INTO v_after;
 
-  -- Delta only when the window actually moved (Save with unchanged dates is a
-  -- no-op, not a history entry). ISO strings, en-dash joined — locale-free.
+  -- Delta when the window moved, and ALSO when a reason was given for an
+  -- unchanged window ("auditee confirmed proposed dates" is provenance the
+  -- auditor typed on purpose — dropping it silently would report success for
+  -- a record that was never written). A bare Save with unchanged dates and no
+  -- reason stays a true no-op. ISO strings, en-dash joined — locale-free;
+  -- concat_ws skips NULLs, and end-without-start is impossible (CHECK above).
   IF v_before.scheduled_date IS DISTINCT FROM v_after.scheduled_date
-     OR v_before.scheduled_end_date IS DISTINCT FROM v_after.scheduled_end_date THEN
-    v_window_before := CASE
-      WHEN v_before.scheduled_date IS NULL THEN NULL
-      WHEN v_before.scheduled_end_date IS NULL THEN v_before.scheduled_date::text
-      ELSE v_before.scheduled_date::text || ' – ' || v_before.scheduled_end_date::text
-    END;
-    v_window_after := CASE
-      WHEN v_after.scheduled_date IS NULL THEN NULL
-      WHEN v_after.scheduled_end_date IS NULL THEN v_after.scheduled_date::text
-      ELSE v_after.scheduled_date::text || ' – ' || v_after.scheduled_end_date::text
-    END;
+     OR v_before.scheduled_end_date IS DISTINCT FROM v_after.scheduled_end_date
+     OR (p_reason IS NOT NULL AND btrim(p_reason) <> '') THEN
+    v_window_before := NULLIF(concat_ws(' – ',
+      v_before.scheduled_date::text, v_before.scheduled_end_date::text), '');
+    v_window_after := NULLIF(concat_ws(' – ',
+      v_after.scheduled_date::text, v_after.scheduled_end_date::text), '');
 
     PERFORM audit_mode_write_delta(
       'AUDIT'::tracked_object_type,

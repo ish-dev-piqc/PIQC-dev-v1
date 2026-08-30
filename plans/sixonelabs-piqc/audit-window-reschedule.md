@@ -22,7 +22,7 @@ Because `'AUDIT'` deltas have no UI surface today (no `HistoryDrawer` mount uses
 
 ### New
 
-- supabase/migrations/20260831000000_audit_scheduled_window.sql
+- supabase/migrations/20260902000000_audit_scheduled_window.sql
 - src/lib/audit/dateWindow.ts
 - src/lib/audit/__tests__/dateWindow.test.ts
 - src/components/dashboard/audit/RescheduleAuditPopover.tsx
@@ -78,5 +78,6 @@ None. Real Supabase data only; existing rows are valid under the new CHECK witho
 ## Verification (expand before review)
 
 - CI green — **first execution of typecheck + tests + mechanical checks (no Node/tsc/vitest on the authoring machine)**.
+- **Deploy order is one-directional: apply migration 20260902000000 BEFORE deploying the frontend.** The context select and createAudit params name `scheduled_end_date`; a frontend deployed first takes all of Audit Mode down (missing column on every SELECT, PGRST202 on create). Migration-first is safe — old clients' 7 named args still resolve against the 8-param create RPC via the default.
 - Unit (new): `dateWindow` formatting (UTC `T00:00:00` anchor, cross-month, cross-year, null end, null start); `AuditRequiredGate` overdue respects `(end ?? start)`; `NewAuditDrawer` submits `scheduledEndDate`; popover save / end-before-start validation / clear-dates path.
 - E2E (user, after deploy — migration cannot execute locally): create audit with window → header date line shows range → reschedule via popover → delta visible under Records → Audit history → overdue chip respects end date → Stage-8 export renders the window → single-date and no-date audits unaffected → clearing dates records a delta.

@@ -62,11 +62,7 @@ describe('RescheduleAuditPopover', () => {
   });
 
   it('seeds from the audit, sends the edited window + reason, and closes on success', async () => {
-    mockReschedule.mockResolvedValueOnce({
-      ok: true,
-      scheduledDate: '2026-09-15',
-      scheduledEndDate: '2026-09-17',
-    });
+    mockReschedule.mockResolvedValueOnce({ ok: true });
     const onRescheduled = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();
     render(
@@ -116,7 +112,7 @@ describe('RescheduleAuditPopover', () => {
   });
 
   it('Clear dates empties both inputs; Save then records the cleared window', async () => {
-    mockReschedule.mockResolvedValueOnce({ ok: true, scheduledDate: null, scheduledEndDate: null });
+    mockReschedule.mockResolvedValueOnce({ ok: true });
     const user = userEvent.setup();
     render(
       <RescheduleAuditPopover

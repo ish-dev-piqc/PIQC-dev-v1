@@ -77,7 +77,10 @@ export default function RescheduleAuditPopover({ audit, isLight, onRescheduled }
     <div
       className="relative"
       onKeyDown={(e) => {
-        if (e.key === 'Escape') setOpen(false);
+        // Never close over an in-flight save — a failure landing in a closed
+        // popover would be silently lost and the user would believe the
+        // reschedule took.
+        if (e.key === 'Escape' && !saving) setOpen(false);
       }}
     >
       <button
@@ -95,7 +98,12 @@ export default function RescheduleAuditPopover({ audit, isLight, onRescheduled }
       </button>
       {open && (
         <>
-          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div
+            className="fixed inset-0 z-30"
+            onClick={() => {
+              if (!saving) setOpen(false);
+            }}
+          />
           <div
             role="dialog"
             aria-label="Reschedule audit"

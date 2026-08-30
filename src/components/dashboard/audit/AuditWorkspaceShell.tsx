@@ -182,6 +182,7 @@ export default function AuditWorkspaceShell() {
     setTraceabilityOpen(false);
     setIssuesCapaOpen(false);
     setEvidenceOpen(false);
+    setAuditHistoryOpen(false);
     setRecordsOpen(false);
     setChatOpen(false);
     setChatThreads((prev) => {

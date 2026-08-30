@@ -278,8 +278,9 @@ export default function AuditRequiredGate() {
                               : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
                           }`}>
                             <Clock size={10} />
-                            {/* The end date is the day it went overdue. */}
-                            Overdue{audit.scheduled_date ? ` · ${formatAuditDate(audit.scheduled_end_date ?? audit.scheduled_date)}` : ''}
+                            {/* The end date is the day it went overdue; isOverdue
+                                guarantees the window end is non-null here. */}
+                            Overdue · {formatAuditDate(audit.scheduled_end_date ?? audit.scheduled_date)}
                           </span>
                         ) : (
                           <span className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded border flex-shrink-0 ${statusTone('REVIEW')}`}>
