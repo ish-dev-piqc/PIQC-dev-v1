@@ -1,0 +1,41 @@
+-- =============================================================================
+-- Audit Mode — revoke the last client-writable audits columns
+-- (audit_name, status). Closes the residue of the V1 vulnerability class that
+-- 20260721000100 closed for current_stage.
+--
+-- 20260721000100 locked current_stage behind the SECURITY DEFINER advance RPC
+-- but re-granted UPDATE (audit_name, status, scheduled_date) to authenticated.
+-- 20260902000000 (PR-UX1) locked the scheduled columns behind
+-- audit_mode_reschedule_audit, restating the grant as (audit_name, status).
+-- That remaining grant is unused: nothing in src/ PATCHes audits — every
+-- .from('audits') call is a .select() — and every `UPDATE audits` statement in
+-- the repo lives inside a SECURITY DEFINER RPC (advance: 20260730000000;
+-- reschedule: 20260902000000). But status drives overdue logic and the
+-- REVIEW/CLOSED lifecycle, and a direct PATCH would leave no
+-- state_history_deltas row — the exact gap V1 described. Revoking now forces
+-- any future close-audit or rename feature through a delta-writing RPC by
+-- construction (product-owner decision 2026-08-30, over documenting the grant
+-- as intentionally client-writable). Zero breakage today.
+--
+-- SEQUENCING (critical): this migration must APPLY AFTER 20260902000000.
+-- That file re-grants UPDATE (audit_name, status) at apply time; applied after
+-- this revoke, it would silently re-open the hole. Merge this PR only after
+-- PR-UX1 (sixonelabs-piqc/audit-window-reschedule) has merged. If PR-UX1 is
+-- abandoned, this migration is still correct against 20260721000100's grant —
+-- the full revoke then also covers scheduled_date, which has no client writer
+-- on main either (written once at creation via audit_mode_create_audit).
+--
+-- Left in place deliberately:
+--   - RLS policy audits_update_lead_auditor (20260427120100): inert for
+--     authenticated once the privilege is gone; a future re-grant would want
+--     its row-scoping back. Dropping it is not the smallest safe change.
+--   - INSERT/SELECT/DELETE grants on audits: untouched.
+--   - service_role / postgres (seeds, ops): untouched — the REVOKE targets
+--     authenticated/anon only, same posture as 20260721000100.
+--
+-- No TS type impact: grants only — no table/column/enum/RPC-signature change.
+--
+-- Owner: @rv61.
+-- =============================================================================
+
+REVOKE UPDATE ON audits FROM authenticated, anon;
