@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: Deliverable generation fan-out (PR-C2) — agenda + confirmation letter join grounded generation; engine consolidated
-status: active
+status: in-review
 started: 2026-08-30
 target_pr:
 ---
@@ -17,6 +17,7 @@ C1 (#547) shipped grounded generation for the checklist. C2 fans out to the agen
 - supabase/migrations/20260901000000_audit_deliverable_generation_fanout.sql (new — generation columns on agenda_objects + confirmation_letter_objects; apply RPCs wrapping the existing upserts)
 - supabase/functions/audit-deliverable-draft/** (new — consolidated engine + per-deliverable config)
 - supabase/functions/audit-checklist-draft/** (DELETED — superseded; deploy note: `supabase functions delete audit-checklist-draft` if it was ever deployed)
+- supabase/functions/_shared/protocolCandidates.ts (comment-only: consumer rename after the consolidation; prompts.ts also imports its MAX_QUOTE_CHARS)
 - src/lib/audit/deliverableGenerationApi.ts (generalize: request/apply per deliverable; computeDeliverableCurrency rename)
 - src/lib/audit/__tests__/deliverableGenerationApi.test.ts (extend for the fan-out)
 - src/lib/audit/mockPreAudit.ts (agenda/letter generation fields; ChecklistGenerationRef → DeliverableGenerationRef rename ripple)
@@ -29,7 +30,7 @@ C1 (#547) shipped grounded generation for the checklist. C2 fans out to the agen
 ## Out of scope (files forbidden)
 
 - C3 export-readiness currency flag; readiness_fingerprint system
-- supabase/functions/isa-finding-draft/**, _shared/protocolCandidates.ts (consumed as-is), _shared/ingestPipeline.ts
+- supabase/functions/isa-finding-draft/**, _shared/ingestPipeline.ts
 - Checklist behavior changes beyond the endpoint switch (C1 semantics frozen)
 - Auto-regenerate (rejected); recipients/personnel names in any prompt
 - src/context/**
