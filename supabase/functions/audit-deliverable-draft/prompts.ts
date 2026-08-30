@@ -9,12 +9,12 @@
 //   - uncited general-practice content is allowed; fabricated specifics are not
 // =============================================================================
 
-const MAX_QUOTE_NOTE = 300; // keep in sync with protocolCandidates.MAX_QUOTE_CHARS
+import { MAX_QUOTE_CHARS } from "../_shared/protocolCandidates.ts";
 
 const SHARED_RULES = `
 GROUNDING:
 - PROTOCOL PASSAGES (labels P1..Pn) are excerpts of THIS study's protocol. EVIDENCE PASSAGES (labels E1..Em) are excerpts of documents the auditor filed for THIS audit.
-- When a passage states the requirement behind an entry, cite it: add {"passage":"<label>","quote":"<verbatim contiguous excerpt, max ${MAX_QUOTE_NOTE} characters>"} to that entry's "refs" (max 2).
+- When a passage states the requirement behind an entry, cite it: add {"passage":"<label>","quote":"<verbatim contiguous excerpt, max ${MAX_QUOTE_CHARS} characters>"} to that entry's "refs" (max 2).
 - Quotes must be copied EXACTLY from the labeled passage — no paraphrase, no stitching. A missing ref is normal; a wrong one is a serious error.
 - NEVER state a study-specific fact (a number, a schedule, a named procedure) unless a cited passage contains it. General GxP practice needs no ref.
 

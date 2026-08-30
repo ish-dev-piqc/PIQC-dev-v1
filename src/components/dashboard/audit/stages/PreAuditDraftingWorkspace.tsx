@@ -1162,9 +1162,14 @@ function DeliverableGenerationPanel({
         </div>
         <button
           type="button"
-          disabled={generating || editing}
+          // Editing blocks generation only when a persisted row exists
+          // (revise would overwrite unsaved edits). A never-saved create form
+          // doesn't block: on an empty deliverable — prefill gated off — the
+          // draft CTA is the whole point, and the click is an explicit choice
+          // to replace the scratch form.
+          disabled={generating || (editing && !!deliverable)}
           onClick={onGenerate}
-          title={editing ? 'Save or cancel your edits first — revising would overwrite them' : undefined}
+          title={editing && deliverable ? 'Save or cancel your edits first — revising would overwrite them' : undefined}
           data-testid={`${kind}-generate-button`}
           className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-md transition-colors flex-shrink-0 ${buttonPrimary}`}
         >

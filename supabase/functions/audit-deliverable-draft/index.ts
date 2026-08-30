@@ -658,6 +658,17 @@ Deno.serve(async (req: Request) => {
       gateRefs(it.refs, item.id);
       items.push(item);
     }
+    if (items.length === 0) {
+      // Never apply an empty item set: in revise mode it would wipe the
+      // auditor's persisted items on the strength of a garbage model reply
+      // (apply is automatic client-side — no human sits between proposal and
+      // apply). In generate mode an empty draft is useless anyway.
+      log("error", "audit_deliverable_draft.empty_items", {
+        request_id: requestId, deliverable: kind, mode,
+      });
+      return new Response(JSON.stringify({ error: "AI service returned an empty draft" }),
+        { status: 502, headers: jsonHeaders });
+    }
     contentPatch = { items };
     outCount = items.length;
   }
