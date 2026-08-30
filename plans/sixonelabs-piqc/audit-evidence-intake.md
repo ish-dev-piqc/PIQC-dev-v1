@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: Audit evidence intake (PR-B) — audit-level source evidence register, text/paste slice
-status: active
+status: in-review
 started: 2026-08-30
 target_pr:
 ---
@@ -29,6 +29,7 @@ Auditors receive source evidence — most importantly the vendor's completed que
 - src/types/audit/enums.ts (DocumentKind)
 - src/types/audit/objects.ts (AuditSourceDocument + list-row DTO)
 - plans/sixonelabs-piqc/audit-evidence-intake.md (this file)
+- plans/sixonelabs-piqc/_archive/audit-approval-latch-followups.md (step-0 housekeeping: archive of the provably-merged predecessor plan, moved + status flipped to merged)
 
 ## Out of scope (files forbidden)
 
