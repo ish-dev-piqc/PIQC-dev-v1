@@ -28,7 +28,7 @@ import {
   materializeRef,
   type ProtocolCandidate,
   type ProtocolRefSnapshot,
-} from "./protocolCandidates.ts";
+} from "../_shared/protocolCandidates.ts";
 
 const SEVERITIES = ["CRITICAL", "MAJOR", "MINOR", "RECOMMENDATION"] as const;
 export type IsaSeverityKey = (typeof SEVERITIES)[number];

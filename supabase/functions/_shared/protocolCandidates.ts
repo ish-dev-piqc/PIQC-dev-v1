@@ -1,5 +1,9 @@
 // =============================================================================
-// isa-finding-draft — protocol-passage candidates for the citation bridge.
+// Document-passage candidates for grounded generation (shared).
+//
+// Born in isa-finding-draft; moved to _shared/ when audit-checklist-draft
+// adopted the same citation bridge. The contract is generation-surface
+// agnostic:
 //
 // The model never sees chunk uuids and never composes provenance. It sees
 // passages labeled P1..Pn and may cite at most one per draft, with a VERBATIM
@@ -11,7 +15,8 @@
 //
 // Pure module — no Deno APIs. Unit tested from
 // src/lib/audit/__tests__/isaProtocolCandidates.test.ts (cross-tree, like
-// gates.ts).
+// isa-finding-draft's gates.ts). Consumers: isa-finding-draft (P-labels),
+// audit-checklist-draft (P- and E-labels via the labelPrefix arg).
 // =============================================================================
 
 export interface ProtocolChunkRow {
@@ -40,14 +45,14 @@ export interface ProtocolRefSnapshot {
 export const MAX_CANDIDATES = 14;
 export const MAX_QUOTE_CHARS = 300;
 
-/** Dedupe retrieval rows by chunk id and assign stable P-labels. */
-export function labelCandidates(rows: ProtocolChunkRow[]): ProtocolCandidate[] {
+/** Dedupe retrieval rows by chunk id and assign stable labels (P1.. by default). */
+export function labelCandidates(rows: ProtocolChunkRow[], prefix = "P"): ProtocolCandidate[] {
   const seen = new Set<string>();
   const out: ProtocolCandidate[] = [];
   for (const row of rows) {
     if (!row || typeof row.id !== "string" || seen.has(row.id)) continue;
     seen.add(row.id);
-    out.push({ ...row, label: `P${out.length + 1}` });
+    out.push({ ...row, label: `${prefix}${out.length + 1}` });
     if (out.length >= MAX_CANDIDATES) break;
   }
   return out;

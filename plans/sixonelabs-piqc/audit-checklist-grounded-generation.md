@@ -23,6 +23,9 @@ The evidence register (PR-B, #545) is inert until generation grounds in it. PR-C
 - src/components/dashboard/audit/stages/PreAuditDraftingWorkspace.tsx (ChecklistTab: Generate / currency notice / Revise with AI)
 - src/types/audit/objects.ts (GenerationRef, GroundingSnapshot, checklist row extension)
 - src/types/audit/enums.ts (only if a new enum is needed)
+- src/lib/audit/mockPreAudit.ts (MockChecklist: three optional generation fields)
+- src/lib/audit/preAuditApi.ts (DeliverableRow + flattenChecklist pass-through of the three new columns ONLY — templated prefill logic untouched)
+- src/lib/audit/__tests__/isaProtocolCandidates.test.ts (import path follows the protocolCandidates.ts move)
 - plans/sixonelabs-piqc/audit-checklist-grounded-generation.md (this file)
 - plans/sixonelabs-piqc/_archive/* (step-0 hygiene: 5 provably-merged plans moved; audit-evidence-intake.md deliberately left for the archive bot)
 
@@ -32,7 +35,7 @@ The evidence register (PR-B, #545) is inert until generation grounds in it. PR-C
 - supabase/functions/_shared/ingestPipeline.ts, soaGridParser (contested; untouched)
 - supabase/functions/isa-report-draft/**, audit-summary/** (parallel precedents, not dependencies)
 - src/context/** (currency notice is component-local set-diff via listAuditEvidence)
-- src/lib/audit/preAuditApi.ts (templated prefill stays as-is — generation is a separate, opt-in path)
+- preAuditApi.ts prefill/upsert/approve logic (only the row-mapper pass-through is in scope — generation is a separate, opt-in path)
 - Any auto-regenerate behavior (consciously rejected in the workflow Q&A)
 
 ## Architecture layers touched

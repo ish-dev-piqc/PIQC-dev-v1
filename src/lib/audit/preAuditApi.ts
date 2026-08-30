@@ -8,7 +8,11 @@ import type {
   MockConfirmationLetterContent,
   MockPreAuditBundle,
 } from './mockPreAudit';
-import type { DeliverableApprovalStatus } from '../../types/audit';
+import type {
+  ChecklistGenerationRef,
+  ChecklistGroundingSnapshot,
+  DeliverableApprovalStatus,
+} from '../../types/audit';
 
 // =============================================================================
 // Pre-Audit Drafting (Stage 5) API
@@ -33,6 +37,11 @@ interface DeliverableRow<TContent> {
   source_risk_summary_id?: string | null;
   source_questionnaire_instance_id?: string | null;
   prefilled_at?: string | null;
+  // Grounded-generation provenance (checklist only today) — see
+  // 20260831000000_audit_checklist_generation.sql.
+  generation_refs?: ChecklistGenerationRef[] | null;
+  grounding_snapshot?: ChecklistGroundingSnapshot | null;
+  generated_at?: string | null;
 }
 
 async function resolveApprovedByName(approvedBy: string | null): Promise<string | null> {
@@ -91,6 +100,9 @@ async function flattenChecklist(
     updated_at: row.updated_at,
     source_questionnaire_instance_id: row.source_questionnaire_instance_id ?? null,
     prefilled_at: row.prefilled_at ?? null,
+    generation_refs: row.generation_refs ?? null,
+    grounding_snapshot: row.grounding_snapshot ?? null,
+    generated_at: row.generated_at ?? null,
   };
 }
 

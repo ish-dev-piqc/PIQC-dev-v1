@@ -7,7 +7,7 @@ import {
   materializeRef,
   quoteInContent,
   type ProtocolChunkRow,
-} from '../../../../supabase/functions/isa-finding-draft/protocolCandidates';
+} from '../../../../supabase/functions/_shared/protocolCandidates';
 
 function row(id: string, content = `Content of ${id}.`): ProtocolChunkRow {
   return {

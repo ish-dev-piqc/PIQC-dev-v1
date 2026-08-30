@@ -36,6 +36,12 @@ import {
 } from '../../../../lib/audit/preAuditApi';
 import type { DeliverableApprovalStatus, TrackedObjectType } from '../../../../types/audit';
 import { listAuditEvidence } from '../../../../lib/audit/evidenceApi';
+import {
+  applyChecklistGeneration,
+  computeChecklistCurrency,
+  requestChecklistDraft,
+} from '../../../../lib/audit/deliverableGenerationApi';
+import type { AuditEvidenceListRow } from '../../../../types/audit';
 import { useOpenEvidence } from '../evidenceDrawerContext';
 import HistoryDrawer from '../HistoryDrawer';
 import PrefillAgentNote from '../PrefillAgentNote';
@@ -98,19 +104,28 @@ export default function PreAuditDraftingWorkspace() {
   // while the drawer is open (attach/remove happen there); it refreshes on
   // audit switch / remount, which is the cheap-and-honest v1 trade-off.
   const openEvidence = useOpenEvidence();
-  const [evidenceCount, setEvidenceCount] = useState<number | null>(null);
+  // Full rows, not just a count: the chip shows length, and the checklist
+  // currency notice set-diffs these against the grounding snapshot.
+  const [evidenceRows, setEvidenceRows] = useState<AuditEvidenceListRow[] | null>(null);
+  const evidenceCount = evidenceRows === null ? null : evidenceRows.length;
 
   useEffect(() => {
     if (!activeAudit) return;
     let cancelled = false;
     void listAuditEvidence(activeAudit.id).then((res) => {
-      if (!cancelled) setEvidenceCount(res.ok ? res.data.length : null);
+      if (!cancelled) setEvidenceRows(res.ok ? res.data : null);
     });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAudit?.id]);
+
+  // Grounded checklist generation (PR-C1). Human-triggered only — the Q&A
+  // consciously rejected auto-regenerate. Proposal lands as DRAFT through the
+  // apply RPC (demote latch intact), then the bundle refetches server truth.
+  const [generating, setGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   // Tracks audits whose prefill RPCs have already been attempted in this
   // session, so opening Stage 5 / switching tabs / re-rendering doesn't fire
@@ -172,6 +187,27 @@ export default function PreAuditDraftingWorkspace() {
   // ---------------------------------------------------------------------------
   const setBundle = (next: MockPreAuditBundle) => {
     setBundles((prev) => ({ ...prev, [auditId]: next }));
+  };
+
+  const runChecklistGeneration = async () => {
+    setGenerating(true);
+    setGenerationError(null);
+    const draft = await requestChecklistDraft(auditId);
+    if (!draft.ok) {
+      setGenerationError(draft.error);
+      setGenerating(false);
+      return;
+    }
+    const applied = await applyChecklistGeneration(auditId, draft.data);
+    if (!applied.ok) {
+      setGenerationError(applied.error);
+      setGenerating(false);
+      return;
+    }
+    // Refetch server truth — one mapper, one read path.
+    const fresh = await fetchPreAuditDeliverables(auditId);
+    setBundles((prev) => ({ ...prev, [auditId]: fresh }));
+    setGenerating(false);
   };
 
   // Approve rejected by the server's compare-and-swap (STALE_CONTENT): the
@@ -475,14 +511,24 @@ export default function PreAuditDraftingWorkspace() {
         />
       )}
       {activeTab === 'checklist' && (
-        <ChecklistTab
-          deliverable={bundle.checklist}
-          isLight={isLight}
-          onChange={(next) => {
-            setBundle({ ...bundle, checklist: next });
-            persistChecklist(bundle.checklist, next);
-          }}
-        />
+        <>
+          <ChecklistGenerationPanel
+            deliverable={bundle.checklist}
+            evidenceRows={evidenceRows}
+            generating={generating}
+            error={generationError}
+            isLight={isLight}
+            onGenerate={() => void runChecklistGeneration()}
+          />
+          <ChecklistTab
+            deliverable={bundle.checklist}
+            isLight={isLight}
+            onChange={(next) => {
+              setBundle({ ...bundle, checklist: next });
+              persistChecklist(bundle.checklist, next);
+            }}
+          />
+        </>
       )}
 
       {/* Stage advance */}
@@ -952,6 +998,125 @@ interface ChecklistTabProps {
   deliverable: MockChecklist | null;
   isLight: boolean;
   onChange: (next: MockChecklist | null) => void;
+}
+
+// ============================================================================
+// ChecklistGenerationPanel — grounded drafting controls + currency notice
+// (PR-C1). Renders above the checklist tab. Three states:
+//   never generated  → "Draft with PIQC" CTA (grounds in protocol + register)
+//   generated, current → quiet provenance line + Revise with AI
+//   generated, drifted → non-dismissable amber currency notice naming the
+//                        new/removed sources + Revise with AI. Flag, never
+//                        block: the auditor can approve and export regardless.
+// ============================================================================
+interface ChecklistGenerationPanelProps {
+  deliverable: MockChecklist | null;
+  evidenceRows: AuditEvidenceListRow[] | null;
+  generating: boolean;
+  error: string | null;
+  isLight: boolean;
+  onGenerate: () => void;
+}
+
+function ChecklistGenerationPanel({
+  deliverable,
+  evidenceRows,
+  generating,
+  error,
+  isLight,
+  onGenerate,
+}: ChecklistGenerationPanelProps) {
+  const subColor = 'text-fg-sub';
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
+  const buttonPrimary = isLight
+    ? 'bg-brand-600 text-white hover:bg-brand-800 disabled:bg-[#CBD5E1]'
+    : 'bg-brand-300 text-[#0F172A] hover:bg-brand-700 disabled:bg-white/10 disabled:text-white/35';
+
+  const hasGeneration = !!deliverable?.grounding_snapshot;
+  // No register data (fetch failed / still loading) → no currency verdict.
+  // Diffing against [] would falsely flag every grounded source as removed.
+  const currency = evidenceRows === null
+    ? null
+    : computeChecklistCurrency(deliverable?.grounding_snapshot, evidenceRows);
+  const refCount = deliverable?.generation_refs?.length ?? 0;
+  const isApproved = deliverable?.approval_status === 'APPROVED';
+  const evidenceCount = evidenceRows?.length ?? 0;
+
+  const buttonLabel = generating
+    ? hasGeneration ? 'Revising…' : 'Drafting…'
+    : hasGeneration ? 'Revise with AI' : 'Draft with PIQC';
+
+  return (
+    <div className={`${cardBg} border rounded-xl px-4 py-3 space-y-2`} data-testid="checklist-generation-panel">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          {hasGeneration ? (
+            <p className={`${subColor} text-xs`}>
+              <Sparkles size={11} className="inline mr-1 -mt-0.5" />
+              Drafted by PIQC
+              {deliverable?.generated_at
+                ? ` on ${new Date(deliverable.generated_at).toLocaleDateString()}`
+                : ''}
+              {' '}from the protocol and{' '}
+              {deliverable?.grounding_snapshot?.evidence.length ?? 0} evidence source
+              {(deliverable?.grounding_snapshot?.evidence.length ?? 0) === 1 ? '' : 's'}
+              {refCount > 0 ? ` · ${refCount} cited passage${refCount === 1 ? '' : 's'}` : ''}.
+              {' '}Every citation quotes its source verbatim — invalid ones are stripped, never repaired.
+            </p>
+          ) : (
+            <p className={`${subColor} text-xs`}>
+              PIQC can draft this checklist grounded in the protocol
+              {evidenceCount > 0
+                ? ` and the ${evidenceCount} attached evidence source${evidenceCount === 1 ? '' : 's'}`
+                : ''}
+              . It lands as a Draft for your review — nothing is approved for you.
+            </p>
+          )}
+          {isApproved && (
+            <p className={`${subColor} text-[11px] mt-1`}>
+              This checklist is Approved — revising returns it to Draft.
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          disabled={generating}
+          onClick={onGenerate}
+          data-testid="checklist-generate-button"
+          className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-md transition-colors flex-shrink-0 ${buttonPrimary}`}
+        >
+          <Sparkles size={12} />
+          {buttonLabel}
+        </button>
+      </div>
+
+      {currency && !currency.isCurrent && (
+        <div
+          data-testid="checklist-currency-notice"
+          className={`border rounded-md px-3 py-2 text-xs ${
+            isLight
+              ? 'bg-amber-50 border-amber-200 text-amber-700'
+              : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+          }`}
+        >
+          <span className="font-semibold">The evidence register has changed since this draft.</span>{' '}
+          {currency.newSinceGeneration.length > 0 && (
+            <>New: {currency.newSinceGeneration.map((d) => d.title).join(', ')}. </>
+          )}
+          {currency.removedSinceGeneration.length > 0 && (
+            <>Removed: {currency.removedSinceGeneration.map((d) => d.title).join(', ')}. </>
+          )}
+          Revise when you're ready — this never blocks approval or export.
+        </div>
+      )}
+
+      {error && (
+        <p className="text-xs text-rose-500">
+          {error} — your checklist is unchanged.
+        </p>
+      )}
+    </div>
+  );
 }
 
 function ChecklistTab({ deliverable, isLight, onChange }: ChecklistTabProps) {
