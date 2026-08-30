@@ -43,8 +43,10 @@ import {
 } from '../../../../lib/audit/deliverableGenerationApi';
 import type { AuditEvidenceListRow } from '../../../../types/audit';
 import { useOpenEvidence } from '../evidenceDrawerContext';
+import { hasReachedStage } from '../../../../lib/audit/workflowStages';
 import HistoryDrawer from '../HistoryDrawer';
 import PrefillAgentNote from '../PrefillAgentNote';
+import StagePreviewNotice from '../StagePreviewNotice';
 
 // =============================================================================
 // PreAuditDraftingWorkspace — PRE_AUDIT_DRAFTING stage center pane.
@@ -94,6 +96,13 @@ export default function PreAuditDraftingWorkspace() {
   const { theme } = useTheme();
   const { activeAudit, advanceStage, advanceStageError } = useAudit();
   const isLight = theme === 'light';
+
+  // One-ahead preview guard (UX2): Stage 5 is viewable while the audit is
+  // still at Stage 4. Reads render; the prefill RPCs, stub/LLM generation,
+  // and advance stay off until the stage is real.
+  const hasReached =
+    !!activeAudit &&
+    hasReachedStage(activeAudit.workflow_type, activeAudit.current_stage, 'PRE_AUDIT_DRAFTING');
 
   const { preAuditBundles: bundles, setPreAuditBundles: setBundles } = useAuditData();
   const [activeTab, setActiveTab] = useState<TabKey>('confirmation_letter');
@@ -164,7 +173,7 @@ export default function PreAuditDraftingWorkspace() {
         const allMissing =
           !initial.confirmation_letter && !initial.agenda && !initial.checklist;
 
-        if (allMissing && !attemptedPrefillRef.current.has(auditIdLocal)) {
+        if (allMissing && hasReached && !attemptedPrefillRef.current.has(auditIdLocal)) {
           attemptedPrefillRef.current.add(auditIdLocal);
           await prefillStage5Deliverables(auditIdLocal);
           const refreshed = await fetchPreAuditDeliverables(auditIdLocal);
@@ -178,8 +187,10 @@ export default function PreAuditDraftingWorkspace() {
     };
     load();
     // Depend on activeAudit?.id only — see RiskSummaryPanel for rationale.
+    // hasReached added so the bootstrap fires when the audit advances into
+    // Stage 5 after an earlier read-only preview ran.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAudit?.id, setBundles]);
+  }, [activeAudit?.id, hasReached, setBundles]);
 
   if (!activeAudit) return null;
 
@@ -202,6 +213,7 @@ export default function PreAuditDraftingWorkspace() {
   };
 
   const runDeliverableGeneration = async (tab: TabKey) => {
+    if (!hasReached) return; // preview — never spend generation from ahead
     setGeneratingTab(tab);
     setGenerationError(null);
     const draft = await requestDeliverableDraft(auditId, tab);
@@ -384,6 +396,7 @@ export default function PreAuditDraftingWorkspace() {
   if (allMissing) {
     return (
       <div className="p-6 max-w-3xl mx-auto">
+        {!hasReached && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
         <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
           Stage 5 · Pre-audit drafting
         </p>
@@ -395,14 +408,16 @@ export default function PreAuditDraftingWorkspace() {
           here from your approved risk summary and vendor service mappings. Generate stubs
           to start, then edit each down to your judgment.
         </p>
-        <button
-          type="button"
-          onClick={generateAllStubs}
-          className={`mt-5 inline-flex items-center gap-2 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${buttonPrimary}`}
-        >
-          <Sparkles size={14} />
-          Generate all three stubs
-        </button>
+        {hasReached && (
+          <button
+            type="button"
+            onClick={generateAllStubs}
+            className={`mt-5 inline-flex items-center gap-2 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${buttonPrimary}`}
+          >
+            <Sparkles size={14} />
+            Generate all three stubs
+          </button>
+        )}
       </div>
     );
   }
@@ -435,6 +450,7 @@ export default function PreAuditDraftingWorkspace() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
+      {!hasReached && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
       {/* Header */}
       <div>
         <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
@@ -621,7 +637,7 @@ export default function PreAuditDraftingWorkspace() {
           <button
             type="button"
             onClick={() => advanceStage('AUDIT_CONDUCT')}
-            disabled={!allApproved || alreadyAdvanced}
+            disabled={!allApproved || alreadyAdvanced || !hasReached}
             className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${buttonApprove}`}
           >
             Advance to Audit conduct

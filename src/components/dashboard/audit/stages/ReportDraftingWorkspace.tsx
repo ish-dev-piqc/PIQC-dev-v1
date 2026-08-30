@@ -30,8 +30,10 @@ import {
 } from '../../../../lib/audit/reportApi';
 import type { MockWorkspaceEntry } from '../../../../lib/audit/mockWorkspaceEntries';
 import type { ProvisionalClassification } from '../../../../types/audit';
+import { hasReachedStage } from '../../../../lib/audit/workflowStages';
 import HistoryDrawer from '../HistoryDrawer';
 import PrefillAgentNote from '../PrefillAgentNote';
+import StagePreviewNotice from '../StagePreviewNotice';
 
 // =============================================================================
 // ReportDraftingWorkspace — REPORT_DRAFTING (Stage 7) center pane.
@@ -72,6 +74,13 @@ export default function ReportDraftingWorkspace({
   const { activeAudit, advanceStage, advanceStageError } = useAudit();
   const { reports, setReports, ...data } = useAuditData();
   const isLight = theme === 'light';
+
+  // One-ahead preview guard (UX2): the nav allows viewing Stage 7 while the
+  // audit is still at Stage 6. Reads render; the prefill RPC, both LLM
+  // refinements, and every mutating control stay off until the stage is real.
+  const hasReached =
+    !!activeAudit &&
+    hasReachedStage(activeAudit.workflow_type, activeAudit.current_stage, 'REPORT_DRAFTING');
 
   const [editing, setEditing] = useState<'summary' | 'conclusions' | null>(null);
   const [draftSummary, setDraftSummary] = useState('');
@@ -133,7 +142,7 @@ export default function ReportDraftingWorkspace({
       // attempted prefill for this audit this session, fire the prefill RPC.
       // The RPC server-side-gates on approved Stage 4 risk summary and skips
       // silently if pre-conditions aren't met.
-      if (!initial && !attemptedPrefillRef.current.has(id)) {
+      if (!initial && hasReached && !attemptedPrefillRef.current.has(id)) {
         attemptedPrefillRef.current.add(id);
         await prefillReportDraft(id);
         draft = await fetchReportDraft(id);
@@ -165,6 +174,7 @@ export default function ReportDraftingWorkspace({
       const llmTasks: Promise<void>[] = [];
 
       if (
+        hasReached &&
         draft &&
         draft.executive_summary_source === 'templated' &&
         draft.approval_status === 'DRAFT' &&
@@ -218,6 +228,7 @@ export default function ReportDraftingWorkspace({
       }
 
       if (
+        hasReached &&
         draft &&
         draft.conclusions_source === 'templated' &&
         draft.approval_status === 'DRAFT' &&
@@ -273,7 +284,9 @@ export default function ReportDraftingWorkspace({
     };
 
     load();
-  }, [activeAudit?.id, setReports]);
+    // hasReached is a dep so the bootstrap fires the moment the audit actually
+    // advances into Stage 7 after an earlier read-only preview ran.
+  }, [activeAudit?.id, hasReached, setReports]);
 
   // Derive non-hook values (safe with null activeAudit since we read by key)
   const auditId = activeAudit?.id ?? null;
@@ -444,6 +457,7 @@ export default function ReportDraftingWorkspace({
   if (!report) {
     return (
       <div className="p-6 max-w-3xl mx-auto">
+        {!hasReached && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
         <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
           Stage 7 · Report drafting
         </p>
@@ -455,14 +469,16 @@ export default function ReportDraftingWorkspace({
           summary, vendor service) into a draft report. You author the executive summary
           and conclusions; everything else assembles automatically.
         </p>
-        <button
-          type="button"
-          onClick={generateStub}
-          className={`mt-5 inline-flex items-center gap-2 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${buttonPrimary}`}
-        >
-          <Sparkles size={14} />
-          Generate report stub
-        </button>
+        {hasReached && (
+          <button
+            type="button"
+            onClick={generateStub}
+            className={`mt-5 inline-flex items-center gap-2 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${buttonPrimary}`}
+          >
+            <Sparkles size={14} />
+            Generate report stub
+          </button>
+        )}
       </div>
     );
   }
@@ -476,6 +492,7 @@ export default function ReportDraftingWorkspace({
   // ---------------------------------------------------------------------------
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-5">
+      {!hasReached && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
@@ -695,7 +712,7 @@ export default function ReportDraftingWorkspace({
               // in-flight conclusions write with the stale templated text
               // currently in render state (saveSummary writes report.conclusions
               // directly). Same race in reverse for the conclusions Edit.
-              disabled={llmRefining || llmConclusionsRefining}
+              disabled={llmRefining || llmConclusionsRefining || !hasReached}
               title={
                 llmRefining || llmConclusionsRefining
                   ? 'Wait for the agent to finish drafting'
@@ -943,7 +960,7 @@ export default function ReportDraftingWorkspace({
               onClick={() => beginEdit('conclusions')}
               // Same cross-section race guard as exec-summary Edit — see comment
               // on that button. Disabled while EITHER section is in-flight.
-              disabled={llmConclusionsRefining || llmRefining}
+              disabled={llmConclusionsRefining || llmRefining || !hasReached}
               title={
                 llmConclusionsRefining || llmRefining
                   ? 'Wait for the agent to finish drafting'
@@ -1004,7 +1021,7 @@ export default function ReportDraftingWorkspace({
                 // call itself being in flight. Doctrine: the latch attests to
                 // what the human saw, so nothing may be mutating while it arms.
                 disabled={
-                  unclassifiedCount > 0 || llmRefining || llmConclusionsRefining || approving
+                  unclassifiedCount > 0 || llmRefining || llmConclusionsRefining || approving || !hasReached
                 }
                 className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${buttonApprove}`}
               >
@@ -1015,7 +1032,7 @@ export default function ReportDraftingWorkspace({
             <button
               type="button"
               onClick={() => advanceStage('FINAL_REVIEW_EXPORT')}
-              disabled={!approved || alreadyAdvanced}
+              disabled={!approved || alreadyAdvanced || !hasReached}
               className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${buttonApprove}`}
             >
               Advance to Final review
