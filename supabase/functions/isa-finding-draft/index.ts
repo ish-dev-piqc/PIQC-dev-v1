@@ -44,7 +44,7 @@ import {
   MAX_QUOTE_CHARS,
   type ProtocolCandidate,
   type ProtocolChunkRow,
-} from "./protocolCandidates.ts";
+} from "../_shared/protocolCandidates.ts";
 
 // -----------------------------------------------------------------------------
 // CORS + constants

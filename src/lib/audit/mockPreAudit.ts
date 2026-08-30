@@ -12,7 +12,11 @@
 // Sponsor-name-free by rule.
 // =============================================================================
 
-import type { DeliverableApprovalStatus } from '../../types/audit';
+import type {
+  ChecklistGenerationRef,
+  ChecklistGroundingSnapshot,
+  DeliverableApprovalStatus,
+} from '../../types/audit';
 
 // -----------------------------------------------------------------------------
 // Confirmation letter
@@ -96,6 +100,11 @@ export interface MockChecklist {
   // the approved Stage 3 questionnaire.
   source_questionnaire_instance_id?: string | null;
   prefilled_at?: string | null;
+  // Grounded-generation provenance (PR-C1) — set when the checklist was
+  // drafted/revised by PIQC from protocol + evidence passages.
+  generation_refs?: ChecklistGenerationRef[] | null;
+  grounding_snapshot?: ChecklistGroundingSnapshot | null;
+  generated_at?: string | null;
 }
 
 // -----------------------------------------------------------------------------

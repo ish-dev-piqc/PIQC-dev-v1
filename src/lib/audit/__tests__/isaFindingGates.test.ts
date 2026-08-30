@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 // coverage rather than only end-to-end faith.
 import { gateDrafts } from '../../../../supabase/functions/isa-finding-draft/gates';
 import { CITATION_MAP } from '../../../../supabase/functions/isa-finding-draft/citationMap';
-import { labelCandidates } from '../../../../supabase/functions/isa-finding-draft/protocolCandidates';
+import { labelCandidates } from '../../../../supabase/functions/_shared/protocolCandidates';
 
 const NOTE_A = 'aaaaaaaa-0000-0000-0000-000000000001';
 const NOTE_B = 'aaaaaaaa-0000-0000-0000-000000000002';

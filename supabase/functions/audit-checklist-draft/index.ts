@@ -1,0 +1,654 @@
+// =============================================================================
+// audit-checklist-draft edge function — PIQC drafts the vendor audit checklist
+// grounded in the protocol + the audit's evidence register (PR-C1).
+//
+// Takes { audit_id }, fetches the audit + current checklist + evidence register
+// server-side under the caller's JWT (RLS-gated), retrieves passages from the
+// protocol's chunks AND the register's evidence chunks (include_in_generation
+// only), asks OpenAI for checklist items, then gates before returning:
+//   - every ref must name a passage actually sent to the model AND quote it
+//     verbatim (materializeRef, the isa-finding-draft Gate 3) — invalid refs
+//     are STRIPPED, never repaired
+//   - unlike findings, uncited items are ALLOWED: much of a real checklist is
+//     general GxP practice. The non-negotiable is "no fabricated provenance",
+//     not "everything cited".
+//   - in revise mode, existing items keep their SERVER-side ids (the model
+//     sees C-labels, never uuids) — the auditor's items survive by identity.
+//
+// Retrieval: service role, but ONLY after the JWT-scoped audit fetch has
+// proven the caller owns the audit (the isa-finding-draft precedent). Chunk
+// RLS is owner-only; the register's evidence docs ARE caller-owned, but the
+// protocol document usually is not.
+//
+// What this function does NOT do:
+//   - write to the database. The client applies the proposal via
+//     audit_mode_apply_checklist_generation (content through the existing
+//     upsert → demote latch intact; snapshot stamped atomically).
+//   - regenerate automatically. A human clicks Generate / Revise (Q&A rule).
+//   - send sponsor or vendor-contact names. Context is protocol/evidence
+//     passages + audit type + protocol title + existing item prompts.
+// =============================================================================
+
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2";
+import {
+  labelCandidates,
+  materializeRef,
+  MAX_QUOTE_CHARS,
+  type ProtocolCandidate,
+  type ProtocolChunkRow,
+} from "../_shared/protocolCandidates.ts";
+
+// -----------------------------------------------------------------------------
+// CORS + constants
+// -----------------------------------------------------------------------------
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+};
+const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
+
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX       = 6;         // whole-checklist drafting ~ finding batch weight
+const MAX_BODY_BYTES       = 10_000;
+const OPENAI_TIMEOUT_MS    = 60_000;
+const MAX_PASSAGE_CHARS    = 700;       // truncate per-passage content in prompt
+const CANDIDATES_PER_GROUP = 4;
+const MAX_ITEMS            = 40;        // hard cap on returned checklist items
+const MAX_PROMPT_CHARS     = 500;       // per-item prompt length cap
+const MAX_REFS_PER_ITEM    = 2;
+const EMBEDDING_MODEL      = "text-embedding-3-small";
+
+// Static retrieval lenses — the standard vendor-audit domains a checklist
+// covers. Each embeds as its own query so one domain's passages don't swamp
+// another's (the isa-finding-draft per-domain-group rationale).
+const QUERY_GROUPS: string[] = [
+  "quality management system, standard operating procedures, document control, change control",
+  "personnel qualifications, training records, delegation of responsibilities, organization chart",
+  "data integrity, data management, audit trail, electronic records and signatures",
+  "vendor oversight, subcontracting, third party agreements, communication with sponsor",
+  "safety reporting, deviations, CAPA, incident and complaint handling",
+  "study-specific procedures, protocol requirements, sample handling, monitoring visits",
+];
+
+const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(ip: string): { ok: boolean; retryAfter: number } {
+  const now = Date.now();
+  if (rateLimitBuckets.size > 10_000) {
+    for (const [k, v] of rateLimitBuckets.entries()) {
+      if (v.resetAt < now) rateLimitBuckets.delete(k);
+    }
+  }
+  const bucket = rateLimitBuckets.get(ip);
+  if (!bucket || bucket.resetAt < now) {
+    rateLimitBuckets.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return { ok: true, retryAfter: 0 };
+  }
+  if (bucket.count >= RATE_LIMIT_MAX) {
+    return { ok: false, retryAfter: Math.ceil((bucket.resetAt - now) / 1000) };
+  }
+  bucket.count++;
+  return { ok: true, retryAfter: 0 };
+}
+
+function getClientIp(req: Request): string {
+  return req.headers.get("cf-connecting-ip")
+      ?? req.headers.get("x-forwarded-for")?.split(",")[0].trim()
+      ?? "unknown";
+}
+
+function log(level: "info" | "warn" | "error", event: string, fields: Record<string, unknown> = {}) {
+  console.log(JSON.stringify({
+    level, event, timestamp: new Date().toISOString(), ...fields,
+  }));
+}
+
+// -----------------------------------------------------------------------------
+// Prompt
+// -----------------------------------------------------------------------------
+
+const CHECKLIST_WRITER_PROMPT = `You draft a vendor-audit checklist for a clinical-trial vendor audit. Your output is a DRAFT the lead auditor reviews and edits item by item — never a final record.
+
+ITEM STRUCTURE:
+- "prompt" is one imperative check the auditor performs on-site or remotely: "Verify …", "Confirm …", "Review …". One check per item — never fuse two checks with "and also".
+- "evidence_expected" is true when the check requires the vendor to produce a record (log, certificate, SOP, report); false for walkthrough/interview checks.
+- Order items by audit flow: quality system first, then personnel/training, data integrity, oversight/subcontracting, safety/CAPA, study-specific procedures last.
+
+GROUNDING:
+- PROTOCOL PASSAGES (labels P1..Pn) are excerpts of THIS study's protocol. EVIDENCE PASSAGES (labels E1..Em) are excerpts of documents the auditor filed for THIS audit (completed questionnaire, SOPs, certificates…).
+- When a passage states the requirement behind an item, cite it: add {"passage":"<label>","quote":"<verbatim contiguous excerpt, max ${MAX_QUOTE_CHARS} characters>"} to the item's "refs" (max ${MAX_REFS_PER_ITEM}).
+- Quotes must be copied EXACTLY from the labeled passage — no paraphrase, no stitching. A missing ref is normal; a wrong one is a serious error.
+- NEVER state a study-specific fact (a number, a schedule, a named procedure) in an item unless a cited passage contains it. General GxP practice items need no ref.
+
+REVISION MODE (when EXISTING ITEMS are provided):
+- Existing items are the auditor's work. Keep each one unless a provided passage clearly makes it redundant or wrong; when kept, return {"existing":"<its C-label>"} and optionally an updated "prompt" ONLY when a passage contradicts the current wording.
+- Add new items for requirements the passages support that no existing item covers. Do not re-order or rewrite for style.
+
+HARD RULES:
+- Sponsor, vendor-contact, and personnel names must NOT appear anywhere in your output.
+- Do not pad: if the passages are thin, produce fewer items.
+- At most ${MAX_ITEMS} items total.
+
+OUTPUT — a single JSON object, no markdown:
+{"items":[{"prompt":"...","evidence_expected":true,"refs":[{"passage":"P1","quote":"..."}],"existing":"C2 or omit"}]}`;
+
+interface ExistingItem {
+  id: string;
+  label: string; // "C1".."Ck" — what the model may reference
+  prompt: string;
+  checkpoint_ref: string | null;
+  evidence_expected: boolean;
+}
+
+function buildUserMessage(
+  protocolTitle: string | null,
+  auditType: string | null,
+  protocolCandidates: ProtocolCandidate[],
+  evidenceCandidates: ProtocolCandidate[],
+  docTitles: Map<string, string>,
+  existing: ExistingItem[],
+): string {
+  const lines: string[] = [];
+  lines.push(`Protocol: ${protocolTitle ?? "(unspecified)"}`);
+  if (auditType) lines.push(`Audit type: ${auditType}`);
+  lines.push("");
+
+  const renderPassage = (c: ProtocolCandidate) => {
+    const where = [
+      c.section_heading ? `§ ${c.section_heading}` : null,
+      c.page_start !== null
+        ? `p. ${c.page_start}${c.page_end !== null && c.page_end !== c.page_start ? `–${c.page_end}` : ""}`
+        : null,
+    ].filter(Boolean).join(", ");
+    return `[${c.label}]${where ? ` (${where})` : ""} ${c.content.slice(0, MAX_PASSAGE_CHARS)}`;
+  };
+
+  if (protocolCandidates.length > 0) {
+    lines.push(`PROTOCOL PASSAGES (${protocolCandidates.length}):`);
+    for (const c of protocolCandidates) lines.push(renderPassage(c));
+    lines.push("");
+  }
+  if (evidenceCandidates.length > 0) {
+    lines.push(`EVIDENCE PASSAGES (${evidenceCandidates.length}; from the auditor's filed documents):`);
+    for (const c of evidenceCandidates) {
+      const title = docTitles.get(c.document_id);
+      lines.push(`${renderPassage(c)}${title ? ` [from: ${title}]` : ""}`);
+    }
+    lines.push("");
+  }
+  if (existing.length > 0) {
+    lines.push(`EXISTING ITEMS (${existing.length}; revision mode — reference by label):`);
+    for (const e of existing) {
+      lines.push(`[${e.label}] ${e.prompt.slice(0, MAX_PROMPT_CHARS)}`);
+    }
+    lines.push("");
+  }
+  lines.push(
+    existing.length > 0
+      ? "Revise the checklist against these passages now. Output the JSON object only."
+      : "Draft the checklist now. Output the JSON object only.",
+  );
+  return lines.join("\n");
+}
+
+// -----------------------------------------------------------------------------
+// Retrieval — one hybrid_search per query group over the COMBINED corpus,
+// partitioned into protocol vs evidence rows afterward by document id. Any
+// failure degrades to "no candidates"; drafting proceeds ungrounded, never 500s.
+// -----------------------------------------------------------------------------
+
+async function embedText(
+  openaiKey: string,
+  text: string,
+  signal: AbortSignal,
+): Promise<number[] | null> {
+  const res = await fetch("https://api.openai.com/v1/embeddings", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ input: text.slice(0, 8_000), model: EMBEDDING_MODEL }),
+    signal,
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const embedding = data?.data?.[0]?.embedding;
+  return Array.isArray(embedding) ? (embedding as number[]) : null;
+}
+
+async function retrieveCandidates(
+  serviceClient: ReturnType<typeof createClient>,
+  openaiKey: string,
+  protocolDocIds: string[],
+  evidenceDocIds: string[],
+  existing: ExistingItem[],
+  signal: AbortSignal,
+  requestId: string,
+): Promise<{ protocol: ProtocolCandidate[]; evidence: ProtocolCandidate[] }> {
+  try {
+    const allDocIds = [...protocolDocIds, ...evidenceDocIds];
+    const queries = [...QUERY_GROUPS];
+    if (existing.length > 0) {
+      queries.push(existing.map((e) => e.prompt).join("\n").slice(0, 4_000));
+    }
+
+    const perGroup = await Promise.all(queries.map(async (queryText) => {
+      const embedding = await embedText(openaiKey, queryText, signal);
+      if (!embedding) return [] as ProtocolChunkRow[];
+      const { data, error } = await serviceClient.rpc("hybrid_search", {
+        query_embedding: embedding,
+        query_text: queryText,
+        match_count: CANDIDATES_PER_GROUP,
+        filter_document_ids: allDocIds,
+      });
+      if (error || !Array.isArray(data)) return [] as ProtocolChunkRow[];
+      return (data as Record<string, unknown>[]).map((row) => ({
+        id: String(row.id),
+        document_id: String(row.document_id),
+        content: String(row.content ?? ""),
+        section_heading: (row.section_heading as string | null) ?? null,
+        page_start: typeof row.page_start === "number" ? row.page_start : null,
+        page_end: typeof row.page_end === "number" ? row.page_end : null,
+      }));
+    }));
+
+    const evidenceIdSet = new Set(evidenceDocIds);
+    const flat = perGroup.flat();
+    return {
+      protocol: labelCandidates(flat.filter((r) => !evidenceIdSet.has(r.document_id)), "P"),
+      evidence: labelCandidates(flat.filter((r) => evidenceIdSet.has(r.document_id)), "E"),
+    };
+  } catch (err) {
+    log("warn", "audit_checklist_draft.retrieval_failed", {
+      request_id: requestId, error: String(err),
+    });
+    return { protocol: [], evidence: [] };
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Handler
+// -----------------------------------------------------------------------------
+
+Deno.serve(async (req: Request) => {
+  const requestId = crypto.randomUUID();
+
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }),
+      { status: 405, headers: jsonHeaders });
+  }
+
+  const ip = getClientIp(req);
+  const rl = checkRateLimit(ip);
+  if (!rl.ok) {
+    log("warn", "audit_checklist_draft.rate_limited", { request_id: requestId, ip });
+    return new Response(JSON.stringify({ error: "Rate limit exceeded" }),
+      { status: 429, headers: { ...jsonHeaders, "Retry-After": String(rl.retryAfter) } });
+  }
+
+  const lenHeader = req.headers.get("content-length");
+  if (lenHeader && parseInt(lenHeader, 10) > MAX_BODY_BYTES) {
+    return new Response(JSON.stringify({ error: "Request too large" }),
+      { status: 413, headers: jsonHeaders });
+  }
+
+  let body: { audit_id?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "Invalid JSON body" }),
+      { status: 400, headers: jsonHeaders });
+  }
+  const auditId = body.audit_id;
+  if (!auditId || typeof auditId !== "string") {
+    return new Response(JSON.stringify({ error: "audit_id is required" }),
+      { status: 400, headers: jsonHeaders });
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  const openaiKey = Deno.env.get("OPENAI_API_KEY");
+  if (!supabaseUrl || !supabaseAnonKey || !openaiKey) {
+    log("error", "audit_checklist_draft.missing_env", { request_id: requestId });
+    return new Response(JSON.stringify({ error: "Service configuration error" }),
+      { status: 500, headers: jsonHeaders });
+  }
+
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return new Response(JSON.stringify({ error: "Not authenticated" }),
+      { status: 401, headers: jsonHeaders });
+  }
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } },
+    auth: { persistSession: false },
+  });
+
+  // ---------------------------------------------------------------------------
+  // Context — RLS-gated. Sponsor / vendor-contact names never selected.
+  // ---------------------------------------------------------------------------
+
+  const { data: audit, error: auditErr } = await supabase
+    .from("audits")
+    .select(`id, audit_type, workflow_type, protocol_id, protocol:protocols(title)`)
+    .eq("id", auditId)
+    .maybeSingle();
+
+  if (auditErr || !audit) {
+    log("warn", "audit_checklist_draft.audit_not_found", { request_id: requestId, audit_id: auditId });
+    return new Response(JSON.stringify({ error: "Audit not found or access denied" }),
+      { status: 404, headers: jsonHeaders });
+  }
+  if (audit.workflow_type !== "VENDOR_AUDIT") {
+    return new Response(JSON.stringify({ error: "Checklist drafting is only available on vendor audits" }),
+      { status: 409, headers: jsonHeaders });
+  }
+
+  const protocol = audit.protocol as { title?: string } | { title?: string }[] | null;
+  const protocolTitle = (Array.isArray(protocol) ? protocol[0]?.title : protocol?.title) ?? null;
+
+  // Existing checklist → revision mode. The model sees C-labels; real ids
+  // never leave the server side of this exchange.
+  const { data: checklistRow } = await supabase
+    .from("checklist_objects")
+    .select("content")
+    .eq("audit_id", auditId)
+    .maybeSingle();
+  const rawItems = (checklistRow?.content as { items?: unknown } | null)?.items;
+  const existing: ExistingItem[] = (Array.isArray(rawItems) ? rawItems : [])
+    .filter((it): it is Record<string, unknown> => !!it && typeof it === "object")
+    .filter((it) => typeof it.id === "string" && typeof it.prompt === "string" && (it.prompt as string).trim().length > 0)
+    .slice(0, MAX_ITEMS)
+    .map((it, i) => ({
+      id: it.id as string,
+      label: `C${i + 1}`,
+      prompt: (it.prompt as string).trim(),
+      checkpoint_ref: typeof it.checkpoint_ref === "string" ? it.checkpoint_ref : null,
+      evidence_expected: it.evidence_expected === true,
+    }));
+  const mode: "generate" | "revise" = existing.length > 0 ? "revise" : "generate";
+
+  // Evidence register — JWT/RLS-gated (the lead auditor owns both sides).
+  const { data: registerRows } = await supabase
+    .from("audit_source_documents")
+    .select("document_id, source_type, include_in_generation, documents(title, status, content_hash, kind)")
+    .eq("audit_id", auditId);
+
+  type RegisterDoc = {
+    document_id: string;
+    source_type: string;
+    title: string;
+    content_hash: string | null;
+  };
+  const evidenceDocs: RegisterDoc[] = (registerRows ?? []).flatMap((r) => {
+    const docRaw = (r as { documents: unknown }).documents;
+    const doc = (Array.isArray(docRaw) ? docRaw[0] : docRaw) as
+      | { title?: string; status?: string; content_hash?: string | null; kind?: string }
+      | null;
+    if (!(r as { include_in_generation: boolean }).include_in_generation) return [];
+    if (!doc || doc.status !== "ready" || doc.kind !== "AUDIT_EVIDENCE") return [];
+    return [{
+      document_id: String((r as { document_id: unknown }).document_id),
+      source_type: String((r as { source_type: unknown }).source_type),
+      title: doc.title ?? "(untitled)",
+      content_hash: doc.content_hash ?? null,
+    }];
+  });
+
+  log("info", "audit_checklist_draft.request", {
+    request_id: requestId,
+    audit_id: auditId,
+    mode,
+    existing_count: existing.length,
+    evidence_doc_count: evidenceDocs.length,
+  });
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+  req.signal.addEventListener("abort", () => controller.abort());
+
+  // ---------------------------------------------------------------------------
+  // Retrieval — service role, ONLY after the JWT audit fetch proved ownership.
+  // ---------------------------------------------------------------------------
+
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  let protocolDocIds: string[] = [];
+  let protocolSource: "ready" | "unavailable" = "unavailable";
+  let candidates: { protocol: ProtocolCandidate[]; evidence: ProtocolCandidate[] } =
+    { protocol: [], evidence: [] };
+
+  if (serviceRoleKey) {
+    const serviceClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false },
+    });
+    if (audit.protocol_id) {
+      const { data: docRows } = await serviceClient
+        .from("documents")
+        .select("id")
+        .eq("protocol_id", audit.protocol_id as string)
+        .eq("status", "ready");
+      protocolDocIds = (docRows ?? []).map((d) => String(d.id));
+      if (protocolDocIds.length > 0) protocolSource = "ready";
+    }
+    const evidenceDocIds = evidenceDocs.map((d) => d.document_id);
+    if (protocolDocIds.length > 0 || evidenceDocIds.length > 0) {
+      candidates = await retrieveCandidates(
+        serviceClient, openaiKey, protocolDocIds, evidenceDocIds,
+        existing, controller.signal, requestId,
+      );
+    }
+  }
+
+  const docTitles = new Map(evidenceDocs.map((d) => [d.document_id, d.title]));
+
+  log("info", "audit_checklist_draft.candidates", {
+    request_id: requestId,
+    audit_id: auditId,
+    protocol_source: protocolSource,
+    protocol_candidates: candidates.protocol.length,
+    evidence_candidates: candidates.evidence.length,
+  });
+
+  // ---------------------------------------------------------------------------
+  // OpenAI call — JSON mode, low temperature.
+  // ---------------------------------------------------------------------------
+
+  let openaiRes: Response;
+  try {
+    openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openaiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        temperature: 0.2,
+        max_tokens: 4_000,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: CHECKLIST_WRITER_PROMPT },
+          {
+            role: "user",
+            content: buildUserMessage(
+              protocolTitle,
+              (audit.audit_type as string | null) ?? null,
+              candidates.protocol,
+              candidates.evidence,
+              docTitles,
+              existing,
+            ),
+          },
+        ],
+      }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    const aborted = (err as Error).name === "AbortError";
+    log("error", "audit_checklist_draft.openai.fetch_failed", {
+      request_id: requestId, aborted, error: String(err),
+    });
+    return new Response(
+      JSON.stringify({ error: aborted ? "Request timed out" : "AI service error" }),
+      { status: aborted ? 504 : 502, headers: jsonHeaders },
+    );
+  }
+  clearTimeout(timeoutId);
+
+  if (!openaiRes.ok) {
+    const errText = await openaiRes.text();
+    log("error", "audit_checklist_draft.openai.error", {
+      request_id: requestId, status: openaiRes.status, error_preview: errText.slice(0, 200),
+    });
+    return new Response(JSON.stringify({ error: "AI service error" }),
+      { status: 502, headers: jsonHeaders });
+  }
+
+  const payload = await openaiRes.json();
+  const content = payload?.choices?.[0]?.message?.content;
+  let parsed: { items?: unknown };
+  try {
+    parsed = JSON.parse(typeof content === "string" ? content : "");
+  } catch {
+    log("error", "audit_checklist_draft.openai.unparseable", { request_id: requestId });
+    return new Response(JSON.stringify({ error: "AI service returned unparseable output" }),
+      { status: 502, headers: jsonHeaders });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Gates. Refs validate via materializeRef (verbatim-quote or stripped);
+  // uncited items pass (see header). Existing-item identity maps C-label →
+  // real id; unknown labels demote the item to "new". Counts only in logs.
+  // ---------------------------------------------------------------------------
+
+  const allCandidates = [...candidates.protocol, ...candidates.evidence];
+  const evidenceLabelSet = new Set(candidates.evidence.map((c) => c.label));
+  const existingByLabel = new Map(existing.map((e) => [e.label, e]));
+
+  interface OutItem {
+    id: string;
+    prompt: string;
+    checkpoint_ref: string | null;
+    evidence_expected: boolean;
+  }
+  interface OutRef {
+    item_id: string;
+    chunk_id: string;
+    document_id: string;
+    source: "PROTOCOL" | "EVIDENCE";
+    quote: string;
+    doc_title: string | null;
+    section_heading: string | null;
+    page_start: number | null;
+    page_end: number | null;
+  }
+
+  const items: OutItem[] = [];
+  const generationRefs: OutRef[] = [];
+  let droppedCount = 0;
+  let strippedRefCount = 0;
+  const keptExistingIds = new Set<string>();
+
+  const rawOut = Array.isArray(parsed.items) ? parsed.items : [];
+  for (const raw of rawOut) {
+    if (items.length >= MAX_ITEMS) break;
+    if (!raw || typeof raw !== "object") { droppedCount++; continue; }
+    const it = raw as Record<string, unknown>;
+
+    const existingLabel = typeof it.existing === "string" ? it.existing.trim() : null;
+    const kept = existingLabel ? existingByLabel.get(existingLabel) : undefined;
+    if (existingLabel && !kept) {
+      // Unknown C-label — treat as a new item rather than fabricating identity.
+      log("warn", "audit_checklist_draft.unknown_existing_label", {
+        request_id: requestId, label: existingLabel,
+      });
+    }
+    if (kept && keptExistingIds.has(kept.id)) { droppedCount++; continue; }
+
+    const promptText = typeof it.prompt === "string" ? it.prompt.trim() : "";
+    if (!kept && (promptText.length === 0 || promptText.length > MAX_PROMPT_CHARS)) {
+      droppedCount++;
+      continue;
+    }
+
+    const item: OutItem = kept
+      ? {
+        id: kept.id,
+        // A revised wording is accepted only within the length cap; the
+        // auditor's own text is the fallback, never dropped.
+        prompt: promptText.length > 0 && promptText.length <= MAX_PROMPT_CHARS ? promptText : kept.prompt,
+        checkpoint_ref: kept.checkpoint_ref,
+        evidence_expected: typeof it.evidence_expected === "boolean" ? it.evidence_expected : kept.evidence_expected,
+      }
+      : {
+        id: crypto.randomUUID(),
+        prompt: promptText,
+        checkpoint_ref: null,
+        evidence_expected: it.evidence_expected === true,
+      };
+    if (kept) keptExistingIds.add(kept.id);
+
+    const rawRefs = Array.isArray(it.refs) ? it.refs.slice(0, MAX_REFS_PER_ITEM) : [];
+    for (const rawRef of rawRefs) {
+      const r = rawRef as Record<string, unknown> | null;
+      const snapshot = materializeRef(r?.passage, r?.quote, allCandidates);
+      if (!snapshot) { strippedRefCount++; continue; }
+      const label = String(r?.passage ?? "").trim();
+      generationRefs.push({
+        item_id: item.id,
+        chunk_id: snapshot.chunk_id,
+        document_id: snapshot.document_id,
+        source: evidenceLabelSet.has(label) ? "EVIDENCE" : "PROTOCOL",
+        quote: snapshot.quote,
+        doc_title: docTitles.get(snapshot.document_id) ?? null,
+        section_heading: snapshot.section_heading,
+        page_start: snapshot.page_start,
+        page_end: snapshot.page_end,
+      });
+    }
+
+    items.push(item);
+  }
+
+  // In revise mode, auditor items the model dropped are NOT resurrected here:
+  // the model was instructed to keep-unless-redundant, and the auditor reviews
+  // the proposal side-by-side before applying. The apply step is theirs.
+
+  const grounding = {
+    protocol_document_ids: protocolDocIds,
+    evidence: evidenceDocs.map((d) => ({
+      document_id: d.document_id,
+      content_hash: d.content_hash,
+      title: d.title,
+      source_type: d.source_type,
+    })),
+  };
+
+  log("info", "audit_checklist_draft.response", {
+    request_id: requestId,
+    audit_id: auditId,
+    mode,
+    item_count: items.length,
+    kept_existing_count: keptExistingIds.size,
+    dropped_count: droppedCount,
+    stripped_ref_count: strippedRefCount,
+    ref_count: generationRefs.length,
+    protocol_source: protocolSource,
+  });
+
+  return new Response(JSON.stringify({
+    mode,
+    items,
+    generation_refs: generationRefs,
+    grounding,
+    dropped_count: droppedCount,
+    stripped_ref_count: strippedRefCount,
+    protocol_source: protocolSource,
+    evidence_doc_count: evidenceDocs.length,
+  }), { status: 200, headers: jsonHeaders });
+});
