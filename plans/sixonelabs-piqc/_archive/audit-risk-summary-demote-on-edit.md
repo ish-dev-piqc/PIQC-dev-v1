@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: Risk summary demote-on-edit (latch integrity)
-status: in-review
+status: merged
 started: 2026-08-26
 target_pr:
 ---

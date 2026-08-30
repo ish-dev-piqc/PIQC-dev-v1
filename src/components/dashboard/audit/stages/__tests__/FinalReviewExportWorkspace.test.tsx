@@ -70,6 +70,22 @@ vi.mock('../../../../../lib/audit/auditApi', () => ({
   getStageReadout: vi.fn(() => Promise.resolve(mockReadout)),
 }));
 
+// Grounding-currency reads (PR-C3). Defaults keep the panel absent so the
+// pre-existing checklist tests are unaffected; the currency suite overrides.
+let mockBundle: {
+  confirmation_letter: unknown;
+  agenda: unknown;
+  checklist: unknown;
+} = { confirmation_letter: null, agenda: null, checklist: null };
+vi.mock('../../../../../lib/audit/preAuditApi', () => ({
+  fetchPreAuditDeliverables: vi.fn(() => Promise.resolve(mockBundle)),
+}));
+
+let mockRegister: { ok: boolean; data?: unknown[]; error?: string } = { ok: true, data: [] };
+vi.mock('../../../../../lib/audit/evidenceApi', () => ({
+  listAuditEvidence: vi.fn(() => Promise.resolve(mockRegister)),
+}));
+
 import FinalReviewExportWorkspace from '../FinalReviewExportWorkspace';
 
 function makeEntry(overrides: Partial<MockWorkspaceEntry> = {}): MockWorkspaceEntry {
@@ -175,5 +191,83 @@ describe('FinalReviewExportWorkspace pre-export checklist', () => {
     await waitFor(() => {
       expect(screen.getByText('6 of 7 gates passed')).toBeInTheDocument();
     });
+  });
+});
+
+describe('FinalReviewExportWorkspace grounding currency (flag, never block)', () => {
+  const SNAPSHOT = {
+    protocol_document_ids: ['pd1'],
+    evidence: [{ document_id: 'd1', content_hash: 'abc', title: 'QA SOP v3', source_type: 'SOP' }],
+  };
+  const REGISTER_ROW = {
+    audit_id: 'audit-1',
+    document_id: 'd1',
+    added_by: 'u1',
+    added_at: '2026-08-30T12:00:00Z',
+    source_type: 'SOP',
+    source_system: null,
+    source_locator: null,
+    include_in_generation: true,
+    title: 'QA SOP v3',
+    status: 'ready',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockWorkspaceEntries = { 'audit-1': [] };
+    mockReportsMap = {};
+    initialStageReadouts = {};
+    mockReadout = null;
+    mockBundle = { confirmation_letter: null, agenda: null, checklist: null };
+    mockRegister = { ok: true, data: [] };
+  });
+
+  it('renders nothing when no deliverable was ever generated', async () => {
+    render(<FinalReviewExportWorkspace />);
+    await waitFor(() => expect(screen.getByText(/Pre-export checklist/)).toBeTruthy());
+    expect(screen.queryByTestId('export-currency-notice')).toBeNull();
+    expect(screen.queryByTestId('export-currency-current')).toBeNull();
+  });
+
+  it('shows the quiet all-current line when snapshots match the register', async () => {
+    mockBundle = {
+      confirmation_letter: null,
+      agenda: null,
+      checklist: { grounding_snapshot: SNAPSHOT },
+    };
+    mockRegister = { ok: true, data: [REGISTER_ROW] };
+    render(<FinalReviewExportWorkspace />);
+    expect(await screen.findByTestId('export-currency-current')).toBeTruthy();
+    expect(screen.queryByTestId('export-currency-notice')).toBeNull();
+  });
+
+  it('names the drifted deliverable and its new source — and never gates export', async () => {
+    mockBundle = {
+      confirmation_letter: null,
+      agenda: { grounding_snapshot: SNAPSHOT },
+      checklist: { grounding_snapshot: SNAPSHOT },
+    };
+    mockRegister = {
+      ok: true,
+      data: [
+        REGISTER_ROW,
+        { ...REGISTER_ROW, document_id: 'd2', title: 'Training matrix' },
+      ],
+    };
+    render(<FinalReviewExportWorkspace />);
+    const notice = await screen.findByTestId('export-currency-notice');
+    expect(notice.textContent).toContain('Agenda:');
+    expect(notice.textContent).toContain('Checklist:');
+    expect(notice.textContent).toContain('Training matrix');
+    expect(notice.textContent).toContain('never blocks export');
+  });
+
+  it('renders no verdict at all when the register read fails', async () => {
+    mockBundle = { confirmation_letter: null, agenda: null, checklist: { grounding_snapshot: SNAPSHOT } };
+    mockRegister = { ok: false, error: 'permission denied' };
+    render(<FinalReviewExportWorkspace />);
+    await waitFor(() => expect(screen.getByText(/Pre-export checklist/)).toBeTruthy());
+    expect(screen.queryByTestId('export-currency-notice')).toBeNull();
+    expect(screen.queryByTestId('export-currency-current')).toBeNull();
   });
 });

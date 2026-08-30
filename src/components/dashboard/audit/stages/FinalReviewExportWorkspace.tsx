@@ -19,6 +19,13 @@ import {
   verifyExportReadiness,
 } from '../../../../lib/audit/reportApi';
 import { getStageReadout } from '../../../../lib/audit/auditApi';
+import { fetchPreAuditDeliverables } from '../../../../lib/audit/preAuditApi';
+import { listAuditEvidence } from '../../../../lib/audit/evidenceApi';
+import {
+  computeDeliverableCurrency,
+  type DeliverableCurrency,
+} from '../../../../lib/audit/deliverableGenerationApi';
+import type { DeliverableGroundingSnapshot } from '../../../../types/audit';
 import {
   PROVISIONAL_IMPACT_LABELS,
   PROVISIONAL_CLASSIFICATION_LABELS,
@@ -54,6 +61,49 @@ export default function FinalReviewExportWorkspace() {
   // Set when the pre-export server verify rejects — the draft moved since
   // sign-off. Cleared on the next export attempt.
   const [exportBlocked, setExportBlocked] = useState<string | null>(null);
+
+  // Grounding currency (PR-C3) — the lifecycle's last honest checkpoint.
+  // One row per PIQC-drafted Stage-5 deliverable: its grounding snapshot
+  // set-diffed against the live evidence register. Display-only, NEVER a
+  // gate. null = data unavailable (loading or a fetch failed) → render
+  // nothing rather than a false verdict; [] = nothing was ever generated →
+  // currency has no meaning → render nothing.
+  const [groundingCurrency, setGroundingCurrency] = useState<
+    Array<{ label: string; currency: DeliverableCurrency }> | null
+  >(null);
+
+  useEffect(() => {
+    if (!activeAudit?.id) return;
+    const id = activeAudit.id;
+    let cancelled = false;
+    // Reset before fetching: a lingering verdict from the PREVIOUS audit must
+    // never show under a new one (slow or failed fetch would otherwise leave
+    // it standing — a false verdict across audits).
+    setGroundingCurrency(null);
+    void (async () => {
+      try {
+        const [bundle, register] = await Promise.all([
+          fetchPreAuditDeliverables(id),
+          listAuditEvidence(id),
+        ]);
+        if (cancelled || !register.ok) return;
+        const rows: Array<{ label: string; currency: DeliverableCurrency }> = [];
+        const push = (label: string, snapshot: DeliverableGroundingSnapshot | null | undefined) => {
+          const currency = computeDeliverableCurrency(snapshot, register.data);
+          if (currency) rows.push({ label, currency });
+        };
+        push('Confirmation letter', bundle.confirmation_letter?.grounding_snapshot);
+        push('Agenda', bundle.agenda?.grounding_snapshot);
+        push('Checklist', bundle.checklist?.grounding_snapshot);
+        setGroundingCurrency(rows);
+      } catch (err) {
+        console.error('[FinalReviewExportWorkspace] grounding currency load error:', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeAudit?.id]);
 
   useEffect(() => {
     if (!activeAudit?.id) return;
@@ -324,6 +374,54 @@ export default function FinalReviewExportWorkspace() {
           ))}
         </ul>
       </div>
+
+      {/* Grounding currency (PR-C3) — information BESIDE the gates, never a
+          gate: export stays fully available regardless. Rendered only when at
+          least one deliverable was PIQC-drafted and both reads succeeded. */}
+      {groundingCurrency !== null && groundingCurrency.length > 0 && (
+        groundingCurrency.some((r) => !r.currency.isCurrent) ? (
+          <div
+            data-testid="export-currency-notice"
+            className={`border rounded-xl px-4 py-3 text-xs space-y-1.5 ${
+              isLight
+                ? 'bg-amber-50 border-amber-200 text-amber-700'
+                : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+            }`}
+          >
+            <p className="font-semibold">
+              The evidence register changed after PIQC drafted{' '}
+              {groundingCurrency.filter((r) => !r.currency.isCurrent).length === 1
+                ? 'a deliverable'
+                : 'deliverables'}
+              .
+            </p>
+            {groundingCurrency
+              .filter((r) => !r.currency.isCurrent)
+              .map((r) => (
+                <p key={r.label}>
+                  <span className="font-semibold">{r.label}:</span>{' '}
+                  {r.currency.newSinceGeneration.length > 0 &&
+                    `new — ${r.currency.newSinceGeneration.map((d) => d.title).join(', ')}`}
+                  {r.currency.newSinceGeneration.length > 0 &&
+                    r.currency.removedSinceGeneration.length > 0 && '; '}
+                  {r.currency.removedSinceGeneration.length > 0 &&
+                    `removed — ${r.currency.removedSinceGeneration.map((d) => d.title).join(', ')}`}
+                </p>
+              ))}
+            <p>
+              This never blocks export — revise at Stage 5 if the drift matters for this audit.
+            </p>
+          </div>
+        ) : (
+          <p data-testid="export-currency-current" className={`${subColor} text-xs px-1`}>
+            Evidence grounding is current for{' '}
+            {groundingCurrency.length === 1
+              ? 'the PIQC-drafted deliverable'
+              : `all ${groundingCurrency.length} PIQC-drafted deliverables`}
+            .
+          </p>
+        )
+      )}
 
       {/* Final sign-off action */}
       {!finalSignedOff && (

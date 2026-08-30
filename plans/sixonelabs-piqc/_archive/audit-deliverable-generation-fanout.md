@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: Deliverable generation fan-out (PR-C2) — agenda + confirmation letter join grounded generation; engine consolidated
-status: in-review
+status: merged
 started: 2026-08-30
 target_pr:
 ---

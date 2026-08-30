@@ -1,7 +1,7 @@
 ---
 feature: sotr-governance-path-fix
 dev: sixonelabs-piqc
-status: in-review
+status: merged
 created: 2026-08-26
 ---
 
