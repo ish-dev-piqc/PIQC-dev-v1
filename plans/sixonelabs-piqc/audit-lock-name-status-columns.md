@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: Lock audits.audit_name + audits.status columns (V1 residue)
-status: active
+status: in-review
 started: 2026-08-30
 target_pr:
 ---
@@ -23,15 +23,15 @@ drives overdue logic and the REVIEW/CLOSED lifecycle, and a direct PATCH would l
 close. Revoking now forces any future close-audit / rename feature through a delta-writing
 RPC by construction. Zero breakage today.
 
-## Merge-order dependency (critical)
+## Merge-order dependency — resolved by folding into PR-UX1
 
-**This PR must merge after PR-UX1 (`sixonelabs-piqc/audit-window-reschedule`).**
-`20260902000000` runs `REVOKE UPDATE ON audits ...; GRANT UPDATE (audit_name, status) ...`
-at apply time — if it applies *after* this revoke, it re-opens the hole. Applied in the
-intended order (PR-UX1 first, this second), the net state is: no UPDATE privilege on
-`audits` for `authenticated`/`anon` at all. If PR-UX1 is abandoned, this migration still
-stands correct against main's `20260721000100` grant (the full revoke also covers
-`scheduled_date`, which likewise has no client writer on main).
+Originally authored as a separate branch off main, which created a fragile merge-order
+dependency: `20260902000000` runs `REVOKE UPDATE ON audits ...; GRANT UPDATE (audit_name,
+status) ...` at apply time — applied *after* this revoke, it would re-open the hole.
+**Folded into PR-UX1 (`sixonelabs-piqc/audit-window-reschedule`) on 2026-08-30** to remove
+that hazard: within one PR, migration version order (`20260902` → `20260903`) guarantees
+the revoke applies last, and the net state is no UPDATE privilege on `audits` for
+`authenticated`/`anon` at all.
 
 ## Scope (files allowed)
 
@@ -41,7 +41,7 @@ stands correct against main's `20260721000100` grant (the full revoke also cover
 ## Out of scope (files forbidden)
 
 - supabase/migrations/20260721000100_audit_mode_lock_current_stage_column.sql (merged; append-only)
-- supabase/migrations/20260902000000_audit_scheduled_window.sql (PR-UX1's file, lives on its branch)
+- supabase/migrations/20260902000000_audit_scheduled_window.sql (PR-UX1's file — same branch after the fold, still not edited by this work)
 - src/** — no type impact: grants only, no table/column/enum/RPC-signature change
 - RLS policy `audits_update_lead_auditor` (`20260427120100`) — left in place, inert for
   `authenticated` once the privilege is gone; future re-grants would want it back
