@@ -126,6 +126,10 @@ export default function PreAuditDraftingWorkspace() {
   // apply RPC (demote latch intact), then the bundle refetches server truth.
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  // Revise-with-AI must never fire over unsaved tab edits (persist human
+  // edits first): while the checklist tab is in edit mode, the generate
+  // button is disabled — the button state IS the rule's enforcement.
+  const [checklistEditing, setChecklistEditing] = useState(false);
 
   // Tracks audits whose prefill RPCs have already been attempted in this
   // session, so opening Stage 5 / switching tabs / re-rendering doesn't fire
@@ -516,6 +520,7 @@ export default function PreAuditDraftingWorkspace() {
             deliverable={bundle.checklist}
             evidenceRows={evidenceRows}
             generating={generating}
+            editing={checklistEditing}
             error={generationError}
             isLight={isLight}
             onGenerate={() => void runChecklistGeneration()}
@@ -527,6 +532,7 @@ export default function PreAuditDraftingWorkspace() {
               setBundle({ ...bundle, checklist: next });
               persistChecklist(bundle.checklist, next);
             }}
+            onEditingChange={setChecklistEditing}
           />
         </>
       )}
@@ -998,6 +1004,9 @@ interface ChecklistTabProps {
   deliverable: MockChecklist | null;
   isLight: boolean;
   onChange: (next: MockChecklist | null) => void;
+  // Reports the tab's edit mode so the generation panel can disable
+  // Revise while unsaved edits exist (rule: persist human edits first).
+  onEditingChange?: (editing: boolean) => void;
 }
 
 // ============================================================================
@@ -1013,6 +1022,7 @@ interface ChecklistGenerationPanelProps {
   deliverable: MockChecklist | null;
   evidenceRows: AuditEvidenceListRow[] | null;
   generating: boolean;
+  editing: boolean;
   error: string | null;
   isLight: boolean;
   onGenerate: () => void;
@@ -1022,6 +1032,7 @@ function ChecklistGenerationPanel({
   deliverable,
   evidenceRows,
   generating,
+  editing,
   error,
   isLight,
   onGenerate,
@@ -1080,8 +1091,9 @@ function ChecklistGenerationPanel({
         </div>
         <button
           type="button"
-          disabled={generating}
+          disabled={generating || editing}
           onClick={onGenerate}
+          title={editing ? 'Save or cancel your edits first — revising would overwrite them' : undefined}
           data-testid="checklist-generate-button"
           className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-md transition-colors flex-shrink-0 ${buttonPrimary}`}
         >
@@ -1119,17 +1131,26 @@ function ChecklistGenerationPanel({
   );
 }
 
-function ChecklistTab({ deliverable, isLight, onChange }: ChecklistTabProps) {
-  const [editing, setEditing] = useState(!deliverable);
+function ChecklistTab({ deliverable, isLight, onChange, onEditingChange }: ChecklistTabProps) {
+  const [editing, setEditingRaw] = useState(!deliverable);
+  const setEditing = (next: boolean) => {
+    setEditingRaw(next);
+    onEditingChange?.(next);
+  };
   const [items, setItems] = useState<MockChecklistItem[]>(
     deliverable?.content.items ?? [],
   );
 
+  // updated_at in the deps: grounded generation (PR-C1) mutates this row
+  // under the SAME id, so keying on id alone would leave stale local items —
+  // clicking Edit after a generation would show (and then Save would clobber
+  // it with) pre-generation content. The workspace disables Generate/Revise
+  // while editing, so this resync can never fire over unsaved edits.
   useEffect(() => {
     setEditing(!deliverable);
     setItems(deliverable?.content.items ?? []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deliverable?.id]);
+  }, [deliverable?.id, deliverable?.updated_at]);
 
   const save = () => {
     onChange({
