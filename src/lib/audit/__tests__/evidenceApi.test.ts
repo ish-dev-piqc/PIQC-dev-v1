@@ -31,6 +31,7 @@ vi.mock('../../supabase', () => ({
 }));
 
 import {
+  extractEvidenceFile,
   ingestAuditEvidence,
   listAuditEvidence,
   normalizeCheckboxes,
@@ -207,5 +208,57 @@ describe('removeAuditEvidence', () => {
     });
     const res = await removeAuditEvidence('a1', 'd1');
     expect(res).toEqual({ ok: false, error: 'Evidence d1 is not attached to audit a1' });
+  });
+});
+
+describe('extractEvidenceFile', () => {
+  beforeEach(() => {
+    mockGetSession.mockReset();
+    mockFetch.mockReset();
+  });
+
+  it('hard-fails without a session and never calls fetch', async () => {
+    mockGetSession.mockResolvedValueOnce({ data: { session: null } });
+    const res = await extractEvidenceFile(new File(['x'], 'q.docx'));
+    expect(res.ok).toBe(false);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('posts filename + base64 bytes and returns text with warnings', async () => {
+    mockGetSession.mockResolvedValueOnce(SESSION);
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ text: '[x] Section A complete', warnings: ['1 empty sheet(s) skipped'], format: 'docx' }),
+    });
+    const res = await extractEvidenceFile(new File(['hello'], 'questionnaire.docx'));
+
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(String(url)).toContain('/functions/v1/evidence-extract');
+    expect(init.headers.Authorization).toBe('Bearer jwt-token');
+    const body = JSON.parse(init.body);
+    expect(body.filename).toBe('questionnaire.docx');
+    expect(body.file_base64).toBe(btoa('hello'));
+    expect(res).toEqual({
+      ok: true,
+      data: { text: '[x] Section A complete', warnings: ['1 empty sheet(s) skipped'] },
+    });
+  });
+
+  it('surfaces the server remediation copy on a parse failure', async () => {
+    mockGetSession.mockResolvedValueOnce(SESSION);
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: 'Couldn’t read this Word file — open the file and paste its text instead; the paste path always works.' }),
+    });
+    const res = await extractEvidenceFile(new File(['x'], 'corrupt.docx'));
+    expect(res.ok).toBe(false);
+    expect(!res.ok && res.error).toContain('paste its text instead');
+  });
+
+  it('maps a thrown fetch to a Result error — busy state must never stick', async () => {
+    mockGetSession.mockResolvedValueOnce(SESSION);
+    mockFetch.mockRejectedValueOnce(new Error('network down'));
+    const res = await extractEvidenceFile(new File(['x'], 'q.xlsx'));
+    expect(res.ok).toBe(false);
   });
 });

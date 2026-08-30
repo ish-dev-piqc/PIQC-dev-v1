@@ -26,10 +26,12 @@ vi.mock('../../../../lib/audit/evidenceApi', () => ({
   listAuditEvidence: vi.fn(),
   ingestAuditEvidence: vi.fn(),
   removeAuditEvidence: vi.fn(),
+  extractEvidenceFile: vi.fn(),
 }));
 
 import EvidenceDrawer from '../EvidenceDrawer';
 import {
+  extractEvidenceFile,
   ingestAuditEvidence,
   listAuditEvidence,
   removeAuditEvidence,
@@ -38,6 +40,7 @@ import {
 const mockList = listAuditEvidence as unknown as ReturnType<typeof vi.fn>;
 const mockIngest = ingestAuditEvidence as unknown as ReturnType<typeof vi.fn>;
 const mockRemove = removeAuditEvidence as unknown as ReturnType<typeof vi.fn>;
+const mockExtract = extractEvidenceFile as unknown as ReturnType<typeof vi.fn>;
 
 const AUDIT = { id: 'a1', audit_name: 'Acme CRO Q3 vendor audit' } as unknown as ComponentProps<
   typeof EvidenceDrawer
@@ -61,6 +64,7 @@ describe('EvidenceDrawer', () => {
     mockList.mockReset();
     mockIngest.mockReset();
     mockRemove.mockReset();
+    mockExtract.mockReset();
   });
 
   it('renders the teaching empty state when the register is empty', async () => {
@@ -145,5 +149,53 @@ describe('EvidenceDrawer', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm remove' }));
     await waitFor(() => expect(mockRemove).toHaveBeenCalledWith('a1', 'd1'));
     await waitFor(() => expect(mockList).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe('EvidenceDrawer file intake (PR-B2)', () => {
+  beforeEach(() => {
+    mockList.mockReset();
+    mockIngest.mockReset();
+    mockExtract.mockReset();
+    mockList.mockResolvedValue({ ok: true, data: [] });
+  });
+
+  it('extraction fills the textarea, suggests a title, and surfaces warnings', async () => {
+    const user = userEvent.setup();
+    mockExtract.mockResolvedValue({
+      ok: true,
+      data: { text: '[x] Section A complete', warnings: ['1 empty sheet(s) skipped'] },
+    });
+    render(<EvidenceDrawer audit={AUDIT} onClose={vi.fn()} />);
+    await screen.findByText('No evidence yet');
+    await user.click(screen.getByRole('button', { name: /attach evidence/i }));
+
+    const file = new File(['bytes'], 'Vendor questionnaire.docx');
+    await user.upload(screen.getByLabelText('Evidence file'), file);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Document text')).toHaveProperty('value', '[x] Section A complete'),
+    );
+    expect(mockExtract).toHaveBeenCalledWith(file);
+    expect(screen.getByLabelText('Evidence title')).toHaveProperty('value', 'Vendor questionnaire');
+    expect(screen.getByText('1 empty sheet(s) skipped')).toBeTruthy();
+  });
+
+  it('extraction failure shows the remediation and leaves the paste path intact', async () => {
+    const user = userEvent.setup();
+    mockExtract.mockResolvedValue({
+      ok: false,
+      error: 'Couldn’t read this Word file — paste the text instead',
+    });
+    render(<EvidenceDrawer audit={AUDIT} onClose={vi.fn()} />);
+    await screen.findByText('No evidence yet');
+    await user.click(screen.getByRole('button', { name: /attach evidence/i }));
+
+    await user.upload(screen.getByLabelText('Evidence file'), new File(['x'], 'bad.docx'));
+
+    expect(await screen.findByText(/paste the text instead/)).toBeTruthy();
+    // The paste path is untouched — typing into the textarea still works.
+    await user.type(screen.getByLabelText('Document text'), 'pasted manually');
+    expect(screen.getByLabelText('Document text')).toHaveProperty('value', 'pasted manually');
   });
 });

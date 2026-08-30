@@ -30,6 +30,73 @@ export function normalizeCheckboxes(text: string): string {
 }
 
 // -----------------------------------------------------------------------------
+// File extraction (PR-B2)
+//
+// Word/Excel evidence goes through the stateless /evidence-extract edge
+// function (no DB, no writes) and the extracted text lands in the drawer's
+// textarea for the auditor to REVIEW — then the shipped paste flow takes over.
+// Extraction failing never strands the auditor: the paste path is the fallback
+// and the server's error copy says so.
+// -----------------------------------------------------------------------------
+
+export interface ExtractedEvidenceFile {
+  text: string;
+  warnings: string[];
+}
+
+// Chunked to stay under argument-count limits on large files.
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+
+export async function extractEvidenceFile(
+  file: File,
+): Promise<Result<ExtractedEvidenceFile>> {
+  const { data: { session } } = await supabase.auth.getSession();
+  // Hard fail without a session — same rule as ingest: never the anon key.
+  if (!session?.access_token) {
+    return { ok: false, error: 'Not signed in — refresh and try again' };
+  }
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+  // fetch/json can throw outright (network drop, gateway HTML error page) —
+  // catch so the Result contract holds and the caller's busy state can't stick.
+  let resOk: boolean;
+  let payload: { text?: string; warnings?: string[]; error?: string } | null;
+  try {
+    const fileBase64 = bytesToBase64(new Uint8Array(await file.arrayBuffer()));
+    const res = await fetch(`${supabaseUrl}/functions/v1/evidence-extract`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ filename: file.name, file_base64: fileBase64 }),
+    });
+    resOk = res.ok;
+    payload = (await res.json()) as typeof payload;
+  } catch (e) {
+    console.error('[evidenceApi] extractEvidenceFile fetch threw:', e);
+    return { ok: false, error: 'Extraction failed — check your connection, or paste the text instead' };
+  }
+
+  if (!resOk || !payload || typeof payload.text !== 'string') {
+    console.error('[evidenceApi] extractEvidenceFile error:', payload?.error);
+    return { ok: false, error: payload?.error ?? 'Extraction failed — paste the text instead' };
+  }
+
+  return {
+    ok: true,
+    data: { text: payload.text, warnings: payload.warnings ?? [] },
+  };
+}
+
+// -----------------------------------------------------------------------------
 // List
 // -----------------------------------------------------------------------------
 export async function listAuditEvidence(
