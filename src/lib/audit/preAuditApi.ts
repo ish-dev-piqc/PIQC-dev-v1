@@ -9,8 +9,8 @@ import type {
   MockPreAuditBundle,
 } from './mockPreAudit';
 import type {
-  ChecklistGenerationRef,
-  ChecklistGroundingSnapshot,
+  DeliverableGenerationRef,
+  DeliverableGroundingSnapshot,
   DeliverableApprovalStatus,
 } from '../../types/audit';
 
@@ -37,10 +37,10 @@ interface DeliverableRow<TContent> {
   source_risk_summary_id?: string | null;
   source_questionnaire_instance_id?: string | null;
   prefilled_at?: string | null;
-  // Grounded-generation provenance (checklist only today) — see
-  // 20260831000000_audit_checklist_generation.sql.
-  generation_refs?: ChecklistGenerationRef[] | null;
-  grounding_snapshot?: ChecklistGroundingSnapshot | null;
+  // Grounded-generation provenance (all three deliverables) — see
+  // 20260831000000 + 20260901000000.
+  generation_refs?: DeliverableGenerationRef[] | null;
+  grounding_snapshot?: DeliverableGroundingSnapshot | null;
   generated_at?: string | null;
 }
 
@@ -68,6 +68,9 @@ async function flattenConfirmationLetter(
     source_risk_summary_id: row.source_risk_summary_id ?? null,
     source_questionnaire_instance_id: row.source_questionnaire_instance_id ?? null,
     prefilled_at: row.prefilled_at ?? null,
+    generation_refs: row.generation_refs ?? null,
+    grounding_snapshot: row.grounding_snapshot ?? null,
+    generated_at: row.generated_at ?? null,
   };
 }
 
@@ -84,6 +87,9 @@ async function flattenAgenda(
     updated_at: row.updated_at,
     source_risk_summary_id: row.source_risk_summary_id ?? null,
     prefilled_at: row.prefilled_at ?? null,
+    generation_refs: row.generation_refs ?? null,
+    grounding_snapshot: row.grounding_snapshot ?? null,
+    generated_at: row.generated_at ?? null,
   };
 }
 

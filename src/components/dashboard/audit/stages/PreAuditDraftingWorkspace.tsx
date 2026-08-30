@@ -37,9 +37,9 @@ import {
 import type { DeliverableApprovalStatus, TrackedObjectType } from '../../../../types/audit';
 import { listAuditEvidence } from '../../../../lib/audit/evidenceApi';
 import {
-  applyChecklistGeneration,
-  computeChecklistCurrency,
-  requestChecklistDraft,
+  applyDeliverableGeneration,
+  computeDeliverableCurrency,
+  requestDeliverableDraft,
 } from '../../../../lib/audit/deliverableGenerationApi';
 import type { AuditEvidenceListRow } from '../../../../types/audit';
 import { useOpenEvidence } from '../evidenceDrawerContext';
@@ -121,15 +121,23 @@ export default function PreAuditDraftingWorkspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAudit?.id]);
 
-  // Grounded checklist generation (PR-C1). Human-triggered only — the Q&A
-  // consciously rejected auto-regenerate. Proposal lands as DRAFT through the
-  // apply RPC (demote latch intact), then the bundle refetches server truth.
-  const [generating, setGenerating] = useState(false);
+  // Grounded deliverable generation (PR-C1 checklist, PR-C2 all three).
+  // Human-triggered only — the Q&A consciously rejected auto-regenerate.
+  // Proposals land as DRAFT through the apply RPCs (demote latch intact),
+  // then the bundle refetches server truth.
+  const [generatingTab, setGeneratingTab] = useState<TabKey | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   // Revise-with-AI must never fire over unsaved tab edits (persist human
-  // edits first): while the checklist tab is in edit mode, the generate
-  // button is disabled — the button state IS the rule's enforcement.
-  const [checklistEditing, setChecklistEditing] = useState(false);
+  // edits first): while a tab is in edit mode, its generate button is
+  // disabled — the button state IS the rule's enforcement.
+  const [editingTabs, setEditingTabs] = useState<Partial<Record<TabKey, boolean>>>({});
+  const setTabEditing = (tab: TabKey, editing: boolean) =>
+    setEditingTabs((prev) => ({ ...prev, [tab]: editing }));
+
+  // A generation error belongs to the tab it happened on.
+  useEffect(() => {
+    setGenerationError(null);
+  }, [activeTab]);
 
   // Tracks audits whose prefill RPCs have already been attempted in this
   // session, so opening Stage 5 / switching tabs / re-rendering doesn't fire
@@ -193,25 +201,28 @@ export default function PreAuditDraftingWorkspace() {
     setBundles((prev) => ({ ...prev, [auditId]: next }));
   };
 
-  const runChecklistGeneration = async () => {
-    setGenerating(true);
+  const runDeliverableGeneration = async (tab: TabKey) => {
+    setGeneratingTab(tab);
     setGenerationError(null);
-    const draft = await requestChecklistDraft(auditId);
+    const draft = await requestDeliverableDraft(auditId, tab);
     if (!draft.ok) {
       setGenerationError(draft.error);
-      setGenerating(false);
+      setGeneratingTab(null);
       return;
     }
-    const applied = await applyChecklistGeneration(auditId, draft.data);
+    // Letter: generation never sees recipients — merge the current ones here.
+    const applied = await applyDeliverableGeneration(auditId, draft.data, {
+      currentRecipients: bundle.confirmation_letter?.content.recipients ?? [],
+    });
     if (!applied.ok) {
       setGenerationError(applied.error);
-      setGenerating(false);
+      setGeneratingTab(null);
       return;
     }
     // Refetch server truth — one mapper, one read path.
     const fresh = await fetchPreAuditDeliverables(auditId);
     setBundles((prev) => ({ ...prev, [auditId]: fresh }));
-    setGenerating(false);
+    setGeneratingTab(null);
   };
 
   // Approve rejected by the server's compare-and-swap (STALE_CONTENT): the
@@ -495,35 +506,62 @@ export default function PreAuditDraftingWorkspace() {
 
       {/* Active tab content */}
       {activeTab === 'confirmation_letter' && (
-        <ConfirmationLetterTab
-          deliverable={bundle.confirmation_letter}
-          isLight={isLight}
-          onChange={(next) => {
-            setBundle({ ...bundle, confirmation_letter: next });
-            persistConfirmationLetter(bundle.confirmation_letter, next);
-          }}
-        />
+        <>
+          <DeliverableGenerationPanel
+            kind="confirmation_letter"
+            deliverable={bundle.confirmation_letter}
+            evidenceRows={evidenceRows}
+            generating={generatingTab === 'confirmation_letter'}
+            editing={editingTabs['confirmation_letter'] === true}
+            error={generationError}
+            isLight={isLight}
+            onGenerate={() => void runDeliverableGeneration('confirmation_letter')}
+          />
+          <ConfirmationLetterTab
+            deliverable={bundle.confirmation_letter}
+            isLight={isLight}
+            onChange={(next) => {
+              setBundle({ ...bundle, confirmation_letter: next });
+              persistConfirmationLetter(bundle.confirmation_letter, next);
+            }}
+            onEditingChange={(e) => setTabEditing('confirmation_letter', e)}
+          />
+        </>
       )}
       {activeTab === 'agenda' && (
-        <AgendaTab
-          deliverable={bundle.agenda}
-          isLight={isLight}
-          onChange={(next) => {
-            setBundle({ ...bundle, agenda: next });
-            persistAgenda(bundle.agenda, next);
-          }}
-        />
+        <>
+          <DeliverableGenerationPanel
+            kind="agenda"
+            deliverable={bundle.agenda}
+            evidenceRows={evidenceRows}
+            generating={generatingTab === 'agenda'}
+            editing={editingTabs['agenda'] === true}
+            error={generationError}
+            isLight={isLight}
+            onGenerate={() => void runDeliverableGeneration('agenda')}
+          />
+          <AgendaTab
+            deliverable={bundle.agenda}
+            isLight={isLight}
+            onChange={(next) => {
+              setBundle({ ...bundle, agenda: next });
+              persistAgenda(bundle.agenda, next);
+            }}
+            onEditingChange={(e) => setTabEditing('agenda', e)}
+          />
+        </>
       )}
       {activeTab === 'checklist' && (
         <>
-          <ChecklistGenerationPanel
+          <DeliverableGenerationPanel
+            kind="checklist"
             deliverable={bundle.checklist}
             evidenceRows={evidenceRows}
-            generating={generating}
-            editing={checklistEditing}
+            generating={generatingTab === 'checklist'}
+            editing={editingTabs['checklist'] === true}
             error={generationError}
             isLight={isLight}
-            onGenerate={() => void runChecklistGeneration()}
+            onGenerate={() => void runDeliverableGeneration('checklist')}
           />
           <ChecklistTab
             deliverable={bundle.checklist}
@@ -532,7 +570,7 @@ export default function PreAuditDraftingWorkspace() {
               setBundle({ ...bundle, checklist: next });
               persistChecklist(bundle.checklist, next);
             }}
-            onEditingChange={setChecklistEditing}
+            onEditingChange={(e) => setTabEditing('checklist', e)}
           />
         </>
       )}
@@ -646,23 +684,33 @@ interface ConfirmationLetterTabProps {
   deliverable: MockConfirmationLetter | null;
   isLight: boolean;
   onChange: (next: MockConfirmationLetter | null) => void;
+  // Reports the tab's edit mode so the generation panel can disable
+  // Revise while unsaved edits exist (rule: persist human edits first).
+  onEditingChange?: (editing: boolean) => void;
 }
 
-function ConfirmationLetterTab({ deliverable, isLight, onChange }: ConfirmationLetterTabProps) {
-  const [editing, setEditing] = useState(!deliverable);
+function ConfirmationLetterTab({ deliverable, isLight, onChange, onEditingChange }: ConfirmationLetterTabProps) {
+  const [editing, setEditingRaw] = useState(!deliverable);
+  const setEditing = (next: boolean) => {
+    setEditingRaw(next);
+    onEditingChange?.(next);
+  };
   const [body, setBody] = useState(deliverable?.content.body_text ?? '');
   const [recipients, setRecipients] = useState<string[]>(
     deliverable?.content.recipients ?? [],
   );
   const [scope, setScope] = useState<string[]>(deliverable?.content.scope ?? []);
 
+  // updated_at in the deps: grounded generation mutates this row under the
+  // SAME id (see ChecklistTab for the full rationale). The workspace disables
+  // Draft/Revise while editing, so this resync never fires over unsaved edits.
   useEffect(() => {
     setEditing(!deliverable);
     setBody(deliverable?.content.body_text ?? '');
     setRecipients(deliverable?.content.recipients ?? []);
     setScope(deliverable?.content.scope ?? []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deliverable?.id]);
+  }, [deliverable?.id, deliverable?.updated_at]);
 
   const save = () => {
     onChange({
@@ -795,19 +843,27 @@ interface AgendaTabProps {
   deliverable: MockAgenda | null;
   isLight: boolean;
   onChange: (next: MockAgenda | null) => void;
+  // Reports the tab's edit mode so the generation panel can disable
+  // Revise while unsaved edits exist (rule: persist human edits first).
+  onEditingChange?: (editing: boolean) => void;
 }
 
-function AgendaTab({ deliverable, isLight, onChange }: AgendaTabProps) {
-  const [editing, setEditing] = useState(!deliverable);
+function AgendaTab({ deliverable, isLight, onChange, onEditingChange }: AgendaTabProps) {
+  const [editing, setEditingRaw] = useState(!deliverable);
+  const setEditing = (next: boolean) => {
+    setEditingRaw(next);
+    onEditingChange?.(next);
+  };
   const [items, setItems] = useState<MockAgendaItem[]>(
     deliverable?.content.items ?? [],
   );
 
+  // updated_at in the deps — same same-id resync rationale as ChecklistTab.
   useEffect(() => {
     setEditing(!deliverable);
     setItems(deliverable?.content.items ?? []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deliverable?.id]);
+  }, [deliverable?.id, deliverable?.updated_at]);
 
   const save = () => {
     onChange({
@@ -1010,16 +1066,23 @@ interface ChecklistTabProps {
 }
 
 // ============================================================================
-// ChecklistGenerationPanel — grounded drafting controls + currency notice
-// (PR-C1). Renders above the checklist tab. Three states:
+// DeliverableGenerationPanel — grounded drafting controls + currency notice
+// (PR-C1 checklist, PR-C2 all three). Renders above each tab. Three states:
 //   never generated  → "Draft with PIQC" CTA (grounds in protocol + register)
 //   generated, current → quiet provenance line + Revise with AI
 //   generated, drifted → non-dismissable amber currency notice naming the
 //                        new/removed sources + Revise with AI. Flag, never
 //                        block: the auditor can approve and export regardless.
 // ============================================================================
-interface ChecklistGenerationPanelProps {
-  deliverable: MockChecklist | null;
+const PANEL_NOUNS: Record<TabKey, string> = {
+  confirmation_letter: 'confirmation letter',
+  agenda: 'agenda',
+  checklist: 'checklist',
+};
+
+interface DeliverableGenerationPanelProps {
+  kind: TabKey;
+  deliverable: MockConfirmationLetter | MockAgenda | MockChecklist | null;
   evidenceRows: AuditEvidenceListRow[] | null;
   generating: boolean;
   editing: boolean;
@@ -1028,7 +1091,8 @@ interface ChecklistGenerationPanelProps {
   onGenerate: () => void;
 }
 
-function ChecklistGenerationPanel({
+function DeliverableGenerationPanel({
+  kind,
   deliverable,
   evidenceRows,
   generating,
@@ -1036,7 +1100,7 @@ function ChecklistGenerationPanel({
   error,
   isLight,
   onGenerate,
-}: ChecklistGenerationPanelProps) {
+}: DeliverableGenerationPanelProps) {
   const subColor = 'text-fg-sub';
   const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const buttonPrimary = isLight
@@ -1048,7 +1112,7 @@ function ChecklistGenerationPanel({
   // Diffing against [] would falsely flag every grounded source as removed.
   const currency = evidenceRows === null
     ? null
-    : computeChecklistCurrency(deliverable?.grounding_snapshot, evidenceRows);
+    : computeDeliverableCurrency(deliverable?.grounding_snapshot, evidenceRows);
   const refCount = deliverable?.generation_refs?.length ?? 0;
   const isApproved = deliverable?.approval_status === 'APPROVED';
   const evidenceCount = evidenceRows?.length ?? 0;
@@ -1057,8 +1121,10 @@ function ChecklistGenerationPanel({
     ? hasGeneration ? 'Revising…' : 'Drafting…'
     : hasGeneration ? 'Revise with AI' : 'Draft with PIQC';
 
+  const noun = PANEL_NOUNS[kind];
+
   return (
-    <div className={`${cardBg} border rounded-xl px-4 py-3 space-y-2`} data-testid="checklist-generation-panel">
+    <div className={`${cardBg} border rounded-xl px-4 py-3 space-y-2`} data-testid={`${kind}-generation-panel`}>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="min-w-0">
           {hasGeneration ? (
@@ -1076,7 +1142,7 @@ function ChecklistGenerationPanel({
             </p>
           ) : (
             <p className={`${subColor} text-xs`}>
-              PIQC can draft this checklist grounded in the protocol
+              PIQC can draft this {noun} grounded in the protocol
               {evidenceCount > 0
                 ? ` and the ${evidenceCount} attached evidence source${evidenceCount === 1 ? '' : 's'}`
                 : ''}
@@ -1085,7 +1151,12 @@ function ChecklistGenerationPanel({
           )}
           {isApproved && (
             <p className={`${subColor} text-[11px] mt-1`}>
-              This checklist is Approved — revising returns it to Draft.
+              This {noun} is Approved — revising returns it to Draft.
+            </p>
+          )}
+          {kind === 'confirmation_letter' && (
+            <p className={`${subColor} text-[11px] mt-1`}>
+              Recipients are never sent to the model — they stay exactly as you set them.
             </p>
           )}
         </div>
@@ -1094,7 +1165,7 @@ function ChecklistGenerationPanel({
           disabled={generating || editing}
           onClick={onGenerate}
           title={editing ? 'Save or cancel your edits first — revising would overwrite them' : undefined}
-          data-testid="checklist-generate-button"
+          data-testid={`${kind}-generate-button`}
           className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-md transition-colors flex-shrink-0 ${buttonPrimary}`}
         >
           <Sparkles size={12} />
@@ -1104,7 +1175,7 @@ function ChecklistGenerationPanel({
 
       {currency && !currency.isCurrent && (
         <div
-          data-testid="checklist-currency-notice"
+          data-testid={`${kind}-currency-notice`}
           className={`border rounded-md px-3 py-2 text-xs ${
             isLight
               ? 'bg-amber-50 border-amber-200 text-amber-700'
@@ -1124,7 +1195,7 @@ function ChecklistGenerationPanel({
 
       {error && (
         <p className="text-xs text-rose-500">
-          {error} — your checklist is unchanged.
+          {error} — your {noun} is unchanged.
         </p>
       )}
     </div>

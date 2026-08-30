@@ -406,15 +406,16 @@ export interface AuditEvidenceListRow extends AuditSourceDocument {
 }
 
 // -----------------------------------------------------------------------------
-// Audit-scoped: grounded checklist generation (PR-C1)
+// Audit-scoped: grounded deliverable generation (PR-C1 checklist, PR-C2 fan-out)
 //
-// Mirrors checklist_objects.generation_refs / grounding_snapshot
-// (20260831000000_audit_checklist_generation.sql). Snapshot semantics — refs
-// and grounding may outlive the chunks/documents they name (breadcrumbs, not
-// dependencies), so display code must never join back to live rows.
+// Mirrors generation_refs / grounding_snapshot on checklist_objects,
+// agenda_objects, and confirmation_letter_objects (20260831000000 +
+// 20260901000000). Snapshot semantics — refs and grounding may outlive the
+// chunks/documents they name (breadcrumbs, not dependencies), so display code
+// must never join back to live rows.
 // -----------------------------------------------------------------------------
-export interface ChecklistGenerationRef {
-  item_id: string;                    // MockChecklistItem.id the ref supports
+export interface DeliverableGenerationRef {
+  item_id: string;                    // item id the ref supports ('letter' for the letter's blob-level refs)
   chunk_id: string;
   document_id: string;
   source: 'PROTOCOL' | 'EVIDENCE';
@@ -425,7 +426,7 @@ export interface ChecklistGenerationRef {
   page_end: number | null;
 }
 
-export interface ChecklistGroundingSnapshot {
+export interface DeliverableGroundingSnapshot {
   protocol_document_ids: string[];
   evidence: Array<{
     document_id: string;
