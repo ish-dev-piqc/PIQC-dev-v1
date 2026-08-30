@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: Header IA pass — the four record surfaces collapse into one Records dropdown
-status: active
+status: in-review
 started: 2026-08-30
 target_pr:
 ---
