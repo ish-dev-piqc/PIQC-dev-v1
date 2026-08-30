@@ -30,7 +30,9 @@ import type {
   ProvisionalImpact,
 } from '../../../../types/audit';
 import type { ExtractedItemRecord } from '../../../../types/sotr';
+import { hasReachedStage } from '../../../../lib/audit/workflowStages';
 import HistoryDrawer from '../HistoryDrawer';
+import StagePreviewNotice from '../StagePreviewNotice';
 import SourceTruthListDrawer from '../../../sotr/SourceTruthListDrawer';
 import SourceTruthDrawer from '../../../sotr/SourceTruthDrawer';
 import { formatExtractedValue } from '../../../sotr/WorksheetItemRow';
@@ -87,6 +89,13 @@ export default function AuditConductWorkspace() {
   const { theme } = useTheme();
   const { activeAudit, advanceStage, advanceStageError } = useAudit();
   const isLight = theme === 'light';
+
+  // One-ahead preview guard (UX2): Stage 6 is viewable while the audit is
+  // still at Stage 5. Observations record what happened during conduct, so
+  // creating/editing them — and advancing — waits until the stage is real.
+  const hasReached =
+    !!activeAudit &&
+    hasReachedStage(activeAudit.workflow_type, activeAudit.current_stage, 'AUDIT_CONDUCT');
 
   const {
     workspaceEntries: entriesByAudit,
@@ -287,6 +296,7 @@ export default function AuditConductWorkspace() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
+      {!hasReached && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="min-w-0">
@@ -302,7 +312,7 @@ export default function AuditConductWorkspace() {
             — the system does not propose or score automatically.
           </p>
         </div>
-        {!inForm && (
+        {!inForm && hasReached && (
           <button
             type="button"
             onClick={openAdd}
@@ -396,6 +406,7 @@ export default function AuditConductWorkspace() {
                     : null
                 }
                 onEdit={() => openEdit(e)}
+                previewLocked={!hasReached}
                 onHistoryClick={() => setHistoryTarget({ objectId: e.id })}
                 isLight={isLight}
                 cardBg={cardBg}
@@ -463,7 +474,7 @@ export default function AuditConductWorkspace() {
           <button
             type="button"
             onClick={() => advanceStage('REPORT_DRAFTING')}
-            disabled={entries.length === 0 || alreadyAdvanced}
+            disabled={entries.length === 0 || alreadyAdvanced || !hasReached}
             className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${
               isLight
                 ? 'bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-[#CBD5E1]'
@@ -739,6 +750,8 @@ interface EntryRowProps {
   entry: MockWorkspaceEntry;
   protocolRisk: TaggedSection | null;
   onEdit: () => void;
+  /** One-ahead preview (UX2): hide the edit affordance, keep the record readable. */
+  previewLocked: boolean;
   onHistoryClick: () => void;
   isLight: boolean;
   cardBg: string;
@@ -751,6 +764,7 @@ function EntryRow({
   entry,
   protocolRisk,
   onEdit,
+  previewLocked,
   onHistoryClick,
   isLight,
   cardBg,
@@ -792,14 +806,16 @@ function EntryRow({
             </div>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onEdit}
-          className={`flex-shrink-0 inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
-        >
-          <Pencil size={12} />
-          Edit
-        </button>
+        {!previewLocked && (
+          <button
+            type="button"
+            onClick={onEdit}
+            className={`flex-shrink-0 inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+          >
+            <Pencil size={12} />
+            Edit
+          </button>
+        )}
       </div>
 
       {/* Observation text */}

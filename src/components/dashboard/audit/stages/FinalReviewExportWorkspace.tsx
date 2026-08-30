@@ -35,7 +35,9 @@ import type { AuditWithContext } from '../../../../context/AuditContext';
 import type { MockReportDraft } from '../../../../lib/audit/mockReport';
 import type { MockWorkspaceEntry } from '../../../../lib/audit/mockWorkspaceEntries';
 import type { MockRiskSummary } from '../../../../lib/audit/mockRiskSummary';
+import { hasReachedStage } from '../../../../lib/audit/workflowStages';
 import HistoryDrawer from '../HistoryDrawer';
+import StagePreviewNotice from '../StagePreviewNotice';
 
 // =============================================================================
 // FinalReviewExportWorkspace — FINAL_REVIEW_EXPORT (Stage 8) center pane.
@@ -56,6 +58,14 @@ export default function FinalReviewExportWorkspace() {
   const { activeAudit } = useAudit();
   const { reports, setReports, ...data } = useAuditData();
   const isLight = theme === 'light';
+
+  // One-ahead preview guard (UX2): Stage 8 is viewable while the audit is
+  // still at Stage 7, and the sign-off/export RPCs do NOT re-check
+  // current_stage server-side (20260730000000) — so without this gate an
+  // audit could be signed off and exported before it ever reached Stage 8.
+  const hasReached =
+    !!activeAudit &&
+    hasReachedStage(activeAudit.workflow_type, activeAudit.current_stage, 'FINAL_REVIEW_EXPORT');
 
   const [confirmingSignoff, setConfirmingSignoff] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -278,6 +288,7 @@ export default function FinalReviewExportWorkspace() {
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-5">
+      {!hasReached && activeAudit && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
       {/* Header */}
       <div>
         <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
@@ -448,8 +459,10 @@ export default function FinalReviewExportWorkspace() {
             </div>
             <button
               type="button"
-              onClick={() => allPassed && setConfirmingSignoff(true)}
-              disabled={!allPassed}
+              onClick={() => allPassed && hasReached && setConfirmingSignoff(true)}
+              // !hasReached: the sign-off RPC has no server-side stage check,
+              // so the one-ahead preview must not offer the latch.
+              disabled={!allPassed || !hasReached}
               className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${buttonApprove}`}
             >
               <Lock size={14} />
