@@ -3,7 +3,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useAudit } from '../../../context/AuditContext';
 import type { AuditStage, AuditWorkflowType } from '../../../types/audit';
 import { STAGE_LABELS, AUDIT_TYPE_LABELS, AUDIT_STATUS_LABELS } from '../../../lib/audit/labels';
-import { ChevronDown, Sparkles, FileSearch, Plus, GitBranch, AlertOctagon, Paperclip, FolderOpen, History } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Sparkles, FileSearch, Plus, GitBranch, AlertOctagon, Paperclip, FolderOpen, History } from 'lucide-react';
 import StageNav from './StageNav';
 import AuditRequiredGate from './AuditRequiredGate';
 import RiskSummaryPanel from './RiskSummaryPanel';
@@ -228,6 +228,15 @@ export default function AuditWorkspaceShell() {
   // VENDOR_AUDIT resolves to the canonical 8 stages (behavior-preserving).
   const stages = stagesForWorkflow(activeAudit.workflow_type);
 
+  // Prev/next stepping for the header chevrons. Same lock rule as StageNav and
+  // MobileStagePicker: anything ≤ current+1 is navigable, beyond is locked.
+  const viewedIdx = stages.indexOf(viewedStage);
+  const currentIdx = stages.indexOf(activeAudit.current_stage);
+  const prevStage = viewedIdx > 0 ? stages[viewedIdx - 1] : null;
+  const nextStage =
+    viewedIdx >= 0 && viewedIdx < stages.length - 1 ? stages[viewedIdx + 1] : null;
+  const nextLocked = nextStage !== null && viewedIdx + 1 > currentIdx + 1;
+
   const headerBg = isLight
     ? 'bg-white border-[#E2E8F0]'
     : 'bg-[#0F172A] border-white/5';
@@ -253,13 +262,90 @@ export default function AuditWorkspaceShell() {
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap mb-1">
+                {/* Prev/next stepping — the literal "back and forth". Adjacent
+                    stage names ride the buttons (visible ≥lg, always in the
+                    accessible name); disabled at the pipeline ends and at the
+                    current+1 lock. */}
+                <button
+                  type="button"
+                  disabled={!prevStage}
+                  onClick={() => prevStage && setViewedStage(prevStage)}
+                  aria-label={prevStage ? `Previous stage: ${STAGE_LABELS[prevStage]}` : 'No previous stage'}
+                  title={prevStage ? `Previous: ${STAGE_LABELS[prevStage]}` : undefined}
+                  className={`inline-flex items-center gap-1 px-1 py-0.5 rounded-md transition-colors ${
+                    prevStage
+                      ? isLight
+                        ? 'text-[#334155] hover:bg-[#0F172A]/[0.04]'
+                        : 'text-[#CBD5E1] hover:bg-white/[0.04]'
+                      : `${mutedColor} opacity-40 cursor-default`
+                  }`}
+                >
+                  <ChevronLeft size={14} />
+                  {prevStage && (
+                    <span className={`hidden lg:inline text-[11px] ${mutedColor} max-w-[9rem] truncate`}>
+                      {STAGE_LABELS[prevStage]}
+                    </span>
+                  )}
+                </button>
                 <span className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] uppercase tracking-wider font-semibold ${chipBg}`}>
                   {STAGE_LABELS[viewedStage]}
                 </span>
+                <button
+                  type="button"
+                  disabled={!nextStage || nextLocked}
+                  onClick={() => nextStage && !nextLocked && setViewedStage(nextStage)}
+                  aria-label={
+                    !nextStage
+                      ? 'No next stage'
+                      : nextLocked
+                      ? 'Next stage locked until the audit advances'
+                      : `Next stage: ${STAGE_LABELS[nextStage]}`
+                  }
+                  title={
+                    !nextStage
+                      ? undefined
+                      : nextLocked
+                      ? 'Locked until the audit advances'
+                      : `Next: ${STAGE_LABELS[nextStage]}`
+                  }
+                  className={`inline-flex items-center gap-1 px-1 py-0.5 rounded-md transition-colors ${
+                    nextStage && !nextLocked
+                      ? isLight
+                        ? 'text-[#334155] hover:bg-[#0F172A]/[0.04]'
+                        : 'text-[#CBD5E1] hover:bg-white/[0.04]'
+                      : `${mutedColor} opacity-40 cursor-default`
+                  }`}
+                >
+                  {nextStage && !nextLocked && (
+                    <span className={`hidden lg:inline text-[11px] ${mutedColor} max-w-[9rem] truncate`}>
+                      {STAGE_LABELS[nextStage]}
+                    </span>
+                  )}
+                  <ChevronRight size={14} />
+                </button>
+                {/* Position cue for <md, where the StageNav rail (which carries
+                    "N of M") is hidden. */}
+                <span className={`md:hidden text-[11px] ${mutedColor}`}>
+                  Stage {viewedIdx + 1} of {stages.length}
+                </span>
+                {/* Off-current indicator as an ACTION (all breakpoints). Replaces
+                    dead "Viewing earlier stage" text that was hidden below sm and
+                    wrong when previewing ahead. */}
                 {viewedStage !== activeAudit.current_stage && (
-                  <span className={`text-[11px] ${mutedColor} hidden sm:inline`}>
-                    Viewing earlier stage
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setViewedStage(activeAudit.current_stage)}
+                    className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border transition-colors ${
+                      isLight
+                        ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+                        : 'bg-[#0F172A] border-white/[0.08] text-[#CBD5E1] hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    {/* Direction-aware: current is forward of a past view,
+                        behind an ahead preview. */}
+                    {viewedIdx < currentIdx ? <ChevronRight size={11} /> : <ChevronLeft size={11} />}
+                    Back to current stage
+                  </button>
                 )}
               </div>
               <h2 className={`${headingColor} font-semibold text-base truncate`}>
@@ -748,34 +834,40 @@ function MobileStagePicker({
   const currentIdx = stages.indexOf(currentStage);
 
   return (
-    <div className="md:hidden flex-shrink-0 self-start relative">
-      <select
-        value={viewedStage}
-        onChange={(e) => onSelectStage(e.target.value as AuditStage)}
-        aria-label="Audit stage"
-        className={`appearance-none text-xs font-semibold pl-3 pr-8 py-1.5 rounded-md border transition-colors cursor-pointer ${
-          isLight
-            ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
-            : 'bg-[#0F172A] border-white/[0.08] text-[#CBD5E1] hover:bg-white/[0.04]'
-        }`}
-      >
-        {stages.map((s, idx) => {
-          // Mirror StageNav locking: anything > current+1 is unreachable.
-          const locked = idx > currentIdx + 1;
-          return (
-            <option key={s} value={s} disabled={locked}>
-              {idx + 1}. {STAGE_LABELS[s]}
-              {locked ? ' 🔒' : idx === currentIdx ? ' ← current' : ''}
-            </option>
-          );
-        })}
-      </select>
-      <ChevronDown
-        size={12}
-        className={`pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 ${
-          isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'
-        }`}
-      />
-    </div>
+    // Visible "Stage" label (wrapping <label> also names the select — the old
+    // aria-label-only control read as an unlabeled dropdown).
+    <label className="md:hidden flex-shrink-0 self-start flex items-center gap-1.5">
+      <span className="text-[10px] uppercase tracking-wider font-semibold text-fg-label">
+        Stage
+      </span>
+      <span className="relative">
+        <select
+          value={viewedStage}
+          onChange={(e) => onSelectStage(e.target.value as AuditStage)}
+          className={`appearance-none text-xs font-semibold pl-3 pr-8 py-1.5 rounded-md border transition-colors cursor-pointer ${
+            isLight
+              ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+              : 'bg-[#0F172A] border-white/[0.08] text-[#CBD5E1] hover:bg-white/[0.04]'
+          }`}
+        >
+          {stages.map((s, idx) => {
+            // Mirror StageNav locking: anything > current+1 is unreachable.
+            const locked = idx > currentIdx + 1;
+            return (
+              <option key={s} value={s} disabled={locked}>
+                {idx + 1}. {STAGE_LABELS[s]}
+                {locked ? ' 🔒' : idx === currentIdx ? ' ← current' : ''}
+              </option>
+            );
+          })}
+        </select>
+        <ChevronDown
+          size={12}
+          className={`pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 ${
+            isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'
+          }`}
+        />
+      </span>
+    </label>
   );
 }

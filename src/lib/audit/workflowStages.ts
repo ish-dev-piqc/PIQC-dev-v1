@@ -42,3 +42,19 @@ export function stagesForWorkflow(
       return INVESTIGATOR_SITE_AUDIT_STAGES;
   }
 }
+
+// Has the audit's workflow position reached `stage`? Stage workspaces use this
+// to distinguish a real visit (current or past — fully live) from the one-ahead
+// preview the nav allows, where mutating actions and mount-time writes must
+// stay off. Fails safe: a stage that isn't in this workflow's pipeline (or a
+// currentStage that isn't) is never "reached".
+export function hasReachedStage(
+  workflowType: AuditWorkflowType,
+  currentStage: AuditStage,
+  stage: AuditStage,
+): boolean {
+  const stages = stagesForWorkflow(workflowType);
+  const currentIdx = stages.indexOf(currentStage);
+  const stageIdx = stages.indexOf(stage);
+  return currentIdx >= 0 && stageIdx >= 0 && currentIdx >= stageIdx;
+}
