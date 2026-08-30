@@ -254,6 +254,7 @@ export default function EvidenceDrawer({ audit, onClose }: Props) {
                         setBusy(false);
                         setRemoveArmed(null);
                         if (res.ok) {
+                          setRemoveError(null);
                           await reload();
                         } else {
                           setRemoveError(res.error);

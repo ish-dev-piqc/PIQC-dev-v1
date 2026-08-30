@@ -1,4 +1,5 @@
 import { supabase } from '../supabase';
+import type { Result } from './auditCreationApi';
 import type { AuditEvidenceListRow, AuditSourceDocument } from '../../types/audit';
 
 // =============================================================================
@@ -13,14 +14,6 @@ import type { AuditEvidenceListRow, AuditSourceDocument } from '../../types/audi
 //
 // Migration: supabase/migrations/20260830000000_audit_evidence_register.sql
 // =============================================================================
-
-// Read/create results carry the failure reason instead of collapsing it to [] /
-// null, so a caller can tell a genuine empty list from a DB error and surface
-// the RPC's specific message. Defined locally: mode isolation forbids importing
-// Site Mode's Result<T>.
-export type Result<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
 
 // -----------------------------------------------------------------------------
 // Checkbox normalization
@@ -103,22 +96,32 @@ export async function ingestAuditEvidence(
   }
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-  const res = await fetch(`${supabaseUrl}/functions/v1/ingest`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${session.access_token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      title: params.title.trim() || 'Untitled evidence',
-      source: 'Audit evidence paste',
-      content: normalizeCheckboxes(params.content),
-      kind: 'AUDIT_EVIDENCE',
-    }),
-  });
-
-  const ingest = (await res.json()) as { document_id?: string; error?: string };
-  if (!res.ok || !ingest.document_id) {
+  // fetch/json can throw outright (network drop, gateway HTML error page) —
+  // catch so the Result contract holds and the caller's busy state can't
+  // stick; supabase-js paths below never reject.
+  let resOk: boolean;
+  let ingest: { document_id?: string; error?: string };
+  try {
+    const res = await fetch(`${supabaseUrl}/functions/v1/ingest`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: params.title.trim() || 'Untitled evidence',
+        source: 'Audit evidence paste',
+        content: normalizeCheckboxes(params.content),
+        kind: 'AUDIT_EVIDENCE',
+      }),
+    });
+    resOk = res.ok;
+    ingest = (await res.json()) as { document_id?: string; error?: string };
+  } catch (e) {
+    console.error('[evidenceApi] ingestAuditEvidence fetch threw:', e);
+    return { ok: false, error: 'Evidence ingest failed — check your connection and try again' };
+  }
+  if (!resOk || !ingest.document_id) {
     console.error('[evidenceApi] ingestAuditEvidence ingest error:', ingest.error);
     return { ok: false, error: ingest.error ?? 'Evidence ingest failed' };
   }

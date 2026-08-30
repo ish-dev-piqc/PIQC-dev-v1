@@ -151,6 +151,14 @@ describe('ingestAuditEvidence', () => {
     });
   });
 
+  it('maps a thrown fetch (network drop) to a Result error — busy state must never stick', async () => {
+    mockGetSession.mockResolvedValueOnce(SESSION);
+    mockFetch.mockRejectedValueOnce(new Error('network down'));
+    const res = await ingestAuditEvidence(PARAMS);
+    expect(res.ok).toBe(false);
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
   it('surfaces the ingest error and never calls the attach RPC', async () => {
     mockGetSession.mockResolvedValueOnce(SESSION);
     mockFetch.mockResolvedValueOnce({

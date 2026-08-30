@@ -155,26 +155,28 @@ BEGIN
   RETURNING * INTO v_after;
 
   IF v_after.audit_id IS NOT NULL THEN
-    -- Actual insert — record it. (write_delta no-ops on empty JSONB, so the
-    -- payload must be real.)
+    -- Actual insert — record it. Values are readable strings, not nested
+    -- objects: HistoryDrawer renders object values as raw JSON; a title +
+    -- source_type snapshot is the human record ("breadcrumbs, not
+    -- dependencies" — the document row may be deleted later, so the delta
+    -- must stand on its own). (write_delta no-ops on empty JSONB.)
     PERFORM audit_mode_write_delta(
       'AUDIT'::tracked_object_type,
       p_audit_id,
       jsonb_build_object(
         'evidence_attached', jsonb_build_object(
           'from', NULL,
-          'to', jsonb_build_object(
-            'document_id', p_document_id,
-            'title',       v_doc_title,
-            'source_type', v_after.source_type
-          )
+          'to', coalesce(v_doc_title, '(untitled)') || ' (' || v_after.source_type || ')'
         )
       ),
       v_user,
       'Evidence attached'
     );
   ELSE
-    -- Already attached — idempotent success, no second delta.
+    -- Already attached — idempotent success, no second delta. Note the
+    -- provenance params are IGNORED on this path (existing row wins); v1 UI
+    -- never re-attaches, so a caller wanting different provenance must
+    -- remove and re-attach.
     SELECT * INTO v_after FROM audit_source_documents
     WHERE audit_id = p_audit_id AND document_id = p_document_id;
   END IF;
@@ -241,16 +243,14 @@ BEGIN
     WHERE id = p_document_id AND kind = 'AUDIT_EVIDENCE';
   END IF;
 
+  -- Readable-string snapshot, same rationale as the attach delta: this line
+  -- outlives the document row it describes.
   PERFORM audit_mode_write_delta(
     'AUDIT'::tracked_object_type,
     p_audit_id,
     jsonb_build_object(
       'evidence_removed', jsonb_build_object(
-        'from', jsonb_build_object(
-          'document_id', p_document_id,
-          'title',       v_doc_title,
-          'source_type', v_join.source_type
-        ),
+        'from', coalesce(v_doc_title, '(untitled)') || ' (' || v_join.source_type || ')',
         'to', NULL
       )
     ),
