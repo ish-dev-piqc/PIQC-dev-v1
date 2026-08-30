@@ -2,40 +2,66 @@ import { supabase } from '../supabase';
 import type { Result } from './auditCreationApi';
 import type {
   AuditEvidenceListRow,
-  ChecklistGenerationRef,
-  ChecklistGroundingSnapshot,
+  DeliverableGenerationRef,
+  DeliverableGroundingSnapshot,
 } from '../../types/audit';
-import type { MockChecklistItem } from './mockPreAudit';
+import type { MockAgendaItem, MockChecklistItem } from './mockPreAudit';
 
 // =============================================================================
-// Grounded deliverable generation API (PR-C1 — checklist slice).
+// Grounded deliverable generation API (PR-C1 checklist, PR-C2 fan-out).
 //
-// requestChecklistDraft calls the /audit-checklist-draft edge function, which
-// returns a PROPOSAL (items + gate-verified refs + the grounding it actually
-// retrieved over) and writes nothing. applyChecklistGeneration lands the
-// proposal via audit_mode_apply_checklist_generation — content through the
-// existing upsert (demote-on-edit latch intact), snapshot stamped atomically.
-// The caller refetches the bundle afterward; this module never re-implements
-// the read path.
+// requestDeliverableDraft calls the consolidated /audit-deliverable-draft edge
+// function, which returns a PROPOSAL (content patch + gate-verified refs + the
+// grounding it actually retrieved over) and writes nothing.
+// applyDeliverableGeneration lands it via the per-deliverable
+// audit_mode_apply_*_generation RPC — content through the existing upsert
+// (demote-on-edit latch intact), snapshot stamped atomically. The caller
+// refetches the bundle afterward; this module never re-implements the read
+// path.
 //
-// computeChecklistCurrency is the flag-never-block set-diff: grounding
+// Letter rule: recipients (personnel names) never reach the model — the edge
+// function drafts body_text + scope only, and THIS module merges the current
+// recipients into the applied content.
+//
+// computeDeliverableCurrency is the flag-never-block set-diff: grounding
 // snapshot vs live register. Pure — unit-tested directly.
 // =============================================================================
 
-export interface ChecklistDraftProposal {
+export type DeliverableKind = 'checklist' | 'agenda' | 'confirmation_letter';
+
+export interface DeliverableDraftProposal {
   mode: 'generate' | 'revise';
-  items: MockChecklistItem[];
-  generation_refs: ChecklistGenerationRef[];
-  grounding: ChecklistGroundingSnapshot;
+  deliverable: DeliverableKind;
+  // items for checklist/agenda; body_text + scope for the letter.
+  content_patch: {
+    items?: MockChecklistItem[] | MockAgendaItem[];
+    body_text?: string;
+    scope?: string[];
+  };
+  generation_refs: DeliverableGenerationRef[];
+  grounding: DeliverableGroundingSnapshot;
   dropped_count: number;
   stripped_ref_count: number;
   protocol_source: 'ready' | 'unavailable';
   evidence_doc_count: number;
 }
 
-export async function requestChecklistDraft(
+const APPLY_RPC: Record<DeliverableKind, string> = {
+  checklist: 'audit_mode_apply_checklist_generation',
+  agenda: 'audit_mode_apply_agenda_generation',
+  confirmation_letter: 'audit_mode_apply_confirmation_letter_generation',
+};
+
+const DRAFT_NOUN: Record<DeliverableKind, string> = {
+  checklist: 'Checklist',
+  agenda: 'Agenda',
+  confirmation_letter: 'Confirmation letter',
+};
+
+export async function requestDeliverableDraft(
   auditId: string,
-): Promise<Result<ChecklistDraftProposal>> {
+  deliverable: DeliverableKind,
+): Promise<Result<DeliverableDraftProposal>> {
   const { data: { session } } = await supabase.auth.getSession();
   // Hard fail without a session — generation must never ride the anon key.
   if (!session?.access_token) {
@@ -46,53 +72,64 @@ export async function requestChecklistDraft(
   // fetch/json can throw outright (network drop, gateway HTML error page) —
   // catch so the Result contract holds and the caller's busy state can't stick.
   let resOk: boolean;
-  let payload: (Partial<ChecklistDraftProposal> & { error?: string }) | null;
+  let payload: (Partial<DeliverableDraftProposal> & { error?: string }) | null;
   try {
-    const res = await fetch(`${supabaseUrl}/functions/v1/audit-checklist-draft`, {
+    const res = await fetch(`${supabaseUrl}/functions/v1/audit-deliverable-draft`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${session.access_token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ audit_id: auditId }),
+      body: JSON.stringify({ audit_id: auditId, deliverable }),
     });
     resOk = res.ok;
     payload = (await res.json()) as typeof payload;
   } catch (e) {
-    console.error('[deliverableGenerationApi] requestChecklistDraft fetch threw:', e);
+    console.error('[deliverableGenerationApi] requestDeliverableDraft fetch threw:', e);
     return { ok: false, error: 'Drafting failed — check your connection and try again' };
   }
 
-  if (!resOk || !payload || !Array.isArray(payload.items)) {
-    console.error('[deliverableGenerationApi] requestChecklistDraft error:', payload?.error);
+  if (!resOk || !payload || typeof payload.content_patch !== 'object' || payload.content_patch === null) {
+    console.error('[deliverableGenerationApi] requestDeliverableDraft error:', payload?.error);
     return { ok: false, error: payload?.error ?? 'Drafting failed' };
   }
 
-  return { ok: true, data: payload as ChecklistDraftProposal };
+  return { ok: true, data: payload as DeliverableDraftProposal };
 }
 
 /**
- * Lands an accepted proposal. Returns Result<null>; the caller refetches the
- * bundle via the existing fetchPreAuditDeliverables read path — one mapper,
- * one source of truth for what a checklist row looks like client-side.
+ * Lands an accepted proposal. For the letter, `currentRecipients` is merged
+ * into the content here — generation never sees or emits recipients. Returns
+ * Result<null>; the caller refetches the bundle via fetchPreAuditDeliverables.
  */
-export async function applyChecklistGeneration(
+export async function applyDeliverableGeneration(
   auditId: string,
-  proposal: ChecklistDraftProposal,
+  proposal: DeliverableDraftProposal,
+  opts?: { currentRecipients?: string[] },
 ): Promise<Result<null>> {
-  const { error } = await supabase.rpc('audit_mode_apply_checklist_generation', {
+  const content =
+    proposal.deliverable === 'confirmation_letter'
+      ? {
+          body_text: proposal.content_patch.body_text ?? '',
+          scope: proposal.content_patch.scope ?? [],
+          recipients: opts?.currentRecipients ?? [],
+        }
+      : { items: proposal.content_patch.items ?? [] };
+
+  const noun = DRAFT_NOUN[proposal.deliverable];
+  const { error } = await supabase.rpc(APPLY_RPC[proposal.deliverable], {
     p_audit_id: auditId,
-    p_content: { items: proposal.items },
+    p_content: content,
     p_generation_refs: proposal.generation_refs,
     p_grounding_snapshot: proposal.grounding,
     p_reason:
       proposal.mode === 'revise'
-        ? 'Checklist revised by PIQC from protocol + evidence'
-        : 'Checklist drafted by PIQC from protocol + evidence',
+        ? `${noun} revised by PIQC from protocol + evidence`
+        : `${noun} drafted by PIQC from protocol + evidence`,
   });
 
   if (error) {
-    console.error('[deliverableGenerationApi] applyChecklistGeneration error:', error);
+    console.error('[deliverableGenerationApi] applyDeliverableGeneration error:', error);
     // The supabase-js shape exposes hint on PostgrestError when present.
     const hint = (error as unknown as { hint?: string }).hint;
     return { ok: false, error: hint ?? error.message };
@@ -105,7 +142,7 @@ export async function applyChecklistGeneration(
 // Currency — flag, never block
 // -----------------------------------------------------------------------------
 
-export interface ChecklistCurrency {
+export interface DeliverableCurrency {
   newSinceGeneration: Array<{ document_id: string; title: string }>;
   removedSinceGeneration: Array<{ document_id: string; title: string }>;
   isCurrent: boolean;
@@ -113,13 +150,13 @@ export interface ChecklistCurrency {
 
 /**
  * Set-diff of the generation's grounding snapshot against the live register.
- * null when the checklist was never generated (currency has no meaning), so
+ * null when the deliverable was never generated (currency has no meaning), so
  * callers can distinguish "current" from "not applicable".
  */
-export function computeChecklistCurrency(
-  snapshot: ChecklistGroundingSnapshot | null | undefined,
+export function computeDeliverableCurrency(
+  snapshot: DeliverableGroundingSnapshot | null | undefined,
   liveRegister: AuditEvidenceListRow[],
-): ChecklistCurrency | null {
+): DeliverableCurrency | null {
   if (!snapshot) return null;
 
   const included = liveRegister.filter((r) => r.include_in_generation);

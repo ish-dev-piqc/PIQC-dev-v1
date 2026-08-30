@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: Grounded checklist generation (PR-C1) — generate + snapshot + currency + Revise with AI for the audit checklist
-status: in-review
+status: merged
 started: 2026-08-30
 target_pr:
 ---

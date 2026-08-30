@@ -1,32 +1,26 @@
 // =============================================================================
-// audit-checklist-draft edge function — PIQC drafts the vendor audit checklist
-// grounded in the protocol + the audit's evidence register (PR-C1).
+// audit-deliverable-draft edge function — PIQC drafts a Stage-5 vendor-audit
+// deliverable grounded in the protocol + the audit's evidence register (PR-C2).
 //
-// Takes { audit_id }, fetches the audit + current checklist + evidence register
-// server-side under the caller's JWT (RLS-gated), retrieves passages from the
-// protocol's chunks AND the register's evidence chunks (include_in_generation
-// only), asks OpenAI for checklist items, then gates before returning:
-//   - every ref must name a passage actually sent to the model AND quote it
-//     verbatim (materializeRef, the isa-finding-draft Gate 3) — invalid refs
-//     are STRIPPED, never repaired
-//   - unlike findings, uncited items are ALLOWED: much of a real checklist is
-//     general GxP practice. The non-negotiable is "no fabricated provenance",
-//     not "everything cited".
-//   - in revise mode, existing items keep their SERVER-side ids (the model
-//     sees C-labels, never uuids) — the auditor's items survive by identity.
+// Consolidates the C1 checklist engine at the rule-of-three moment: takes
+// { audit_id, deliverable: 'checklist' | 'agenda' | 'confirmation_letter' },
+// runs ONE engine (JWT ownership proof → service-role retrieval over protocol
+// + register chunks → OpenAI → verbatim-quote ref gate), and shapes output per
+// deliverable. Supersedes /audit-checklist-draft (deleted).
 //
-// Retrieval: service role, but ONLY after the JWT-scoped audit fetch has
-// proven the caller owns the audit (the isa-finding-draft precedent). Chunk
-// RLS is owner-only; the register's evidence docs ARE caller-owned, but the
-// protocol document usually is not.
-//
-// What this function does NOT do:
-//   - write to the database. The client applies the proposal via
-//     audit_mode_apply_checklist_generation (content through the existing
-//     upsert → demote latch intact; snapshot stamped atomically).
-//   - regenerate automatically. A human clicks Generate / Revise (Q&A rule).
-//   - send sponsor or vendor-contact names. Context is protocol/evidence
-//     passages + audit type + protocol title + existing item prompts.
+// Invariants (all three deliverables):
+//   - proposals only — this function never writes to the database. The client
+//     applies via the audit_mode_apply_*_generation RPCs (content through the
+//     existing upserts → demote latch intact; snapshot stamped atomically).
+//   - refs must name a passage actually sent to the model AND quote it
+//     verbatim (materializeRef) — invalid refs are STRIPPED, never repaired.
+//     Uncited entries are allowed: the non-negotiable is no fabricated
+//     provenance, not everything-cited.
+//   - existing entries survive by identity: the model sees C-labels, never
+//     real ids.
+//   - the letter's recipients NEVER reach the model (personnel names); the
+//     client merges current recipients into content at apply time.
+//   - human-triggered only; no auto-regenerate.
 // =============================================================================
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -34,10 +28,10 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
   labelCandidates,
   materializeRef,
-  MAX_QUOTE_CHARS,
   type ProtocolCandidate,
   type ProtocolChunkRow,
 } from "../_shared/protocolCandidates.ts";
+import { AGENDA_PROMPT, CHECKLIST_PROMPT, LETTER_PROMPT } from "./prompts.ts";
 
 // -----------------------------------------------------------------------------
 // CORS + constants
@@ -51,19 +45,30 @@ const corsHeaders = {
 const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX       = 6;         // whole-checklist drafting ~ finding batch weight
+const RATE_LIMIT_MAX       = 6;
 const MAX_BODY_BYTES       = 10_000;
 const OPENAI_TIMEOUT_MS    = 60_000;
-const MAX_PASSAGE_CHARS    = 700;       // truncate per-passage content in prompt
+const MAX_PASSAGE_CHARS    = 700;
 const CANDIDATES_PER_GROUP = 4;
-const MAX_ITEMS            = 40;        // hard cap on returned checklist items
-const MAX_PROMPT_CHARS     = 500;       // per-item prompt length cap
-const MAX_REFS_PER_ITEM    = 2;
+const MAX_PROMPT_CHARS     = 500;   // per-entry text cap (item prompt / topic)
+const MAX_BODY_TEXT_CHARS  = 6_000; // letter body cap
+const MAX_REFS_PER_ENTRY   = 2;
 const EMBEDDING_MODEL      = "text-embedding-3-small";
 
-// Static retrieval lenses — the standard vendor-audit domains a checklist
-// covers. Each embeds as its own query so one domain's passages don't swamp
-// another's (the isa-finding-draft per-domain-group rationale).
+type DeliverableKind = "checklist" | "agenda" | "confirmation_letter";
+
+const DELIVERABLES: Record<DeliverableKind, {
+  table: string;
+  systemPrompt: string;
+  maxItems: number;
+}> = {
+  checklist:           { table: "checklist_objects",           systemPrompt: CHECKLIST_PROMPT, maxItems: 40 },
+  agenda:              { table: "agenda_objects",              systemPrompt: AGENDA_PROMPT,    maxItems: 20 },
+  confirmation_letter: { table: "confirmation_letter_objects", systemPrompt: LETTER_PROMPT,    maxItems: 1 },
+};
+
+// Static retrieval lenses — the standard vendor-audit domains. Per-domain
+// queries so one domain's passages don't swamp another's.
 const QUERY_GROUPS: string[] = [
   "quality management system, standard operating procedures, document control, change control",
   "personnel qualifications, training records, delegation of responsibilities, organization chart",
@@ -107,49 +112,49 @@ function log(level: "info" | "warn" | "error", event: string, fields: Record<str
 }
 
 // -----------------------------------------------------------------------------
-// Prompt
+// Existing-content extraction (C-labels)
 // -----------------------------------------------------------------------------
 
-const CHECKLIST_WRITER_PROMPT = `You draft a vendor-audit checklist for a clinical-trial vendor audit. Your output is a DRAFT the lead auditor reviews and edits item by item — never a final record.
-
-ITEM STRUCTURE:
-- "prompt" is one imperative check the auditor performs on-site or remotely: "Verify …", "Confirm …", "Review …". One check per item — never fuse two checks with "and also".
-- "evidence_expected" is true when the check requires the vendor to produce a record (log, certificate, SOP, report); false for walkthrough/interview checks.
-- Order items by audit flow: quality system first, then personnel/training, data integrity, oversight/subcontracting, safety/CAPA, study-specific procedures last.
-
-GROUNDING:
-- PROTOCOL PASSAGES (labels P1..Pn) are excerpts of THIS study's protocol. EVIDENCE PASSAGES (labels E1..Em) are excerpts of documents the auditor filed for THIS audit (completed questionnaire, SOPs, certificates…).
-- When a passage states the requirement behind an item, cite it: add {"passage":"<label>","quote":"<verbatim contiguous excerpt, max ${MAX_QUOTE_CHARS} characters>"} to the item's "refs" (max ${MAX_REFS_PER_ITEM}).
-- Quotes must be copied EXACTLY from the labeled passage — no paraphrase, no stitching. A missing ref is normal; a wrong one is a serious error.
-- NEVER state a study-specific fact (a number, a schedule, a named procedure) in an item unless a cited passage contains it. General GxP practice items need no ref.
-
-REVISION MODE (when EXISTING ITEMS are provided):
-- Existing items are the auditor's work. Keep each one unless a provided passage clearly makes it redundant or wrong; when kept, return {"existing":"<its C-label>"} and optionally an updated "prompt" ONLY when a passage contradicts the current wording.
-- Add new items for requirements the passages support that no existing item covers. Do not re-order or rewrite for style.
-
-HARD RULES:
-- Sponsor, vendor-contact, and personnel names must NOT appear anywhere in your output.
-- Do not pad: if the passages are thin, produce fewer items.
-- At most ${MAX_ITEMS} items total.
-
-OUTPUT — a single JSON object, no markdown:
-{"items":[{"prompt":"...","evidence_expected":true,"refs":[{"passage":"P1","quote":"..."}],"existing":"C2 or omit"}]}`;
-
-interface ExistingItem {
+interface ExistingEntry {
   id: string;
-  label: string; // "C1".."Ck" — what the model may reference
-  prompt: string;
-  checkpoint_ref: string | null;
-  evidence_expected: boolean;
+  label: string;
+  text: string;                          // what the model sees for this entry
+  raw: Record<string, unknown>;          // full original fields for kept-entry fallback
 }
 
+function extractExisting(kind: DeliverableKind, content: unknown, maxItems: number): ExistingEntry[] {
+  const c = (content ?? {}) as Record<string, unknown>;
+  if (kind === "confirmation_letter") return []; // letter revision passes body/scope, not labeled entries
+  const rawItems = Array.isArray(c.items) ? c.items : [];
+  return rawItems
+    .filter((it): it is Record<string, unknown> => !!it && typeof it === "object")
+    .filter((it) => typeof it.id === "string")
+    .filter((it) => {
+      const text = kind === "checklist" ? it.prompt : it.topic;
+      return typeof text === "string" && text.trim().length > 0;
+    })
+    .slice(0, maxItems)
+    .map((it, i) => ({
+      id: it.id as string,
+      label: `C${i + 1}`,
+      text: String(kind === "checklist" ? it.prompt : it.topic).trim(),
+      raw: it,
+    }));
+}
+
+// -----------------------------------------------------------------------------
+// User message
+// -----------------------------------------------------------------------------
+
 function buildUserMessage(
+  kind: DeliverableKind,
   protocolTitle: string | null,
   auditType: string | null,
   protocolCandidates: ProtocolCandidate[],
   evidenceCandidates: ProtocolCandidate[],
   docTitles: Map<string, string>,
-  existing: ExistingItem[],
+  existing: ExistingEntry[],
+  letterCurrent: { body_text: string; scope: string[] } | null,
 ): string {
   const lines: string[] = [];
   lines.push(`Protocol: ${protocolTitle ?? "(unspecified)"}`);
@@ -181,23 +186,27 @@ function buildUserMessage(
   }
   if (existing.length > 0) {
     lines.push(`EXISTING ITEMS (${existing.length}; revision mode — reference by label):`);
-    for (const e of existing) {
-      lines.push(`[${e.label}] ${e.prompt.slice(0, MAX_PROMPT_CHARS)}`);
-    }
+    for (const e of existing) lines.push(`[${e.label}] ${e.text.slice(0, MAX_PROMPT_CHARS)}`);
+    lines.push("");
+  }
+  if (kind === "confirmation_letter" && letterCurrent) {
+    lines.push("CURRENT LETTER (revision mode — preserve substance):");
+    lines.push(`body_text: ${letterCurrent.body_text.slice(0, MAX_BODY_TEXT_CHARS)}`);
+    lines.push(`scope: ${letterCurrent.scope.join(" | ").slice(0, 2_000)}`);
     lines.push("");
   }
   lines.push(
-    existing.length > 0
-      ? "Revise the checklist against these passages now. Output the JSON object only."
-      : "Draft the checklist now. Output the JSON object only.",
+    existing.length > 0 || letterCurrent
+      ? "Revise against these passages now. Output the JSON object only."
+      : "Draft it now. Output the JSON object only.",
   );
   return lines.join("\n");
 }
 
 // -----------------------------------------------------------------------------
-// Retrieval — one hybrid_search per query group over the COMBINED corpus,
-// partitioned into protocol vs evidence rows afterward by document id. Any
-// failure degrades to "no candidates"; drafting proceeds ungrounded, never 500s.
+// Retrieval — one hybrid_search per query group over the combined corpus,
+// partitioned into protocol vs evidence rows by document id. Failure degrades
+// to "no candidates"; drafting proceeds ungrounded, never 500s.
 // -----------------------------------------------------------------------------
 
 async function embedText(
@@ -222,16 +231,14 @@ async function retrieveCandidates(
   openaiKey: string,
   protocolDocIds: string[],
   evidenceDocIds: string[],
-  existing: ExistingItem[],
+  reviseQuery: string | null,
   signal: AbortSignal,
   requestId: string,
 ): Promise<{ protocol: ProtocolCandidate[]; evidence: ProtocolCandidate[] }> {
   try {
     const allDocIds = [...protocolDocIds, ...evidenceDocIds];
     const queries = [...QUERY_GROUPS];
-    if (existing.length > 0) {
-      queries.push(existing.map((e) => e.prompt).join("\n").slice(0, 4_000));
-    }
+    if (reviseQuery) queries.push(reviseQuery.slice(0, 4_000));
 
     const perGroup = await Promise.all(queries.map(async (queryText) => {
       const embedding = await embedText(openaiKey, queryText, signal);
@@ -260,7 +267,7 @@ async function retrieveCandidates(
       evidence: labelCandidates(flat.filter((r) => evidenceIdSet.has(r.document_id)), "E"),
     };
   } catch (err) {
-    log("warn", "audit_checklist_draft.retrieval_failed", {
+    log("warn", "audit_deliverable_draft.retrieval_failed", {
       request_id: requestId, error: String(err),
     });
     return { protocol: [], evidence: [] };
@@ -285,7 +292,7 @@ Deno.serve(async (req: Request) => {
   const ip = getClientIp(req);
   const rl = checkRateLimit(ip);
   if (!rl.ok) {
-    log("warn", "audit_checklist_draft.rate_limited", { request_id: requestId, ip });
+    log("warn", "audit_deliverable_draft.rate_limited", { request_id: requestId, ip });
     return new Response(JSON.stringify({ error: "Rate limit exceeded" }),
       { status: 429, headers: { ...jsonHeaders, "Retry-After": String(rl.retryAfter) } });
   }
@@ -296,7 +303,7 @@ Deno.serve(async (req: Request) => {
       { status: 413, headers: jsonHeaders });
   }
 
-  let body: { audit_id?: string };
+  let body: { audit_id?: string; deliverable?: string };
   try {
     body = await req.json();
   } catch {
@@ -308,12 +315,18 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: "audit_id is required" }),
       { status: 400, headers: jsonHeaders });
   }
+  const kind = body.deliverable as DeliverableKind;
+  if (kind !== "checklist" && kind !== "agenda" && kind !== "confirmation_letter") {
+    return new Response(JSON.stringify({ error: "deliverable must be checklist, agenda, or confirmation_letter" }),
+      { status: 400, headers: jsonHeaders });
+  }
+  const config = DELIVERABLES[kind];
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
   if (!supabaseUrl || !supabaseAnonKey || !openaiKey) {
-    log("error", "audit_checklist_draft.missing_env", { request_id: requestId });
+    log("error", "audit_deliverable_draft.missing_env", { request_id: requestId });
     return new Response(JSON.stringify({ error: "Service configuration error" }),
       { status: 500, headers: jsonHeaders });
   }
@@ -329,7 +342,7 @@ Deno.serve(async (req: Request) => {
   });
 
   // ---------------------------------------------------------------------------
-  // Context — RLS-gated. Sponsor / vendor-contact names never selected.
+  // Context — RLS-gated. Names never selected.
   // ---------------------------------------------------------------------------
 
   const { data: audit, error: auditErr } = await supabase
@@ -339,52 +352,45 @@ Deno.serve(async (req: Request) => {
     .maybeSingle();
 
   if (auditErr || !audit) {
-    log("warn", "audit_checklist_draft.audit_not_found", { request_id: requestId, audit_id: auditId });
+    log("warn", "audit_deliverable_draft.audit_not_found", { request_id: requestId, audit_id: auditId });
     return new Response(JSON.stringify({ error: "Audit not found or access denied" }),
       { status: 404, headers: jsonHeaders });
   }
   if (audit.workflow_type !== "VENDOR_AUDIT") {
-    return new Response(JSON.stringify({ error: "Checklist drafting is only available on vendor audits" }),
+    return new Response(JSON.stringify({ error: "Deliverable drafting is only available on vendor audits" }),
       { status: 409, headers: jsonHeaders });
   }
 
   const protocol = audit.protocol as { title?: string } | { title?: string }[] | null;
   const protocolTitle = (Array.isArray(protocol) ? protocol[0]?.title : protocol?.title) ?? null;
 
-  // Existing checklist → revision mode. The model sees C-labels; real ids
-  // never leave the server side of this exchange.
-  const { data: checklistRow } = await supabase
-    .from("checklist_objects")
+  // Existing deliverable → revision mode. Letter: body/scope only — recipients
+  // are NEVER read into this function's prompt path.
+  const { data: existingRow } = await supabase
+    .from(config.table)
     .select("content")
     .eq("audit_id", auditId)
     .maybeSingle();
-  const rawItems = (checklistRow?.content as { items?: unknown } | null)?.items;
-  const existing: ExistingItem[] = (Array.isArray(rawItems) ? rawItems : [])
-    .filter((it): it is Record<string, unknown> => !!it && typeof it === "object")
-    .filter((it) => typeof it.id === "string" && typeof it.prompt === "string" && (it.prompt as string).trim().length > 0)
-    .slice(0, MAX_ITEMS)
-    .map((it, i) => ({
-      id: it.id as string,
-      label: `C${i + 1}`,
-      prompt: (it.prompt as string).trim(),
-      checkpoint_ref: typeof it.checkpoint_ref === "string" ? it.checkpoint_ref : null,
-      evidence_expected: it.evidence_expected === true,
-    }));
-  const mode: "generate" | "revise" = existing.length > 0 ? "revise" : "generate";
+  const existingContent = (existingRow?.content ?? null) as Record<string, unknown> | null;
 
-  // Evidence register — JWT/RLS-gated (the lead auditor owns both sides).
+  const existing = extractExisting(kind, existingContent, config.maxItems);
+  let letterCurrent: { body_text: string; scope: string[] } | null = null;
+  if (kind === "confirmation_letter" && existingContent) {
+    const bodyText = typeof existingContent.body_text === "string" ? existingContent.body_text : "";
+    const scope = Array.isArray(existingContent.scope)
+      ? existingContent.scope.filter((sLine): sLine is string => typeof sLine === "string")
+      : [];
+    if (bodyText.trim().length > 0 || scope.length > 0) letterCurrent = { body_text: bodyText, scope };
+  }
+  const mode: "generate" | "revise" = existing.length > 0 || letterCurrent ? "revise" : "generate";
+
+  // Evidence register — JWT/RLS-gated.
   const { data: registerRows } = await supabase
     .from("audit_source_documents")
     .select("document_id, source_type, include_in_generation, documents(title, status, content_hash, kind)")
     .eq("audit_id", auditId);
 
-  type RegisterDoc = {
-    document_id: string;
-    source_type: string;
-    title: string;
-    content_hash: string | null;
-  };
-  const evidenceDocs: RegisterDoc[] = (registerRows ?? []).flatMap((r) => {
+  const evidenceDocs = (registerRows ?? []).flatMap((r) => {
     const docRaw = (r as { documents: unknown }).documents;
     const doc = (Array.isArray(docRaw) ? docRaw[0] : docRaw) as
       | { title?: string; status?: string; content_hash?: string | null; kind?: string }
@@ -399,9 +405,10 @@ Deno.serve(async (req: Request) => {
     }];
   });
 
-  log("info", "audit_checklist_draft.request", {
+  log("info", "audit_deliverable_draft.request", {
     request_id: requestId,
     audit_id: auditId,
+    deliverable: kind,
     mode,
     existing_count: existing.length,
     evidence_doc_count: evidenceDocs.length,
@@ -436,22 +443,19 @@ Deno.serve(async (req: Request) => {
     }
     const evidenceDocIds = evidenceDocs.map((d) => d.document_id);
     if (protocolDocIds.length > 0 || evidenceDocIds.length > 0) {
+      const reviseQuery = existing.length > 0
+        ? existing.map((e) => e.text).join("\n")
+        : letterCurrent
+          ? `${letterCurrent.scope.join("\n")}\n${letterCurrent.body_text}`
+          : null;
       candidates = await retrieveCandidates(
         serviceClient, openaiKey, protocolDocIds, evidenceDocIds,
-        existing, controller.signal, requestId,
+        reviseQuery, controller.signal, requestId,
       );
     }
   }
 
   const docTitles = new Map(evidenceDocs.map((d) => [d.document_id, d.title]));
-
-  log("info", "audit_checklist_draft.candidates", {
-    request_id: requestId,
-    audit_id: auditId,
-    protocol_source: protocolSource,
-    protocol_candidates: candidates.protocol.length,
-    evidence_candidates: candidates.evidence.length,
-  });
 
   // ---------------------------------------------------------------------------
   // OpenAI call — JSON mode, low temperature.
@@ -471,16 +475,12 @@ Deno.serve(async (req: Request) => {
         max_tokens: 4_000,
         response_format: { type: "json_object" },
         messages: [
-          { role: "system", content: CHECKLIST_WRITER_PROMPT },
+          { role: "system", content: config.systemPrompt },
           {
             role: "user",
             content: buildUserMessage(
-              protocolTitle,
-              (audit.audit_type as string | null) ?? null,
-              candidates.protocol,
-              candidates.evidence,
-              docTitles,
-              existing,
+              kind, protocolTitle, (audit.audit_type as string | null) ?? null,
+              candidates.protocol, candidates.evidence, docTitles, existing, letterCurrent,
             ),
           },
         ],
@@ -490,7 +490,7 @@ Deno.serve(async (req: Request) => {
   } catch (err) {
     clearTimeout(timeoutId);
     const aborted = (err as Error).name === "AbortError";
-    log("error", "audit_checklist_draft.openai.fetch_failed", {
+    log("error", "audit_deliverable_draft.openai.fetch_failed", {
       request_id: requestId, aborted, error: String(err),
     });
     return new Response(
@@ -502,7 +502,7 @@ Deno.serve(async (req: Request) => {
 
   if (!openaiRes.ok) {
     const errText = await openaiRes.text();
-    log("error", "audit_checklist_draft.openai.error", {
+    log("error", "audit_deliverable_draft.openai.error", {
       request_id: requestId, status: openaiRes.status, error_preview: errText.slice(0, 200),
     });
     return new Response(JSON.stringify({ error: "AI service error" }),
@@ -511,31 +511,23 @@ Deno.serve(async (req: Request) => {
 
   const payload = await openaiRes.json();
   const content = payload?.choices?.[0]?.message?.content;
-  let parsed: { items?: unknown };
+  let parsed: Record<string, unknown>;
   try {
     parsed = JSON.parse(typeof content === "string" ? content : "");
   } catch {
-    log("error", "audit_checklist_draft.openai.unparseable", { request_id: requestId });
+    log("error", "audit_deliverable_draft.openai.unparseable", { request_id: requestId });
     return new Response(JSON.stringify({ error: "AI service returned unparseable output" }),
       { status: 502, headers: jsonHeaders });
   }
 
   // ---------------------------------------------------------------------------
-  // Gates. Refs validate via materializeRef (verbatim-quote or stripped);
-  // uncited items pass (see header). Existing-item identity maps C-label →
-  // real id; unknown labels demote the item to "new". Counts only in logs.
+  // Gates + shaping. Counts only in logs.
   // ---------------------------------------------------------------------------
 
   const allCandidates = [...candidates.protocol, ...candidates.evidence];
   const evidenceLabelSet = new Set(candidates.evidence.map((c) => c.label));
   const existingByLabel = new Map(existing.map((e) => [e.label, e]));
 
-  interface OutItem {
-    id: string;
-    prompt: string;
-    checkpoint_ref: string | null;
-    evidence_expected: boolean;
-  }
   interface OutRef {
     item_id: string;
     chunk_id: string;
@@ -547,60 +539,19 @@ Deno.serve(async (req: Request) => {
     page_start: number | null;
     page_end: number | null;
   }
-
-  const items: OutItem[] = [];
   const generationRefs: OutRef[] = [];
   let droppedCount = 0;
   let strippedRefCount = 0;
-  const keptExistingIds = new Set<string>();
 
-  const rawOut = Array.isArray(parsed.items) ? parsed.items : [];
-  for (const raw of rawOut) {
-    if (items.length >= MAX_ITEMS) break;
-    if (!raw || typeof raw !== "object") { droppedCount++; continue; }
-    const it = raw as Record<string, unknown>;
-
-    const existingLabel = typeof it.existing === "string" ? it.existing.trim() : null;
-    const kept = existingLabel ? existingByLabel.get(existingLabel) : undefined;
-    if (existingLabel && !kept) {
-      // Unknown C-label — treat as a new item rather than fabricating identity.
-      log("warn", "audit_checklist_draft.unknown_existing_label", {
-        request_id: requestId, label: existingLabel,
-      });
-    }
-    if (kept && keptExistingIds.has(kept.id)) { droppedCount++; continue; }
-
-    const promptText = typeof it.prompt === "string" ? it.prompt.trim() : "";
-    if (!kept && (promptText.length === 0 || promptText.length > MAX_PROMPT_CHARS)) {
-      droppedCount++;
-      continue;
-    }
-
-    const item: OutItem = kept
-      ? {
-        id: kept.id,
-        // A revised wording is accepted only within the length cap; the
-        // auditor's own text is the fallback, never dropped.
-        prompt: promptText.length > 0 && promptText.length <= MAX_PROMPT_CHARS ? promptText : kept.prompt,
-        checkpoint_ref: kept.checkpoint_ref,
-        evidence_expected: typeof it.evidence_expected === "boolean" ? it.evidence_expected : kept.evidence_expected,
-      }
-      : {
-        id: crypto.randomUUID(),
-        prompt: promptText,
-        checkpoint_ref: null,
-        evidence_expected: it.evidence_expected === true,
-      };
-    if (kept) keptExistingIds.add(kept.id);
-
-    const rawRefs = Array.isArray(it.refs) ? it.refs.slice(0, MAX_REFS_PER_ITEM) : [];
-    for (const rawRef of rawRefs) {
+  const gateRefs = (rawRefs: unknown, itemId: string) => {
+    const refs = Array.isArray(rawRefs) ? rawRefs.slice(0, MAX_REFS_PER_ENTRY) : [];
+    for (const rawRef of refs) {
       const r = rawRef as Record<string, unknown> | null;
       const snapshot = materializeRef(r?.passage, r?.quote, allCandidates);
       if (!snapshot) { strippedRefCount++; continue; }
       const label = String(r?.passage ?? "").trim();
       generationRefs.push({
-        item_id: item.id,
+        item_id: itemId,
         chunk_id: snapshot.chunk_id,
         document_id: snapshot.document_id,
         source: evidenceLabelSet.has(label) ? "EVIDENCE" : "PROTOCOL",
@@ -611,13 +562,116 @@ Deno.serve(async (req: Request) => {
         page_end: snapshot.page_end,
       });
     }
+  };
 
-    items.push(item);
+  // Shaped per deliverable. `content_patch` is what the client merges into the
+  // deliverable's content at apply time (letter: recipients merged client-side).
+  let contentPatch: Record<string, unknown>;
+  let outCount = 0;
+  const keptExistingIds = new Set<string>();
+
+  if (kind === "confirmation_letter") {
+    const bodyText = typeof parsed.body_text === "string" ? parsed.body_text.trim().slice(0, MAX_BODY_TEXT_CHARS) : "";
+    const scope = (Array.isArray(parsed.scope) ? parsed.scope : [])
+      .filter((sLine): sLine is string => typeof sLine === "string" && sLine.trim().length > 0)
+      .map((sLine) => sLine.trim().slice(0, MAX_PROMPT_CHARS))
+      .slice(0, 20);
+    if (bodyText.length === 0) {
+      log("error", "audit_deliverable_draft.empty_letter", { request_id: requestId });
+      return new Response(JSON.stringify({ error: "AI service returned an empty letter draft" }),
+        { status: 502, headers: jsonHeaders });
+    }
+    gateRefs(parsed.refs, "letter");
+    contentPatch = { body_text: bodyText, scope };
+    outCount = 1;
+  } else {
+    interface OutItem { id: string; [k: string]: unknown }
+    const items: OutItem[] = [];
+    const rawOut = Array.isArray(parsed.items) ? parsed.items : [];
+    for (const raw of rawOut) {
+      if (items.length >= config.maxItems) break;
+      if (!raw || typeof raw !== "object") { droppedCount++; continue; }
+      const it = raw as Record<string, unknown>;
+
+      const existingLabel = typeof it.existing === "string" ? it.existing.trim() : null;
+      const kept = existingLabel ? existingByLabel.get(existingLabel) : undefined;
+      if (existingLabel && !kept) {
+        log("warn", "audit_deliverable_draft.unknown_existing_label", {
+          request_id: requestId, label: existingLabel,
+        });
+      }
+      if (kept && keptExistingIds.has(kept.id)) { droppedCount++; continue; }
+
+      const textField = kind === "checklist" ? "prompt" : "topic";
+      const textValue = typeof it[textField] === "string" ? (it[textField] as string).trim() : "";
+      if (!kept && (textValue.length === 0 || textValue.length > MAX_PROMPT_CHARS)) {
+        droppedCount++;
+        continue;
+      }
+      const textOrKept = textValue.length > 0 && textValue.length <= MAX_PROMPT_CHARS
+        ? textValue
+        : String(kept?.raw[textField] ?? "");
+
+      let item: OutItem;
+      if (kind === "checklist") {
+        item = kept
+          ? {
+            id: kept.id,
+            prompt: textOrKept,
+            checkpoint_ref: (kept.raw.checkpoint_ref as string | null) ?? null,
+            evidence_expected: typeof it.evidence_expected === "boolean"
+              ? it.evidence_expected
+              : kept.raw.evidence_expected === true,
+          }
+          : {
+            id: crypto.randomUUID(),
+            prompt: textOrKept,
+            checkpoint_ref: null,
+            evidence_expected: it.evidence_expected === true,
+          };
+      } else {
+        // Agenda: a kept item's time and owner are the auditor's — never
+        // model-updated (prompt says so; this enforces it).
+        const timeValue = typeof it.time === "string" ? it.time.trim().slice(0, 40) : "";
+        const ownerValue = typeof it.owner === "string" ? it.owner.trim().slice(0, 60) : "";
+        const notesValue = typeof it.notes === "string" && it.notes.trim().length > 0
+          ? it.notes.trim().slice(0, MAX_PROMPT_CHARS)
+          : null;
+        item = kept
+          ? {
+            id: kept.id,
+            time: String(kept.raw.time ?? ""),
+            topic: textOrKept,
+            owner: String(kept.raw.owner ?? "Auditor"),
+            notes: notesValue ?? ((kept.raw.notes as string | null) ?? null),
+          }
+          : {
+            id: crypto.randomUUID(),
+            time: timeValue || "TBD",
+            topic: textOrKept,
+            owner: ownerValue || "Auditor",
+            notes: notesValue,
+          };
+      }
+      if (kept) keptExistingIds.add(kept.id);
+
+      gateRefs(it.refs, item.id);
+      items.push(item);
+    }
+    if (items.length === 0) {
+      // Never apply an empty item set: in revise mode it would wipe the
+      // auditor's persisted items on the strength of a garbage model reply
+      // (apply is automatic client-side — no human sits between proposal and
+      // apply). In generate mode an empty draft is useless anyway.
+      log("error", "audit_deliverable_draft.empty_items", {
+        request_id: requestId, deliverable: kind, mode,
+      });
+      return new Response(JSON.stringify({ error: "AI service returned an empty draft" }),
+        { status: 502, headers: jsonHeaders });
+    }
+    contentPatch = { items };
+    outCount = items.length;
   }
-
-  // In revise mode, auditor items the model dropped are NOT resurrected here:
-  // the model was instructed to keep-unless-redundant, and the auditor reviews
-  // the proposal side-by-side before applying. The apply step is theirs.
 
   const grounding = {
     protocol_document_ids: protocolDocIds,
@@ -629,11 +683,12 @@ Deno.serve(async (req: Request) => {
     })),
   };
 
-  log("info", "audit_checklist_draft.response", {
+  log("info", "audit_deliverable_draft.response", {
     request_id: requestId,
     audit_id: auditId,
+    deliverable: kind,
     mode,
-    item_count: items.length,
+    out_count: outCount,
     kept_existing_count: keptExistingIds.size,
     dropped_count: droppedCount,
     stripped_ref_count: strippedRefCount,
@@ -643,7 +698,8 @@ Deno.serve(async (req: Request) => {
 
   return new Response(JSON.stringify({
     mode,
-    items,
+    deliverable: kind,
+    content_patch: contentPatch,
     generation_refs: generationRefs,
     grounding,
     dropped_count: droppedCount,

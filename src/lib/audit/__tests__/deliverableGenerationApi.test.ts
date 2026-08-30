@@ -1,12 +1,15 @@
-// Unit tests for deliverableGenerationApi (PR-C1 — grounded checklist slice).
+// Unit tests for deliverableGenerationApi (PR-C1 checklist, PR-C2 fan-out).
 //
 // Locks the contracts that keep generation honest at the API boundary:
 //   - no session is a hard fail (never the anon key), and a thrown fetch maps
 //     to a Result error so the caller's busy state can't stick
-//   - apply sends the proposal's OWN grounding through to the RPC verbatim —
-//     the snapshot records what generation saw, not what the client believes
-//   - computeChecklistCurrency: pure set-diff, flag-never-block semantics,
-//     null when the checklist was never generated
+//   - apply routes each deliverable to its own RPC and sends the proposal's
+//     OWN grounding through verbatim — the snapshot records what generation
+//     saw, not what the client believes
+//   - the letter's recipients are merged client-side at apply — generation
+//     never sees or emits them
+//   - computeDeliverableCurrency: pure set-diff, flag-never-block semantics,
+//     null when the deliverable was never generated
 //
 // Mock surface mirrors evidenceApi.test.ts (vi.hoisted supabase mock +
 // stubbed global fetch).
@@ -26,23 +29,31 @@ vi.mock('../../supabase', () => ({
 }));
 
 import {
-  applyChecklistGeneration,
-  computeChecklistCurrency,
-  requestChecklistDraft,
-  type ChecklistDraftProposal,
+  applyDeliverableGeneration,
+  computeDeliverableCurrency,
+  requestDeliverableDraft,
+  type DeliverableDraftProposal,
 } from '../deliverableGenerationApi';
-import type { AuditEvidenceListRow, ChecklistGroundingSnapshot } from '../../../types/audit';
+import type { AuditEvidenceListRow, DeliverableGroundingSnapshot } from '../../../types/audit';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
 const SESSION = { data: { session: { access_token: 'jwt-token' } } };
 
-const PROPOSAL: ChecklistDraftProposal = {
+const GROUNDING: DeliverableGroundingSnapshot = {
+  protocol_document_ids: ['pd1'],
+  evidence: [{ document_id: 'd1', content_hash: 'abc', title: 'QA SOP v3', source_type: 'SOP' }],
+};
+
+const CHECKLIST_PROPOSAL: DeliverableDraftProposal = {
   mode: 'generate',
-  items: [
-    { id: 'i1', prompt: 'Verify SOP index is current', checkpoint_ref: null, evidence_expected: true },
-  ],
+  deliverable: 'checklist',
+  content_patch: {
+    items: [
+      { id: 'i1', prompt: 'Verify SOP index is current', checkpoint_ref: null, evidence_expected: true },
+    ],
+  },
   generation_refs: [
     {
       item_id: 'i1',
@@ -56,14 +67,21 @@ const PROPOSAL: ChecklistDraftProposal = {
       page_end: null,
     },
   ],
-  grounding: {
-    protocol_document_ids: ['pd1'],
-    evidence: [{ document_id: 'd1', content_hash: 'abc', title: 'QA SOP v3', source_type: 'SOP' }],
-  },
+  grounding: GROUNDING,
   dropped_count: 0,
   stripped_ref_count: 0,
   protocol_source: 'ready',
   evidence_doc_count: 1,
+};
+
+const LETTER_PROPOSAL: DeliverableDraftProposal = {
+  ...CHECKLIST_PROPOSAL,
+  deliverable: 'confirmation_letter',
+  mode: 'revise',
+  content_patch: {
+    body_text: 'This letter confirms the audit…',
+    scope: ['Quality management system', 'Data integrity'],
+  },
 };
 
 function evidenceRow(overrides: Partial<AuditEvidenceListRow>): AuditEvidenceListRow {
@@ -82,7 +100,7 @@ function evidenceRow(overrides: Partial<AuditEvidenceListRow>): AuditEvidenceLis
   };
 }
 
-describe('requestChecklistDraft', () => {
+describe('requestDeliverableDraft', () => {
   beforeEach(() => {
     mockGetSession.mockReset();
     mockFetch.mockReset();
@@ -90,68 +108,92 @@ describe('requestChecklistDraft', () => {
 
   it('hard-fails without a session and never calls fetch', async () => {
     mockGetSession.mockResolvedValueOnce({ data: { session: null } });
-    const res = await requestChecklistDraft('a1');
+    const res = await requestDeliverableDraft('a1', 'agenda');
     expect(res.ok).toBe(false);
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('posts the audit id and returns the proposal', async () => {
+  it('posts the audit id + deliverable and returns the proposal', async () => {
     mockGetSession.mockResolvedValueOnce(SESSION);
-    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => PROPOSAL });
-    const res = await requestChecklistDraft('a1');
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => CHECKLIST_PROPOSAL });
+    const res = await requestDeliverableDraft('a1', 'checklist');
 
     const [url, init] = mockFetch.mock.calls[0];
-    expect(String(url)).toContain('/functions/v1/audit-checklist-draft');
+    expect(String(url)).toContain('/functions/v1/audit-deliverable-draft');
     expect(init.headers.Authorization).toBe('Bearer jwt-token');
-    expect(JSON.parse(init.body)).toEqual({ audit_id: 'a1' });
-    expect(res).toEqual({ ok: true, data: PROPOSAL });
+    expect(JSON.parse(init.body)).toEqual({ audit_id: 'a1', deliverable: 'checklist' });
+    expect(res).toEqual({ ok: true, data: CHECKLIST_PROPOSAL });
   });
 
   it('surfaces the server error message on a non-OK response', async () => {
     mockGetSession.mockResolvedValueOnce(SESSION);
     mockFetch.mockResolvedValueOnce({
       ok: false,
-      json: async () => ({ error: 'Checklist drafting is only available on vendor audits' }),
+      json: async () => ({ error: 'Deliverable drafting is only available on vendor audits' }),
     });
-    const res = await requestChecklistDraft('a1');
+    const res = await requestDeliverableDraft('a1', 'agenda');
     expect(res).toEqual({
       ok: false,
-      error: 'Checklist drafting is only available on vendor audits',
+      error: 'Deliverable drafting is only available on vendor audits',
     });
   });
 
   it('maps a thrown fetch (network drop) to a Result error — busy state must never stick', async () => {
     mockGetSession.mockResolvedValueOnce(SESSION);
     mockFetch.mockRejectedValueOnce(new Error('network down'));
-    const res = await requestChecklistDraft('a1');
+    const res = await requestDeliverableDraft('a1', 'confirmation_letter');
     expect(res.ok).toBe(false);
   });
 });
 
-describe('applyChecklistGeneration', () => {
+describe('applyDeliverableGeneration', () => {
   beforeEach(() => {
     mockRpc.mockReset();
   });
 
-  it('passes the proposal grounding through verbatim with generate attribution', async () => {
+  it('routes the checklist to its RPC with items content and generate attribution', async () => {
     mockRpc.mockResolvedValueOnce({ data: { id: 'ch1' }, error: null });
-    const res = await applyChecklistGeneration('a1', PROPOSAL);
+    const res = await applyDeliverableGeneration('a1', CHECKLIST_PROPOSAL);
     expect(mockRpc).toHaveBeenCalledWith('audit_mode_apply_checklist_generation', {
       p_audit_id: 'a1',
-      p_content: { items: PROPOSAL.items },
-      p_generation_refs: PROPOSAL.generation_refs,
-      p_grounding_snapshot: PROPOSAL.grounding,
+      p_content: { items: CHECKLIST_PROPOSAL.content_patch.items },
+      p_generation_refs: CHECKLIST_PROPOSAL.generation_refs,
+      p_grounding_snapshot: CHECKLIST_PROPOSAL.grounding,
       p_reason: 'Checklist drafted by PIQC from protocol + evidence',
     });
     expect(res).toEqual({ ok: true, data: null });
   });
 
-  it('uses the revise attribution when the proposal was a revision', async () => {
+  it('routes the agenda to its RPC with revise attribution', async () => {
     mockRpc.mockResolvedValueOnce({ data: null, error: null });
-    await applyChecklistGeneration('a1', { ...PROPOSAL, mode: 'revise' });
-    expect(mockRpc.mock.calls[0][1].p_reason).toBe(
-      'Checklist revised by PIQC from protocol + evidence',
-    );
+    await applyDeliverableGeneration('a1', {
+      ...CHECKLIST_PROPOSAL,
+      deliverable: 'agenda',
+      mode: 'revise',
+    });
+    const [rpcName, args] = mockRpc.mock.calls[0];
+    expect(rpcName).toBe('audit_mode_apply_agenda_generation');
+    expect(args.p_reason).toBe('Agenda revised by PIQC from protocol + evidence');
+  });
+
+  it('merges current recipients into letter content — generation never emits them', async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: null });
+    await applyDeliverableGeneration('a1', LETTER_PROPOSAL, {
+      currentRecipients: ['Quality Assurance Team'],
+    });
+    const [rpcName, args] = mockRpc.mock.calls[0];
+    expect(rpcName).toBe('audit_mode_apply_confirmation_letter_generation');
+    expect(args.p_content).toEqual({
+      body_text: 'This letter confirms the audit…',
+      scope: ['Quality management system', 'Data integrity'],
+      recipients: ['Quality Assurance Team'],
+    });
+  });
+
+  it('defaults letter recipients to empty when none are supplied', async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: null });
+    await applyDeliverableGeneration('a1', LETTER_PROPOSAL);
+    expect(mockRpc.mock.calls[0][1].p_content.recipients).toEqual([]);
   });
 
   it('prefers the RPC hint over the raw message on failure', async () => {
@@ -159,24 +201,21 @@ describe('applyChecklistGeneration', () => {
       data: null,
       error: { message: '23514', hint: 'grounding_snapshot must be a JSON object' },
     });
-    const res = await applyChecklistGeneration('a1', PROPOSAL);
+    const res = await applyDeliverableGeneration('a1', CHECKLIST_PROPOSAL);
     expect(res).toEqual({ ok: false, error: 'grounding_snapshot must be a JSON object' });
   });
 });
 
-describe('computeChecklistCurrency', () => {
-  const SNAPSHOT: ChecklistGroundingSnapshot = {
-    protocol_document_ids: ['pd1'],
-    evidence: [{ document_id: 'd1', content_hash: 'abc', title: 'QA SOP v3', source_type: 'SOP' }],
-  };
+describe('computeDeliverableCurrency', () => {
+  const SNAPSHOT = GROUNDING;
 
-  it('returns null when the checklist was never generated', () => {
-    expect(computeChecklistCurrency(null, [evidenceRow({})])).toBeNull();
-    expect(computeChecklistCurrency(undefined, [])).toBeNull();
+  it('returns null when the deliverable was never generated', () => {
+    expect(computeDeliverableCurrency(null, [evidenceRow({})])).toBeNull();
+    expect(computeDeliverableCurrency(undefined, [])).toBeNull();
   });
 
   it('is current when the live register matches the snapshot', () => {
-    const currency = computeChecklistCurrency(SNAPSHOT, [evidenceRow({})]);
+    const currency = computeDeliverableCurrency(SNAPSHOT, [evidenceRow({})]);
     expect(currency).toEqual({
       newSinceGeneration: [],
       removedSinceGeneration: [],
@@ -185,7 +224,7 @@ describe('computeChecklistCurrency', () => {
   });
 
   it('flags a source added after generation', () => {
-    const currency = computeChecklistCurrency(SNAPSHOT, [
+    const currency = computeDeliverableCurrency(SNAPSHOT, [
       evidenceRow({}),
       evidenceRow({ document_id: 'd2', title: 'Training matrix' }),
     ]);
@@ -195,13 +234,13 @@ describe('computeChecklistCurrency', () => {
   });
 
   it('flags a grounded source removed after generation', () => {
-    const currency = computeChecklistCurrency(SNAPSHOT, []);
+    const currency = computeDeliverableCurrency(SNAPSHOT, []);
     expect(currency?.isCurrent).toBe(false);
     expect(currency?.removedSinceGeneration).toEqual([{ document_id: 'd1', title: 'QA SOP v3' }]);
   });
 
   it('ignores register rows withheld from generation', () => {
-    const currency = computeChecklistCurrency(SNAPSHOT, [
+    const currency = computeDeliverableCurrency(SNAPSHOT, [
       evidenceRow({}),
       evidenceRow({ document_id: 'd3', title: 'Withheld doc', include_in_generation: false }),
     ]);

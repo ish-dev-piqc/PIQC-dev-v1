@@ -1,8 +1,8 @@
 // =============================================================================
 // Document-passage candidates for grounded generation (shared).
 //
-// Born in isa-finding-draft; moved to _shared/ when audit-checklist-draft
-// adopted the same citation bridge. The contract is generation-surface
+// Born in isa-finding-draft; moved to _shared/ when the Stage-5 deliverable
+// drafting engine adopted the same citation bridge. The contract is generation-surface
 // agnostic:
 //
 // The model never sees chunk uuids and never composes provenance. It sees
@@ -16,7 +16,7 @@
 // Pure module — no Deno APIs. Unit tested from
 // src/lib/audit/__tests__/isaProtocolCandidates.test.ts (cross-tree, like
 // isa-finding-draft's gates.ts). Consumers: isa-finding-draft (P-labels),
-// audit-checklist-draft (P- and E-labels via the labelPrefix arg).
+// audit-deliverable-draft (P- and E-labels via the labelPrefix arg).
 // =============================================================================
 
 export interface ProtocolChunkRow {

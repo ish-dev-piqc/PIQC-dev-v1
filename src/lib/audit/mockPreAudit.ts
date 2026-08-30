@@ -13,8 +13,8 @@
 // =============================================================================
 
 import type {
-  ChecklistGenerationRef,
-  ChecklistGroundingSnapshot,
+  DeliverableGenerationRef,
+  DeliverableGroundingSnapshot,
   DeliverableApprovalStatus,
 } from '../../types/audit';
 
@@ -41,6 +41,11 @@ export interface MockConfirmationLetter {
   source_risk_summary_id?: string | null;
   source_questionnaire_instance_id?: string | null;
   prefilled_at?: string | null;
+  // Grounded-generation provenance (PR-C2) — set when drafted/revised by
+  // PIQC from protocol + evidence passages.
+  generation_refs?: DeliverableGenerationRef[] | null;
+  grounding_snapshot?: DeliverableGroundingSnapshot | null;
+  generated_at?: string | null;
 }
 
 // -----------------------------------------------------------------------------
@@ -71,6 +76,11 @@ export interface MockAgenda {
   // the approved Stage 4 risk summary.
   source_risk_summary_id?: string | null;
   prefilled_at?: string | null;
+  // Grounded-generation provenance (PR-C2) — set when drafted/revised by
+  // PIQC from protocol + evidence passages.
+  generation_refs?: DeliverableGenerationRef[] | null;
+  grounding_snapshot?: DeliverableGroundingSnapshot | null;
+  generated_at?: string | null;
 }
 
 // -----------------------------------------------------------------------------
@@ -102,8 +112,8 @@ export interface MockChecklist {
   prefilled_at?: string | null;
   // Grounded-generation provenance (PR-C1) — set when the checklist was
   // drafted/revised by PIQC from protocol + evidence passages.
-  generation_refs?: ChecklistGenerationRef[] | null;
-  grounding_snapshot?: ChecklistGroundingSnapshot | null;
+  generation_refs?: DeliverableGenerationRef[] | null;
+  grounding_snapshot?: DeliverableGroundingSnapshot | null;
   generated_at?: string | null;
 }
 
