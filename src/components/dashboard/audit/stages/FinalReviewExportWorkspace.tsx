@@ -19,6 +19,7 @@ import {
   verifyExportReadiness,
 } from '../../../../lib/audit/reportApi';
 import { getStageReadout } from '../../../../lib/audit/auditApi';
+import { formatAuditWindow } from '../../../../lib/audit/dateWindow';
 import { fetchPreAuditDeliverables } from '../../../../lib/audit/preAuditApi';
 import { listAuditEvidence } from '../../../../lib/audit/evidenceApi';
 import {
@@ -589,7 +590,8 @@ function buildMarkdown(
   push(`**Protocol:** ${audit.protocol_code} — ${audit.protocol_title}  `);
   push(`**Phase:** ${audit.clinical_trial_phase.replace(/_/g, ' ').replace('PHASE ', 'Phase ')}  `);
   push(`**Audit type:** ${audit.audit_type}  `);
-  if (audit.scheduled_date) push(`**Scheduled date:** ${audit.scheduled_date}  `);
+  const scheduledWindow = formatAuditWindow(audit.scheduled_date, audit.scheduled_end_date);
+  if (scheduledWindow) push(`**Scheduled:** ${scheduledWindow}  `);
   if (report.final_signed_off_at)
     push(`**Signed off:** ${formatTimestamp(report.final_signed_off_at)}${report.final_signed_off_by_name ? ` · ${report.final_signed_off_by_name}` : ''}  `);
 
@@ -672,7 +674,8 @@ async function buildDocx(
   children.push(bold('Protocol: ', `${audit.protocol_code} — ${audit.protocol_title}`));
   children.push(bold('Phase: ', audit.clinical_trial_phase.replace(/_/g, ' ').replace('PHASE ', 'Phase ')));
   children.push(bold('Audit type: ', audit.audit_type));
-  if (audit.scheduled_date) children.push(bold('Scheduled date: ', audit.scheduled_date));
+  const scheduledWindow = formatAuditWindow(audit.scheduled_date, audit.scheduled_end_date);
+  if (scheduledWindow) children.push(bold('Scheduled: ', scheduledWindow));
   if (report.final_signed_off_at)
     children.push(bold('Signed off: ', formatTimestamp(report.final_signed_off_at)));
 

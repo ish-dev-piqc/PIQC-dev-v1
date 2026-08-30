@@ -194,6 +194,7 @@ export interface Audit {
   current_stage: AuditStage;
   lead_auditor_id: string;          // auth.users.id
   scheduled_date: string | null;    // yyyy-mm-dd
+  scheduled_end_date: string | null; // yyyy-mm-dd; null = single-day (or unscheduled)
   created_at: string;
   updated_at: string;
 }

@@ -48,6 +48,7 @@ const AUDIT: AuditWithContext = {
   status: 'IN_PROGRESS',
   current_stage: 'AUDIT_CONDUCT',
   scheduled_date: null,
+  scheduled_end_date: null,
   vendor_name: 'Acme ePRO GmbH',
   auditee_name: 'Acme ePRO GmbH',
   site_number: null,

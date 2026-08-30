@@ -28,6 +28,7 @@ const AUDIT_ROW = {
   status: 'IN_PROGRESS',
   current_stage: 'SCOPE_AND_RISK_REVIEW' as AuditStage,
   scheduled_date: null,
+  scheduled_end_date: null,
   protocol_id: 'protocol-1',
   protocol_version_id: 'protocol-version-1',
   vendors: { name: 'Acme CRO' },

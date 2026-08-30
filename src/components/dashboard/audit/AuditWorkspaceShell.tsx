@@ -3,7 +3,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useAudit } from '../../../context/AuditContext';
 import type { AuditStage, AuditWorkflowType } from '../../../types/audit';
 import { STAGE_LABELS, AUDIT_TYPE_LABELS, AUDIT_STATUS_LABELS } from '../../../lib/audit/labels';
-import { ChevronDown, Sparkles, FileSearch, Plus, GitBranch, AlertOctagon, Paperclip, FolderOpen } from 'lucide-react';
+import { ChevronDown, Sparkles, FileSearch, Plus, GitBranch, AlertOctagon, Paperclip, FolderOpen, History } from 'lucide-react';
 import StageNav from './StageNav';
 import AuditRequiredGate from './AuditRequiredGate';
 import RiskSummaryPanel from './RiskSummaryPanel';
@@ -12,6 +12,8 @@ import NewAuditDrawer from './onboarding/NewAuditDrawer';
 import TraceabilityDrawer from './TraceabilityDrawer';
 import IssuesCapaDrawer from './IssuesCapaDrawer';
 import EvidenceDrawer from './EvidenceDrawer';
+import HistoryDrawer from './HistoryDrawer';
+import RescheduleAuditPopover from './RescheduleAuditPopover';
 import { EvidenceOpenContext } from './evidenceDrawerContext';
 import AuditChatPanel from './AuditChatPanel';
 import PiqcDock from './PiqcDock';
@@ -77,7 +79,7 @@ const STAGE_COMPONENTS: Record<
 
 export default function AuditWorkspaceShell() {
   const { theme } = useTheme();
-  const { activeAudit, audits, setActiveAudit } = useAudit();
+  const { activeAudit, audits, setActiveAudit, refresh } = useAudit();
   const isLight = theme === 'light';
 
   // Reset viewedStage to the audit's current stage whenever the active audit changes.
@@ -102,7 +104,11 @@ export default function AuditWorkspaceShell() {
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   // Stable identity: handed to stage workspaces via EvidenceOpenContext.
   const openEvidence = useCallback(() => setEvidenceOpen(true), []);
-  // Records menu (header IA pass) — one dropdown for the four record
+  // Audit history slide-over — the audit-level delta trail ('AUDIT' deltas:
+  // stage advances, reschedules, evidence attach/remove). Before PR-UX1 these
+  // deltas were written but had no UI surface.
+  const [auditHistoryOpen, setAuditHistoryOpen] = useState(false);
+  // Records menu (header IA pass) — one dropdown for the record
   // surfaces. Transient UI: closes on selection, Escape, outside click,
   // and audit switch.
   const [recordsOpen, setRecordsOpen] = useState(false);
@@ -176,6 +182,7 @@ export default function AuditWorkspaceShell() {
     setTraceabilityOpen(false);
     setIssuesCapaOpen(false);
     setEvidenceOpen(false);
+    setAuditHistoryOpen(false);
     setRecordsOpen(false);
     setChatOpen(false);
     setChatThreads((prev) => {
@@ -265,13 +272,21 @@ export default function AuditWorkspaceShell() {
                   {AUDIT_STATUS_LABELS[activeAudit.status]}
                 </span>
               </p>
+              {/* Date line — visible at every breakpoint (mobile included);
+                  the date itself is the reschedule affordance. */}
+              <RescheduleAuditPopover
+                audit={activeAudit}
+                isLight={isLight}
+                onRescheduled={refresh}
+              />
             </div>
-            {/* The grouping pass landed: the four record surfaces (Protocol
-                source / Traceability / Issues & CAPA / Evidence) live in the
-                Records dropdown, so the row is stage picker (mobile) ·
-                New audit · Records · Risk summary (xl-hidden, vendor).
-                flex-wrap kept for narrow viewports. A new always-on button
-                here should justify itself against the menu first. */}
+            {/* The grouping pass landed: the record surfaces (Protocol
+                source / Traceability / Issues & CAPA / Evidence / Audit
+                history) live in the Records dropdown, so the row is stage
+                picker (mobile) · New audit · Records · Risk summary
+                (xl-hidden, vendor). flex-wrap kept for narrow viewports.
+                A new always-on button here should justify itself against
+                the menu first. */}
             <div className="flex items-center gap-2 flex-wrap justify-end flex-shrink-0 self-start">
               {/* Mobile-only stage picker — replaces the StageNav rail below md: */}
               <MobileStagePicker
@@ -297,7 +312,7 @@ export default function AuditWorkspaceShell() {
                 <Plus size={12} />
                 New audit
               </button>
-              {/* Records — one dropdown for the four record surfaces (all
+              {/* Records — one dropdown for the record surfaces (all
                   answer "show me this audit's records/provenance"). Drawer
                   state and mounts are unchanged — this is trigger-only IA.
                   Lightweight local menu pattern: backdrop for outside click,
@@ -314,7 +329,7 @@ export default function AuditWorkspaceShell() {
                   onClick={() => setRecordsOpen((o) => !o)}
                   aria-haspopup="menu"
                   aria-expanded={recordsOpen}
-                  title="Protocol source, traceability, issues & CAPA, evidence"
+                  title="Protocol source, traceability, issues & CAPA, evidence, history"
                   data-testid="audit-records-button"
                   className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors ${
                     isLight
@@ -410,6 +425,22 @@ export default function AuditWorkspaceShell() {
                       >
                         <Paperclip size={12} />
                         Evidence
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setRecordsOpen(false);
+                          setAuditHistoryOpen(true);
+                        }}
+                        title="Audit-level change history: stage moves, reschedules, evidence"
+                        data-testid="audit-history-button"
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-left transition-colors ${
+                          isLight ? 'text-[#334155] hover:bg-[#F8FAFC]' : 'text-[#CBD5E1] hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <History size={12} />
+                        Audit history
                       </button>
                     </div>
                   </>
@@ -531,6 +562,19 @@ export default function AuditWorkspaceShell() {
         <EvidenceDrawer
           audit={activeAudit}
           onClose={() => setEvidenceOpen(false)}
+        />
+      )}
+
+      {/* Audit history drawer — the 'AUDIT' delta trail (stage advances,
+          reschedules, evidence attach/remove). Generic HistoryDrawer, first
+          mounted at the audit level in PR-UX1. */}
+      {auditHistoryOpen && (
+        <HistoryDrawer
+          objectType="AUDIT"
+          objectId={activeAudit.id}
+          title={activeAudit.audit_name}
+          subTitle="Audit · change history"
+          onClose={() => setAuditHistoryOpen(false)}
         />
       )}
 

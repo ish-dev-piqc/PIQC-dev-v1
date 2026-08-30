@@ -10,6 +10,7 @@ import {
 import { useTheme } from '../../../../../context/ThemeContext';
 import { useAudit } from '../../../../../context/AuditContext';
 import { AUDIT_TYPE_LABELS, ISA_DOMAIN_LABELS } from '../../../../../lib/audit/labels';
+import { formatAuditWindow } from '../../../../../lib/audit/dateWindow';
 import { fetchIsaNotes } from '../../../../../lib/audit/isaNotesApi';
 import { fetchIsaFindings } from '../../../../../lib/audit/isaFindingsApi';
 import {
@@ -196,7 +197,9 @@ export default function IsaReportWorkspace() {
     protocolCode: activeAudit.protocol_code || null,
     protocolTitle: activeAudit.protocol_title || null,
     auditTypeLabel: AUDIT_TYPE_LABELS[activeAudit.audit_type],
-    auditDate: activeAudit.scheduled_date,
+    // Pre-formatted window string ("Sep 15 – 17, 2026") — every export site
+    // interpolates auditDate as-is, so formatting happens once, here.
+    auditDate: formatAuditWindow(activeAudit.scheduled_date, activeAudit.scheduled_end_date),
     generatedAt: new Date(),
   };
   const packet = buildIsaReportPacket(meta, draft, findings, positiveNotes);

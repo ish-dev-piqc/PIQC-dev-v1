@@ -27,6 +27,7 @@ export interface AuditWithContext {
   status: AuditStatus;
   current_stage: AuditStage;
   scheduled_date: string | null;
+  scheduled_end_date: string | null; // null = single-day (or unscheduled)
   vendor_name: string;         // '' for investigator site audits
   // auditee = the party under audit: the vendor (VENDOR_AUDIT) or the site
   // (INVESTIGATOR_SITE_AUDIT). Display surfaces (shell header, hub) use this so
@@ -83,6 +84,7 @@ interface AuditRow {
   status: AuditStatus;
   current_stage: AuditStage;
   scheduled_date: string | null;
+  scheduled_end_date: string | null;
   protocol_id: string;
   protocol_version_id: string;
   // Left-joined auditee — vendors for VENDOR_AUDIT, sites for INVESTIGATOR_SITE_AUDIT.
@@ -110,6 +112,7 @@ function flatten(row: AuditRow): AuditWithContext {
     status: row.status,
     current_stage: row.current_stage,
     scheduled_date: row.scheduled_date,
+    scheduled_end_date: row.scheduled_end_date,
     vendor_name: vendorName,
     auditee_name: isSiteAudit ? siteName : vendorName,
     site_number: row.sites?.site_number ?? null,
@@ -143,7 +146,7 @@ export function AuditProvider({ children }: { children: React.ReactNode }) {
     const { data, error: queryError } = await supabase
       .from('audits')
       .select(`
-        id, audit_name, audit_type, workflow_type, status, current_stage, scheduled_date,
+        id, audit_name, audit_type, workflow_type, status, current_stage, scheduled_date, scheduled_end_date,
         protocol_id, protocol_version_id,
         vendors ( name ),
         sites ( name, site_number, principal_investigator, country ),

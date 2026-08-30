@@ -9,6 +9,7 @@ import {
   AUDIT_WORKFLOW_TYPE_LABELS,
 } from '../../../lib/audit/labels';
 import { stagesForWorkflow } from '../../../lib/audit/workflowStages';
+import { formatAuditDate, formatAuditWindow } from '../../../lib/audit/dateWindow';
 import type { AuditStatus, AuditWorkflowType } from '../../../types/audit';
 import NewAuditDrawer from './onboarding/NewAuditDrawer';
 
@@ -32,25 +33,16 @@ function todayLocalIso(): string {
   return new Date().toLocaleDateString('en-CA');
 }
 
-// Overdue = scheduled in the past and still open. REVIEW is excluded — those
+// Overdue = the scheduled window has fully passed and the audit is still open.
+// A multi-day audit is on schedule until its END date — comparing the start
+// would flag every in-progress window from day two. REVIEW is excluded — those
 // audits already surface in the attention queue under their own reason.
+// Lexicographic compare is valid for yyyy-mm-dd.
 function isOverdue(audit: AuditWithContext): boolean {
-  if (!audit.scheduled_date) return false;
+  const windowEnd = audit.scheduled_end_date ?? audit.scheduled_date;
+  if (!windowEnd) return false;
   if (audit.status === 'CLOSED' || audit.status === 'REVIEW') return false;
-  return audit.scheduled_date < todayLocalIso();
-}
-
-function formatDate(iso: string | null): string | null {
-  if (!iso) return null;
-  // Anchor date-only strings to LOCAL midnight. A bare yyyy-mm-dd parses as UTC
-  // midnight per ECMA-262, which renders the previous calendar day in any
-  // UTC-negative zone — the auditor would see a scheduled date they never
-  // entered (worst in the Overdue badge, where the date is the whole message).
-  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  return windowEnd < todayLocalIso();
 }
 
 export default function AuditRequiredGate() {
@@ -286,7 +278,9 @@ export default function AuditRequiredGate() {
                               : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
                           }`}>
                             <Clock size={10} />
-                            Overdue{audit.scheduled_date ? ` · ${formatDate(audit.scheduled_date)}` : ''}
+                            {/* The end date is the day it went overdue; isOverdue
+                                guarantees the window end is non-null here. */}
+                            Overdue · {formatAuditDate(audit.scheduled_end_date ?? audit.scheduled_date)}
                           </span>
                         ) : (
                           <span className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded border flex-shrink-0 ${statusTone('REVIEW')}`}>
@@ -366,7 +360,7 @@ export default function AuditRequiredGate() {
           {/* Rows */}
           <div className={`divide-y ${divider}`}>
             {filteredAudits.map((audit) => {
-              const date = formatDate(audit.scheduled_date);
+              const date = formatAuditWindow(audit.scheduled_date, audit.scheduled_end_date);
               const stage = stageIndex(audit);
               return (
                 <button
