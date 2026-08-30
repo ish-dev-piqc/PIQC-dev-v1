@@ -445,8 +445,8 @@ function AddEvidenceForm({
           </p>
         )}
         {extractError && <p className="text-xs text-rose-500">{extractError}</p>}
-        {extractWarnings.map((w) => (
-          <p key={w} className={`text-xs ${isLight ? 'text-amber-700' : 'text-amber-300'}`}>
+        {extractWarnings.map((w, i) => (
+          <p key={`${i}-${w}`} className={`text-xs ${isLight ? 'text-amber-700' : 'text-amber-300'}`}>
             {w}
           </p>
         ))}
