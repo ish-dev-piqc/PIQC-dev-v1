@@ -124,10 +124,35 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.json();
-    const { title, source, filename, content, pdf_base64, protocol_id } = body;
+    const { title, source, filename, content, pdf_base64, protocol_id, kind } = body;
 
     const callerProtocolId =
       typeof protocol_id === "string" && protocol_id.length > 0 ? protocol_id : null;
+
+    // Document kind — 'PROTOCOL' (default) or 'AUDIT_EVIDENCE' (audit evidence
+    // register, text path only; protocol_id must stay NULL so evidence never
+    // enters protocol-scoped search).
+    const docKind = kind ?? "PROTOCOL";
+    if (docKind !== "PROTOCOL" && docKind !== "AUDIT_EVIDENCE") {
+      return new Response(
+        JSON.stringify({ error: `Unknown document kind: ${kind}` }),
+        { status: 400, headers: jsonHeaders },
+      );
+    }
+    if (docKind === "AUDIT_EVIDENCE" && pdf_base64) {
+      return new Response(
+        JSON.stringify({
+          error: "PDF evidence isn't supported yet — paste the text content instead",
+        }),
+        { status: 400, headers: jsonHeaders },
+      );
+    }
+    if (docKind === "AUDIT_EVIDENCE" && callerProtocolId) {
+      return new Response(
+        JSON.stringify({ error: "Evidence documents cannot carry a protocol_id" }),
+        { status: 400, headers: jsonHeaders },
+      );
+    }
 
     // -----------------------------------------------------------------
     // PDF PATH — async via Reducto + Svix webhook
@@ -194,6 +219,7 @@ Deno.serve(async (req: Request) => {
           filename: filename ?? null,
           user_id: userId,
           content_hash: contentHash,
+          kind: docKind,
           ...(callerProtocolId ? { protocol_id: callerProtocolId } : {}),
         })
         .select("id")
@@ -276,12 +302,18 @@ Deno.serve(async (req: Request) => {
     if (content && typeof content === "string") {
       const chunks: ChunkData[] = splitIntoChunks(content);
 
+      // Hash vouches for the retained text (evidence provenance); no dedup —
+      // documents_user_hash_idx is deliberately non-unique.
+      const contentHash = await sha256Hex(new TextEncoder().encode(content));
+
       const { data: doc, error: docError } = await supabase
         .from("documents")
         .insert({
           title: title ?? "",
           source: source ?? "",
           user_id: userId,
+          content_hash: contentHash,
+          kind: docKind,
           ...(callerProtocolId ? { protocol_id: callerProtocolId } : {}),
         })
         .select("id")

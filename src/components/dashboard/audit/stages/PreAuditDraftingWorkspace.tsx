@@ -11,6 +11,7 @@ import {
   CalendarDays,
   ListChecks,
   History as HistoryIcon,
+  Paperclip,
 } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useAudit } from '../../../../context/AuditContext';
@@ -34,6 +35,8 @@ import {
   prefillStage5Deliverables,
 } from '../../../../lib/audit/preAuditApi';
 import type { DeliverableApprovalStatus, TrackedObjectType } from '../../../../types/audit';
+import { listAuditEvidence } from '../../../../lib/audit/evidenceApi';
+import { useOpenEvidence } from '../evidenceDrawerContext';
 import HistoryDrawer from '../HistoryDrawer';
 import PrefillAgentNote from '../PrefillAgentNote';
 
@@ -88,6 +91,26 @@ export default function PreAuditDraftingWorkspace() {
 
   const { preAuditBundles: bundles, setPreAuditBundles: setBundles } = useAuditData();
   const [activeTab, setActiveTab] = useState<TabKey>('confirmation_letter');
+
+  // Evidence register summary chip. null = not loaded (or list failed) — the
+  // chip hides rather than claiming "0 attached" untruthfully; the header
+  // Evidence button remains the always-on entry point. Count can go stale
+  // while the drawer is open (attach/remove happen there); it refreshes on
+  // audit switch / remount, which is the cheap-and-honest v1 trade-off.
+  const openEvidence = useOpenEvidence();
+  const [evidenceCount, setEvidenceCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!activeAudit) return;
+    let cancelled = false;
+    void listAuditEvidence(activeAudit.id).then((res) => {
+      if (!cancelled) setEvidenceCount(res.ok ? res.data.length : null);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAudit?.id]);
 
   // Tracks audits whose prefill RPCs have already been attempted in this
   // session, so opening Stage 5 / switching tabs / re-rendering doesn't fire
@@ -374,6 +397,27 @@ export default function PreAuditDraftingWorkspace() {
           Editing an Approved deliverable reverts it to Draft.
         </p>
       </div>
+
+      {/* Evidence summary chip — grounding matters most at this stage: the
+          three deliverables draft from what the register holds. Opens the
+          shell's audit-level Evidence drawer (one list, one implementation). */}
+      {openEvidence && evidenceCount !== null && (
+        <button
+          type="button"
+          onClick={openEvidence}
+          data-testid="stage5-evidence-chip"
+          className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors ${
+            isLight
+              ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+              : 'bg-[#0F172A] border-white/[0.08] text-[#CBD5E1] hover:bg-white/[0.04]'
+          }`}
+        >
+          <Paperclip size={12} />
+          {evidenceCount === 0
+            ? 'No source evidence attached yet — attach'
+            : `${evidenceCount} evidence source${evidenceCount === 1 ? '' : 's'} attached · View`}
+        </button>
+      )}
 
       {/* Agentic moment — one-time note. Dismissable; persists per (stage, audit)
           in localStorage. The next-action signal lives inside the note text. */}

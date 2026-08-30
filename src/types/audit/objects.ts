@@ -379,6 +379,33 @@ export interface EvidenceOnQuestionnaireResponse {
 }
 
 // -----------------------------------------------------------------------------
+// Audit-scoped: source evidence register (PR-B)
+//
+// One row per document attached to an audit as grounding evidence
+// (audit_source_documents). Distinct from the unused EvidenceAttachment model
+// above: register rows point at documents+chunks rows (kind='AUDIT_EVIDENCE'),
+// which is what PR-C's grounded generation retrieves over.
+// -----------------------------------------------------------------------------
+export interface AuditSourceDocument {
+  audit_id: string;
+  document_id: string;
+  added_by: string;
+  added_at: string;
+  source_type: string;            // what it is (free text; UI offers preset chips)
+  source_system: string | null;   // where the human obtained it (null = not recorded)
+  source_locator: string | null;  // doc number / binder path / URL
+  include_in_generation: boolean; // withhold-never-delete lever for PR-C
+}
+
+// List-row DTO for the evidence drawer: join row + the document facts the UI
+// shows. Status mirrors documents.status (text path resolves synchronously,
+// so 'pending' is only ever a transient read).
+export interface AuditEvidenceListRow extends AuditSourceDocument {
+  title: string;
+  status: 'pending' | 'ready' | 'failed';
+}
+
+// -----------------------------------------------------------------------------
 // Pre-Audit Drafting deliverables (D-010 step 7)
 // -----------------------------------------------------------------------------
 
