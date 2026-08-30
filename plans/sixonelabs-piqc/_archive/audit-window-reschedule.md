@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: Audit window & reschedule (PR-UX1) — scheduled_end_date + reschedule RPC + header popover
-status: in-review
+status: merged
+merged: 2026-08-30
 started: 2026-08-30
-target_pr:
+target_pr: #557
 ---
 
 # Audit window & reschedule (PR-UX1)
