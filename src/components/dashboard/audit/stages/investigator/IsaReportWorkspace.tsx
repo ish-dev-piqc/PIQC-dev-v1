@@ -40,7 +40,9 @@ import {
   buildIsaObservationFormDocx,
   buildIsaReportDocx,
 } from '../../../../../lib/audit/isaReportDocx';
+import { hasReachedStage } from '../../../../../lib/audit/workflowStages';
 import PiqcMark from '../../PiqcMark';
+import StagePreviewNotice from '../../StagePreviewNotice';
 import type {
   AuditNoteObject,
   IsaFindingObject,
@@ -112,6 +114,13 @@ export default function IsaReportWorkspace() {
   const { theme } = useTheme();
   const { activeAudit } = useAudit();
   const isLight = theme === 'light';
+
+  // One-ahead preview guard (UX2): ISA Stage 6 is viewable from ISA_CONDUCT.
+  // Section drafting (LLM), prose saves, and the verdict wait until the
+  // stage is real; assembled content stays readable.
+  const hasReached =
+    !!activeAudit &&
+    hasReachedStage(activeAudit.workflow_type, activeAudit.current_stage, 'ISA_REPORT');
 
   const [draft, setDraft] = useState<IsaReportDraftObject | null>(null);
   const [findings, setFindings] = useState<IsaFindingObject[]>([]);
@@ -293,7 +302,7 @@ export default function IsaReportWorkspace() {
             <button
               type="button"
               onClick={() => void applyProposal()}
-              disabled={savingField !== null}
+              disabled={savingField !== null || !hasReached}
               className={`rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40 ${primaryBtn}`}
             >
               Apply
@@ -308,7 +317,7 @@ export default function IsaReportWorkspace() {
     <button
       type="button"
       onClick={() => void requestSection(field)}
-      disabled={requestingSection !== null || !!disabledHint}
+      disabled={requestingSection !== null || !!disabledHint || !hasReached}
       title={disabledHint}
       className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs text-fg-body transition-colors disabled:opacity-40 ${inputBase}`}
     >
@@ -415,7 +424,7 @@ export default function IsaReportWorkspace() {
             <button
               type="button"
               onClick={() => void save(field, { [inputKey]: value } as UpsertIsaReportDraftInput)}
-              disabled={!dirty || !value.trim() || savingField === field}
+              disabled={!dirty || !value.trim() || savingField === field || !hasReached}
               className={`rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40 ${primaryBtn}`}
             >
               {savingField === field ? 'Saving…' : 'Save'}
@@ -428,6 +437,7 @@ export default function IsaReportWorkspace() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
+      {!hasReached && activeAudit && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
       {/* Header + export bar */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -527,7 +537,7 @@ export default function IsaReportWorkspace() {
                         : { clearSiteVerdictText: true }),
                     });
                   }}
-                  disabled={!verdict || savingField === 'verdict'}
+                  disabled={!verdict || savingField === 'verdict' || !hasReached}
                   className={`rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40 ${primaryBtn}`}
                 >
                   {savingField === 'verdict' ? 'Saving…' : 'Save verdict'}

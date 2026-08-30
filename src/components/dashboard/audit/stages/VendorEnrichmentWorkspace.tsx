@@ -29,6 +29,8 @@ import VendorServiceForm, { type VendorServiceFormValues } from './vendor-enrich
 import ServiceMappingTable from './vendor-enrichment/ServiceMappingTable';
 import TrustAssessmentForm, { type TrustAssessmentFormValues } from './vendor-enrichment/TrustAssessmentForm';
 import HistoryDrawer from '../HistoryDrawer';
+import StagePreviewNotice from '../StagePreviewNotice';
+import { hasReachedStage } from '../../../../lib/audit/workflowStages';
 import type { TrackedObjectType } from '../../../../types/audit';
 
 // =============================================================================
@@ -48,6 +50,13 @@ export default function VendorEnrichmentWorkspace() {
   const { theme } = useTheme();
   const { activeAudit } = useAudit();
   const isLight = theme === 'light';
+
+  // One-ahead preview guard (UX2): Stage 2 is viewable while the audit is
+  // still at Intake. Without data the sections render live entry FORMS, so
+  // the preview swaps them for placeholders; existing records show read-only.
+  const hasReached =
+    !!activeAudit &&
+    hasReachedStage(activeAudit.workflow_type, activeAudit.current_stage, 'VENDOR_ENRICHMENT');
 
   // -----------------------------------------------------------------------
   // Shared state stores (Phase B — propagates across stages)
@@ -287,6 +296,7 @@ export default function VendorEnrichmentWorkspace() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
+      {!hasReached && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
       {/* Header */}
       <div>
         <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
@@ -310,10 +320,13 @@ export default function VendorEnrichmentWorkspace() {
         status={serviceStatus}
         isLight={isLight}
       >
-        {service && serviceMode === 'view' ? (
+        {!hasReached && !service ? (
+          <p className="text-fg-muted text-sm">Nothing recorded yet.</p>
+        ) : service && (serviceMode === 'view' || !hasReached) ? (
           <ServiceSummary
             service={service}
             isLight={isLight}
+            previewLocked={!hasReached}
             onEdit={() => setServiceMode('edit')}
             onHistoryClick={() => setHistoryTarget({ objectType: 'VENDOR_SERVICE_OBJECT', objectId: service.id })}
           />
@@ -335,7 +348,7 @@ export default function VendorEnrichmentWorkspace() {
         lockedReason="Define the vendor service above first."
         isLight={isLight}
       >
-        {service && (
+        {service && hasReached && (
           <ServiceMappingTable
             mappings={auditMappings}
             availableRisks={auditProtocolRisks}
@@ -344,6 +357,12 @@ export default function VendorEnrichmentWorkspace() {
             onUpdate={updateMapping}
             onRemove={removeMapping}
           />
+        )}
+        {service && !hasReached && (
+          <p className="text-fg-muted text-sm">
+            {auditMappings.length} mapping{auditMappings.length === 1 ? '' : 's'} recorded —
+            read-only in preview.
+          </p>
         )}
       </SectionCard>
 
@@ -355,10 +374,13 @@ export default function VendorEnrichmentWorkspace() {
         status={trustStatus}
         isLight={isLight}
       >
-        {assessment && trustMode === 'view' ? (
+        {!hasReached && !assessment ? (
+          <p className="text-fg-muted text-sm">Nothing recorded yet.</p>
+        ) : assessment && (trustMode === 'view' || !hasReached) ? (
           <TrustAssessmentSummary
             assessment={assessment}
             isLight={isLight}
+            previewLocked={!hasReached}
             onEdit={() => setTrustMode('edit')}
             onHistoryClick={() => setHistoryTarget({ objectType: 'TRUST_ASSESSMENT_OBJECT', objectId: assessment.id })}
           />
@@ -466,13 +488,15 @@ function StatusBadge({ status, isLight }: { status: SectionStatus; isLight: bool
 // ============================================================================
 
 interface ServiceSummaryProps {
+  /** One-ahead preview (UX2): hide the edit affordance, keep History. */
+  previewLocked?: boolean;
   service: MockVendorService;
   isLight: boolean;
   onEdit: () => void;
   onHistoryClick: () => void;
 }
 
-function ServiceSummary({ service, isLight, onEdit, onHistoryClick }: ServiceSummaryProps) {
+function ServiceSummary({ service, isLight, onEdit, onHistoryClick, previewLocked = false }: ServiceSummaryProps) {
   const headingColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
   const mutedColor = 'text-fg-muted';
@@ -508,14 +532,16 @@ function ServiceSummary({ service, isLight, onEdit, onHistoryClick }: ServiceSum
           )}
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onEdit}
-            className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
-          >
-            <Pencil size={12} />
-            Edit
-          </button>
+          {!previewLocked && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+            >
+              <Pencil size={12} />
+              Edit
+            </button>
+          )}
           <button
             type="button"
             className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
@@ -539,6 +565,8 @@ function ServiceSummary({ service, isLight, onEdit, onHistoryClick }: ServiceSum
 // ============================================================================
 
 interface TrustAssessmentSummaryProps {
+  /** One-ahead preview (UX2): hide the edit affordance, keep History. */
+  previewLocked?: boolean;
   assessment: MockTrustAssessment;
   isLight: boolean;
   onEdit: () => void;
@@ -550,6 +578,7 @@ function TrustAssessmentSummary({
   isLight,
   onEdit,
   onHistoryClick,
+  previewLocked = false,
 }: TrustAssessmentSummaryProps) {
   const headingColor = 'text-fg-heading';
   const subColor = 'text-fg-sub';
@@ -641,14 +670,16 @@ function TrustAssessmentSummary({
 
       {/* Actions */}
       <div className="flex items-center gap-2 pt-2">
-        <button
-          type="button"
-          onClick={onEdit}
-          className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
-        >
-          <Pencil size={12} />
-          Edit
-        </button>
+        {!previewLocked && (
+          <button
+            type="button"
+            onClick={onEdit}
+            className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+          >
+            <Pencil size={12} />
+            Edit
+          </button>
+        )}
         <button
           type="button"
           className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
