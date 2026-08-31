@@ -43,10 +43,11 @@ the engine; D3 is not. Three context-assembly additions, all scoped to this kind
 (other kinds' context stays byte-identical):
 
 1. **Risk domains**: nothing in the engine fetches `vendor_risk_summary_objects` today.
-   Gap-summary requests additionally fetch the approved risk summary's `focus_areas` +
-   `study_context` and the junction rows → `protocol_risk_objects`
-   (`section_identifier`, `section_title`, `operational_domain_tag`) — these free-text
-   domains are the "scope areas" the coverage listing is organized by.
+   Gap-summary requests additionally fetch the risk summary's `focus_areas` (approved
+   or not — see the no-gate ledger decision below) and the junction rows →
+   `protocol_risk_objects` (`section_identifier`, `section_title`,
+   `operational_domain_tag`) — these free-text domains are the "scope areas" the
+   coverage listing is organized by. `study_context` is deliberately not fetched.
 2. **Checklist items**: index.ts:391 reads only the kind's own table. Gap-summary requests
    additionally read `checklist_objects.content.items` (prompt + `evidence_expected`) —
    the "what is outstanding" basis.
@@ -58,11 +59,16 @@ the engine; D3 is not. Three context-assembly additions, all scoped to this kind
    boundary is the point of the lever). Passage retrieval (hybrid_search) continues to run
    over included docs only, unchanged.
 
-**Currency decision (pinned).** The grounding snapshot keeps recording **included** docs
-only, matching `computeDeliverableCurrency`'s existing `include_in_generation` filter
-(deliverableGenerationApi.ts:183). This already yields correct staleness in both
-directions: withholding a doc after generation → `removedSinceGeneration`; including a
-previously-withheld doc → `newSinceGeneration`. Zero currency-code changes.
+**Currency decision (revised by the adversarial review).** The snapshot's `evidence`
+field keeps recording **included** docs only (legacy semantics, shared with all kinds),
+which covers the withhold/include toggle directions. But the review confirmed two blind
+axes unique to this kind: a doc filed *as withheld* after generation appears in neither
+diff set (summary stale, UI says current), and checklist/scope edits never touch
+currency at all. So the gap kind's snapshot additionally persists `register` (full
+listing incl. withheld flags) and `checklist_item_ids` — opaque extra fields today's
+`computeDeliverableCurrency` ignores — and the client slice adds a kind-aware
+comparison gated on presence of those fields (legacy snapshots and other kinds
+byte-identical).
 
 ## Scope (files allowed)
 
@@ -92,7 +98,7 @@ previously-withheld doc → `newSinceGeneration`. Zero currency-code changes.
 - 20260730000000 gate/readout RPCs and `audit_mode_advance_audit_stage` — never gates (D2 owns gate changes, held for the partner)
 - Prefill RPCs / stub creators — no prefill, no stub for this kind (empty state = manual edit or Draft with PIQC)
 - Any UI for toggling `include_in_generation` (the withhold lever still has no writer — separate feature if asked)
-- `computeDeliverableCurrency` and the snapshot semantics (pinned above — no changes)
+- `computeDeliverableCurrency`'s legacy behavior for the four existing kinds (the client slice may only ADD a gap-kind comparison gated on presence of the new snapshot fields)
 - The engine's items-branch ternaries (letter shape sidesteps them; refactor only when an items-shaped 5th+ kind actually lands)
 - src/context/** (bundle flows through `Record<string, MockPreAuditBundle>` untouched)
 - Other modes (sotr/site); other stage workspaces
@@ -158,6 +164,33 @@ none
   provenance survives human rewrite; phantom-id approve race; `fetchPreAuditDeliverables`
   swallows per-table errors (the 5th query follows the existing semantics); 5× (now)
   duplicate `user_profiles` lookups when all rows approved.
+
+### From the slice-1/2 adversarial review (accepted, not fixed here)
+
+- **SQL lifecycle is a 5th verbatim clone** (upsert / CAS approve / apply-generation,
+  plus the 21-branch visibility-helper re-paste). Already-diverging: D1's demote-diff
+  improvement exists in D1+D3 but not the trio. Depth-correct fix is one generic
+  `audit_mode_upsert_deliverable`/`approve_deliverable` pair dispatching on a kind→table
+  map — a live-RPC rework for the migrations partner. Trigger: the 6th kind, or her
+  return, whichever first.
+- **CAS staleness on no-op saves** (all five letter/notification-family kinds, cloned
+  from D1): a byte-identical re-save moves `updated_at` (touch trigger) without writing
+  a delta, so a held `p_expected_updated_at` fails approve with STALE_CONTENT for
+  content that provably didn't change. Proper fix is trigger- or upsert-level no-op
+  detection — partner's-return migration.
+- **Client currency filter lacks the engine's `kind === 'AUDIT_EVIDENCE'` filter**
+  (pre-existing, all kinds): a non-evidence doc in `audit_source_documents` with
+  `include_in_generation=true` is permanently flagged `newSinceGeneration`. Fix when
+  next touching `computeDeliverableCurrency` (the D3 client slice is a natural moment).
+- **Names-in-titles is a prompt-level soft control**: the gap prompt now instructs
+  referring to person-titled documents by type + non-name detail, but freetext titles
+  have no mechanical name scrubber and a bad model call persists into the append-only
+  trail. Durable fix if this ever bites: a doc-type/role field on the register instead
+  of raw titles reaching the prompt. Trigger: any name observed in a generated summary.
+- **Register cap discloses, withheld rows exempt**: on-file rows past
+  `GAP_MAX_REGISTER_DOCS` (120) are dropped deterministically (newest-first order) and
+  the count is disclosed to the model; withheld rows are never dropped. Revisit the cap
+  if real registers approach it.
 
 ## Verification
 
