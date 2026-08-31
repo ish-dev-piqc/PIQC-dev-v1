@@ -76,38 +76,70 @@ export default function VendorEnrichmentWorkspace() {
   const [trustMode, setTrustMode] = useState<'view' | 'edit' | 'create'>('view');
   const [historyTarget, setHistoryTarget] = useState<{ objectType: TrackedObjectType; objectId: string } | null>(null);
 
+  // Load-path honesty (hardening PR-2). Keyed by audit (a slow response must
+  // never write another audit's state — PR-1's lesson) and re-earned per
+  // mount: 'failed' replaces the section cards with an honest error card,
+  // because pending/create forms over unknown server state invite retyping
+  // and upserting over rows that exist.
+  const [loadStates, setLoadStates] = useState<
+    Record<string, 'loading' | 'ok' | 'failed'>
+  >({});
+  // Retry re-runs the load effect (nonce dep) so it keeps the effect's
+  // cancellation semantics instead of duplicating the fetch logic.
+  const [reloadNonce, setReloadNonce] = useState(0);
+
   // Load vendor data when active audit changes
   useEffect(() => {
     if (!activeAudit) return;
+    const auditIdLocal = activeAudit.id;
+    let cancelled = false;
 
     const loadVendorData = async () => {
+      setLoadStates((prev) => ({ ...prev, [auditIdLocal]: 'loading' }));
       try {
-        const [service, mappings, assessment] = await Promise.all([
-          fetchVendorService(activeAudit.id),
-          fetchServiceMappingsByAudit(activeAudit.id),
-          fetchTrustAssessment(activeAudit.id),
+        const [serviceRes, mappingsRes, assessmentRes] = await Promise.all([
+          fetchVendorService(auditIdLocal),
+          fetchServiceMappingsByAudit(auditIdLocal),
+          fetchTrustAssessment(auditIdLocal),
         ]);
-        
-        if (service) {
-          setServices((prev) => ({ ...prev, [activeAudit.id]: service }));
+        if (cancelled) return;
+
+        // ok → set UNCONDITIONALLY: a legitimate null/[] is server truth and
+        // must clear a stale cache entry (the old truthiness guards made
+        // "server emptied" indistinguishable from "load failed", so deleted
+        // mappings kept rendering forever).
+        if (serviceRes.ok) {
+          setServices((prev) => ({ ...prev, [auditIdLocal]: serviceRes.data }));
         }
-        if (mappings.length > 0) {
-          setMappings((prev) => ({ ...prev, [activeAudit.id]: mappings }));
+        if (mappingsRes.ok) {
+          setMappings((prev) => ({ ...prev, [auditIdLocal]: mappingsRes.data }));
         }
-        if (assessment) {
-          setAssessments((prev) => ({ ...prev, [activeAudit.id]: assessment }));
+        if (assessmentRes.ok) {
+          setAssessments((prev) => ({ ...prev, [auditIdLocal]: assessmentRes.data }));
         }
+        setLoadStates((prev) => ({
+          ...prev,
+          [auditIdLocal]:
+            serviceRes.ok && mappingsRes.ok && assessmentRes.ok ? 'ok' : 'failed',
+        }));
       } catch (err) {
         console.error('[VendorEnrichmentWorkspace] Load error:', err);
+        if (!cancelled) {
+          setLoadStates((prev) => ({ ...prev, [auditIdLocal]: 'failed' }));
+        }
       }
     };
 
     loadVendorData();
     setServiceMode('view');
     setTrustMode('view');
+    return () => {
+      cancelled = true;
+    };
     // Depend on activeAudit?.id only — see RiskSummaryPanel for rationale.
+    // reloadNonce lets the error card's Retry re-run this effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAudit?.id, setServices, setMappings, setAssessments]);
+  }, [activeAudit?.id, reloadNonce, setServices, setMappings, setAssessments]);
 
   if (!activeAudit) return null;
 
@@ -293,6 +325,53 @@ export default function VendorEnrichmentWorkspace() {
 
   const sectionHeader = 'text-fg-label';
   const subColor = 'text-fg-sub';
+
+  // Load-path honesty: until this audit's reads settle ok, the section cards
+  // don't render — a 'pending' create form over unknown server state is an
+  // invitation to retype and upsert over rows that exist.
+  const loadState = loadStates[auditId] ?? 'loading';
+  if (loadState !== 'ok') {
+    return (
+      <div className="p-6 max-w-4xl mx-auto space-y-6">
+        {!hasReached && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
+        <div>
+          <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
+            Stage 2 · Vendor enrichment
+          </p>
+          <h2 className={`${headingColor} text-xl font-semibold mt-1`}>
+            Vendor service, mapping, and trust
+          </h2>
+        </div>
+        {loadState === 'loading' ? (
+          <p className={`${subColor} text-sm`}>Loading vendor enrichment…</p>
+        ) : (
+          <div
+            role="alert"
+            data-testid="vendor-load-error"
+            className={`border rounded-xl p-5 space-y-3 ${
+              isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5'
+            }`}
+          >
+            <p className={`text-sm leading-relaxed ${isLight ? 'text-red-700' : 'text-red-300'}`}>
+              Vendor enrichment could not be loaded — records may exist on the server, so the
+              entry forms are hidden (typing into one would overwrite whatever is really there).
+            </p>
+            <button
+              type="button"
+              onClick={() => setReloadNonce((n) => n + 1)}
+              className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors ${
+                isLight
+                  ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+                  : 'bg-[#0F172A] border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]'
+              }`}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">

@@ -43,9 +43,11 @@ export async function fetchAuditLineage(audit: AuditWithContext): Promise<Lineag
       report,
     ] = await Promise.all([
       fetchProtocolRisksForAudit(audit.id),
-      fetchVendorService(audit.id),
-      fetchServiceMappingsByAudit(audit.id),
-      fetchTrustAssessment(audit.id),
+      // Result-carrying reads (PR-2): the drawer renders what it can see —
+      // a failed read is omitted like an absent one (ledgered).
+      fetchVendorService(audit.id).then((r) => (r.ok ? r.data : null)),
+      fetchServiceMappingsByAudit(audit.id).then((r) => (r.ok ? r.data : [])),
+      fetchTrustAssessment(audit.id).then((r) => (r.ok ? r.data : null)),
       fetchQuestionnaireBundle(audit.id),
       fetchRiskSummary(audit.id),
       // Lineage renders what it can see; a failed kind is omitted from the

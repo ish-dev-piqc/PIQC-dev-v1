@@ -30,9 +30,9 @@ import HistoryDrawer from '../HistoryDrawer';
 // pre-populated). Phase 3 = LLM-assisted. The form is suggestion-aware in
 // shape from day one — those phases swap data sources, not UI.
 //
-// Phase A pattern: in-session local state. Edits/adds persist while the tab
-// is open; refresh resets to mock baseline. Replace with Supabase calls when
-// per-mutation RPCs land.
+// Wired to Supabase: reads via fetchProtocolRisksForAudit, writes via the
+// per-mutation RPCs (createProtocolRisk etc.) — the shared context store
+// propagates edits to the other stages that consume it.
 // =============================================================================
 
 type FormMode = 'list' | 'add' | 'edit';
@@ -58,13 +58,19 @@ export default function IntakeWorkspace() {
   // Load protocol risks from Supabase when the active audit changes
   useEffect(() => {
     if (!activeAudit) return;
+    const auditIdLocal = activeAudit.id;
+    // Cancellation latch (PR-2): a slow fetch resolving after an audit
+    // switch must not flip `loading` mid-render of the next audit — the
+    // sibling workspaces all carry this guard.
+    let cancelled = false;
 
     const loadRisks = async () => {
       setLoading(true);
-      const risks = await fetchProtocolRisksForAudit(activeAudit.id);
+      const risks = await fetchProtocolRisksForAudit(auditIdLocal);
+      if (cancelled) return;
       setSectionsByAudit((prev) => ({
         ...prev,
-        [activeAudit.id]: risks,
+        [auditIdLocal]: risks,
       }));
       setLoading(false);
     };
@@ -72,6 +78,9 @@ export default function IntakeWorkspace() {
     loadRisks();
     setMode('list');
     setEditTarget(null);
+    return () => {
+      cancelled = true;
+    };
     // Depend on activeAudit?.id only — see RiskSummaryPanel for rationale.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAudit?.id, setSectionsByAudit]);

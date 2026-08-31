@@ -63,9 +63,10 @@ const AUDIT: AuditWithContext = {
 
 beforeEach(() => {
   m(fetchProtocolRisksForAudit).mockResolvedValue([]);
-  m(fetchVendorService).mockResolvedValue(null);
-  m(fetchServiceMappingsByAudit).mockResolvedValue([]);
-  m(fetchTrustAssessment).mockResolvedValue(null);
+  // PR-2 shape: the vendor trio returns Result<T>; lineage unwraps ok/data.
+  m(fetchVendorService).mockResolvedValue({ ok: true, data: null });
+  m(fetchServiceMappingsByAudit).mockResolvedValue({ ok: true, data: [] });
+  m(fetchTrustAssessment).mockResolvedValue({ ok: true, data: null });
   m(fetchQuestionnaireBundle).mockResolvedValue(null);
   m(fetchRiskSummary).mockResolvedValue(null);
   // PR-1 shape: { bundle, failedKinds } — lineageApi unwraps .bundle.

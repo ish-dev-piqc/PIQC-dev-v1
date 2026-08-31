@@ -1,4 +1,5 @@
 import { supabase } from '../supabase';
+import type { Result } from './auditCreationApi';
 import type {
   MockVendorService,
   MockServiceMapping,
@@ -14,7 +15,11 @@ import type {
 // =============================================================================
 // Vendor Enrichment (Stage 2) API
 //
-// Reads: direct SELECT (RLS enforces visibility).
+// Reads: direct SELECT (RLS enforces visibility). The audit-scoped fetch
+// trio returns Result<T> — "legitimately empty" is { ok: true, data: null }
+// and a DB error is { ok: false }, because collapsing both into null made a
+// failed read render create-mode forms over rows that exist (and made a
+// legitimate empty unable to clear a stale cache).
 // Writes: RPCs in supabase/migrations/20260430140000_audit_mode_vendor_enrichment_rpcs.sql.
 //   Each RPC mutates the row and writes a state_history_deltas record in the
 //   same transaction.
@@ -44,7 +49,9 @@ function flattenService(row: VendorServiceRow): MockVendorService {
   };
 }
 
-export async function fetchVendorService(auditId: string): Promise<MockVendorService | null> {
+export async function fetchVendorService(
+  auditId: string,
+): Promise<Result<MockVendorService | null>> {
   const { data, error } = await supabase
     .from('vendor_service_objects')
     .select('*')
@@ -53,10 +60,10 @@ export async function fetchVendorService(auditId: string): Promise<MockVendorSer
 
   if (error) {
     console.error('[vendorEnrichmentApi] fetchVendorService error:', error);
-    return null;
+    return { ok: false, error: error.message };
   }
 
-  return data ? flattenService(data as VendorServiceRow) : null;
+  return { ok: true, data: data ? flattenService(data as VendorServiceRow) : null };
 }
 
 export async function createVendorService(
@@ -158,10 +165,10 @@ export async function fetchServiceMappings(
 }
 
 // Convenience for the load effect: get mappings via the audit's vendor_service.
-// Empty array if the audit has no vendor service yet.
+// { ok: true, data: [] } if the audit has no vendor service yet.
 export async function fetchServiceMappingsByAudit(
   auditId: string
-): Promise<MockServiceMapping[]> {
+): Promise<Result<MockServiceMapping[]>> {
   const { data, error } = await supabase
     .from('vendor_service_mapping_objects')
     .select('*, vendor_service_objects!inner(audit_id)')
@@ -170,10 +177,10 @@ export async function fetchServiceMappingsByAudit(
 
   if (error) {
     console.error('[vendorEnrichmentApi] fetchServiceMappingsByAudit error:', error);
-    return [];
+    return { ok: false, error: error.message };
   }
 
-  return ((data ?? []) as ServiceMappingRow[]).map(flattenMapping);
+  return { ok: true, data: ((data ?? []) as ServiceMappingRow[]).map(flattenMapping) };
 }
 
 export async function createServiceMapping(
@@ -266,7 +273,9 @@ function flattenTrust(row: TrustAssessmentRow): MockTrustAssessment {
   };
 }
 
-export async function fetchTrustAssessment(auditId: string): Promise<MockTrustAssessment | null> {
+export async function fetchTrustAssessment(
+  auditId: string,
+): Promise<Result<MockTrustAssessment | null>> {
   const { data, error } = await supabase
     .from('trust_assessment_objects')
     .select('*')
@@ -275,10 +284,10 @@ export async function fetchTrustAssessment(auditId: string): Promise<MockTrustAs
 
   if (error) {
     console.error('[vendorEnrichmentApi] fetchTrustAssessment error:', error);
-    return null;
+    return { ok: false, error: error.message };
   }
 
-  return data ? flattenTrust(data as TrustAssessmentRow) : null;
+  return { ok: true, data: data ? flattenTrust(data as TrustAssessmentRow) : null };
 }
 
 export async function upsertTrustAssessment(

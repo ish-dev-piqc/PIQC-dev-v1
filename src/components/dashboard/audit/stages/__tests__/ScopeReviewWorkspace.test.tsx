@@ -35,14 +35,20 @@ vi.mock('../../../../../context/AuditContext', () => ({
 // resolves) actually re-renders with the fetched value — a plain vi.fn()
 // setter wouldn't trigger React to re-render.
 let initialStageReadouts: Record<string, unknown> = {};
+// Stable setter spies for the Result-carrying vendor trio (PR-2): the
+// keep-cache-on-error contract is "the setter is NOT called", which needs
+// the same vi.fn() across renders.
+const mockSetVendorServices = vi.fn();
+const mockSetServiceMappings = vi.fn();
+const mockSetTrustAssessments = vi.fn();
 vi.mock('../../../../../context/AuditDataContext', () => ({
   useAuditData: () => {
     const [stageReadouts, setStageReadouts] = useState(initialStageReadouts);
     return {
       protocolRisks: {}, setProtocolRisks: vi.fn(),
-      vendorServices: {}, setVendorServices: vi.fn(),
-      serviceMappings: {}, setServiceMappings: vi.fn(),
-      trustAssessments: {}, setTrustAssessments: vi.fn(),
+      vendorServices: {}, setVendorServices: mockSetVendorServices,
+      serviceMappings: {}, setServiceMappings: mockSetServiceMappings,
+      trustAssessments: {}, setTrustAssessments: mockSetTrustAssessments,
       riskSummaries: {}, setRiskSummaries: vi.fn(),
       questionnaires: {}, setQuestionnaires: vi.fn(),
       preAuditBundles: {}, setPreAuditBundles: vi.fn(),
@@ -57,10 +63,11 @@ vi.mock('../../../../../context/AuditDataContext', () => ({
 vi.mock('../../../../../lib/audit/intakeApi', () => ({
   fetchProtocolRisksForAudit: vi.fn().mockResolvedValue([]),
 }));
+// PR-2 shape: the trio returns Result<T> — empty is { ok: true, data: null/[] }.
 vi.mock('../../../../../lib/audit/vendorEnrichmentApi', () => ({
-  fetchVendorService: vi.fn().mockResolvedValue(null),
-  fetchServiceMappingsByAudit: vi.fn().mockResolvedValue([]),
-  fetchTrustAssessment: vi.fn().mockResolvedValue(null),
+  fetchVendorService: vi.fn().mockResolvedValue({ ok: true, data: null }),
+  fetchServiceMappingsByAudit: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+  fetchTrustAssessment: vi.fn().mockResolvedValue({ ok: true, data: null }),
 }));
 vi.mock('../../../../../lib/audit/questionnaireApi', () => ({
   // Raw store says approved — deliberately contradicts the readout below.
@@ -252,5 +259,57 @@ describe('ScopeReviewWorkspace gate feed', () => {
         'Cannot advance: the questionnaire is not approved.',
       );
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Hardening PR-2 — the vendor trio's Result absorption: server truth
+// (including a legitimate null/[]) is written through; an errored read
+// KEEPS the known cache instead of clobbering it with nothing.
+// ---------------------------------------------------------------------------
+
+describe('ScopeReviewWorkspace — vendor trio Result absorption (PR-2)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockActiveAudit = {
+      id: AUDIT_ID,
+      current_stage: 'SCOPE_AND_RISK_REVIEW',
+      workflow_type: 'VENDOR_AUDIT',
+      protocol_id: 'protocol-1',
+      protocol_code: 'PROTO-001',
+    };
+    mockAdvanceStageError = null;
+    initialStageReadouts = {};
+    mockReadoutForFetch = makeReadout();
+  });
+
+  it('ok results are written through, including legitimate empties', async () => {
+    render(<ScopeReviewWorkspace />);
+
+    await waitFor(() => expect(mockSetVendorServices).toHaveBeenCalled());
+    expect(mockSetServiceMappings).toHaveBeenCalled();
+    expect(mockSetTrustAssessments).toHaveBeenCalled();
+  });
+
+  it('an errored read keeps the known cache — the setter is never called', async () => {
+    const { fetchVendorService, fetchTrustAssessment } = await import(
+      '../../../../../lib/audit/vendorEnrichmentApi'
+    );
+    (fetchVendorService as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: false,
+      error: 'permission denied',
+    });
+    (fetchTrustAssessment as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: false,
+      error: 'permission denied',
+    });
+
+    render(<ScopeReviewWorkspace />);
+
+    // Mappings read is healthy — its write still lands…
+    await waitFor(() => expect(mockSetServiceMappings).toHaveBeenCalled());
+    // …while the errored reads never clobber their stores with null.
+    expect(mockSetVendorServices).not.toHaveBeenCalled();
+    expect(mockSetTrustAssessments).not.toHaveBeenCalled();
   });
 });

@@ -67,7 +67,7 @@ export default function ScopeReviewWorkspace() {
     let cancelled = false;
 
     void (async () => {
-      const [risks, service, mappings, trust, questionnaire, riskSummary, readout] =
+      const [risks, serviceRes, mappingsRes, trustRes, questionnaire, riskSummary, readout] =
         await Promise.all([
           fetchProtocolRisksForAudit(auditId),
           fetchVendorService(auditId),
@@ -79,9 +79,19 @@ export default function ScopeReviewWorkspace() {
         ]);
       if (cancelled) return;
       data.setProtocolRisks((prev) => ({ ...prev, [auditId]: risks }));
-      data.setVendorServices((prev) => ({ ...prev, [auditId]: service }));
-      data.setServiceMappings((prev) => ({ ...prev, [auditId]: mappings }));
-      data.setTrustAssessments((prev) => ({ ...prev, [auditId]: trust }));
+      // Result-carrying reads (PR-2): ok → server truth, including null/[]
+      // (a legitimate empty must clear stale cache); error → KEEP the known
+      // cache — the old shape collapsed errors to null and clobbered good
+      // scope context with nothing.
+      if (serviceRes.ok) {
+        data.setVendorServices((prev) => ({ ...prev, [auditId]: serviceRes.data }));
+      }
+      if (mappingsRes.ok) {
+        data.setServiceMappings((prev) => ({ ...prev, [auditId]: mappingsRes.data }));
+      }
+      if (trustRes.ok) {
+        data.setTrustAssessments((prev) => ({ ...prev, [auditId]: trustRes.data }));
+      }
       data.setQuestionnaires((prev) => ({ ...prev, [auditId]: questionnaire }));
       data.setRiskSummaries((prev) => ({ ...prev, [auditId]: riskSummary }));
       data.setStageReadouts((prev) => ({ ...prev, [auditId]: readout }));
