@@ -40,7 +40,9 @@ import {
   buildIsaObservationFormDocx,
   buildIsaReportDocx,
 } from '../../../../../lib/audit/isaReportDocx';
+import { hasReachedStage } from '../../../../../lib/audit/workflowStages';
 import PiqcMark from '../../PiqcMark';
+import StagePreviewNotice from '../../StagePreviewNotice';
 import type {
   AuditNoteObject,
   IsaFindingObject,
@@ -112,6 +114,13 @@ export default function IsaReportWorkspace() {
   const { theme } = useTheme();
   const { activeAudit } = useAudit();
   const isLight = theme === 'light';
+
+  // One-ahead preview guard (UX2): ISA Stage 6 is viewable from ISA_CONDUCT.
+  // Section drafting (LLM), prose saves, and the verdict wait until the
+  // stage is real; assembled content stays readable.
+  const hasReached =
+    !!activeAudit &&
+    hasReachedStage(activeAudit.workflow_type, activeAudit.current_stage, 'ISA_REPORT');
 
   const [draft, setDraft] = useState<IsaReportDraftObject | null>(null);
   const [findings, setFindings] = useState<IsaFindingObject[]>([]);
@@ -206,6 +215,10 @@ export default function IsaReportWorkspace() {
   const verdictSet = !!draft?.site_verdict;
 
   const save = async (field: string, input: UpsertIsaReportDraftInput) => {
+    // Preview choke point (UX2): every draft write funnels through here, so
+    // one guard covers exec edits, template clears, prose saves, response
+    // window, and verdict alike.
+    if (!hasReached) return false;
     setSavingField(field);
     const res = await upsertIsaReportDraft(activeAudit.id, input);
     setSavingField(null);
@@ -293,7 +306,7 @@ export default function IsaReportWorkspace() {
             <button
               type="button"
               onClick={() => void applyProposal()}
-              disabled={savingField !== null}
+              disabled={savingField !== null || !hasReached}
               className={`rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40 ${primaryBtn}`}
             >
               Apply
@@ -308,7 +321,7 @@ export default function IsaReportWorkspace() {
     <button
       type="button"
       onClick={() => void requestSection(field)}
-      disabled={requestingSection !== null || !!disabledHint}
+      disabled={requestingSection !== null || !!disabledHint || !hasReached}
       title={disabledHint}
       className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs text-fg-body transition-colors disabled:opacity-40 ${inputBase}`}
     >
@@ -415,7 +428,7 @@ export default function IsaReportWorkspace() {
             <button
               type="button"
               onClick={() => void save(field, { [inputKey]: value } as UpsertIsaReportDraftInput)}
-              disabled={!dirty || !value.trim() || savingField === field}
+              disabled={!dirty || !value.trim() || savingField === field || !hasReached}
               className={`rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40 ${primaryBtn}`}
             >
               {savingField === field ? 'Saving…' : 'Save'}
@@ -428,6 +441,7 @@ export default function IsaReportWorkspace() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
+      {!hasReached && activeAudit && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
       {/* Header + export bar */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -445,8 +459,14 @@ export default function IsaReportWorkspace() {
           <button
             type="button"
             onClick={() => void copyReport()}
-            disabled={!verdictSet}
-            title={verdictSet ? 'Copy the full report — paste into Word or Google Docs' : 'Set the site continuation verdict first'}
+            disabled={!verdictSet || !hasReached}
+            title={
+              !hasReached
+                ? 'Available when the audit reaches this stage'
+                : verdictSet
+                ? 'Copy the full report — paste into Word or Google Docs'
+                : 'Set the site continuation verdict first'
+            }
             className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40 ${primaryBtn}`}
           >
             {copied === 'report' ? <Check size={13} /> : <ClipboardCopy size={13} />}
@@ -455,8 +475,14 @@ export default function IsaReportWorkspace() {
           <button
             type="button"
             onClick={() => void downloadDocx()}
-            disabled={!verdictSet}
-            title={verdictSet ? 'Download .docx' : 'Set the site continuation verdict first'}
+            disabled={!verdictSet || !hasReached}
+            title={
+              !hasReached
+                ? 'Available when the audit reaches this stage'
+                : verdictSet
+                ? 'Download .docx'
+                : 'Set the site continuation verdict first'
+            }
             className={`flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold text-fg-body disabled:opacity-40 ${inputBase}`}
           >
             <Download size={13} />
@@ -527,7 +553,7 @@ export default function IsaReportWorkspace() {
                         : { clearSiteVerdictText: true }),
                     });
                   }}
-                  disabled={!verdict || savingField === 'verdict'}
+                  disabled={!verdict || savingField === 'verdict' || !hasReached}
                   className={`rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40 ${primaryBtn}`}
                 >
                   {savingField === 'verdict' ? 'Saving…' : 'Save verdict'}
@@ -594,28 +620,30 @@ export default function IsaReportWorkspace() {
               ) : (
                 <>
                   <p className="text-fg-body text-sm whitespace-pre-wrap">{packet.execSummary.text}</p>
-                  <div className="flex items-center justify-end gap-2">
-                    {packet.execSummary.source !== 'templated' && (
+                  {hasReached && (
+                    <div className="flex items-center justify-end gap-2">
+                      {packet.execSummary.source !== 'templated' && (
+                        <button
+                          type="button"
+                          onClick={() => void save('exec', { clearExecSummary: true })}
+                          className="text-fg-muted text-xs hover:text-fg-body"
+                          title="Discard the stored text and derive from findings again"
+                        >
+                          Return to template
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={() => void save('exec', { clearExecSummary: true })}
-                        className="text-fg-muted text-xs hover:text-fg-body"
-                        title="Discard the stored text and derive from findings again"
+                        onClick={() => {
+                          setExecText(packet.execSummary.text);
+                          setExecEditing(true);
+                        }}
+                        className={`rounded-md border px-3 py-1.5 text-xs text-fg-body ${inputBase}`}
                       >
-                        Return to template
+                        Edit
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setExecText(packet.execSummary.text);
-                        setExecEditing(true);
-                      }}
-                      className={`rounded-md border px-3 py-1.5 text-xs text-fg-body ${inputBase}`}
-                    >
-                      Edit
-                    </button>
-                  </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -642,13 +670,15 @@ export default function IsaReportWorkspace() {
                       void save('response', { responseDueDays: days });
                     }
                   }}
-                  className={`w-16 rounded-md border px-2 py-1 text-xs text-fg-body outline-none ${inputBase}`}
+                  disabled={!hasReached}
+                  className={`w-16 rounded-md border px-2 py-1 text-xs text-fg-body outline-none disabled:opacity-40 ${inputBase}`}
                   aria-label="Response due days"
                 />
                 <select
                   value={draft?.response_due_basis ?? 'CALENDAR'}
                   onChange={(e) => void save('response', { responseDueBasis: e.target.value as 'CALENDAR' | 'BUSINESS' })}
-                  className={`rounded-md border px-2 py-1 text-xs text-fg-body outline-none ${inputBase}`}
+                  disabled={!hasReached}
+                  className={`rounded-md border px-2 py-1 text-xs text-fg-body outline-none disabled:opacity-40 ${inputBase}`}
                   aria-label="Response due basis"
                 >
                   <option value="CALENDAR">calendar days</option>
@@ -666,7 +696,7 @@ export default function IsaReportWorkspace() {
               <div className="ml-auto flex items-center gap-2">
                 {/* The observation form is the auditee-facing response
                     vehicle — it needs findings, not the site verdict. */}
-                {findings.length > 0 && (
+                {findings.length > 0 && hasReached && (
                   <>
                     <button
                       type="button"

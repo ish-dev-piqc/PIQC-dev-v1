@@ -7,7 +7,7 @@
 // This suite pins that 5-of-7 split so a future "just swap all 7" or
 // "swap none" refactor gets caught.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useState } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import type { MockWorkspaceEntry } from '../../../../../lib/audit/mockWorkspaceEntries';
@@ -17,9 +17,17 @@ vi.mock('../../../../../context/ThemeContext', () => ({
   useTheme: () => ({ theme: 'dark' as const, toggleTheme: () => {} }),
 }));
 
-const ACTIVE_AUDIT = { id: 'audit-1', audit_name: 'Vendor audit' };
+// workflow_type + current_stage feed hasReachedStage (UX2 one-ahead preview
+// guard). Default: the audit is really at Stage 8, so legacy tests see the
+// pre-UX2 behavior unchanged.
+let mockActiveAudit = {
+  id: 'audit-1',
+  audit_name: 'Vendor audit',
+  workflow_type: 'VENDOR_AUDIT',
+  current_stage: 'FINAL_REVIEW_EXPORT',
+};
 vi.mock('../../../../../context/AuditContext', () => ({
-  useAudit: () => ({ activeAudit: ACTIVE_AUDIT }),
+  useAudit: () => ({ activeAudit: mockActiveAudit }),
 }));
 
 let mockWorkspaceEntries: Record<string, MockWorkspaceEntry[]> = {};
@@ -269,5 +277,69 @@ describe('FinalReviewExportWorkspace grounding currency (flag, never block)', ()
     await waitFor(() => expect(screen.getByText(/Pre-export checklist/)).toBeTruthy());
     expect(screen.queryByTestId('export-currency-notice')).toBeNull();
     expect(screen.queryByTestId('export-currency-current')).toBeNull();
+  });
+});
+
+// -----------------------------------------------------------------------------
+// PR-UX2 — one-ahead preview guard. Stage 8 is viewable while the audit is
+// still at Stage 7, and the sign-off/export RPCs carry no server-side stage
+// check — the preview must therefore never offer the sign-off latch, even
+// with every artefact gate green.
+// -----------------------------------------------------------------------------
+
+describe('FinalReviewExportWorkspace — one-ahead preview guard (PR-UX2)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockActiveAudit = {
+      id: 'audit-1',
+      audit_name: 'Vendor audit',
+      workflow_type: 'VENDOR_AUDIT',
+      current_stage: 'REPORT_DRAFTING', // one behind — previewing Stage 8
+    };
+    mockWorkspaceEntries = { 'audit-1': [makeEntry()] };
+    mockReportsMap = {
+      'audit-1': {
+        id: 'rd-1',
+        audit_id: 'audit-1',
+        executive_summary: '',
+        conclusions: '',
+        approval_status: 'APPROVED',
+        approved_at: '2026-08-01T00:00:00Z',
+        approved_by_name: 'Auditor',
+        updated_at: '2026-08-01T00:00:00Z',
+        final_signed_off_at: null,
+        final_signed_off_by_name: null,
+        exported_at: null,
+      } as MockReportDraft,
+    };
+    mockReadout = {
+      riskSummaryApproved: true,
+      questionnaireApproved: true,
+      letterApproved: true,
+      agendaApproved: true,
+      checklistApproved: true,
+    };
+    initialStageReadouts = {};
+  });
+
+  afterEach(() => {
+    // Restore the at-stage default so test-order changes never leak the
+    // preview stage into other describes.
+    mockActiveAudit = {
+      id: 'audit-1',
+      audit_name: 'Vendor audit',
+      workflow_type: 'VENDOR_AUDIT',
+      current_stage: 'FINAL_REVIEW_EXPORT',
+    };
+  });
+
+  it('all 7 gates green but audit still at Stage 7 → sign-off disabled, preview notice up', async () => {
+    render(<FinalReviewExportWorkspace />);
+
+    await waitFor(() => {
+      expect(screen.getByText('7 of 7 gates passed')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/has not reached this stage yet/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /sign off audit/i })).toBeDisabled();
   });
 });

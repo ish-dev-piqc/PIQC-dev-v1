@@ -46,10 +46,17 @@ vi.mock('../../../../../context/ThemeContext', () => ({
 }));
 
 const mockAdvanceStage = vi.fn();
-let mockActiveAudit: { id: string; current_stage: string; status: string } | null = {
+// workflow_type feeds hasReachedStage (UX2 one-ahead preview guard).
+let mockActiveAudit: {
+  id: string;
+  current_stage: string;
+  status: string;
+  workflow_type: string;
+} | null = {
   id: 'audit-1',
   current_stage: 'REPORT_DRAFTING',
   status: 'IN_PROGRESS',
+  workflow_type: 'VENDOR_AUDIT',
 };
 vi.mock('../../../../../context/AuditContext', () => ({
   useAudit: () => ({
@@ -89,12 +96,13 @@ vi.mock('../../../../../context/AuditDataContext', () => ({
  * Pass the draft you want both fetchReportDraft and useAuditData.reports to
  * return; pass null for "no draft on the audit."
  */
-function setupContext(draft: MockReportDraft | null) {
+function setupContext(draft: MockReportDraft | null, currentStage = 'REPORT_DRAFTING') {
   mockReportsMap = draft ? { 'audit-1': draft } : { 'audit-1': null };
   mockActiveAudit = {
     id: 'audit-1',
-    current_stage: 'REPORT_DRAFTING',
+    current_stage: currentStage,
     status: 'IN_PROGRESS',
+    workflow_type: 'VENDOR_AUDIT',
   };
 }
 
@@ -864,5 +872,52 @@ describe('ReportDraftingWorkspace — readiness latch (export-readiness spec)', 
     expect(
       await screen.findByText(/changed since you last reviewed it/i),
     ).toBeInTheDocument();
+  });
+});
+
+// -----------------------------------------------------------------------------
+// PR-UX2 — one-ahead preview guard. The shell's nav allows viewing Stage 7
+// while the audit is still at Stage 6; previewing must be a pure read — no
+// prefill RPC, no LLM spend, no stub affordance — with the preview notice up.
+// -----------------------------------------------------------------------------
+
+describe('ReportDraftingWorkspace — one-ahead preview guard (PR-UX2)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('PREVIEW, no draft: prefill does NOT fire, notice renders, stub button absent', async () => {
+    setupContext(null, 'AUDIT_CONDUCT');
+    mockFetch.mockResolvedValue(null);
+
+    render(<ReportDraftingWorkspace />);
+
+    // The load effect still reads (previews render real data)…
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('audit-1'));
+    // …but writes and spend stay off.
+    expect(mockPrefill).not.toHaveBeenCalled();
+    expect(mockRequestLlm).not.toHaveBeenCalled();
+    expect(mockRequestLlmConclusions).not.toHaveBeenCalled();
+    expect(screen.getByText(/has not reached this stage yet/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /generate report stub/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('PREVIEW, templated draft present: LLM refinement does NOT fire even though every PR #69 guard passes', async () => {
+    const templated = makeReportDraft({
+      executive_summary_source: 'templated',
+      conclusions_source: 'templated',
+    });
+    setupContext(templated, 'AUDIT_CONDUCT');
+    mockFetch.mockResolvedValue(templated);
+
+    render(<ReportDraftingWorkspace />);
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+    expect(mockRequestLlm).not.toHaveBeenCalled();
+    expect(mockRequestLlmConclusions).not.toHaveBeenCalled();
+    expect(mockPrefill).not.toHaveBeenCalled();
+    expect(screen.getByText(/has not reached this stage yet/i)).toBeInTheDocument();
   });
 });

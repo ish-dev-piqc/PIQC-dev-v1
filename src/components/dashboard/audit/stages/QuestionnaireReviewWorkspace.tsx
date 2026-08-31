@@ -38,7 +38,9 @@ import type {
   QuestionnaireInstanceStatus,
   ResponseSource,
 } from '../../../../types/audit';
+import { hasReachedStage } from '../../../../lib/audit/workflowStages';
 import HistoryDrawer from '../HistoryDrawer';
+import StagePreviewNotice from '../StagePreviewNotice';
 import { useOpenEvidence } from '../evidenceDrawerContext';
 
 // =============================================================================
@@ -91,6 +93,13 @@ export default function QuestionnaireReviewWorkspace() {
   const { theme } = useTheme();
   const { activeAudit } = useAudit();
   const isLight = theme === 'light';
+
+  // One-ahead preview guard (UX2): Stage 3 is viewable while the audit is
+  // still at Stage 2. Approving from a preview would pre-flip the Stage 4
+  // gate, so instance creation, edits, transitions, and approval all wait.
+  const hasReached =
+    !!activeAudit &&
+    hasReachedStage(activeAudit.workflow_type, activeAudit.current_stage, 'QUESTIONNAIRE_REVIEW');
 
   // Shared store across stages — Scope Review's gate reads from here.
   const { questionnaires: bundles, setQuestionnaires: setBundles, setStageReadouts } =
@@ -192,6 +201,7 @@ export default function QuestionnaireReviewWorkspace() {
   if (!bundle) {
     return (
       <div className="p-6 max-w-3xl mx-auto">
+        {!hasReached && activeAudit && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
         <div>
           <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
             Stage 3 · Questionnaire review
@@ -205,14 +215,16 @@ export default function QuestionnaireReviewWorkspace() {
             mappings — make sure those are in place first.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={createInstance}
-          className={`mt-5 inline-flex items-center gap-2 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${buttonPrimary}`}
-        >
-          <Sparkles size={14} />
-          Create questionnaire instance
-        </button>
+        {hasReached && (
+          <button
+            type="button"
+            onClick={createInstance}
+            className={`mt-5 inline-flex items-center gap-2 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${buttonPrimary}`}
+          >
+            <Sparkles size={14} />
+            Create questionnaire instance
+          </button>
+        )}
       </div>
     );
   }
@@ -385,12 +397,16 @@ export default function QuestionnaireReviewWorkspace() {
 
   const approved = !!bundle.instance.approved_at;
   const isComplete = bundle.instance.status === 'COMPLETE';
-  const readOnly = approved;
+  // Approved seals the instance; !hasReached extends the same read-only
+  // machinery to the one-ahead preview (QuestionRow edits, status
+  // transitions, and addenda generation all key off this).
+  const readOnly = approved || !hasReached;
   const currentStatusIdx = QUESTIONNAIRE_INSTANCE_STATUS_ORDER.indexOf(bundle.instance.status);
   const nextStatus = QUESTIONNAIRE_INSTANCE_STATUS_ORDER[currentStatusIdx + 1];
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
+      {!hasReached && activeAudit && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
       {/* Header */}
       <div>
         <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
@@ -561,7 +577,7 @@ export default function QuestionnaireReviewWorkspace() {
               </p>
             )}
           </div>
-          {!approved && isComplete && (
+          {!approved && isComplete && hasReached && (
             <button
               type="button"
               onClick={approve}
@@ -576,6 +592,11 @@ export default function QuestionnaireReviewWorkspace() {
           {!approved && !isComplete && (
             <span className={`${mutedColor} text-xs italic`}>
               Approval available once status reaches Complete.
+            </span>
+          )}
+          {!approved && isComplete && !hasReached && (
+            <span className={`${mutedColor} text-xs italic`}>
+              Approval unlocks when the audit reaches this stage.
             </span>
           )}
         </div>

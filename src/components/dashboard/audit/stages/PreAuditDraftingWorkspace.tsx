@@ -43,8 +43,10 @@ import {
 } from '../../../../lib/audit/deliverableGenerationApi';
 import type { AuditEvidenceListRow } from '../../../../types/audit';
 import { useOpenEvidence } from '../evidenceDrawerContext';
+import { hasReachedStage } from '../../../../lib/audit/workflowStages';
 import HistoryDrawer from '../HistoryDrawer';
 import PrefillAgentNote from '../PrefillAgentNote';
+import StagePreviewNotice from '../StagePreviewNotice';
 
 // =============================================================================
 // PreAuditDraftingWorkspace — PRE_AUDIT_DRAFTING stage center pane.
@@ -94,6 +96,13 @@ export default function PreAuditDraftingWorkspace() {
   const { theme } = useTheme();
   const { activeAudit, advanceStage, advanceStageError } = useAudit();
   const isLight = theme === 'light';
+
+  // One-ahead preview guard (UX2): Stage 5 is viewable while the audit is
+  // still at Stage 4. Reads render; the prefill RPCs, stub/LLM generation,
+  // and advance stay off until the stage is real.
+  const hasReached =
+    !!activeAudit &&
+    hasReachedStage(activeAudit.workflow_type, activeAudit.current_stage, 'PRE_AUDIT_DRAFTING');
 
   const { preAuditBundles: bundles, setPreAuditBundles: setBundles } = useAuditData();
   const [activeTab, setActiveTab] = useState<TabKey>('confirmation_letter');
@@ -152,10 +161,17 @@ export default function PreAuditDraftingWorkspace() {
   useEffect(() => {
     if (!activeAudit) return;
     const auditIdLocal = activeAudit.id;
+    // Cancellation matters since hasReached joined the deps: the effect can
+    // now run twice for the SAME audit (preview → stage advances while
+    // mounted). Without it, a slow run-1 fetch resolving after run-2's
+    // prefill would clobber the prefilled bundle with the stale pre-advance
+    // snapshot. Same pattern as AuditConduct's hydrate effect.
+    let cancelled = false;
 
     const load = async () => {
       try {
         const initial = await fetchPreAuditDeliverables(auditIdLocal);
+        if (cancelled) return;
 
         // Silent agentic bootstrap: if all three deliverables are missing AND
         // we haven't attempted prefill yet for this audit this session, fire
@@ -164,10 +180,11 @@ export default function PreAuditDraftingWorkspace() {
         const allMissing =
           !initial.confirmation_letter && !initial.agenda && !initial.checklist;
 
-        if (allMissing && !attemptedPrefillRef.current.has(auditIdLocal)) {
+        if (allMissing && hasReached && !attemptedPrefillRef.current.has(auditIdLocal)) {
           attemptedPrefillRef.current.add(auditIdLocal);
           await prefillStage5Deliverables(auditIdLocal);
           const refreshed = await fetchPreAuditDeliverables(auditIdLocal);
+          if (cancelled) return;
           setBundles((prev) => ({ ...prev, [auditIdLocal]: refreshed }));
         } else {
           setBundles((prev) => ({ ...prev, [auditIdLocal]: initial }));
@@ -177,9 +194,14 @@ export default function PreAuditDraftingWorkspace() {
       }
     };
     load();
+    return () => {
+      cancelled = true;
+    };
     // Depend on activeAudit?.id only — see RiskSummaryPanel for rationale.
+    // hasReached added so the bootstrap fires when the audit advances into
+    // Stage 5 after an earlier read-only preview ran.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAudit?.id, setBundles]);
+  }, [activeAudit?.id, hasReached, setBundles]);
 
   if (!activeAudit) return null;
 
@@ -202,6 +224,7 @@ export default function PreAuditDraftingWorkspace() {
   };
 
   const runDeliverableGeneration = async (tab: TabKey) => {
+    if (!hasReached) return; // preview — never spend generation from ahead
     setGeneratingTab(tab);
     setGenerationError(null);
     const draft = await requestDeliverableDraft(auditId, tab);
@@ -384,6 +407,7 @@ export default function PreAuditDraftingWorkspace() {
   if (allMissing) {
     return (
       <div className="p-6 max-w-3xl mx-auto">
+        {!hasReached && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
         <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
           Stage 5 · Pre-audit drafting
         </p>
@@ -395,14 +419,16 @@ export default function PreAuditDraftingWorkspace() {
           here from your approved risk summary and vendor service mappings. Generate stubs
           to start, then edit each down to your judgment.
         </p>
-        <button
-          type="button"
-          onClick={generateAllStubs}
-          className={`mt-5 inline-flex items-center gap-2 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${buttonPrimary}`}
-        >
-          <Sparkles size={14} />
-          Generate all three stubs
-        </button>
+        {hasReached && (
+          <button
+            type="button"
+            onClick={generateAllStubs}
+            className={`mt-5 inline-flex items-center gap-2 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${buttonPrimary}`}
+          >
+            <Sparkles size={14} />
+            Generate all three stubs
+          </button>
+        )}
       </div>
     );
   }
@@ -435,6 +461,7 @@ export default function PreAuditDraftingWorkspace() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
+      {!hasReached && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
       {/* Header */}
       <div>
         <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
@@ -515,6 +542,7 @@ export default function PreAuditDraftingWorkspace() {
             editing={editingTabs['confirmation_letter'] === true}
             error={generationError}
             isLight={isLight}
+            previewLocked={!hasReached}
             onGenerate={() => void runDeliverableGeneration('confirmation_letter')}
           />
           <ConfirmationLetterTab
@@ -525,6 +553,7 @@ export default function PreAuditDraftingWorkspace() {
               persistConfirmationLetter(bundle.confirmation_letter, next);
             }}
             onEditingChange={(e) => setTabEditing('confirmation_letter', e)}
+            previewLocked={!hasReached}
           />
         </>
       )}
@@ -538,6 +567,7 @@ export default function PreAuditDraftingWorkspace() {
             editing={editingTabs['agenda'] === true}
             error={generationError}
             isLight={isLight}
+            previewLocked={!hasReached}
             onGenerate={() => void runDeliverableGeneration('agenda')}
           />
           <AgendaTab
@@ -548,6 +578,7 @@ export default function PreAuditDraftingWorkspace() {
               persistAgenda(bundle.agenda, next);
             }}
             onEditingChange={(e) => setTabEditing('agenda', e)}
+            previewLocked={!hasReached}
           />
         </>
       )}
@@ -561,6 +592,7 @@ export default function PreAuditDraftingWorkspace() {
             editing={editingTabs['checklist'] === true}
             error={generationError}
             isLight={isLight}
+            previewLocked={!hasReached}
             onGenerate={() => void runDeliverableGeneration('checklist')}
           />
           <ChecklistTab
@@ -571,6 +603,7 @@ export default function PreAuditDraftingWorkspace() {
               persistChecklist(bundle.checklist, next);
             }}
             onEditingChange={(e) => setTabEditing('checklist', e)}
+            previewLocked={!hasReached}
           />
         </>
       )}
@@ -621,7 +654,7 @@ export default function PreAuditDraftingWorkspace() {
           <button
             type="button"
             onClick={() => advanceStage('AUDIT_CONDUCT')}
-            disabled={!allApproved || alreadyAdvanced}
+            disabled={!allApproved || alreadyAdvanced || !hasReached}
             className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${buttonApprove}`}
           >
             Advance to Audit conduct
@@ -687,9 +720,11 @@ interface ConfirmationLetterTabProps {
   // Reports the tab's edit mode so the generation panel can disable
   // Revise while unsaved edits exist (rule: persist human edits first).
   onEditingChange?: (editing: boolean) => void;
+  /** One-ahead preview (UX2): no scratch form, no Edit/Approve. */
+  previewLocked?: boolean;
 }
 
-function ConfirmationLetterTab({ deliverable, isLight, onChange, onEditingChange }: ConfirmationLetterTabProps) {
+function ConfirmationLetterTab({ deliverable, isLight, onChange, onEditingChange, previewLocked = false }: ConfirmationLetterTabProps) {
   const [editing, setEditingRaw] = useState(!deliverable);
   const setEditing = (next: boolean) => {
     setEditingRaw(next);
@@ -758,6 +793,7 @@ function ConfirmationLetterTab({ deliverable, isLight, onChange, onEditingChange
       onCancel={cancel}
       onApprove={approve}
       canSave={!!body.trim()}
+      previewLocked={previewLocked}
       prefilledSources={
         deliverable?.prefilled_at
           ? [
@@ -767,7 +803,9 @@ function ConfirmationLetterTab({ deliverable, isLight, onChange, onEditingChange
           : undefined
       }
     >
-      {!editing && deliverable ? (
+      {previewLocked && !deliverable ? (
+        <p className="text-fg-muted text-sm">Nothing recorded yet.</p>
+      ) : !editing && deliverable ? (
         <div className="space-y-4">
           <SubSection label="Body" isLight={isLight}>
             <p className={`text-sm whitespace-pre-wrap leading-relaxed ${isLight ? 'text-[#0F172A]' : 'text-white'}`}>
@@ -846,9 +884,11 @@ interface AgendaTabProps {
   // Reports the tab's edit mode so the generation panel can disable
   // Revise while unsaved edits exist (rule: persist human edits first).
   onEditingChange?: (editing: boolean) => void;
+  /** One-ahead preview (UX2): no scratch form, no Edit/Approve. */
+  previewLocked?: boolean;
 }
 
-function AgendaTab({ deliverable, isLight, onChange, onEditingChange }: AgendaTabProps) {
+function AgendaTab({ deliverable, isLight, onChange, onEditingChange, previewLocked = false }: AgendaTabProps) {
   const [editing, setEditingRaw] = useState(!deliverable);
   const setEditing = (next: boolean) => {
     setEditingRaw(next);
@@ -926,8 +966,11 @@ function AgendaTab({ deliverable, isLight, onChange, onEditingChange }: AgendaTa
           : undefined
       }
       canSave={items.length > 0 && items.every((it) => it.time.trim() && it.topic.trim())}
+      previewLocked={previewLocked}
     >
-      {!editing && deliverable && deliverable.content.items.length > 0 ? (
+      {previewLocked && !deliverable ? (
+        <p className="text-fg-muted text-sm">Nothing recorded yet.</p>
+      ) : !editing && deliverable && deliverable.content.items.length > 0 ? (
         <div className="space-y-2">
           {deliverable.content.items.map((it) => (
             <AgendaItemRow key={it.id} item={it} isLight={isLight} />
@@ -1063,6 +1106,8 @@ interface ChecklistTabProps {
   // Reports the tab's edit mode so the generation panel can disable
   // Revise while unsaved edits exist (rule: persist human edits first).
   onEditingChange?: (editing: boolean) => void;
+  /** One-ahead preview (UX2): no scratch form, no Edit/Approve. */
+  previewLocked?: boolean;
 }
 
 // ============================================================================
@@ -1088,6 +1133,9 @@ interface DeliverableGenerationPanelProps {
   editing: boolean;
   error: string | null;
   isLight: boolean;
+  /** One-ahead preview (UX2): the CTA disables honestly instead of the
+   *  click dying silently against runDeliverableGeneration's guard. */
+  previewLocked?: boolean;
   onGenerate: () => void;
 }
 
@@ -1099,6 +1147,7 @@ function DeliverableGenerationPanel({
   editing,
   error,
   isLight,
+  previewLocked = false,
   onGenerate,
 }: DeliverableGenerationPanelProps) {
   const subColor = 'text-fg-sub';
@@ -1167,9 +1216,15 @@ function DeliverableGenerationPanel({
           // doesn't block: on an empty deliverable — prefill gated off — the
           // draft CTA is the whole point, and the click is an explicit choice
           // to replace the scratch form.
-          disabled={generating || (editing && !!deliverable)}
+          disabled={generating || (editing && !!deliverable) || previewLocked}
           onClick={onGenerate}
-          title={editing && deliverable ? 'Save or cancel your edits first — revising would overwrite them' : undefined}
+          title={
+            previewLocked
+              ? 'Available when the audit reaches this stage'
+              : editing && deliverable
+              ? 'Save or cancel your edits first — revising would overwrite them'
+              : undefined
+          }
           data-testid={`${kind}-generate-button`}
           className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-md transition-colors flex-shrink-0 ${buttonPrimary}`}
         >
@@ -1207,7 +1262,7 @@ function DeliverableGenerationPanel({
   );
 }
 
-function ChecklistTab({ deliverable, isLight, onChange, onEditingChange }: ChecklistTabProps) {
+function ChecklistTab({ deliverable, isLight, onChange, onEditingChange, previewLocked = false }: ChecklistTabProps) {
   const [editing, setEditingRaw] = useState(!deliverable);
   const setEditing = (next: boolean) => {
     setEditingRaw(next);
@@ -1302,8 +1357,11 @@ function ChecklistTab({ deliverable, isLight, onChange, onEditingChange }: Check
           : undefined
       }
       canSave={items.length > 0 && items.every((it) => it.prompt.trim())}
+      previewLocked={previewLocked}
     >
-      {!editing && deliverable && deliverable.content.items.length > 0 ? (
+      {previewLocked && !deliverable ? (
+        <p className="text-fg-muted text-sm">Nothing recorded yet.</p>
+      ) : !editing && deliverable && deliverable.content.items.length > 0 ? (
         <div className="space-y-2">
           {deliverable.content.items.map((it, idx) => (
             <div key={it.id} className={`${cardBg} border rounded-md px-3 py-2.5 flex items-start gap-3`}>
@@ -1426,6 +1484,9 @@ interface DeliverableShellProps {
    *  renders a small Sparkles + "Started from: …" line below the
    *  description so the auditor can see where the content originated. */
   prefilledSources?: string[];
+  /** One-ahead preview (UX2): hide Edit/Approve — approving from a preview
+   *  would pre-flip the Stage 6 gate. History stays. */
+  previewLocked?: boolean;
   children: React.ReactNode;
 }
 
@@ -1442,6 +1503,7 @@ function DeliverableShell({
   onApprove,
   canSave,
   prefilledSources,
+  previewLocked = false,
   children,
 }: DeliverableShellProps) {
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -1504,7 +1566,7 @@ function DeliverableShell({
               <HistoryIcon size={12} />
               History
             </button>
-            {!editing && (
+            {!editing && !previewLocked && (
               <>
                 <button
                   type="button"
