@@ -110,12 +110,17 @@ export default function QuestionnaireReviewWorkspace() {
 
   useEffect(() => {
     if (!activeAudit) return;
+    const auditIdLocal = activeAudit.id;
+    // Cancellation latch (PR-2): without it a slow fetch resolving after an
+    // audit switch writes the OLD audit's bundle over the new view — the
+    // sibling workspaces all carry this guard.
+    let cancelled = false;
 
     const loadQuestionnaire = async () => {
       try {
-        const bundle = await fetchQuestionnaireBundle(activeAudit.id);
-        if (bundle) {
-          setBundles((prev) => ({ ...prev, [activeAudit.id]: bundle }));
+        const bundle = await fetchQuestionnaireBundle(auditIdLocal);
+        if (!cancelled && bundle) {
+          setBundles((prev) => ({ ...prev, [auditIdLocal]: bundle }));
         }
       } catch (err) {
         console.error('[QuestionnaireReviewWorkspace] Load error:', err);
@@ -123,6 +128,9 @@ export default function QuestionnaireReviewWorkspace() {
     };
 
     loadQuestionnaire();
+    return () => {
+      cancelled = true;
+    };
     // Depend on activeAudit?.id only — see RiskSummaryPanel for rationale.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAudit?.id, setBundles]);
