@@ -84,7 +84,8 @@ let mockBundle: {
   confirmation_letter: unknown;
   agenda: unknown;
   checklist: unknown;
-} = { confirmation_letter: null, agenda: null, checklist: null };
+  internal_notification?: unknown;
+} = { confirmation_letter: null, agenda: null, checklist: null, internal_notification: null };
 vi.mock('../../../../../lib/audit/preAuditApi', () => ({
   fetchPreAuditDeliverables: vi.fn(() => Promise.resolve(mockBundle)),
 }));
@@ -226,7 +227,7 @@ describe('FinalReviewExportWorkspace grounding currency (flag, never block)', ()
     mockReportsMap = {};
     initialStageReadouts = {};
     mockReadout = null;
-    mockBundle = { confirmation_letter: null, agenda: null, checklist: null };
+    mockBundle = { confirmation_letter: null, agenda: null, checklist: null, internal_notification: null };
     mockRegister = { ok: true, data: [] };
   });
 
@@ -268,6 +269,26 @@ describe('FinalReviewExportWorkspace grounding currency (flag, never block)', ()
     expect(notice.textContent).toContain('Checklist:');
     expect(notice.textContent).toContain('Training matrix');
     expect(notice.textContent).toContain('never blocks export');
+  });
+
+  it('lists a PIQC-drafted internal notification in the currency panel (PR-D1)', async () => {
+    mockBundle = {
+      confirmation_letter: null,
+      agenda: null,
+      checklist: null,
+      internal_notification: { grounding_snapshot: SNAPSHOT },
+    };
+    mockRegister = {
+      ok: true,
+      data: [
+        REGISTER_ROW,
+        { ...REGISTER_ROW, document_id: 'd2', title: 'Training matrix' },
+      ],
+    };
+    render(<FinalReviewExportWorkspace />);
+    const notice = await screen.findByTestId('export-currency-notice');
+    expect(notice.textContent).toContain('Internal notification:');
+    expect(notice.textContent).toContain('Training matrix');
   });
 
   it('renders no verdict at all when the register read fails', async () => {

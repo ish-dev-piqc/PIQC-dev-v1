@@ -21,6 +21,8 @@ import {
   prefillAgenda,
   prefillChecklist,
   prefillStage5Deliverables,
+  upsertInternalNotification,
+  approveInternalNotification,
 } from '../preAuditApi';
 
 vi.mock('../../supabase', () => {
@@ -247,5 +249,93 @@ describe('prefillStage5Deliverables — best-effort Promise.all', () => {
       checklist: null,
     });
     expect(errorSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Internal notification (PR-D1) — the 4th deliverable has NO prefill by
+// design; its wrappers are the plain upsert + CAS-approve pair.
+// ---------------------------------------------------------------------------
+
+function makeNotificationRow() {
+  return {
+    id: 'notification-1',
+    audit_id: 'audit-1',
+    content: { body_text: 'Internal heads-up …', scope: ['eCOA validation'] },
+    approval_status: 'DRAFT',
+    approved_by: null,
+    approved_at: null,
+    updated_at: '2026-09-04T00:00:00Z',
+  };
+}
+
+describe('upsertInternalNotification', () => {
+  let errorSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    mockRpc.mockReset();
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  it('calls the RPC with audit id + content and returns the flattened row', async () => {
+    mockRpc.mockResolvedValueOnce({ data: makeNotificationRow(), error: null });
+
+    const content = { body_text: 'Internal heads-up …', scope: ['eCOA validation'] };
+    const result = await upsertInternalNotification('audit-1', content);
+
+    expect(mockRpc).toHaveBeenCalledWith('audit_mode_upsert_internal_notification', {
+      p_audit_id: 'audit-1',
+      p_content: content,
+      p_reason: null,
+    });
+    expect(result?.id).toBe('notification-1');
+    expect(result?.content.body_text).toBe('Internal heads-up …');
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  it('returns null and logs on RPC error', async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: PERMISSION_DENIED });
+
+    const result = await upsertInternalNotification('audit-1', { body_text: 'x', scope: [] });
+
+    expect(result).toBeNull();
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[preAuditApi] upsertInternalNotification'),
+      expect.anything(),
+    );
+  });
+});
+
+describe('approveInternalNotification', () => {
+  beforeEach(() => {
+    mockRpc.mockReset();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  it('passes the CAS version (p_expected_updated_at) and returns ok on success', async () => {
+    const approved = { ...makeNotificationRow(), approval_status: 'APPROVED' };
+    mockRpc.mockResolvedValueOnce({ data: approved, error: null });
+
+    const result = await approveInternalNotification('notification-1', '2026-09-04T00:00:00Z');
+
+    expect(mockRpc).toHaveBeenCalledWith('audit_mode_approve_internal_notification', {
+      p_id: 'notification-1',
+      p_reason: null,
+      p_expected_updated_at: '2026-09-04T00:00:00Z',
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data.approval_status).toBe('APPROVED');
+  });
+
+  it('surfaces the server hint on CAS rejection (STALE_CONTENT)', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: '40001', message: 'changed since reviewed', hint: 'STALE_CONTENT' },
+    });
+
+    const result = await approveInternalNotification('notification-1', '2026-09-04T00:00:00Z');
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errorHint).toBe('STALE_CONTENT');
   });
 });
