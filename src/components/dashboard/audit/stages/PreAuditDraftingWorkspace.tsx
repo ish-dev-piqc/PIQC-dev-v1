@@ -11,6 +11,8 @@ import {
   CalendarDays,
   ListChecks,
   History as HistoryIcon,
+  Megaphone,
+  FileSearch,
   Paperclip,
 } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
@@ -22,6 +24,8 @@ import {
   type MockConfirmationLetter,
   type MockAgenda,
   type MockChecklist,
+  type MockInternalNotification,
+  type MockEvidenceGapSummary,
   type MockPreAuditBundle,
 } from '../../../../lib/audit/mockPreAudit';
 import {
@@ -32,12 +36,18 @@ import {
   approveAgenda,
   upsertChecklist,
   approveChecklist,
+  upsertInternalNotification,
+  approveInternalNotification,
+  upsertEvidenceGapSummary,
+  approveEvidenceGapSummary,
   prefillStage5Deliverables,
+  type DeliverableApproveResult,
 } from '../../../../lib/audit/preAuditApi';
 import type { DeliverableApprovalStatus, TrackedObjectType } from '../../../../types/audit';
 import { listAuditEvidence } from '../../../../lib/audit/evidenceApi';
 import {
   applyDeliverableGeneration,
+  checklistLiveIds,
   computeDeliverableCurrency,
   requestDeliverableDraft,
 } from '../../../../lib/audit/deliverableGenerationApi';
@@ -51,24 +61,37 @@ import StagePreviewNotice from '../StagePreviewNotice';
 // =============================================================================
 // PreAuditDraftingWorkspace — PRE_AUDIT_DRAFTING stage center pane.
 //
-// Three tabs sharing the Revise / Save / Cancel / Approve pattern:
-//   - Confirmation Letter (sent to vendor)
-//   - Agenda (multi-item audit plan)
-//   - Checklist (auditor's working checklist)
+// Five tabs sharing the Revise / Save / Cancel / Approve pattern:
+//   - Confirmation Letter      (sent to vendor)
+//   - Agenda                   (multi-item audit plan)
+//   - Checklist                (auditor's working checklist)
+//   - Internal Notification    (internal heads-up inviting scope input — PR-D1)
+//   - Evidence Gap Summary     (per-scope-area coverage vs the register — PR-D3)
 //
-// All three deliverables follow D-010 step 7 lifecycle:
+// All follow the D-010 step 7 lifecycle:
 //   - DRAFT until explicitly Approved
 //   - Editing an APPROVED deliverable demotes it to DRAFT (re-approval needed)
-//   - When all three are APPROVED, AUDIT_CONDUCT unlocks
+//   - When letter + agenda + checklist are APPROVED, AUDIT_CONDUCT unlocks.
+//     The internal notification and evidence gap summary NEVER gate advance
+//     (v8 rule) — their approvals are their own latches only.
 // =============================================================================
 
-type TabKey = 'confirmation_letter' | 'agenda' | 'checklist';
+type TabKey =
+  | 'confirmation_letter'
+  | 'agenda'
+  | 'checklist'
+  | 'internal_notification'
+  | 'evidence_gap_summary';
 
 interface TabDef {
   key: TabKey;
   label: string;
   description: string;
   icon: typeof FileText;
+  // Whether this deliverable's approval feeds the 5→6 gate (server truth:
+  // 20260730000000 readout). Declared here ONCE — the gate checklist and the
+  // advance condition both derive from it, so they can never disagree.
+  gating: boolean;
 }
 
 const TAB_DEFS: TabDef[] = [
@@ -77,20 +100,49 @@ const TAB_DEFS: TabDef[] = [
     label: 'Confirmation letter',
     description: 'Sent to the vendor confirming dates, attendees, and scope.',
     icon: FileText,
+    gating: true,
   },
   {
     key: 'agenda',
     label: 'Agenda',
     description: 'Multi-day audit plan: time slots, topics, owners, and notes.',
     icon: CalendarDays,
+    gating: true,
   },
   {
     key: 'checklist',
     label: 'Checklist',
     description: "The auditor's working checklist — what to observe, evidence to collect, checkpoints to verify.",
     icon: ListChecks,
+    gating: true,
+  },
+  {
+    key: 'internal_notification',
+    label: 'Internal notification',
+    description: 'Internal heads-up announcing the audit and inviting scope input. Optional — never blocks advance.',
+    icon: Megaphone,
+    gating: false,
+  },
+  {
+    key: 'evidence_gap_summary',
+    label: 'Evidence gap summary',
+    description: 'Per scope area: what evidence the register holds and what remains outstanding. Optional — never blocks advance.',
+    icon: FileSearch,
+    gating: false,
   },
 ];
+
+const GATING_TAB_DEFS = TAB_DEFS.filter((t) => t.gating);
+
+// One place for "nothing loaded yet" — the render fallback and the functional
+// bundle merges below both use it.
+const EMPTY_BUNDLE: MockPreAuditBundle = {
+  confirmation_letter: null,
+  agenda: null,
+  checklist: null,
+  internal_notification: null,
+  evidence_gap_summary: null,
+};
 
 export default function PreAuditDraftingWorkspace() {
   const { theme } = useTheme();
@@ -154,8 +206,15 @@ export default function PreAuditDraftingWorkspace() {
   // network-noise optimisation.
   const attemptedPrefillRef = useRef<Set<string>>(new Set());
 
+  // Optional-first escape hatch: the guided stub screen (below) renders when
+  // nothing is drafted, but the two optional kinds (notification, gap
+  // summary) have no stubs — this flag lets the auditor skip straight to
+  // either tab without creating three unwanted stub rows first.
+  const [optionalFirst, setOptionalFirst] = useState(false);
+
   useEffect(() => {
     setActiveTab('confirmation_letter');
+    setOptionalFirst(false);
   }, [activeAudit?.id]);
 
   useEffect(() => {
@@ -206,11 +265,7 @@ export default function PreAuditDraftingWorkspace() {
   if (!activeAudit) return null;
 
   const auditId = activeAudit.id;
-  const bundle: MockPreAuditBundle = bundles[auditId] ?? {
-    confirmation_letter: null,
-    agenda: null,
-    checklist: null,
-  };
+  const bundle: MockPreAuditBundle = bundles[auditId] ?? EMPTY_BUNDLE;
 
   // ---------------------------------------------------------------------------
   // Mutations
@@ -219,8 +274,20 @@ export default function PreAuditDraftingWorkspace() {
   // to figure out: was content edited? was approval transitioned?
   // Then call the right RPC. Optimistic update, revert on failure.
   // ---------------------------------------------------------------------------
-  const setBundle = (next: MockPreAuditBundle) => {
-    setBundles((prev) => ({ ...prev, [auditId]: next }));
+
+  // Functional per-field merge: every async completion folds into the LATEST
+  // cache state. Writing `{ ...bundle, field }` from a render-time closure
+  // instead lets interleaved persists clobber each other — save the
+  // notification, approve the checklist while the save is in flight, and the
+  // checklist's APPROVED reverts in cache when the notification write lands.
+  const setBundleField = (
+    key: keyof MockPreAuditBundle,
+    value: MockPreAuditBundle[keyof MockPreAuditBundle],
+  ) => {
+    setBundles((prev) => ({
+      ...prev,
+      [auditId]: { ...(prev[auditId] ?? EMPTY_BUNDLE), [key]: value } as MockPreAuditBundle,
+    }));
   };
 
   const runDeliverableGeneration = async (tab: TabKey) => {
@@ -257,108 +324,105 @@ export default function PreAuditDraftingWorkspace() {
     setBundles((prevBundles) => ({ ...prevBundles, [auditId]: fresh }));
   };
 
-  const persistConfirmationLetter = async (
+  // One persist flow for all five deliverables (the 4th copy was the
+  // rule-of-three moment). Approval transitions CAS on the row version the
+  // reviewer saw — the latch attests to exactly the content they reviewed.
+  // An upsert that FAILS (null; the API layer already logged it) REVERTS the
+  // optimistic row: the UI must never show unsaved content as saved, because
+  // a later Approve would CAS-pass against the unchanged server row and latch
+  // content the reviewer never wrote.
+  // T ranges over the bundle's member types so the field writes below
+  // type-check without casts; every member carries the id/approval_status/
+  // updated_at the flow relies on.
+  async function persistDeliverable<
+    T extends NonNullable<MockPreAuditBundle[keyof MockPreAuditBundle]>,
+  >(
+    key: keyof MockPreAuditBundle,
+    noun: string,
+    prev: T | null,
+    next: T | null,
+    ops: {
+      upsert: (n: T) => Promise<T | null>;
+      approve: (p: T) => Promise<DeliverableApproveResult<T>>;
+    },
+  ): Promise<void> {
+    if (!next) return;
+    try {
+      const isApprovalTransition =
+        !!prev &&
+        prev.approval_status !== 'APPROVED' &&
+        next.approval_status === 'APPROVED';
+
+      if (prev && isApprovalTransition) {
+        const result = await ops.approve(prev);
+        if (result.ok) {
+          setBundleField(key, result.data);
+        } else {
+          await reloadAfterStaleApprove(`approve${noun}`, result.error);
+        }
+        return;
+      }
+
+      const persisted = await ops.upsert(next);
+      setBundleField(key, persisted ?? prev);
+    } catch (err) {
+      console.error(`[PreAuditDraftingWorkspace] persist${noun} error:`, err);
+      setBundleField(key, prev);
+    }
+  }
+
+  const persistConfirmationLetter = (
     prev: MockConfirmationLetter | null,
     next: MockConfirmationLetter | null,
-  ) => {
-    if (!next) return;
-    try {
-      const isApprovalTransition =
-        !!prev &&
-        prev.approval_status !== 'APPROVED' &&
-        next.approval_status === 'APPROVED';
+  ) =>
+    persistDeliverable('confirmation_letter', 'ConfirmationLetter', prev, next, {
+      upsert: (n) => upsertConfirmationLetter(auditId, n.content),
+      approve: (p) => approveConfirmationLetter(p.id, p.updated_at),
+    });
 
-      if (isApprovalTransition) {
-        // CAS on the row version this tab rendered — the latch attests to
-        // exactly the content the reviewer saw.
-        const result = await approveConfirmationLetter(prev.id, prev.updated_at);
-        if (result.ok) {
-          setBundle({ ...bundle, confirmation_letter: result.data });
-        } else {
-          await reloadAfterStaleApprove('approveConfirmationLetter', result.error);
-        }
-        return;
-      }
+  const persistAgenda = (prev: MockAgenda | null, next: MockAgenda | null) =>
+    persistDeliverable('agenda', 'Agenda', prev, next, {
+      upsert: (n) => upsertAgenda(auditId, n.content),
+      approve: (p) => approveAgenda(p.id, p.updated_at),
+    });
 
-      const persisted = await upsertConfirmationLetter(auditId, next.content);
-      if (persisted) {
-        setBundle({ ...bundle, confirmation_letter: persisted });
-      }
-    } catch (err) {
-      console.error('[PreAuditDraftingWorkspace] persistConfirmationLetter error:', err);
-      setBundle({ ...bundle, confirmation_letter: prev });
-    }
-  };
+  const persistChecklist = (prev: MockChecklist | null, next: MockChecklist | null) =>
+    persistDeliverable('checklist', 'Checklist', prev, next, {
+      upsert: (n) => upsertChecklist(auditId, n.content),
+      approve: (p) => approveChecklist(p.id, p.updated_at),
+    });
 
-  const persistAgenda = async (
-    prev: MockAgenda | null,
-    next: MockAgenda | null,
-  ) => {
-    if (!next) return;
-    try {
-      const isApprovalTransition =
-        !!prev &&
-        prev.approval_status !== 'APPROVED' &&
-        next.approval_status === 'APPROVED';
+  const persistInternalNotification = (
+    prev: MockInternalNotification | null,
+    next: MockInternalNotification | null,
+  ) =>
+    persistDeliverable('internal_notification', 'InternalNotification', prev, next, {
+      upsert: (n) => upsertInternalNotification(auditId, n.content),
+      approve: (p) => approveInternalNotification(p.id, p.updated_at),
+    });
 
-      if (isApprovalTransition) {
-        const result = await approveAgenda(prev.id, prev.updated_at);
-        if (result.ok) {
-          setBundle({ ...bundle, agenda: result.data });
-        } else {
-          await reloadAfterStaleApprove('approveAgenda', result.error);
-        }
-        return;
-      }
-
-      const persisted = await upsertAgenda(auditId, next.content);
-      if (persisted) {
-        setBundle({ ...bundle, agenda: persisted });
-      }
-    } catch (err) {
-      console.error('[PreAuditDraftingWorkspace] persistAgenda error:', err);
-      setBundle({ ...bundle, agenda: prev });
-    }
-  };
-
-  const persistChecklist = async (
-    prev: MockChecklist | null,
-    next: MockChecklist | null,
-  ) => {
-    if (!next) return;
-    try {
-      const isApprovalTransition =
-        !!prev &&
-        prev.approval_status !== 'APPROVED' &&
-        next.approval_status === 'APPROVED';
-
-      if (isApprovalTransition) {
-        const result = await approveChecklist(prev.id, prev.updated_at);
-        if (result.ok) {
-          setBundle({ ...bundle, checklist: result.data });
-        } else {
-          await reloadAfterStaleApprove('approveChecklist', result.error);
-        }
-        return;
-      }
-
-      const persisted = await upsertChecklist(auditId, next.content);
-      if (persisted) {
-        setBundle({ ...bundle, checklist: persisted });
-      }
-    } catch (err) {
-      console.error('[PreAuditDraftingWorkspace] persistChecklist error:', err);
-      setBundle({ ...bundle, checklist: prev });
-    }
-  };
+  const persistEvidenceGapSummary = (
+    prev: MockEvidenceGapSummary | null,
+    next: MockEvidenceGapSummary | null,
+  ) =>
+    persistDeliverable('evidence_gap_summary', 'EvidenceGapSummary', prev, next, {
+      upsert: (n) => upsertEvidenceGapSummary(auditId, n.content),
+      approve: (p) => approveEvidenceGapSummary(p.id, p.updated_at),
+    });
 
   const generateAllStubs = async () => {
+    // Stubs cover the three gating deliverables only — the internal
+    // notification has no stub by design (drafted from its tab when wanted).
+    // Functional merges so a concurrently-landed notification is preserved.
     const stubs = {
       confirmation_letter: createConfirmationStub(auditId),
       agenda: createAgendaStub(auditId),
       checklist: createChecklistStub(auditId),
     };
-    setBundle(stubs);
+    setBundles((prev) => ({
+      ...prev,
+      [auditId]: { ...(prev[auditId] ?? EMPTY_BUNDLE), ...stubs },
+    }));
 
     try {
       const [letter, agenda, checklist] = await Promise.all([
@@ -366,11 +430,15 @@ export default function PreAuditDraftingWorkspace() {
         upsertAgenda(auditId, stubs.agenda.content, 'Generated stub'),
         upsertChecklist(auditId, stubs.checklist.content, 'Generated stub'),
       ]);
-      setBundle({
-        confirmation_letter: letter ?? stubs.confirmation_letter,
-        agenda: agenda ?? stubs.agenda,
-        checklist: checklist ?? stubs.checklist,
-      });
+      setBundles((prev) => ({
+        ...prev,
+        [auditId]: {
+          ...(prev[auditId] ?? EMPTY_BUNDLE),
+          confirmation_letter: letter ?? stubs.confirmation_letter,
+          agenda: agenda ?? stubs.agenda,
+          checklist: checklist ?? stubs.checklist,
+        },
+      }));
     } catch (err) {
       console.error('[PreAuditDraftingWorkspace] generateAllStubs error:', err);
     }
@@ -399,12 +467,18 @@ export default function PreAuditDraftingWorkspace() {
     : 'bg-emerald-500 text-[#020617] hover:bg-emerald-400 disabled:bg-white/10 disabled:text-white/35';
 
   // ---------------------------------------------------------------------------
-  // Empty state — all three deliverables missing
+  // Empty state — nothing drafted yet. The two non-gating kinds are part of
+  // the check so an existing notification or gap-summary row is never hidden
+  // behind the stub screen (data on the server must always render);
+  // trioMissing separately drives the in-tab stub affordance below, so the
+  // one-click bootstrap stays reachable when the tabs render with the gating
+  // trio still unstarted.
   // ---------------------------------------------------------------------------
+  const trioMissing = !bundle.confirmation_letter && !bundle.agenda && !bundle.checklist;
   const allMissing =
-    !bundle.confirmation_letter && !bundle.agenda && !bundle.checklist;
+    trioMissing && !bundle.internal_notification && !bundle.evidence_gap_summary;
 
-  if (allMissing) {
+  if (allMissing && !optionalFirst) {
     return (
       <div className="p-6 max-w-3xl mx-auto">
         {!hasReached && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
@@ -415,19 +489,43 @@ export default function PreAuditDraftingWorkspace() {
           Draft pre-audit deliverables
         </h2>
         <p className={`${subColor} text-sm mt-1.5 leading-relaxed max-w-2xl`}>
-          The three deliverables — confirmation letter, agenda, and checklist — are drafted
-          here from your approved risk summary and vendor service mappings. Generate stubs
-          to start, then edit each down to your judgment.
+          The pre-audit deliverables — confirmation letter, agenda, checklist, plus an
+          optional internal notification and evidence gap summary — are drafted here from
+          your approved risk summary and vendor service mappings. Stubs start the three
+          gating deliverables; the two optional ones have no stubs and are drafted from
+          their own tabs.
         </p>
         {hasReached && (
-          <button
-            type="button"
-            onClick={generateAllStubs}
-            className={`mt-5 inline-flex items-center gap-2 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${buttonPrimary}`}
-          >
-            <Sparkles size={14} />
-            Generate all three stubs
-          </button>
+          <div className="mt-5 flex items-center gap-4 flex-wrap">
+            <button
+              type="button"
+              onClick={generateAllStubs}
+              className={`inline-flex items-center gap-2 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${buttonPrimary}`}
+            >
+              <Sparkles size={14} />
+              Generate all three stubs
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOptionalFirst(true);
+                setActiveTab('internal_notification');
+              }}
+              className={`${subColor} text-sm font-medium underline underline-offset-2 hover:opacity-80`}
+            >
+              Start with the internal notification instead
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOptionalFirst(true);
+                setActiveTab('evidence_gap_summary');
+              }}
+              className={`${subColor} text-sm font-medium underline underline-offset-2 hover:opacity-80`}
+            >
+              …or the evidence gap summary
+            </button>
+          </div>
         )}
       </div>
     );
@@ -440,11 +538,14 @@ export default function PreAuditDraftingWorkspace() {
     confirmation_letter: bundle.confirmation_letter?.approval_status ?? null,
     agenda: bundle.agenda?.approval_status ?? null,
     checklist: bundle.checklist?.approval_status ?? null,
+    internal_notification: bundle.internal_notification?.approval_status ?? null,
+    evidence_gap_summary: bundle.evidence_gap_summary?.approval_status ?? null,
   };
-  const allApproved =
-    approvalStatuses.confirmation_letter === 'APPROVED' &&
-    approvalStatuses.agenda === 'APPROVED' &&
-    approvalStatuses.checklist === 'APPROVED';
+  // Derived from the SAME gating flags that render the gate checklist, so the
+  // advance button and the list can never disagree about membership. The
+  // internal notification and evidence gap summary (gating: false) never
+  // feed this.
+  const allApproved = GATING_TAB_DEFS.every((t) => approvalStatuses[t.key] === 'APPROVED');
 
   const alreadyAdvanced = ['AUDIT_CONDUCT', 'REPORT_DRAFTING', 'FINAL_REVIEW_EXPORT'].includes(
     activeAudit.current_stage,
@@ -471,13 +572,15 @@ export default function PreAuditDraftingWorkspace() {
           Draft pre-audit deliverables
         </h2>
         <p className={`${subColor} text-sm mt-1.5 leading-relaxed max-w-2xl`}>
-          Three deliverables share this stage. All must be Approved before audit conduct unlocks.
-          Editing an Approved deliverable reverts it to Draft.
+          Five deliverables share this stage. The confirmation letter, agenda, and checklist
+          must be Approved before audit conduct unlocks; the internal notification and
+          evidence gap summary are optional and never block. Editing an Approved
+          deliverable reverts it to Draft.
         </p>
       </div>
 
       {/* Evidence summary chip — grounding matters most at this stage: the
-          three deliverables draft from what the register holds. Opens the
+          deliverables draft from what the register holds. Opens the
           shell's audit-level Evidence drawer (one list, one implementation). */}
       {openEvidence && evidenceCount !== null && (
         <button
@@ -502,8 +605,27 @@ export default function PreAuditDraftingWorkspace() {
       {anyPrefilled && (
         <PrefillAgentNote
           storageKey={`piq-stage5-prefill-note-dismissed:${auditId}`}
-          message="These deliverables were pre-filled from your approved questionnaire and risk summary. Review and approve each before continuing."
+          message="These deliverables were pre-filled from your approved questionnaire and risk summary. Review and approve the letter, agenda, and checklist before continuing."
         />
+      )}
+
+      {/* Stub bootstrap stays reachable when the tabs rendered with the
+          gating trio unstarted (notification-first flow) — without this the
+          one-click stub path exists only on the all-empty screen. */}
+      {trioMissing && hasReached && (
+        <div className={`${cardBg} border rounded-xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap`}>
+          <p className={`${subColor} text-sm`}>
+            The confirmation letter, agenda, and checklist haven't been started.
+          </p>
+          <button
+            type="button"
+            onClick={generateAllStubs}
+            className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-md transition-colors ${buttonPrimary}`}
+          >
+            <Sparkles size={12} />
+            Generate all three stubs
+          </button>
+        </div>
       )}
 
       {/* Tab rail with per-tab approval indicator */}
@@ -549,7 +671,7 @@ export default function PreAuditDraftingWorkspace() {
             deliverable={bundle.confirmation_letter}
             isLight={isLight}
             onChange={(next) => {
-              setBundle({ ...bundle, confirmation_letter: next });
+              setBundleField('confirmation_letter', next);
               persistConfirmationLetter(bundle.confirmation_letter, next);
             }}
             onEditingChange={(e) => setTabEditing('confirmation_letter', e)}
@@ -574,7 +696,7 @@ export default function PreAuditDraftingWorkspace() {
             deliverable={bundle.agenda}
             isLight={isLight}
             onChange={(next) => {
-              setBundle({ ...bundle, agenda: next });
+              setBundleField('agenda', next);
               persistAgenda(bundle.agenda, next);
             }}
             onEditingChange={(e) => setTabEditing('agenda', e)}
@@ -599,10 +721,63 @@ export default function PreAuditDraftingWorkspace() {
             deliverable={bundle.checklist}
             isLight={isLight}
             onChange={(next) => {
-              setBundle({ ...bundle, checklist: next });
+              setBundleField('checklist', next);
               persistChecklist(bundle.checklist, next);
             }}
             onEditingChange={(e) => setTabEditing('checklist', e)}
+            previewLocked={!hasReached}
+          />
+        </>
+      )}
+      {activeTab === 'internal_notification' && (
+        <>
+          <DeliverableGenerationPanel
+            kind="internal_notification"
+            deliverable={bundle.internal_notification}
+            evidenceRows={evidenceRows}
+            generating={generatingTab === 'internal_notification'}
+            editing={editingTabs['internal_notification'] === true}
+            error={generationError}
+            isLight={isLight}
+            previewLocked={!hasReached}
+            onGenerate={() => void runDeliverableGeneration('internal_notification')}
+          />
+          <SimpleLetterTab
+            config={NOTIFICATION_TAB_CONFIG}
+            deliverable={bundle.internal_notification}
+            isLight={isLight}
+            onChange={(next) => {
+              setBundleField('internal_notification', next);
+              persistInternalNotification(bundle.internal_notification, next);
+            }}
+            onEditingChange={(e) => setTabEditing('internal_notification', e)}
+            previewLocked={!hasReached}
+          />
+        </>
+      )}
+      {activeTab === 'evidence_gap_summary' && (
+        <>
+          <DeliverableGenerationPanel
+            kind="evidence_gap_summary"
+            deliverable={bundle.evidence_gap_summary}
+            evidenceRows={evidenceRows}
+            generating={generatingTab === 'evidence_gap_summary'}
+            editing={editingTabs['evidence_gap_summary'] === true}
+            error={generationError}
+            isLight={isLight}
+            previewLocked={!hasReached}
+            liveChecklistItemIds={checklistLiveIds(bundle.checklist)}
+            onGenerate={() => void runDeliverableGeneration('evidence_gap_summary')}
+          />
+          <SimpleLetterTab
+            config={GAP_SUMMARY_TAB_CONFIG}
+            deliverable={bundle.evidence_gap_summary}
+            isLight={isLight}
+            onChange={(next) => {
+              setBundleField('evidence_gap_summary', next);
+              persistEvidenceGapSummary(bundle.evidence_gap_summary, next);
+            }}
+            onEditingChange={(e) => setTabEditing('evidence_gap_summary', e)}
             previewLocked={!hasReached}
           />
         </>
@@ -619,12 +794,12 @@ export default function PreAuditDraftingWorkspace() {
               {alreadyAdvanced
                 ? 'Audit has already advanced past this stage'
                 : allApproved
-                ? 'All deliverables approved — ready to advance'
-                : 'Approve all three deliverables to advance'}
+                ? 'Gating deliverables approved — ready to advance'
+                : 'Approve the confirmation letter, agenda, and checklist to advance'}
             </p>
             {!alreadyAdvanced && !allApproved && (
               <ul className={`${subColor} text-xs mt-2 space-y-1`}>
-                {TAB_DEFS.map((t) => {
+                {GATING_TAB_DEFS.map((t) => {
                   const s = approvalStatuses[t.key];
                   const ok = s === 'APPROVED';
                   return (
@@ -862,6 +1037,196 @@ function ConfirmationLetterTab({ deliverable, isLight, onChange, onEditingChange
           <ChipListEditor
             label="Scope"
             placeholder="One scope item per entry"
+            items={scope}
+            onChange={setScope}
+            isLight={isLight}
+            multiline
+          />
+        </div>
+      )}
+    </DeliverableShell>
+  );
+}
+
+// ============================================================================
+// Simple letter tab — shared by the two OPTIONAL letter-shaped kinds:
+//   - Internal notification (PR-D1): letter-shaped, deliberately without a
+//     recipients editor — internal distribution happens outside PIQC, and
+//     roles-only body text keeps the deliverable name-free end to end.
+//   - Evidence gap summary (PR-D3): same shape; almost always drafted with
+//     PIQC (grounding in the register is the point), the scratch form exists
+//     so a manual summary is still possible when generation is down.
+// The two diverge ONLY in strings (rule-of-three: the third letter-shaped
+// tab was the consolidation moment, same call as persistDeliverable). The
+// confirmation letter stays its own component — recipients is a behavioral
+// axis, not a string.
+// ============================================================================
+
+// Structural common shape of the two kinds' rows. Both Mock types are
+// mutually assignable with it (their generation fields are optional), so the
+// call sites keep their precisely-typed persist wrappers without casts.
+interface SimpleLetterDeliverable {
+  id: string;
+  audit_id: string;
+  content: { body_text: string; scope: string[] };
+  approval_status: DeliverableApprovalStatus;
+  approved_by_name: string | null;
+  approved_at: string | null;
+  updated_at: string;
+}
+
+interface SimpleLetterTabConfig {
+  kind: string;
+  objectType: TrackedObjectType;
+  description: string;
+  /** Optimistic-row id mint, e.g. 'in' → `in-${Date.now()}`. */
+  idPrefix: string;
+  scopeLabel: string;
+  bodyPlaceholder: string;
+  scopePlaceholder: string;
+}
+
+const NOTIFICATION_TAB_CONFIG: SimpleLetterTabConfig = {
+  kind: 'Internal notification',
+  objectType: 'INTERNAL_NOTIFICATION_OBJECT',
+  description: 'Circulated inside your organization to announce the audit and invite scope input before the opening meeting. Optional — approving it is never required to advance. Address roles, not names; distribution happens outside PIQC.',
+  idPrefix: 'in',
+  scopeLabel: 'Scope',
+  bodyPlaceholder: 'Announce the audit to internal stakeholders and invite scope input before the opening meeting. Address roles, not names.',
+  scopePlaceholder: 'One scope item per entry',
+};
+
+const GAP_SUMMARY_TAB_CONFIG: SimpleLetterTabConfig = {
+  kind: 'Evidence gap summary',
+  objectType: 'EVIDENCE_GAP_SUMMARY_OBJECT',
+  description: 'Per scope area: what evidence the register holds and what remains outstanding. Withheld register documents are named as withheld, never silently absent. Optional — approving it is never required to advance.',
+  idPrefix: 'egs',
+  scopeLabel: 'Scope areas covered',
+  bodyPlaceholder: 'Summarize per scope area what evidence is on file and what remains outstanding. Name withheld documents as withheld.',
+  scopePlaceholder: 'One scope area per entry',
+};
+
+interface SimpleLetterTabProps {
+  config: SimpleLetterTabConfig;
+  deliverable: SimpleLetterDeliverable | null;
+  isLight: boolean;
+  onChange: (next: SimpleLetterDeliverable | null) => void;
+  // Reports the tab's edit mode so the generation panel can disable
+  // Revise while unsaved edits exist (rule: persist human edits first).
+  onEditingChange?: (editing: boolean) => void;
+  /** One-ahead preview (UX2): no scratch form, no Edit/Approve. */
+  previewLocked?: boolean;
+}
+
+function SimpleLetterTab({ config, deliverable, isLight, onChange, onEditingChange, previewLocked = false }: SimpleLetterTabProps) {
+  const [editing, setEditingRaw] = useState(!deliverable);
+  const setEditing = (next: boolean) => {
+    setEditingRaw(next);
+    onEditingChange?.(next);
+  };
+  const [body, setBody] = useState(deliverable?.content.body_text ?? '');
+  const [scope, setScope] = useState<string[]>(deliverable?.content.scope ?? []);
+
+  // updated_at in the deps: grounded generation mutates this row under the
+  // SAME id (see ChecklistTab for the full rationale). The workspace disables
+  // Draft/Revise while editing, so this resync never fires over unsaved edits.
+  useEffect(() => {
+    setEditing(!deliverable);
+    setBody(deliverable?.content.body_text ?? '');
+    setScope(deliverable?.content.scope ?? []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deliverable?.id, deliverable?.updated_at]);
+
+  const save = () => {
+    onChange({
+      id: deliverable?.id ?? `${config.idPrefix}-${Date.now()}`,
+      audit_id: deliverable?.audit_id ?? '',
+      content: { body_text: body, scope },
+      // Editing demotes APPROVED → DRAFT
+      approval_status: 'DRAFT',
+      approved_by_name: null,
+      approved_at: null,
+      // Optimistic placeholder; the persist round-trip replaces this with the
+      // server row (whose updated_at the approve CAS then uses).
+      updated_at: deliverable?.updated_at ?? new Date().toISOString(),
+    });
+    setEditing(false);
+  };
+
+  const approve = () => {
+    if (!deliverable) return;
+    onChange({
+      ...deliverable,
+      approval_status: 'APPROVED',
+      approved_at: new Date().toISOString(),
+      approved_by_name: 'You',
+    });
+  };
+
+  const cancel = () => {
+    setBody(deliverable?.content.body_text ?? '');
+    setScope(deliverable?.content.scope ?? []);
+    setEditing(false);
+  };
+
+  return (
+    <DeliverableShell
+      kind={config.kind}
+      objectType={config.objectType}
+      description={config.description}
+      deliverable={deliverable}
+      isLight={isLight}
+      editing={editing}
+      onBeginEdit={() => setEditing(true)}
+      onSave={save}
+      onCancel={cancel}
+      onApprove={approve}
+      canSave={!!body.trim()}
+      previewLocked={previewLocked}
+    >
+      {previewLocked && !deliverable ? (
+        <p className="text-fg-muted text-sm">Nothing recorded yet.</p>
+      ) : !editing && deliverable ? (
+        <div className="space-y-4">
+          <SubSection label="Body" isLight={isLight}>
+            <p className={`text-sm whitespace-pre-wrap leading-relaxed ${isLight ? 'text-[#0F172A]' : 'text-white'}`}>
+              {deliverable.content.body_text}
+            </p>
+          </SubSection>
+          {deliverable.content.scope.length > 0 && (
+            <SubSection label={config.scopeLabel} isLight={isLight}>
+              <ul className="space-y-1">
+                {deliverable.content.scope.map((s, i) => (
+                  <li
+                    key={i}
+                    className={`text-sm flex items-start gap-2 ${isLight ? 'text-[#0F172A]' : 'text-white'}`}
+                  >
+                    <span
+                      className={`mt-1.5 w-1 h-1 rounded-full flex-shrink-0 ${
+                        isLight ? 'bg-brand-600/55' : 'bg-brand-300/55'
+                      }`}
+                    />
+                    {s}
+                  </li>
+                ))}
+              </ul>
+            </SubSection>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <FieldLabel label="Body text" isLight={isLight}>
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={10}
+              placeholder={config.bodyPlaceholder}
+              className={textareaClass(isLight)}
+            />
+          </FieldLabel>
+          <ChipListEditor
+            label={config.scopeLabel}
+            placeholder={config.scopePlaceholder}
             items={scope}
             onChange={setScope}
             isLight={isLight}
@@ -1123,11 +1488,19 @@ const PANEL_NOUNS: Record<TabKey, string> = {
   confirmation_letter: 'confirmation letter',
   agenda: 'agenda',
   checklist: 'checklist',
+  internal_notification: 'internal notification',
+  evidence_gap_summary: 'evidence gap summary',
 };
 
 interface DeliverableGenerationPanelProps {
   kind: TabKey;
-  deliverable: MockConfirmationLetter | MockAgenda | MockChecklist | null;
+  deliverable:
+    | MockConfirmationLetter
+    | MockAgenda
+    | MockChecklist
+    | MockInternalNotification
+    | MockEvidenceGapSummary
+    | null;
   evidenceRows: AuditEvidenceListRow[] | null;
   generating: boolean;
   editing: boolean;
@@ -1136,6 +1509,10 @@ interface DeliverableGenerationPanelProps {
   /** One-ahead preview (UX2): the CTA disables honestly instead of the
    *  click dying silently against runDeliverableGeneration's guard. */
   previewLocked?: boolean;
+  /** Gap summary only (PR-D3): live checklist item ids for the snapshot's
+   *  checklist-identity axis. Other kinds' snapshots carry no such axis, so
+   *  they never pass this. */
+  liveChecklistItemIds?: string[];
   onGenerate: () => void;
 }
 
@@ -1148,6 +1525,7 @@ function DeliverableGenerationPanel({
   error,
   isLight,
   previewLocked = false,
+  liveChecklistItemIds,
   onGenerate,
 }: DeliverableGenerationPanelProps) {
   const subColor = 'text-fg-sub';
@@ -1161,7 +1539,14 @@ function DeliverableGenerationPanel({
   // Diffing against [] would falsely flag every grounded source as removed.
   const currency = evidenceRows === null
     ? null
-    : computeDeliverableCurrency(deliverable?.grounding_snapshot, evidenceRows);
+    : computeDeliverableCurrency(deliverable?.grounding_snapshot, evidenceRows, liveChecklistItemIds);
+  // The gap kind can also drift on checklist identity alone — the header must
+  // not blame the register for a checklist-only change.
+  const registerDrifted =
+    !!currency &&
+    (currency.newSinceGeneration.length > 0 ||
+      currency.removedSinceGeneration.length > 0 ||
+      (currency.withholdFlippedSinceGeneration?.length ?? 0) > 0);
   const refCount = deliverable?.generation_refs?.length ?? 0;
   const isApproved = deliverable?.approval_status === 'APPROVED';
   const evidenceCount = evidenceRows?.length ?? 0;
@@ -1183,9 +1568,12 @@ function DeliverableGenerationPanel({
               {deliverable?.generated_at
                 ? ` on ${new Date(deliverable.generated_at).toLocaleDateString()}`
                 : ''}
-              {' '}from the protocol and{' '}
-              {deliverable?.grounding_snapshot?.evidence.length ?? 0} evidence source
-              {(deliverable?.grounding_snapshot?.evidence.length ?? 0) === 1 ? '' : 's'}
+              {/* A register-carrying snapshot (gap summary) is grounded in the
+                  FULL register — quoting the included-only evidence count
+                  would contradict a body that names withheld docs too. */}
+              {deliverable?.grounding_snapshot?.register
+                ? ` from the protocol and the full evidence register (${deliverable.grounding_snapshot.register.length} document${deliverable.grounding_snapshot.register.length === 1 ? '' : 's'})`
+                : ` from the protocol and ${deliverable?.grounding_snapshot?.evidence.length ?? 0} evidence source${(deliverable?.grounding_snapshot?.evidence.length ?? 0) === 1 ? '' : 's'}`}
               {refCount > 0 ? ` · ${refCount} cited passage${refCount === 1 ? '' : 's'}` : ''}.
               {' '}Every citation quotes its source verbatim — invalid ones are stripped, never repaired.
             </p>
@@ -1242,12 +1630,25 @@ function DeliverableGenerationPanel({
               : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
           }`}
         >
-          <span className="font-semibold">The evidence register has changed since this draft.</span>{' '}
+          <span className="font-semibold">
+            {registerDrifted
+              ? 'The evidence register has changed since this draft.'
+              : 'The checklist has changed since this draft.'}
+          </span>{' '}
           {currency.newSinceGeneration.length > 0 && (
             <>New: {currency.newSinceGeneration.map((d) => d.title).join(', ')}. </>
           )}
           {currency.removedSinceGeneration.length > 0 && (
             <>Removed: {currency.removedSinceGeneration.map((d) => d.title).join(', ')}. </>
+          )}
+          {(currency.withholdFlippedSinceGeneration?.length ?? 0) > 0 && (
+            <>
+              Withhold flag changed:{' '}
+              {(currency.withholdFlippedSinceGeneration ?? []).map((d) => d.title).join(', ')}.{' '}
+            </>
+          )}
+          {registerDrifted && currency.checklistChanged === true && (
+            <>The checklist's items have also changed. </>
           )}
           Revise when you're ready — this never blocks approval or export.
         </div>

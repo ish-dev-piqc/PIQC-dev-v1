@@ -38,7 +38,7 @@ const EMPTY: LineageInput = {
   trust: null,
   questionnaire: null,
   riskSummary: null,
-  preAudit: { confirmation_letter: null, agenda: null, checklist: null },
+  preAudit: { confirmation_letter: null, agenda: null, checklist: null, internal_notification: null, evidence_gap_summary: null },
   entries: [],
   issues: [],
   capas: [],
@@ -112,6 +112,16 @@ function fullInput(): LineageInput {
         prefilled_at: '2026-07-01T10:00:00Z',
       },
       checklist: null,
+      internal_notification: {
+        id: 'in1',
+        audit_id: 'a1',
+        content: { body_text: 'Internal heads-up.', scope: [] },
+        approval_status: 'DRAFT',
+        approved_by_name: null,
+        approved_at: null,
+        updated_at: '2026-09-04T00:00:00Z',
+      },
+      evidence_gap_summary: null,
     },
     entries: [
       {
@@ -223,6 +233,37 @@ describe('buildLineageGraph', () => {
     expect(mapping?.parentId).toBe(service?.id);
     expect(g.nodes.filter((n) => n.parentId === service?.id)).toHaveLength(1);
     expect(nodeDepth(g, mapping!)).toBe(3); // seed → audit → service → mapping
+  });
+
+  it('the internal notification renders as a deliverable node with its tracked type (PR-D1)', () => {
+    const g = buildLineageGraph(fullInput());
+    const n = g.nodes.find((x) => x.entityType === 'INTERNAL_NOTIFICATION');
+    expect(n?.title).toBe('Internal notification');
+    expect(n?.trackedObjectType).toBe('INTERNAL_NOTIFICATION_OBJECT');
+    // Never prefilled → drafted-in-stage origin, no provenance edges.
+    expect(n?.origin).toBe('Drafted in Pre-audit drafting.');
+    expect(g.edges.filter((e) => e.fromId === n?.id)).toHaveLength(0);
+  });
+
+  it('the evidence gap summary renders as a deliverable node with its tracked type (PR-D3)', () => {
+    const input = fullInput();
+    input.preAudit.evidence_gap_summary = {
+      id: 'egs1',
+      audit_id: 'a1',
+      content: { body_text: 'Coverage per scope area.', scope: ['data_management'] },
+      approval_status: 'DRAFT',
+      approved_by_name: null,
+      approved_at: null,
+      updated_at: '2026-09-05T00:00:00Z',
+    };
+    const g = buildLineageGraph(input);
+    const n = g.nodes.find((x) => x.entityType === 'EVIDENCE_GAP_SUMMARY');
+    expect(n?.title).toBe('Evidence gap summary');
+    expect(n?.trackedObjectType).toBe('EVIDENCE_GAP_SUMMARY_OBJECT');
+    expect(n?.stage).toBe(5);
+    // Never prefilled → drafted-in-stage origin, no provenance edges.
+    expect(n?.origin).toBe('Drafted in Pre-audit drafting.');
+    expect(g.edges.filter((e) => e.fromId === n?.id)).toHaveLength(0);
   });
 
   it('every stage object carries a trackedObjectType for history lookups', () => {
