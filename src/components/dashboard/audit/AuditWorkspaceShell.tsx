@@ -38,6 +38,13 @@ import IsaStagePlaceholder from './stages/investigator/IsaStagePlaceholder';
 // keeps vendor and investigator stage sets isolated: an ISA_* stage never
 // resolves to a vendor component and vice versa. Investigator stages without a
 // real workspace yet fall through to IsaStagePlaceholder (see the render below).
+//
+// EVERY workspace listed here is reachable one stage AHEAD of the audit's
+// position (the nav allows current+1). A new workspace MUST derive
+// hasReachedStage(...) and, while previewing, render StagePreviewNotice and
+// suppress its mutating actions and mount-time writes — see any sibling for
+// the pattern. Nothing enforces this mechanically (yet); forget it and the
+// preview silently writes.
 const STAGE_COMPONENTS: Record<
   AuditWorkflowType,
   Partial<Record<AuditStage, React.ComponentType>>
@@ -235,7 +242,9 @@ export default function AuditWorkspaceShell() {
   const prevStage = viewedIdx > 0 ? stages[viewedIdx - 1] : null;
   const nextStage =
     viewedIdx >= 0 && viewedIdx < stages.length - 1 ? stages[viewedIdx + 1] : null;
-  const nextLocked = nextStage !== null && viewedIdx + 1 > currentIdx + 1;
+  // Locked iff stepping forward would pass current+1 — i.e. already viewing
+  // ahead of current.
+  const nextLocked = nextStage !== null && viewedIdx > currentIdx;
 
   const headerBg = isLight
     ? 'bg-white border-[#E2E8F0]'
@@ -246,6 +255,11 @@ export default function AuditWorkspaceShell() {
   const chipBg = isLight
     ? 'bg-brand-600/10 border-brand-600/20 text-brand-600'
     : 'bg-brand-600/15 border-brand-600/30 text-brand-300';
+  // Shared by both stage-step chevrons.
+  const stepBtnOn = isLight
+    ? 'text-[#334155] hover:bg-[#0F172A]/[0.04]'
+    : 'text-[#CBD5E1] hover:bg-white/[0.04]';
+  const stepBtnOff = `${mutedColor} opacity-40 cursor-default`;
 
   return (
     <div className="flex-1 flex" style={{ minHeight: 0 }}>
@@ -273,11 +287,7 @@ export default function AuditWorkspaceShell() {
                   aria-label={prevStage ? `Previous stage: ${STAGE_LABELS[prevStage]}` : 'No previous stage'}
                   title={prevStage ? `Previous: ${STAGE_LABELS[prevStage]}` : undefined}
                   className={`inline-flex items-center gap-1 px-1 py-0.5 rounded-md transition-colors ${
-                    prevStage
-                      ? isLight
-                        ? 'text-[#334155] hover:bg-[#0F172A]/[0.04]'
-                        : 'text-[#CBD5E1] hover:bg-white/[0.04]'
-                      : `${mutedColor} opacity-40 cursor-default`
+                    prevStage ? stepBtnOn : stepBtnOff
                   }`}
                 >
                   <ChevronLeft size={14} />
@@ -309,11 +319,7 @@ export default function AuditWorkspaceShell() {
                       : `Next: ${STAGE_LABELS[nextStage]}`
                   }
                   className={`inline-flex items-center gap-1 px-1 py-0.5 rounded-md transition-colors ${
-                    nextStage && !nextLocked
-                      ? isLight
-                        ? 'text-[#334155] hover:bg-[#0F172A]/[0.04]'
-                        : 'text-[#CBD5E1] hover:bg-white/[0.04]'
-                      : `${mutedColor} opacity-40 cursor-default`
+                    nextStage && !nextLocked ? stepBtnOn : stepBtnOff
                   }`}
                 >
                   {nextStage && !nextLocked && (
@@ -324,14 +330,18 @@ export default function AuditWorkspaceShell() {
                   <ChevronRight size={14} />
                 </button>
                 {/* Position cue for <md, where the StageNav rail (which carries
-                    "N of M") is hidden. */}
-                <span className={`md:hidden text-[11px] ${mutedColor}`}>
-                  Stage {viewedIdx + 1} of {stages.length}
-                </span>
+                    "N of M") is hidden. viewedIdx guard: for one paint after a
+                    cross-workflow audit switch, viewedStage belongs to the old
+                    pipeline (indexOf -1) until the snap effect fires. */}
+                {viewedIdx >= 0 && (
+                  <span className={`md:hidden text-[11px] ${mutedColor}`}>
+                    Stage {viewedIdx + 1} of {stages.length}
+                  </span>
+                )}
                 {/* Off-current indicator as an ACTION (all breakpoints). Replaces
                     dead "Viewing earlier stage" text that was hidden below sm and
                     wrong when previewing ahead. */}
-                {viewedStage !== activeAudit.current_stage && (
+                {viewedIdx >= 0 && viewedStage !== activeAudit.current_stage && (
                   <button
                     type="button"
                     onClick={() => setViewedStage(activeAudit.current_stage)}

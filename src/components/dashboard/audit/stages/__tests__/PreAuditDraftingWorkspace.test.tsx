@@ -5,6 +5,7 @@
 // follows ReportDraftingWorkspace.test.tsx (PR #66/#69 precedent).
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { useState } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 
 vi.mock('../../../../../context/ThemeContext', () => ({
@@ -25,11 +26,16 @@ vi.mock('../../../../../context/AuditContext', () => ({
   }),
 }));
 
+// Real useState behind the store so the component's own setPreAuditBundles
+// (after the mount fetch resolves) actually re-renders with the bundle —
+// the tab UI is unreachable with a vi.fn() setter. Same pattern as
+// FinalReviewExportWorkspace.test.tsx's stageReadouts mock.
+let initialBundles: Record<string, unknown> = {};
 vi.mock('../../../../../context/AuditDataContext', () => ({
-  useAuditData: () => ({
-    preAuditBundles: {},
-    setPreAuditBundles: vi.fn(),
-  }),
+  useAuditData: () => {
+    const [preAuditBundles, setPreAuditBundles] = useState(initialBundles);
+    return { preAuditBundles, setPreAuditBundles };
+  },
 }));
 
 const EMPTY_BUNDLE = { confirmation_letter: null, agenda: null, checklist: null };
@@ -66,6 +72,7 @@ const mockPrefill = prefillStage5Deliverables as ReturnType<typeof vi.fn>;
 describe('PreAuditDraftingWorkspace — one-ahead preview guard (PR-UX2)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    initialBundles = {};
     mockFetch.mockResolvedValue(EMPTY_BUNDLE);
   });
 
@@ -100,5 +107,37 @@ describe('PreAuditDraftingWorkspace — one-ahead preview guard (PR-UX2)', () =>
     await waitFor(() => expect(mockPrefill).toHaveBeenCalledWith('audit-1'));
     expect(mockPrefill).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/has not reached this stage yet/i)).not.toBeInTheDocument();
+  });
+
+  it('PREVIEW with an existing deliverable: Edit/Approve hidden, generation CTA disabled', async () => {
+    // Legacy state: pre-UX2 the mount prefill fired during previews, so real
+    // audits at Stage 4 carry Stage-5 rows. The tab UI renders — but every
+    // write affordance must be off.
+    mockActiveAudit = {
+      id: 'audit-1',
+      workflow_type: 'VENDOR_AUDIT',
+      current_stage: 'SCOPE_AND_RISK_REVIEW',
+    };
+    mockFetch.mockResolvedValue({
+      confirmation_letter: {
+        id: 'cl-1',
+        audit_id: 'audit-1',
+        content: { body_text: 'Letter body.', recipients: [], scope: [] },
+        approval_status: 'DRAFT',
+        approved_at: null,
+        approved_by_name: null,
+        updated_at: '2026-08-01T00:00:00Z',
+      },
+      agenda: null,
+      checklist: null,
+    });
+
+    render(<PreAuditDraftingWorkspace />);
+
+    await waitFor(() => expect(screen.getByText('Letter body.')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^approve$/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId('confirmation_letter-generate-button')).toBeDisabled();
+    expect(mockPrefill).not.toHaveBeenCalled();
   });
 });

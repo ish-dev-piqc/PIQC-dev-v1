@@ -538,7 +538,9 @@ export default function FinalReviewExportWorkspace() {
             // Both the sign-off latch AND the live gate checklist must hold —
             // a post-sign-off edit demotes upstream approvals, and the export
             // must not ride the stale latch (spec: audit-export-readiness H4).
-            disabled={!finalSignedOff || !allPassed}
+            // !hasReached: a legacy pre-UX2 preview sign-off (the RPC never
+            // checked current_stage) must not leave export live from a preview.
+            disabled={!finalSignedOff || !allPassed || !hasReached}
             className={`inline-flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-md transition-colors ${buttonPrimary} disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             <Download size={14} />
@@ -547,7 +549,9 @@ export default function FinalReviewExportWorkspace() {
           <button
             type="button"
             onClick={exportDocx}
-            disabled={!finalSignedOff || !allPassed}
+            // !hasReached: a legacy pre-UX2 preview sign-off (the RPC never
+            // checked current_stage) must not leave export live from a preview.
+            disabled={!finalSignedOff || !allPassed || !hasReached}
             className={`inline-flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-md transition-colors ${buttonSecondary} disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             <FileText size={14} />

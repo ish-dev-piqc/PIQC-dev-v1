@@ -161,10 +161,17 @@ export default function PreAuditDraftingWorkspace() {
   useEffect(() => {
     if (!activeAudit) return;
     const auditIdLocal = activeAudit.id;
+    // Cancellation matters since hasReached joined the deps: the effect can
+    // now run twice for the SAME audit (preview → stage advances while
+    // mounted). Without it, a slow run-1 fetch resolving after run-2's
+    // prefill would clobber the prefilled bundle with the stale pre-advance
+    // snapshot. Same pattern as AuditConduct's hydrate effect.
+    let cancelled = false;
 
     const load = async () => {
       try {
         const initial = await fetchPreAuditDeliverables(auditIdLocal);
+        if (cancelled) return;
 
         // Silent agentic bootstrap: if all three deliverables are missing AND
         // we haven't attempted prefill yet for this audit this session, fire
@@ -177,6 +184,7 @@ export default function PreAuditDraftingWorkspace() {
           attemptedPrefillRef.current.add(auditIdLocal);
           await prefillStage5Deliverables(auditIdLocal);
           const refreshed = await fetchPreAuditDeliverables(auditIdLocal);
+          if (cancelled) return;
           setBundles((prev) => ({ ...prev, [auditIdLocal]: refreshed }));
         } else {
           setBundles((prev) => ({ ...prev, [auditIdLocal]: initial }));
@@ -186,6 +194,9 @@ export default function PreAuditDraftingWorkspace() {
       }
     };
     load();
+    return () => {
+      cancelled = true;
+    };
     // Depend on activeAudit?.id only — see RiskSummaryPanel for rationale.
     // hasReached added so the bootstrap fires when the audit advances into
     // Stage 5 after an earlier read-only preview ran.
@@ -531,6 +542,7 @@ export default function PreAuditDraftingWorkspace() {
             editing={editingTabs['confirmation_letter'] === true}
             error={generationError}
             isLight={isLight}
+            previewLocked={!hasReached}
             onGenerate={() => void runDeliverableGeneration('confirmation_letter')}
           />
           <ConfirmationLetterTab
@@ -541,6 +553,7 @@ export default function PreAuditDraftingWorkspace() {
               persistConfirmationLetter(bundle.confirmation_letter, next);
             }}
             onEditingChange={(e) => setTabEditing('confirmation_letter', e)}
+            previewLocked={!hasReached}
           />
         </>
       )}
@@ -554,6 +567,7 @@ export default function PreAuditDraftingWorkspace() {
             editing={editingTabs['agenda'] === true}
             error={generationError}
             isLight={isLight}
+            previewLocked={!hasReached}
             onGenerate={() => void runDeliverableGeneration('agenda')}
           />
           <AgendaTab
@@ -564,6 +578,7 @@ export default function PreAuditDraftingWorkspace() {
               persistAgenda(bundle.agenda, next);
             }}
             onEditingChange={(e) => setTabEditing('agenda', e)}
+            previewLocked={!hasReached}
           />
         </>
       )}
@@ -577,6 +592,7 @@ export default function PreAuditDraftingWorkspace() {
             editing={editingTabs['checklist'] === true}
             error={generationError}
             isLight={isLight}
+            previewLocked={!hasReached}
             onGenerate={() => void runDeliverableGeneration('checklist')}
           />
           <ChecklistTab
@@ -587,6 +603,7 @@ export default function PreAuditDraftingWorkspace() {
               persistChecklist(bundle.checklist, next);
             }}
             onEditingChange={(e) => setTabEditing('checklist', e)}
+            previewLocked={!hasReached}
           />
         </>
       )}
@@ -703,9 +720,11 @@ interface ConfirmationLetterTabProps {
   // Reports the tab's edit mode so the generation panel can disable
   // Revise while unsaved edits exist (rule: persist human edits first).
   onEditingChange?: (editing: boolean) => void;
+  /** One-ahead preview (UX2): no scratch form, no Edit/Approve. */
+  previewLocked?: boolean;
 }
 
-function ConfirmationLetterTab({ deliverable, isLight, onChange, onEditingChange }: ConfirmationLetterTabProps) {
+function ConfirmationLetterTab({ deliverable, isLight, onChange, onEditingChange, previewLocked = false }: ConfirmationLetterTabProps) {
   const [editing, setEditingRaw] = useState(!deliverable);
   const setEditing = (next: boolean) => {
     setEditingRaw(next);
@@ -774,6 +793,7 @@ function ConfirmationLetterTab({ deliverable, isLight, onChange, onEditingChange
       onCancel={cancel}
       onApprove={approve}
       canSave={!!body.trim()}
+      previewLocked={previewLocked}
       prefilledSources={
         deliverable?.prefilled_at
           ? [
@@ -783,7 +803,9 @@ function ConfirmationLetterTab({ deliverable, isLight, onChange, onEditingChange
           : undefined
       }
     >
-      {!editing && deliverable ? (
+      {previewLocked && !deliverable ? (
+        <p className="text-fg-muted text-sm">Nothing recorded yet.</p>
+      ) : !editing && deliverable ? (
         <div className="space-y-4">
           <SubSection label="Body" isLight={isLight}>
             <p className={`text-sm whitespace-pre-wrap leading-relaxed ${isLight ? 'text-[#0F172A]' : 'text-white'}`}>
@@ -862,9 +884,11 @@ interface AgendaTabProps {
   // Reports the tab's edit mode so the generation panel can disable
   // Revise while unsaved edits exist (rule: persist human edits first).
   onEditingChange?: (editing: boolean) => void;
+  /** One-ahead preview (UX2): no scratch form, no Edit/Approve. */
+  previewLocked?: boolean;
 }
 
-function AgendaTab({ deliverable, isLight, onChange, onEditingChange }: AgendaTabProps) {
+function AgendaTab({ deliverable, isLight, onChange, onEditingChange, previewLocked = false }: AgendaTabProps) {
   const [editing, setEditingRaw] = useState(!deliverable);
   const setEditing = (next: boolean) => {
     setEditingRaw(next);
@@ -942,8 +966,11 @@ function AgendaTab({ deliverable, isLight, onChange, onEditingChange }: AgendaTa
           : undefined
       }
       canSave={items.length > 0 && items.every((it) => it.time.trim() && it.topic.trim())}
+      previewLocked={previewLocked}
     >
-      {!editing && deliverable && deliverable.content.items.length > 0 ? (
+      {previewLocked && !deliverable ? (
+        <p className="text-fg-muted text-sm">Nothing recorded yet.</p>
+      ) : !editing && deliverable && deliverable.content.items.length > 0 ? (
         <div className="space-y-2">
           {deliverable.content.items.map((it) => (
             <AgendaItemRow key={it.id} item={it} isLight={isLight} />
@@ -1079,6 +1106,8 @@ interface ChecklistTabProps {
   // Reports the tab's edit mode so the generation panel can disable
   // Revise while unsaved edits exist (rule: persist human edits first).
   onEditingChange?: (editing: boolean) => void;
+  /** One-ahead preview (UX2): no scratch form, no Edit/Approve. */
+  previewLocked?: boolean;
 }
 
 // ============================================================================
@@ -1104,6 +1133,9 @@ interface DeliverableGenerationPanelProps {
   editing: boolean;
   error: string | null;
   isLight: boolean;
+  /** One-ahead preview (UX2): the CTA disables honestly instead of the
+   *  click dying silently against runDeliverableGeneration's guard. */
+  previewLocked?: boolean;
   onGenerate: () => void;
 }
 
@@ -1115,6 +1147,7 @@ function DeliverableGenerationPanel({
   editing,
   error,
   isLight,
+  previewLocked = false,
   onGenerate,
 }: DeliverableGenerationPanelProps) {
   const subColor = 'text-fg-sub';
@@ -1183,9 +1216,15 @@ function DeliverableGenerationPanel({
           // doesn't block: on an empty deliverable — prefill gated off — the
           // draft CTA is the whole point, and the click is an explicit choice
           // to replace the scratch form.
-          disabled={generating || (editing && !!deliverable)}
+          disabled={generating || (editing && !!deliverable) || previewLocked}
           onClick={onGenerate}
-          title={editing && deliverable ? 'Save or cancel your edits first — revising would overwrite them' : undefined}
+          title={
+            previewLocked
+              ? 'Available when the audit reaches this stage'
+              : editing && deliverable
+              ? 'Save or cancel your edits first — revising would overwrite them'
+              : undefined
+          }
           data-testid={`${kind}-generate-button`}
           className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-md transition-colors flex-shrink-0 ${buttonPrimary}`}
         >
@@ -1223,7 +1262,7 @@ function DeliverableGenerationPanel({
   );
 }
 
-function ChecklistTab({ deliverable, isLight, onChange, onEditingChange }: ChecklistTabProps) {
+function ChecklistTab({ deliverable, isLight, onChange, onEditingChange, previewLocked = false }: ChecklistTabProps) {
   const [editing, setEditingRaw] = useState(!deliverable);
   const setEditing = (next: boolean) => {
     setEditingRaw(next);
@@ -1318,8 +1357,11 @@ function ChecklistTab({ deliverable, isLight, onChange, onEditingChange }: Check
           : undefined
       }
       canSave={items.length > 0 && items.every((it) => it.prompt.trim())}
+      previewLocked={previewLocked}
     >
-      {!editing && deliverable && deliverable.content.items.length > 0 ? (
+      {previewLocked && !deliverable ? (
+        <p className="text-fg-muted text-sm">Nothing recorded yet.</p>
+      ) : !editing && deliverable && deliverable.content.items.length > 0 ? (
         <div className="space-y-2">
           {deliverable.content.items.map((it, idx) => (
             <div key={it.id} className={`${cardBg} border rounded-md px-3 py-2.5 flex items-start gap-3`}>
@@ -1442,6 +1484,9 @@ interface DeliverableShellProps {
    *  renders a small Sparkles + "Started from: …" line below the
    *  description so the auditor can see where the content originated. */
   prefilledSources?: string[];
+  /** One-ahead preview (UX2): hide Edit/Approve — approving from a preview
+   *  would pre-flip the Stage 6 gate. History stays. */
+  previewLocked?: boolean;
   children: React.ReactNode;
 }
 
@@ -1458,6 +1503,7 @@ function DeliverableShell({
   onApprove,
   canSave,
   prefilledSources,
+  previewLocked = false,
   children,
 }: DeliverableShellProps) {
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -1520,7 +1566,7 @@ function DeliverableShell({
               <HistoryIcon size={12} />
               History
             </button>
-            {!editing && (
+            {!editing && !previewLocked && (
               <>
                 <button
                   type="button"

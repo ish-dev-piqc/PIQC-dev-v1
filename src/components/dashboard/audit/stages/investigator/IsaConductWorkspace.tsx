@@ -691,12 +691,15 @@ export default function IsaConductWorkspace() {
                 <button
                   key={row.domain}
                   type="button"
+                  // In preview the capture section is hidden, so the "tag new
+                  // notes" affordance would be a silent no-op — disable it.
+                  disabled={!hasReached}
                   onClick={() => {
                     setDomain(row.domain);
                     captureRef.current?.focus();
                   }}
-                  title={`${label}: ${row.noteCount} ${row.noteCount === 1 ? 'note' : 'notes'}, ${row.findingCount} ${row.findingCount === 1 ? 'finding' : 'findings'} — click to tag new notes with this domain`}
-                  className={`rounded border px-1.5 py-0.5 text-[10px] transition-colors ${state}`}
+                  title={`${label}: ${row.noteCount} ${row.noteCount === 1 ? 'note' : 'notes'}, ${row.findingCount} ${row.findingCount === 1 ? 'finding' : 'findings'}${hasReached ? ' — click to tag new notes with this domain' : ''}`}
+                  className={`rounded border px-1.5 py-0.5 text-[10px] transition-colors disabled:cursor-default ${state}`}
                 >
                   {label}
                   {row.noteCount > 0 && ` · ${row.noteCount}`}

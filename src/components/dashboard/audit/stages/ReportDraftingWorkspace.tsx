@@ -133,9 +133,15 @@ export default function ReportDraftingWorkspace({
   useEffect(() => {
     if (!activeAudit?.id) return;
     const id = activeAudit.id;
+    // Cancellation matters since hasReached joined the deps: the effect can
+    // now run twice for the SAME audit (preview → stage advances while
+    // mounted), and a slow run-1 fetch resolving after run-2's prefill would
+    // clobber the prefilled draft with a stale null under the same key.
+    let cancelled = false;
 
     const load = async () => {
       const initial = await fetchReportDraft(id);
+      if (cancelled) return;
       let draft = initial;
 
       // Silent agentic bootstrap: if no report exists AND we haven't already
@@ -146,6 +152,7 @@ export default function ReportDraftingWorkspace({
         attemptedPrefillRef.current.add(id);
         await prefillReportDraft(id);
         draft = await fetchReportDraft(id);
+        if (cancelled) return;
       }
       setReports((prev) => ({ ...prev, [id]: draft }));
 
@@ -286,6 +293,9 @@ export default function ReportDraftingWorkspace({
     load();
     // hasReached is a dep so the bootstrap fires the moment the audit actually
     // advances into Stage 7 after an earlier read-only preview ran.
+    return () => {
+      cancelled = true;
+    };
   }, [activeAudit?.id, hasReached, setReports]);
 
   // Derive non-hook values (safe with null activeAudit since we read by key)

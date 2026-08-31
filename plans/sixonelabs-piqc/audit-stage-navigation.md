@@ -25,6 +25,7 @@ This PR changes no gating rules and no schema — component/test layers plus one
 - `src/components/dashboard/audit/AuditWorkspaceShell.tsx` — chip-row prev/next chevrons, back-to-current chip, mobile position cue, MobileStagePicker label
 - `src/components/dashboard/audit/StagePreviewNotice.tsx` — new shared preview banner (presentational)
 - `src/components/dashboard/audit/StagePlaceholder.tsx` — **delete** (dead code; shell uses `IsaStagePlaceholder`)
+- `src/components/dashboard/audit/stages/ScopeReviewWorkspace.tsx` — **banner only** (scope expanded 2026-08-30 by review finding: Stage 4 was the one stage without the preview banner, making the preview signal inconsistent across the pipeline; its readout-driven guard logic stays untouched)
 - Stage workspaces gaining the ahead-guard (+ their tests, extended or new):
   - `src/components/dashboard/audit/stages/ReportDraftingWorkspace.tsx` (+ existing test file)
   - `src/components/dashboard/audit/stages/PreAuditDraftingWorkspace.tsx` (+ new test)
@@ -41,7 +42,7 @@ This PR changes no gating rules and no schema — component/test layers plus one
 - `supabase/**` — no migrations, no RPC changes (schema freeze while migrations partner is away)
 - `src/context/**` — no context changes; `viewedStage` stays shell-local
 - `src/lib/audit/**` other than `workflowStages.ts` + its test
-- `src/components/dashboard/audit/stages/ScopeReviewWorkspace.tsx` — already hardened, readout-driven, test-pinned; do not touch
+- `src/components/dashboard/audit/stages/ScopeReviewWorkspace.tsx` beyond the additive preview banner — its readout-driven guard + tests stay untouched
 - `src/components/dashboard/audit/StageNav.tsx` — rail works; UX2 adds what's missing elsewhere
 - Site Mode, SOTR, shared infra
 
@@ -71,6 +72,10 @@ None. Test mocks live in `__tests__/` only (existing house pattern).
 - **Server-side `current_stage` check on Stage-8 sign-off/export RPCs** (`20260730000000` has none): needs a migration — deferred while the migrations partner is away. This PR's client gating narrows the UI path; a direct API call can still sign off early. Trigger: partner's return or the next schema PR.
 - Viewing beyond current+1 stays locked (empty workspaces mislead more than a lock).
 - Hardcoded per-workspace "Stage N · Label" headers left as-is (cosmetic; ISA numbering already matches its own pipeline).
+- **Lock-rule triplication** (review finding, accepted): the "viewable ≤ current+1" rule lives in StageNav, MobileStagePicker, and the new header chevrons, plus its ordinal mirror `hasReachedStage` in lib. A `canViewStage()` lib helper unifying all three is deferred — trigger: any revisit of the +1 policy (that revisit is itself in this ledger).
+- **`alreadyAdvanced` string-arrays** (review finding, accepted): four workspaces encode "stage passed" as hardcoded downstream-stage arrays instead of an ordinal helper; they drift if the pipeline ever changes. Replace with a `hasPassedStage()` sibling when a pipeline change first forces the edit.
+- **Guard is opt-in per workspace** (review finding, accepted): a future stage workspace gets no preview guard by default; the convention is enforced by the shell dispatch comment + this ledger + the D1–D6 roadmap notes, not by lint. Trigger for a mechanical check: the first time a new workspace ships without the guard.
+- Stale doc references to deleted `StagePlaceholder.tsx` remain in root `plan.md` (shared-infra-owned, 2-reviewer file — out of scope) and `.claude/skills/fable-audit/surfaces.md`; flagged for a separate cleanup.
 
 ## Verification
 

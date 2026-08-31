@@ -594,6 +594,11 @@ export default function QuestionnaireReviewWorkspace() {
               Approval available once status reaches Complete.
             </span>
           )}
+          {!approved && isComplete && !hasReached && (
+            <span className={`${mutedColor} text-xs italic`}>
+              Approval unlocks when the audit reaches this stage.
+            </span>
+          )}
         </div>
       </div>
 

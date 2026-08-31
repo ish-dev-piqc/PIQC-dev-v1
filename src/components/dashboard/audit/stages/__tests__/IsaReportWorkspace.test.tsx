@@ -59,13 +59,16 @@ describe('IsaReportWorkspace — one-ahead preview guard (PR-UX2)', () => {
     mockFetchDraft.mockResolvedValue({ ok: true, data: null });
   });
 
-  it('PREVIEW (audit at ISA_CONDUCT): notice renders', async () => {
+  it('PREVIEW (audit at ISA_CONDUCT): notice renders and the save choke is closed at its visible controls', async () => {
     mockActiveAudit = { ...mockActiveAudit, current_stage: 'ISA_CONDUCT' };
 
     render(<IsaReportWorkspace />);
 
     await waitFor(() => expect(mockFetchDraft).toHaveBeenCalledWith('audit-1'));
     expect(screen.getByText(/has not reached this stage yet/i)).toBeInTheDocument();
+    // Response-window controls call save() on change — both must be disabled.
+    expect(screen.getByLabelText('Response due days')).toBeDisabled();
+    expect(screen.getByLabelText('Response due basis')).toBeDisabled();
   });
 
   it('AT STAGE: no preview notice', async () => {

@@ -345,7 +345,11 @@ export default function VendorEnrichmentWorkspace() {
         title="Protocol section mapping"
         description="Link the protocol sections this vendor service is responsible for. Auditor assigns a derived criticality + rationale."
         status={mappingStatus}
-        lockedReason="Define the vendor service above first."
+        lockedReason={
+          hasReached
+            ? 'Define the vendor service above first.'
+            : 'Mappings follow the vendor service once the audit reaches this stage.'
+        }
         isLight={isLight}
       >
         {service && hasReached && (

@@ -380,9 +380,16 @@ export default function AuditConductWorkspace() {
       {!inForm && entries.length === 0 && (
         <div className={`border border-dashed rounded-xl px-6 py-10 text-center ${emptyBg}`}>
           <p className={`${subColor} text-sm`}>
-            No observations recorded yet. Use{' '}
-            <span className={`${headingColor} font-medium`}>New entry</span> to capture the first
-            observation.
+            {hasReached ? (
+              <>
+                No observations recorded yet. Use{' '}
+                <span className={`${headingColor} font-medium`}>New entry</span> to capture the
+                first observation.
+              </>
+            ) : (
+              // Preview: don't point at the hidden New-entry button.
+              'No observations recorded yet. Observations are captured once the audit reaches this stage.'
+            )}
           </p>
         </div>
       )}
@@ -461,6 +468,8 @@ export default function AuditConductWorkspace() {
             <p className={`${headingColor} text-sm font-semibold mt-1`}>
               {alreadyAdvanced
                 ? 'Audit has already advanced past this stage'
+                : !hasReached
+                ? 'Advancing unlocks when the audit reaches this stage'
                 : entries.length === 0
                 ? 'Capture at least one observation before advancing'
                 : 'Ready to advance to Report drafting'}
