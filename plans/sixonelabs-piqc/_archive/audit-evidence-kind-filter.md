@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: Evidence register kind filter — listAuditEvidence parity with generation snapshots
-status: in-review
+status: merged
+merged: 2026-08-31
 started: 2026-08-30
-target_pr:
+target_pr: #569
 ---
 
 # Evidence register kind filter (listAuditEvidence ↔ generation snapshot parity)
