@@ -27,7 +27,11 @@ import type { MockAgendaItem, MockChecklistItem } from './mockPreAudit';
 // snapshot vs live register. Pure — unit-tested directly.
 // =============================================================================
 
-export type DeliverableKind = 'checklist' | 'agenda' | 'confirmation_letter';
+export type DeliverableKind =
+  | 'checklist'
+  | 'agenda'
+  | 'confirmation_letter'
+  | 'internal_notification';
 
 export interface DeliverableDraftProposal {
   mode: 'generate' | 'revise';
@@ -50,12 +54,14 @@ const APPLY_RPC: Record<DeliverableKind, string> = {
   checklist: 'audit_mode_apply_checklist_generation',
   agenda: 'audit_mode_apply_agenda_generation',
   confirmation_letter: 'audit_mode_apply_confirmation_letter_generation',
+  internal_notification: 'audit_mode_apply_internal_notification_generation',
 };
 
 const DRAFT_NOUN: Record<DeliverableKind, string> = {
   checklist: 'Checklist',
   agenda: 'Agenda',
   confirmation_letter: 'Confirmation letter',
+  internal_notification: 'Internal notification',
 };
 
 export async function requestDeliverableDraft(
@@ -114,7 +120,13 @@ export async function applyDeliverableGeneration(
           scope: proposal.content_patch.scope ?? [],
           recipients: opts?.currentRecipients ?? [],
         }
-      : { items: proposal.content_patch.items ?? [] };
+      : proposal.deliverable === 'internal_notification'
+        ? {
+            // Letter-shaped but deliberately recipient-free (roles-only body).
+            body_text: proposal.content_patch.body_text ?? '',
+            scope: proposal.content_patch.scope ?? [],
+          }
+        : { items: proposal.content_patch.items ?? [] };
 
   const noun = DRAFT_NOUN[proposal.deliverable];
   const { error } = await supabase.rpc(APPLY_RPC[proposal.deliverable], {
