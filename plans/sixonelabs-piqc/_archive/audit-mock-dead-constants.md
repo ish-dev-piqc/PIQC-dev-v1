@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: Delete dead sibling mock constants in src/lib/audit/ (house rule 4 cleanup)
-status: in-review
+status: merged
+merged: 2026-08-31
 started: 2026-08-30
-target_pr:
+target_pr: #565
 ---
 
 # Delete dead sibling mock constants
