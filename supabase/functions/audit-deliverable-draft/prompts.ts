@@ -65,6 +65,21 @@ REVISION MODE (when CURRENT DRAFT is provided):
 OUTPUT — a single JSON object, no markdown:
 {"body_text":"...","scope":["..."],"refs":[{"passage":"P2","quote":"..."}]}`;
 
+export const EVIDENCE_GAP_SUMMARY_PROMPT = `You draft the evidence gap summary for a clinical-trial vendor audit — the document that checks audit scope coverage against the evidence collected so far and lists what is outstanding. Your output is a DRAFT the lead auditor reviews and edits — never a final record, and never a verdict.
+
+STRUCTURE:
+- "body_text" is the coverage narrative, organized per scope area (use SCOPE AREAS when provided; otherwise organize by the register and checklist themselves). For each area: name the register documents on file that cover it, then what is outstanding — checklist items expecting evidence with no matching document on file, and register documents not yet ready. Close with a single consolidated "Outstanding" list the auditor can hand to the vendor.
+- Register documents marked WITHHELD must be named as withheld from generation — never described (their content was not provided to you), never counted as coverage, never omitted.
+- The EVIDENCE REGISTER, SCOPE AREAS, and CHECKLIST EXPECTATIONS blocks are this audit's own records, fed to you verbatim — restate their titles and items freely without refs. Refs are only for claims drawn from the P/E passages.
+- Coverage statements are factual and even: "no document on file for X". Never adequacy judgments ("insufficient", "inadequate") and never conclusions about audit readiness — those are the auditor's.
+- "scope" is the list of scope areas the summary covers.
+${SHARED_RULES}
+REVISION MODE (when CURRENT SUMMARY is provided):
+- The current body_text and scope are the auditor's work. Preserve their substance and wording; update coverage statements the register blocks contradict (a document arrived, was withheld, or changed status) and refresh the Outstanding list to match.
+
+OUTPUT — a single JSON object, no markdown:
+{"body_text":"...","scope":["..."],"refs":[{"passage":"E1","quote":"..."}]}`;
+
 export const LETTER_PROMPT = `You draft the audit confirmation letter's narrative for a clinical-trial vendor audit — the text the lead auditor sends to confirm the audit's scope and arrangements. Your output is a DRAFT the auditor reviews and edits — never a final record, and never sent by you.
 
 STRUCTURE:

@@ -4,9 +4,12 @@
 //
 // Consolidates the C1 checklist engine at the rule-of-three moment: takes
 // { audit_id, deliverable: 'checklist' | 'agenda' | 'confirmation_letter' |
-// 'internal_notification' (PR-D1) }, runs ONE engine (JWT ownership proof →
-// service-role retrieval over protocol + register chunks → OpenAI →
-// verbatim-quote ref gate), and shapes output per deliverable's `shape`.
+// 'internal_notification' (PR-D1) | 'evidence_gap_summary' (PR-D3) }, runs
+// ONE engine (JWT ownership proof → service-role retrieval over protocol +
+// register chunks → OpenAI → verbatim-quote ref gate), and shapes output per
+// deliverable's `shape`. The gap summary additionally feeds the FULL register
+// (withheld rows as titles-only), the risk summary's scope areas, and the
+// checklist's expectations into its user message — see the gap-context block.
 // Supersedes /audit-checklist-draft (deleted).
 //
 // Invariants (all deliverables):
@@ -32,7 +35,7 @@ import {
   type ProtocolCandidate,
   type ProtocolChunkRow,
 } from "../_shared/protocolCandidates.ts";
-import { AGENDA_PROMPT, CHECKLIST_PROMPT, INTERNAL_NOTIFICATION_PROMPT, LETTER_PROMPT } from "./prompts.ts";
+import { AGENDA_PROMPT, CHECKLIST_PROMPT, EVIDENCE_GAP_SUMMARY_PROMPT, INTERNAL_NOTIFICATION_PROMPT, LETTER_PROMPT } from "./prompts.ts";
 
 // -----------------------------------------------------------------------------
 // CORS + constants
@@ -56,7 +59,7 @@ const MAX_BODY_TEXT_CHARS  = 6_000; // letter body cap
 const MAX_REFS_PER_ENTRY   = 2;
 const EMBEDDING_MODEL      = "text-embedding-3-small";
 
-type DeliverableKind = "checklist" | "agenda" | "confirmation_letter" | "internal_notification";
+type DeliverableKind = "checklist" | "agenda" | "confirmation_letter" | "internal_notification" | "evidence_gap_summary";
 
 // shape drives every structural branch: "items" kinds carry labeled entry
 // lists (C-label revision mode, capped at maxItems); "letter" kinds carry a
@@ -81,6 +84,7 @@ const DELIVERABLES: Record<DeliverableKind, DeliverableConfig> = {
   agenda:                { table: "agenda_objects",                systemPrompt: AGENDA_PROMPT,                shape: "items", maxItems: 20 },
   confirmation_letter:   { table: "confirmation_letter_objects",   systemPrompt: LETTER_PROMPT,                shape: "letter", blobRefId: "letter",       revisionHeading: "CURRENT LETTER" },
   internal_notification: { table: "internal_notification_objects", systemPrompt: INTERNAL_NOTIFICATION_PROMPT, shape: "letter", blobRefId: "notification", revisionHeading: "CURRENT DRAFT"  },
+  evidence_gap_summary:  { table: "evidence_gap_summary_objects",  systemPrompt: EVIDENCE_GAP_SUMMARY_PROMPT,  shape: "letter", blobRefId: "gap_summary",  revisionHeading: "CURRENT SUMMARY" },
 };
 
 // Static retrieval lenses — the standard vendor-audit domains. Per-domain
@@ -164,6 +168,17 @@ function extractExisting(kind: DeliverableKind, content: unknown): ExistingEntry
 // User message
 // -----------------------------------------------------------------------------
 
+// Gap-summary-only context (PR-D3): the coverage basis the summary is written
+// against. registerListing is the FULL register — withheld rows appear as
+// titles-only (their content never reaches retrieval or the prompt; naming
+// them as withheld is the point of the deliverable).
+interface GapSummaryContext {
+  registerListing: { title: string; status: string; withheld: boolean }[];
+  focusAreas: string[];
+  domains: string[];
+  checklistItems: { prompt: string; evidence_expected: boolean }[];
+}
+
 function buildUserMessage(
   kind: DeliverableKind,
   protocolTitle: string | null,
@@ -173,6 +188,7 @@ function buildUserMessage(
   docTitles: Map<string, string>,
   existing: ExistingEntry[],
   letterCurrent: { body_text: string; scope: string[] } | null,
+  gapContext: GapSummaryContext | null,
 ): string {
   const lines: string[] = [];
   lines.push(`Protocol: ${protocolTitle ?? "(unspecified)"}`);
@@ -201,6 +217,33 @@ function buildUserMessage(
       lines.push(`${renderPassage(c)}${title ? ` [from: ${title}]` : ""}`);
     }
     lines.push("");
+  }
+  if (gapContext) {
+    if (gapContext.focusAreas.length > 0 || gapContext.domains.length > 0) {
+      lines.push("SCOPE AREAS (from the risk summary):");
+      if (gapContext.focusAreas.length > 0) {
+        lines.push(`Focus areas: ${gapContext.focusAreas.join(" | ")}`);
+      }
+      for (const d of gapContext.domains) lines.push(`- ${d}`);
+      lines.push("");
+    }
+    lines.push(`EVIDENCE REGISTER (${gapContext.registerListing.length} documents; the coverage basis):`);
+    if (gapContext.registerListing.length === 0) {
+      lines.push("(no evidence documents filed yet)");
+    }
+    for (const entry of gapContext.registerListing) {
+      lines.push(entry.withheld
+        ? `- [WITHHELD from generation] ${entry.title}`
+        : `- [on file, ${entry.status}] ${entry.title}`);
+    }
+    lines.push("");
+    if (gapContext.checklistItems.length > 0) {
+      lines.push(`CHECKLIST EXPECTATIONS (${gapContext.checklistItems.length} items):`);
+      for (const it of gapContext.checklistItems) {
+        lines.push(`- ${it.prompt}${it.evidence_expected ? " [evidence expected]" : ""}`);
+      }
+      lines.push("");
+    }
   }
   if (existing.length > 0) {
     lines.push(`EXISTING ITEMS (${existing.length}; revision mode — reference by label):`);
@@ -427,6 +470,83 @@ Deno.serve(async (req: Request) => {
     }];
   });
 
+  // ---------------------------------------------------------------------------
+  // Gap-summary coverage basis (PR-D3) — JWT/RLS-gated, this kind only. All
+  // three reads mirror queries the client app already performs; no new
+  // privilege paths. Withheld rows contribute their register title ONLY —
+  // their document content stays out of retrieval and the prompt entirely.
+  // Absence degrades: no risk summary → organize by register + checklist; no
+  // checklist → outstanding basis is scope areas vs register.
+  // ---------------------------------------------------------------------------
+
+  let gapContext: GapSummaryContext | null = null;
+  if (kind === "evidence_gap_summary") {
+    const registerListing = (registerRows ?? []).flatMap((r) => {
+      const docRaw = (r as { documents: unknown }).documents;
+      const doc = (Array.isArray(docRaw) ? docRaw[0] : docRaw) as
+        | { title?: string; status?: string; kind?: string }
+        | null;
+      if (!doc || doc.kind !== "AUDIT_EVIDENCE") return [];
+      return [{
+        title: (doc.title ?? "(untitled)").slice(0, 200),
+        status: doc.status ?? "unknown",
+        withheld: !(r as { include_in_generation: boolean }).include_in_generation,
+      }];
+    }).slice(0, 60);
+
+    const [riskRes, checklistRes] = await Promise.all([
+      supabase
+        .from("vendor_risk_summary_objects")
+        .select("id, focus_areas")
+        .eq("audit_id", auditId)
+        .maybeSingle(),
+      supabase
+        .from("checklist_objects")
+        .select("content")
+        .eq("audit_id", auditId)
+        .maybeSingle(),
+    ]);
+
+    const focusAreasRaw = (riskRes.data as { focus_areas?: unknown } | null)?.focus_areas;
+    const focusAreas = (Array.isArray(focusAreasRaw) ? focusAreasRaw : [])
+      .filter((a): a is string => typeof a === "string" && a.trim().length > 0)
+      .map((a) => a.trim().slice(0, 200))
+      .slice(0, 20);
+
+    let domains: string[] = [];
+    const riskSummaryId = (riskRes.data as { id?: unknown } | null)?.id;
+    if (typeof riskSummaryId === "string") {
+      const { data: junction } = await supabase
+        .from("vendor_risk_summary_protocol_risks")
+        .select("protocol_risk_objects(section_identifier, section_title, operational_domain_tag)")
+        .eq("risk_summary_id", riskSummaryId);
+      domains = [...new Set(((junction ?? []) as { protocol_risk_objects: unknown }[])
+        .flatMap((j) => {
+          const v = j.protocol_risk_objects;
+          const rows = (Array.isArray(v) ? v : v ? [v] : []) as
+            { section_identifier?: string; section_title?: string; operational_domain_tag?: string }[];
+          return rows.flatMap((p) => {
+            if (typeof p.operational_domain_tag !== "string" || p.operational_domain_tag.trim().length === 0) return [];
+            const section = [p.section_identifier, p.section_title].filter(Boolean).join(" ");
+            return [`${p.operational_domain_tag.trim()}${section ? ` (§${section})` : ""}`.slice(0, 200)];
+          });
+        }))].slice(0, 30);
+    }
+
+    const checklistContent = (checklistRes.data as { content?: unknown } | null)?.content as
+      | Record<string, unknown>
+      | null
+      | undefined;
+    const checklistItems = (checklistContent && Array.isArray(checklistContent.items) ? checklistContent.items : [])
+      .filter((it): it is Record<string, unknown> => !!it && typeof it === "object")
+      .flatMap((it) => typeof it.prompt === "string" && it.prompt.trim().length > 0
+        ? [{ prompt: it.prompt.trim().slice(0, MAX_PROMPT_CHARS), evidence_expected: it.evidence_expected === true }]
+        : [])
+      .slice(0, 40);
+
+    gapContext = { registerListing, focusAreas, domains, checklistItems };
+  }
+
   log("info", "audit_deliverable_draft.request", {
     request_id: requestId,
     audit_id: auditId,
@@ -434,6 +554,12 @@ Deno.serve(async (req: Request) => {
     mode,
     existing_count: existing.length,
     evidence_doc_count: evidenceDocs.length,
+    ...(gapContext ? {
+      register_listing_count: gapContext.registerListing.length,
+      withheld_count: gapContext.registerListing.filter((e) => e.withheld).length,
+      scope_area_count: gapContext.focusAreas.length + gapContext.domains.length,
+      checklist_item_count: gapContext.checklistItems.length,
+    } : {}),
   });
 
   const controller = new AbortController();
@@ -503,6 +629,7 @@ Deno.serve(async (req: Request) => {
             content: buildUserMessage(
               kind, protocolTitle, (audit.audit_type as string | null) ?? null,
               candidates.protocol, candidates.evidence, docTitles, existing, letterCurrent,
+              gapContext,
             ),
           },
         ],
