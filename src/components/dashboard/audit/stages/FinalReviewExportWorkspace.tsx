@@ -23,6 +23,7 @@ import { formatAuditWindow } from '../../../../lib/audit/dateWindow';
 import { fetchPreAuditDeliverables } from '../../../../lib/audit/preAuditApi';
 import { listAuditEvidence } from '../../../../lib/audit/evidenceApi';
 import {
+  checklistLiveIds,
   computeDeliverableCurrency,
   type DeliverableCurrency,
 } from '../../../../lib/audit/deliverableGenerationApi';
@@ -99,14 +100,26 @@ export default function FinalReviewExportWorkspace() {
         ]);
         if (cancelled || !register.ok) return;
         const rows: Array<{ label: string; currency: DeliverableCurrency }> = [];
-        const push = (label: string, snapshot: DeliverableGroundingSnapshot | null | undefined) => {
-          const currency = computeDeliverableCurrency(snapshot, register.data);
+        const push = (
+          label: string,
+          snapshot: DeliverableGroundingSnapshot | null | undefined,
+          liveChecklistItemIds?: string[],
+        ) => {
+          const currency = computeDeliverableCurrency(snapshot, register.data, liveChecklistItemIds);
           if (currency) rows.push({ label, currency });
         };
         push('Confirmation letter', bundle.confirmation_letter?.grounding_snapshot);
         push('Agenda', bundle.agenda?.grounding_snapshot);
         push('Checklist', bundle.checklist?.grounding_snapshot);
         push('Internal notification', bundle.internal_notification?.grounding_snapshot);
+        // Gap summary (PR-D3): its snapshot carries the extra axes (full
+        // register + checklist identity), so its currency also needs the LIVE
+        // checklist item ids — checklistLiveIds owns the no-row-means-[] policy.
+        push(
+          'Evidence gap summary',
+          bundle.evidence_gap_summary?.grounding_snapshot,
+          checklistLiveIds(bundle.checklist),
+        );
         setGroundingCurrency(rows);
       } catch (err) {
         console.error('[FinalReviewExportWorkspace] grounding currency load error:', err);
@@ -402,7 +415,7 @@ export default function FinalReviewExportWorkspace() {
             }`}
           >
             <p className="font-semibold">
-              The evidence register changed after PIQC drafted{' '}
+              The evidence register or checklist changed after PIQC drafted{' '}
               {groundingCurrency.filter((r) => !r.currency.isCurrent).length === 1
                 ? 'a deliverable'
                 : 'deliverables'}
@@ -410,17 +423,23 @@ export default function FinalReviewExportWorkspace() {
             </p>
             {groundingCurrency
               .filter((r) => !r.currency.isCurrent)
-              .map((r) => (
-                <p key={r.label}>
-                  <span className="font-semibold">{r.label}:</span>{' '}
-                  {r.currency.newSinceGeneration.length > 0 &&
-                    `new — ${r.currency.newSinceGeneration.map((d) => d.title).join(', ')}`}
-                  {r.currency.newSinceGeneration.length > 0 &&
-                    r.currency.removedSinceGeneration.length > 0 && '; '}
-                  {r.currency.removedSinceGeneration.length > 0 &&
-                    `removed — ${r.currency.removedSinceGeneration.map((d) => d.title).join(', ')}`}
-                </p>
-              ))}
+              .map((r) => {
+                const flips = r.currency.withholdFlippedSinceGeneration ?? [];
+                const parts = [
+                  r.currency.newSinceGeneration.length > 0 &&
+                    `new — ${r.currency.newSinceGeneration.map((d) => d.title).join(', ')}`,
+                  r.currency.removedSinceGeneration.length > 0 &&
+                    `removed — ${r.currency.removedSinceGeneration.map((d) => d.title).join(', ')}`,
+                  flips.length > 0 &&
+                    `withhold flag changed — ${flips.map((d) => d.title).join(', ')}`,
+                  r.currency.checklistChanged === true && 'checklist items changed',
+                ].filter(Boolean);
+                return (
+                  <p key={r.label}>
+                    <span className="font-semibold">{r.label}:</span> {parts.join('; ')}
+                  </p>
+                );
+              })}
             <p>
               This never blocks export — revise at Stage 5 if the drift matters for this audit.
             </p>

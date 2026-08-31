@@ -12,6 +12,7 @@ import {
   ListChecks,
   History as HistoryIcon,
   Megaphone,
+  FileSearch,
   Paperclip,
 } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
@@ -24,6 +25,7 @@ import {
   type MockAgenda,
   type MockChecklist,
   type MockInternalNotification,
+  type MockEvidenceGapSummary,
   type MockPreAuditBundle,
 } from '../../../../lib/audit/mockPreAudit';
 import {
@@ -36,6 +38,8 @@ import {
   approveChecklist,
   upsertInternalNotification,
   approveInternalNotification,
+  upsertEvidenceGapSummary,
+  approveEvidenceGapSummary,
   prefillStage5Deliverables,
   type DeliverableApproveResult,
 } from '../../../../lib/audit/preAuditApi';
@@ -43,6 +47,7 @@ import type { DeliverableApprovalStatus, TrackedObjectType } from '../../../../t
 import { listAuditEvidence } from '../../../../lib/audit/evidenceApi';
 import {
   applyDeliverableGeneration,
+  checklistLiveIds,
   computeDeliverableCurrency,
   requestDeliverableDraft,
 } from '../../../../lib/audit/deliverableGenerationApi';
@@ -56,21 +61,27 @@ import StagePreviewNotice from '../StagePreviewNotice';
 // =============================================================================
 // PreAuditDraftingWorkspace — PRE_AUDIT_DRAFTING stage center pane.
 //
-// Four tabs sharing the Revise / Save / Cancel / Approve pattern:
+// Five tabs sharing the Revise / Save / Cancel / Approve pattern:
 //   - Confirmation Letter      (sent to vendor)
 //   - Agenda                   (multi-item audit plan)
 //   - Checklist                (auditor's working checklist)
 //   - Internal Notification    (internal heads-up inviting scope input — PR-D1)
+//   - Evidence Gap Summary     (per-scope-area coverage vs the register — PR-D3)
 //
 // All follow the D-010 step 7 lifecycle:
 //   - DRAFT until explicitly Approved
 //   - Editing an APPROVED deliverable demotes it to DRAFT (re-approval needed)
 //   - When letter + agenda + checklist are APPROVED, AUDIT_CONDUCT unlocks.
-//     The internal notification NEVER gates advance (v8 rule) — its approval
-//     is its own latch only.
+//     The internal notification and evidence gap summary NEVER gate advance
+//     (v8 rule) — their approvals are their own latches only.
 // =============================================================================
 
-type TabKey = 'confirmation_letter' | 'agenda' | 'checklist' | 'internal_notification';
+type TabKey =
+  | 'confirmation_letter'
+  | 'agenda'
+  | 'checklist'
+  | 'internal_notification'
+  | 'evidence_gap_summary';
 
 interface TabDef {
   key: TabKey;
@@ -112,6 +123,13 @@ const TAB_DEFS: TabDef[] = [
     icon: Megaphone,
     gating: false,
   },
+  {
+    key: 'evidence_gap_summary',
+    label: 'Evidence gap summary',
+    description: 'Per scope area: what evidence the register holds and what remains outstanding. Optional — never blocks advance.',
+    icon: FileSearch,
+    gating: false,
+  },
 ];
 
 const GATING_TAB_DEFS = TAB_DEFS.filter((t) => t.gating);
@@ -123,6 +141,7 @@ const EMPTY_BUNDLE: MockPreAuditBundle = {
   agenda: null,
   checklist: null,
   internal_notification: null,
+  evidence_gap_summary: null,
 };
 
 export default function PreAuditDraftingWorkspace() {
@@ -187,15 +206,15 @@ export default function PreAuditDraftingWorkspace() {
   // network-noise optimisation.
   const attemptedPrefillRef = useRef<Set<string>>(new Set());
 
-  // Notification-first escape hatch: the guided stub screen (below) renders
-  // when nothing is drafted, but the internal notification has no stub — this
-  // flag lets the auditor skip straight to its tab without creating three
-  // unwanted stub rows first.
-  const [notificationFirst, setNotificationFirst] = useState(false);
+  // Optional-first escape hatch: the guided stub screen (below) renders when
+  // nothing is drafted, but the two optional kinds (notification, gap
+  // summary) have no stubs — this flag lets the auditor skip straight to
+  // either tab without creating three unwanted stub rows first.
+  const [optionalFirst, setOptionalFirst] = useState(false);
 
   useEffect(() => {
     setActiveTab('confirmation_letter');
-    setNotificationFirst(false);
+    setOptionalFirst(false);
   }, [activeAudit?.id]);
 
   useEffect(() => {
@@ -305,7 +324,7 @@ export default function PreAuditDraftingWorkspace() {
     setBundles((prevBundles) => ({ ...prevBundles, [auditId]: fresh }));
   };
 
-  // One persist flow for all four deliverables (the 4th copy was the
+  // One persist flow for all five deliverables (the 4th copy was the
   // rule-of-three moment). Approval transitions CAS on the row version the
   // reviewer saw — the latch attests to exactly the content they reviewed.
   // An upsert that FAILS (null; the API layer already logged it) REVERTS the
@@ -382,6 +401,15 @@ export default function PreAuditDraftingWorkspace() {
       approve: (p) => approveInternalNotification(p.id, p.updated_at),
     });
 
+  const persistEvidenceGapSummary = (
+    prev: MockEvidenceGapSummary | null,
+    next: MockEvidenceGapSummary | null,
+  ) =>
+    persistDeliverable('evidence_gap_summary', 'EvidenceGapSummary', prev, next, {
+      upsert: (n) => upsertEvidenceGapSummary(auditId, n.content),
+      approve: (p) => approveEvidenceGapSummary(p.id, p.updated_at),
+    });
+
   const generateAllStubs = async () => {
     // Stubs cover the three gating deliverables only — the internal
     // notification has no stub by design (drafted from its tab when wanted).
@@ -439,16 +467,18 @@ export default function PreAuditDraftingWorkspace() {
     : 'bg-emerald-500 text-[#020617] hover:bg-emerald-400 disabled:bg-white/10 disabled:text-white/35';
 
   // ---------------------------------------------------------------------------
-  // Empty state — nothing drafted yet. The notification is part of the check
-  // so an existing notification row is never hidden behind the stub screen
-  // (data on the server must always render); trioMissing separately drives
-  // the in-tab stub affordance below, so the one-click bootstrap stays
-  // reachable when the tabs render with the gating trio still unstarted.
+  // Empty state — nothing drafted yet. The two non-gating kinds are part of
+  // the check so an existing notification or gap-summary row is never hidden
+  // behind the stub screen (data on the server must always render);
+  // trioMissing separately drives the in-tab stub affordance below, so the
+  // one-click bootstrap stays reachable when the tabs render with the gating
+  // trio still unstarted.
   // ---------------------------------------------------------------------------
   const trioMissing = !bundle.confirmation_letter && !bundle.agenda && !bundle.checklist;
-  const allMissing = trioMissing && !bundle.internal_notification;
+  const allMissing =
+    trioMissing && !bundle.internal_notification && !bundle.evidence_gap_summary;
 
-  if (allMissing && !notificationFirst) {
+  if (allMissing && !optionalFirst) {
     return (
       <div className="p-6 max-w-3xl mx-auto">
         {!hasReached && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
@@ -459,10 +489,11 @@ export default function PreAuditDraftingWorkspace() {
           Draft pre-audit deliverables
         </h2>
         <p className={`${subColor} text-sm mt-1.5 leading-relaxed max-w-2xl`}>
-          The pre-audit deliverables — confirmation letter, agenda, checklist, and an
-          optional internal notification — are drafted here from your approved risk summary
-          and vendor service mappings. Stubs start the three gating deliverables; the
-          internal notification has no stub and is drafted from its own tab.
+          The pre-audit deliverables — confirmation letter, agenda, checklist, plus an
+          optional internal notification and evidence gap summary — are drafted here from
+          your approved risk summary and vendor service mappings. Stubs start the three
+          gating deliverables; the two optional ones have no stubs and are drafted from
+          their own tabs.
         </p>
         {hasReached && (
           <div className="mt-5 flex items-center gap-4 flex-wrap">
@@ -477,12 +508,22 @@ export default function PreAuditDraftingWorkspace() {
             <button
               type="button"
               onClick={() => {
-                setNotificationFirst(true);
+                setOptionalFirst(true);
                 setActiveTab('internal_notification');
               }}
               className={`${subColor} text-sm font-medium underline underline-offset-2 hover:opacity-80`}
             >
               Start with the internal notification instead
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOptionalFirst(true);
+                setActiveTab('evidence_gap_summary');
+              }}
+              className={`${subColor} text-sm font-medium underline underline-offset-2 hover:opacity-80`}
+            >
+              …or the evidence gap summary
             </button>
           </div>
         )}
@@ -498,10 +539,12 @@ export default function PreAuditDraftingWorkspace() {
     agenda: bundle.agenda?.approval_status ?? null,
     checklist: bundle.checklist?.approval_status ?? null,
     internal_notification: bundle.internal_notification?.approval_status ?? null,
+    evidence_gap_summary: bundle.evidence_gap_summary?.approval_status ?? null,
   };
   // Derived from the SAME gating flags that render the gate checklist, so the
   // advance button and the list can never disagree about membership. The
-  // internal notification (gating: false) never feeds this.
+  // internal notification and evidence gap summary (gating: false) never
+  // feed this.
   const allApproved = GATING_TAB_DEFS.every((t) => approvalStatuses[t.key] === 'APPROVED');
 
   const alreadyAdvanced = ['AUDIT_CONDUCT', 'REPORT_DRAFTING', 'FINAL_REVIEW_EXPORT'].includes(
@@ -529,9 +572,10 @@ export default function PreAuditDraftingWorkspace() {
           Draft pre-audit deliverables
         </h2>
         <p className={`${subColor} text-sm mt-1.5 leading-relaxed max-w-2xl`}>
-          Four deliverables share this stage. The confirmation letter, agenda, and checklist
-          must be Approved before audit conduct unlocks; the internal notification is
-          optional and never blocks. Editing an Approved deliverable reverts it to Draft.
+          Five deliverables share this stage. The confirmation letter, agenda, and checklist
+          must be Approved before audit conduct unlocks; the internal notification and
+          evidence gap summary are optional and never block. Editing an Approved
+          deliverable reverts it to Draft.
         </p>
       </div>
 
@@ -698,7 +742,8 @@ export default function PreAuditDraftingWorkspace() {
             previewLocked={!hasReached}
             onGenerate={() => void runDeliverableGeneration('internal_notification')}
           />
-          <InternalNotificationTab
+          <SimpleLetterTab
+            config={NOTIFICATION_TAB_CONFIG}
             deliverable={bundle.internal_notification}
             isLight={isLight}
             onChange={(next) => {
@@ -706,6 +751,33 @@ export default function PreAuditDraftingWorkspace() {
               persistInternalNotification(bundle.internal_notification, next);
             }}
             onEditingChange={(e) => setTabEditing('internal_notification', e)}
+            previewLocked={!hasReached}
+          />
+        </>
+      )}
+      {activeTab === 'evidence_gap_summary' && (
+        <>
+          <DeliverableGenerationPanel
+            kind="evidence_gap_summary"
+            deliverable={bundle.evidence_gap_summary}
+            evidenceRows={evidenceRows}
+            generating={generatingTab === 'evidence_gap_summary'}
+            editing={editingTabs['evidence_gap_summary'] === true}
+            error={generationError}
+            isLight={isLight}
+            previewLocked={!hasReached}
+            liveChecklistItemIds={checklistLiveIds(bundle.checklist)}
+            onGenerate={() => void runDeliverableGeneration('evidence_gap_summary')}
+          />
+          <SimpleLetterTab
+            config={GAP_SUMMARY_TAB_CONFIG}
+            deliverable={bundle.evidence_gap_summary}
+            isLight={isLight}
+            onChange={(next) => {
+              setBundleField('evidence_gap_summary', next);
+              persistEvidenceGapSummary(bundle.evidence_gap_summary, next);
+            }}
+            onEditingChange={(e) => setTabEditing('evidence_gap_summary', e)}
             previewLocked={!hasReached}
           />
         </>
@@ -977,15 +1049,68 @@ function ConfirmationLetterTab({ deliverable, isLight, onChange, onEditingChange
 }
 
 // ============================================================================
-// Internal notification tab (PR-D1) — letter-shaped, deliberately without a
-// recipients editor: internal distribution happens outside PIQC, and
-// roles-only body text keeps the deliverable name-free end to end.
+// Simple letter tab — shared by the two OPTIONAL letter-shaped kinds:
+//   - Internal notification (PR-D1): letter-shaped, deliberately without a
+//     recipients editor — internal distribution happens outside PIQC, and
+//     roles-only body text keeps the deliverable name-free end to end.
+//   - Evidence gap summary (PR-D3): same shape; almost always drafted with
+//     PIQC (grounding in the register is the point), the scratch form exists
+//     so a manual summary is still possible when generation is down.
+// The two diverge ONLY in strings (rule-of-three: the third letter-shaped
+// tab was the consolidation moment, same call as persistDeliverable). The
+// confirmation letter stays its own component — recipients is a behavioral
+// axis, not a string.
 // ============================================================================
 
-interface InternalNotificationTabProps {
-  deliverable: MockInternalNotification | null;
+// Structural common shape of the two kinds' rows. Both Mock types are
+// mutually assignable with it (their generation fields are optional), so the
+// call sites keep their precisely-typed persist wrappers without casts.
+interface SimpleLetterDeliverable {
+  id: string;
+  audit_id: string;
+  content: { body_text: string; scope: string[] };
+  approval_status: DeliverableApprovalStatus;
+  approved_by_name: string | null;
+  approved_at: string | null;
+  updated_at: string;
+}
+
+interface SimpleLetterTabConfig {
+  kind: string;
+  objectType: TrackedObjectType;
+  description: string;
+  /** Optimistic-row id mint, e.g. 'in' → `in-${Date.now()}`. */
+  idPrefix: string;
+  scopeLabel: string;
+  bodyPlaceholder: string;
+  scopePlaceholder: string;
+}
+
+const NOTIFICATION_TAB_CONFIG: SimpleLetterTabConfig = {
+  kind: 'Internal notification',
+  objectType: 'INTERNAL_NOTIFICATION_OBJECT',
+  description: 'Circulated inside your organization to announce the audit and invite scope input before the opening meeting. Optional — approving it is never required to advance. Address roles, not names; distribution happens outside PIQC.',
+  idPrefix: 'in',
+  scopeLabel: 'Scope',
+  bodyPlaceholder: 'Announce the audit to internal stakeholders and invite scope input before the opening meeting. Address roles, not names.',
+  scopePlaceholder: 'One scope item per entry',
+};
+
+const GAP_SUMMARY_TAB_CONFIG: SimpleLetterTabConfig = {
+  kind: 'Evidence gap summary',
+  objectType: 'EVIDENCE_GAP_SUMMARY_OBJECT',
+  description: 'Per scope area: what evidence the register holds and what remains outstanding. Withheld register documents are named as withheld, never silently absent. Optional — approving it is never required to advance.',
+  idPrefix: 'egs',
+  scopeLabel: 'Scope areas covered',
+  bodyPlaceholder: 'Summarize per scope area what evidence is on file and what remains outstanding. Name withheld documents as withheld.',
+  scopePlaceholder: 'One scope area per entry',
+};
+
+interface SimpleLetterTabProps {
+  config: SimpleLetterTabConfig;
+  deliverable: SimpleLetterDeliverable | null;
   isLight: boolean;
-  onChange: (next: MockInternalNotification | null) => void;
+  onChange: (next: SimpleLetterDeliverable | null) => void;
   // Reports the tab's edit mode so the generation panel can disable
   // Revise while unsaved edits exist (rule: persist human edits first).
   onEditingChange?: (editing: boolean) => void;
@@ -993,7 +1118,7 @@ interface InternalNotificationTabProps {
   previewLocked?: boolean;
 }
 
-function InternalNotificationTab({ deliverable, isLight, onChange, onEditingChange, previewLocked = false }: InternalNotificationTabProps) {
+function SimpleLetterTab({ config, deliverable, isLight, onChange, onEditingChange, previewLocked = false }: SimpleLetterTabProps) {
   const [editing, setEditingRaw] = useState(!deliverable);
   const setEditing = (next: boolean) => {
     setEditingRaw(next);
@@ -1014,7 +1139,7 @@ function InternalNotificationTab({ deliverable, isLight, onChange, onEditingChan
 
   const save = () => {
     onChange({
-      id: deliverable?.id ?? `in-${Date.now()}`,
+      id: deliverable?.id ?? `${config.idPrefix}-${Date.now()}`,
       audit_id: deliverable?.audit_id ?? '',
       content: { body_text: body, scope },
       // Editing demotes APPROVED → DRAFT
@@ -1046,9 +1171,9 @@ function InternalNotificationTab({ deliverable, isLight, onChange, onEditingChan
 
   return (
     <DeliverableShell
-      kind="Internal notification"
-      objectType="INTERNAL_NOTIFICATION_OBJECT"
-      description="Circulated inside your organization to announce the audit and invite scope input before the opening meeting. Optional — approving it is never required to advance. Address roles, not names; distribution happens outside PIQC."
+      kind={config.kind}
+      objectType={config.objectType}
+      description={config.description}
       deliverable={deliverable}
       isLight={isLight}
       editing={editing}
@@ -1069,7 +1194,7 @@ function InternalNotificationTab({ deliverable, isLight, onChange, onEditingChan
             </p>
           </SubSection>
           {deliverable.content.scope.length > 0 && (
-            <SubSection label="Scope" isLight={isLight}>
+            <SubSection label={config.scopeLabel} isLight={isLight}>
               <ul className="space-y-1">
                 {deliverable.content.scope.map((s, i) => (
                   <li
@@ -1095,13 +1220,13 @@ function InternalNotificationTab({ deliverable, isLight, onChange, onEditingChan
               value={body}
               onChange={(e) => setBody(e.target.value)}
               rows={10}
-              placeholder="Announce the audit to internal stakeholders and invite scope input before the opening meeting. Address roles, not names."
+              placeholder={config.bodyPlaceholder}
               className={textareaClass(isLight)}
             />
           </FieldLabel>
           <ChipListEditor
-            label="Scope"
-            placeholder="One scope item per entry"
+            label={config.scopeLabel}
+            placeholder={config.scopePlaceholder}
             items={scope}
             onChange={setScope}
             isLight={isLight}
@@ -1364,11 +1489,18 @@ const PANEL_NOUNS: Record<TabKey, string> = {
   agenda: 'agenda',
   checklist: 'checklist',
   internal_notification: 'internal notification',
+  evidence_gap_summary: 'evidence gap summary',
 };
 
 interface DeliverableGenerationPanelProps {
   kind: TabKey;
-  deliverable: MockConfirmationLetter | MockAgenda | MockChecklist | MockInternalNotification | null;
+  deliverable:
+    | MockConfirmationLetter
+    | MockAgenda
+    | MockChecklist
+    | MockInternalNotification
+    | MockEvidenceGapSummary
+    | null;
   evidenceRows: AuditEvidenceListRow[] | null;
   generating: boolean;
   editing: boolean;
@@ -1377,6 +1509,10 @@ interface DeliverableGenerationPanelProps {
   /** One-ahead preview (UX2): the CTA disables honestly instead of the
    *  click dying silently against runDeliverableGeneration's guard. */
   previewLocked?: boolean;
+  /** Gap summary only (PR-D3): live checklist item ids for the snapshot's
+   *  checklist-identity axis. Other kinds' snapshots carry no such axis, so
+   *  they never pass this. */
+  liveChecklistItemIds?: string[];
   onGenerate: () => void;
 }
 
@@ -1389,6 +1525,7 @@ function DeliverableGenerationPanel({
   error,
   isLight,
   previewLocked = false,
+  liveChecklistItemIds,
   onGenerate,
 }: DeliverableGenerationPanelProps) {
   const subColor = 'text-fg-sub';
@@ -1402,7 +1539,14 @@ function DeliverableGenerationPanel({
   // Diffing against [] would falsely flag every grounded source as removed.
   const currency = evidenceRows === null
     ? null
-    : computeDeliverableCurrency(deliverable?.grounding_snapshot, evidenceRows);
+    : computeDeliverableCurrency(deliverable?.grounding_snapshot, evidenceRows, liveChecklistItemIds);
+  // The gap kind can also drift on checklist identity alone — the header must
+  // not blame the register for a checklist-only change.
+  const registerDrifted =
+    !!currency &&
+    (currency.newSinceGeneration.length > 0 ||
+      currency.removedSinceGeneration.length > 0 ||
+      (currency.withholdFlippedSinceGeneration?.length ?? 0) > 0);
   const refCount = deliverable?.generation_refs?.length ?? 0;
   const isApproved = deliverable?.approval_status === 'APPROVED';
   const evidenceCount = evidenceRows?.length ?? 0;
@@ -1424,9 +1568,12 @@ function DeliverableGenerationPanel({
               {deliverable?.generated_at
                 ? ` on ${new Date(deliverable.generated_at).toLocaleDateString()}`
                 : ''}
-              {' '}from the protocol and{' '}
-              {deliverable?.grounding_snapshot?.evidence.length ?? 0} evidence source
-              {(deliverable?.grounding_snapshot?.evidence.length ?? 0) === 1 ? '' : 's'}
+              {/* A register-carrying snapshot (gap summary) is grounded in the
+                  FULL register — quoting the included-only evidence count
+                  would contradict a body that names withheld docs too. */}
+              {deliverable?.grounding_snapshot?.register
+                ? ` from the protocol and the full evidence register (${deliverable.grounding_snapshot.register.length} document${deliverable.grounding_snapshot.register.length === 1 ? '' : 's'})`
+                : ` from the protocol and ${deliverable?.grounding_snapshot?.evidence.length ?? 0} evidence source${(deliverable?.grounding_snapshot?.evidence.length ?? 0) === 1 ? '' : 's'}`}
               {refCount > 0 ? ` · ${refCount} cited passage${refCount === 1 ? '' : 's'}` : ''}.
               {' '}Every citation quotes its source verbatim — invalid ones are stripped, never repaired.
             </p>
@@ -1483,12 +1630,25 @@ function DeliverableGenerationPanel({
               : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
           }`}
         >
-          <span className="font-semibold">The evidence register has changed since this draft.</span>{' '}
+          <span className="font-semibold">
+            {registerDrifted
+              ? 'The evidence register has changed since this draft.'
+              : 'The checklist has changed since this draft.'}
+          </span>{' '}
           {currency.newSinceGeneration.length > 0 && (
             <>New: {currency.newSinceGeneration.map((d) => d.title).join(', ')}. </>
           )}
           {currency.removedSinceGeneration.length > 0 && (
             <>Removed: {currency.removedSinceGeneration.map((d) => d.title).join(', ')}. </>
+          )}
+          {(currency.withholdFlippedSinceGeneration?.length ?? 0) > 0 && (
+            <>
+              Withhold flag changed:{' '}
+              {(currency.withholdFlippedSinceGeneration ?? []).map((d) => d.title).join(', ')}.{' '}
+            </>
+          )}
+          {registerDrifted && currency.checklistChanged === true && (
+            <>The checklist's items have also changed. </>
           )}
           Revise when you're ready — this never blocks approval or export.
         </div>

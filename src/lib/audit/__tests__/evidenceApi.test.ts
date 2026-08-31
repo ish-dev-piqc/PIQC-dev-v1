@@ -1,10 +1,13 @@
 // Unit tests for the evidenceApi Result<T> contract (PR-B evidence register).
 //
-// Locks four behaviors at the API boundary: (1) checkbox glyphs normalize
+// Locks five behaviors at the API boundary: (1) checkbox glyphs normalize
 // BEFORE ingest so stored text / hash / embeddings agree, (2) no session is a
 // hard fail — evidence must never ride the anon key, (3) a DB error is
 // distinguishable from a legitimately empty register, (4) RPC failures surface
-// the server's hint when present (remediation-naming) over the raw message.
+// the server's hint when present (remediation-naming) over the raw message,
+// (5) the register inner-joins documents filtered to kind='AUDIT_EVIDENCE' —
+// parity with the generation-snapshot filter in audit-deliverable-draft, so a
+// foreign-kind attach can't sit in the register as permanently newSinceGeneration.
 //
 // Mock surface mirrors auditCreationApi.test.ts (vi.hoisted chainable supabase
 // mock), extended with auth.getSession and a stubbed global fetch for the
@@ -12,19 +15,21 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockOrder, mockRpc, mockGetSession } = vi.hoisted(() => ({
-  mockOrder: vi.fn(),
-  mockRpc: vi.fn(),
-  mockGetSession: vi.fn(),
-}));
+const { mockSelect, mockEq, mockOrder, mockRpc, mockGetSession } = vi.hoisted(() => {
+  const mockOrder = vi.fn();
+  const mockEq = vi.fn();
+  const mockSelect = vi.fn();
+  // Chainable: .select(...).eq(...).eq(...).order(...) — eq returns the chain
+  // so the audit_id and documents.kind filters both resolve.
+  const chain = { eq: mockEq, order: mockOrder };
+  mockSelect.mockReturnValue(chain);
+  mockEq.mockReturnValue(chain);
+  return { mockSelect, mockEq, mockOrder, mockRpc: vi.fn(), mockGetSession: vi.fn() };
+});
 
 vi.mock('../../supabase', () => ({
   supabase: {
-    from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({ order: mockOrder })),
-      })),
-    })),
+    from: vi.fn(() => ({ select: mockSelect })),
     rpc: mockRpc,
     auth: { getSession: mockGetSession },
   },
@@ -69,7 +74,19 @@ describe('normalizeCheckboxes', () => {
 
 describe('listAuditEvidence', () => {
   beforeEach(() => {
+    // mockClear (not mockReset) on select/eq — reset would drop the chain
+    // return values wired in vi.hoisted.
+    mockSelect.mockClear();
+    mockEq.mockClear();
     mockOrder.mockReset();
+  });
+
+  it('inner-joins documents filtered to kind AUDIT_EVIDENCE (generation-snapshot parity)', async () => {
+    mockOrder.mockResolvedValueOnce({ data: [], error: null });
+    await listAuditEvidence('a1');
+    expect(mockSelect.mock.calls[0][0]).toContain('documents!inner(title, status)');
+    expect(mockEq).toHaveBeenCalledWith('audit_id', 'a1');
+    expect(mockEq).toHaveBeenCalledWith('documents.kind', 'AUDIT_EVIDENCE');
   });
 
   it('flattens the joined document (object form) into list rows', async () => {
