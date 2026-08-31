@@ -742,7 +742,8 @@ export default function PreAuditDraftingWorkspace() {
             previewLocked={!hasReached}
             onGenerate={() => void runDeliverableGeneration('internal_notification')}
           />
-          <InternalNotificationTab
+          <SimpleLetterTab
+            config={NOTIFICATION_TAB_CONFIG}
             deliverable={bundle.internal_notification}
             isLight={isLight}
             onChange={(next) => {
@@ -768,7 +769,8 @@ export default function PreAuditDraftingWorkspace() {
             liveChecklistItemIds={checklistLiveIds(bundle.checklist)}
             onGenerate={() => void runDeliverableGeneration('evidence_gap_summary')}
           />
-          <EvidenceGapSummaryTab
+          <SimpleLetterTab
+            config={GAP_SUMMARY_TAB_CONFIG}
             deliverable={bundle.evidence_gap_summary}
             isLight={isLight}
             onChange={(next) => {
@@ -1047,15 +1049,68 @@ function ConfirmationLetterTab({ deliverable, isLight, onChange, onEditingChange
 }
 
 // ============================================================================
-// Internal notification tab (PR-D1) — letter-shaped, deliberately without a
-// recipients editor: internal distribution happens outside PIQC, and
-// roles-only body text keeps the deliverable name-free end to end.
+// Simple letter tab — shared by the two OPTIONAL letter-shaped kinds:
+//   - Internal notification (PR-D1): letter-shaped, deliberately without a
+//     recipients editor — internal distribution happens outside PIQC, and
+//     roles-only body text keeps the deliverable name-free end to end.
+//   - Evidence gap summary (PR-D3): same shape; almost always drafted with
+//     PIQC (grounding in the register is the point), the scratch form exists
+//     so a manual summary is still possible when generation is down.
+// The two diverge ONLY in strings (rule-of-three: the third letter-shaped
+// tab was the consolidation moment, same call as persistDeliverable). The
+// confirmation letter stays its own component — recipients is a behavioral
+// axis, not a string.
 // ============================================================================
 
-interface InternalNotificationTabProps {
-  deliverable: MockInternalNotification | null;
+// Structural common shape of the two kinds' rows. Both Mock types are
+// mutually assignable with it (their generation fields are optional), so the
+// call sites keep their precisely-typed persist wrappers without casts.
+interface SimpleLetterDeliverable {
+  id: string;
+  audit_id: string;
+  content: { body_text: string; scope: string[] };
+  approval_status: DeliverableApprovalStatus;
+  approved_by_name: string | null;
+  approved_at: string | null;
+  updated_at: string;
+}
+
+interface SimpleLetterTabConfig {
+  kind: string;
+  objectType: TrackedObjectType;
+  description: string;
+  /** Optimistic-row id mint, e.g. 'in' → `in-${Date.now()}`. */
+  idPrefix: string;
+  scopeLabel: string;
+  bodyPlaceholder: string;
+  scopePlaceholder: string;
+}
+
+const NOTIFICATION_TAB_CONFIG: SimpleLetterTabConfig = {
+  kind: 'Internal notification',
+  objectType: 'INTERNAL_NOTIFICATION_OBJECT',
+  description: 'Circulated inside your organization to announce the audit and invite scope input before the opening meeting. Optional — approving it is never required to advance. Address roles, not names; distribution happens outside PIQC.',
+  idPrefix: 'in',
+  scopeLabel: 'Scope',
+  bodyPlaceholder: 'Announce the audit to internal stakeholders and invite scope input before the opening meeting. Address roles, not names.',
+  scopePlaceholder: 'One scope item per entry',
+};
+
+const GAP_SUMMARY_TAB_CONFIG: SimpleLetterTabConfig = {
+  kind: 'Evidence gap summary',
+  objectType: 'EVIDENCE_GAP_SUMMARY_OBJECT',
+  description: 'Per scope area: what evidence the register holds and what remains outstanding. Withheld register documents are named as withheld, never silently absent. Optional — approving it is never required to advance.',
+  idPrefix: 'egs',
+  scopeLabel: 'Scope areas covered',
+  bodyPlaceholder: 'Summarize per scope area what evidence is on file and what remains outstanding. Name withheld documents as withheld.',
+  scopePlaceholder: 'One scope area per entry',
+};
+
+interface SimpleLetterTabProps {
+  config: SimpleLetterTabConfig;
+  deliverable: SimpleLetterDeliverable | null;
   isLight: boolean;
-  onChange: (next: MockInternalNotification | null) => void;
+  onChange: (next: SimpleLetterDeliverable | null) => void;
   // Reports the tab's edit mode so the generation panel can disable
   // Revise while unsaved edits exist (rule: persist human edits first).
   onEditingChange?: (editing: boolean) => void;
@@ -1063,7 +1118,7 @@ interface InternalNotificationTabProps {
   previewLocked?: boolean;
 }
 
-function InternalNotificationTab({ deliverable, isLight, onChange, onEditingChange, previewLocked = false }: InternalNotificationTabProps) {
+function SimpleLetterTab({ config, deliverable, isLight, onChange, onEditingChange, previewLocked = false }: SimpleLetterTabProps) {
   const [editing, setEditingRaw] = useState(!deliverable);
   const setEditing = (next: boolean) => {
     setEditingRaw(next);
@@ -1084,7 +1139,7 @@ function InternalNotificationTab({ deliverable, isLight, onChange, onEditingChan
 
   const save = () => {
     onChange({
-      id: deliverable?.id ?? `in-${Date.now()}`,
+      id: deliverable?.id ?? `${config.idPrefix}-${Date.now()}`,
       audit_id: deliverable?.audit_id ?? '',
       content: { body_text: body, scope },
       // Editing demotes APPROVED → DRAFT
@@ -1116,9 +1171,9 @@ function InternalNotificationTab({ deliverable, isLight, onChange, onEditingChan
 
   return (
     <DeliverableShell
-      kind="Internal notification"
-      objectType="INTERNAL_NOTIFICATION_OBJECT"
-      description="Circulated inside your organization to announce the audit and invite scope input before the opening meeting. Optional — approving it is never required to advance. Address roles, not names; distribution happens outside PIQC."
+      kind={config.kind}
+      objectType={config.objectType}
+      description={config.description}
       deliverable={deliverable}
       isLight={isLight}
       editing={editing}
@@ -1139,7 +1194,7 @@ function InternalNotificationTab({ deliverable, isLight, onChange, onEditingChan
             </p>
           </SubSection>
           {deliverable.content.scope.length > 0 && (
-            <SubSection label="Scope" isLight={isLight}>
+            <SubSection label={config.scopeLabel} isLight={isLight}>
               <ul className="space-y-1">
                 {deliverable.content.scope.map((s, i) => (
                   <li
@@ -1165,151 +1220,13 @@ function InternalNotificationTab({ deliverable, isLight, onChange, onEditingChan
               value={body}
               onChange={(e) => setBody(e.target.value)}
               rows={10}
-              placeholder="Announce the audit to internal stakeholders and invite scope input before the opening meeting. Address roles, not names."
+              placeholder={config.bodyPlaceholder}
               className={textareaClass(isLight)}
             />
           </FieldLabel>
           <ChipListEditor
-            label="Scope"
-            placeholder="One scope item per entry"
-            items={scope}
-            onChange={setScope}
-            isLight={isLight}
-            multiline
-          />
-        </div>
-      )}
-    </DeliverableShell>
-  );
-}
-
-// ============================================================================
-// Evidence gap summary tab (PR-D3) — letter-shaped like the notification:
-// body text + scope-area chips, no recipients. Almost always drafted with
-// PIQC (the whole point is grounding in the register); the scratch form
-// exists so a manual summary is still possible when generation is down.
-// ============================================================================
-
-interface EvidenceGapSummaryTabProps {
-  deliverable: MockEvidenceGapSummary | null;
-  isLight: boolean;
-  onChange: (next: MockEvidenceGapSummary | null) => void;
-  // Reports the tab's edit mode so the generation panel can disable
-  // Revise while unsaved edits exist (rule: persist human edits first).
-  onEditingChange?: (editing: boolean) => void;
-  /** One-ahead preview (UX2): no scratch form, no Edit/Approve. */
-  previewLocked?: boolean;
-}
-
-function EvidenceGapSummaryTab({ deliverable, isLight, onChange, onEditingChange, previewLocked = false }: EvidenceGapSummaryTabProps) {
-  const [editing, setEditingRaw] = useState(!deliverable);
-  const setEditing = (next: boolean) => {
-    setEditingRaw(next);
-    onEditingChange?.(next);
-  };
-  const [body, setBody] = useState(deliverable?.content.body_text ?? '');
-  const [scope, setScope] = useState<string[]>(deliverable?.content.scope ?? []);
-
-  // updated_at in the deps: grounded generation mutates this row under the
-  // SAME id (see ChecklistTab for the full rationale). The workspace disables
-  // Draft/Revise while editing, so this resync never fires over unsaved edits.
-  useEffect(() => {
-    setEditing(!deliverable);
-    setBody(deliverable?.content.body_text ?? '');
-    setScope(deliverable?.content.scope ?? []);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deliverable?.id, deliverable?.updated_at]);
-
-  const save = () => {
-    onChange({
-      id: deliverable?.id ?? `egs-${Date.now()}`,
-      audit_id: deliverable?.audit_id ?? '',
-      content: { body_text: body, scope },
-      // Editing demotes APPROVED → DRAFT
-      approval_status: 'DRAFT',
-      approved_by_name: null,
-      approved_at: null,
-      // Optimistic placeholder; the persist round-trip replaces this with the
-      // server row (whose updated_at the approve CAS then uses).
-      updated_at: deliverable?.updated_at ?? new Date().toISOString(),
-    });
-    setEditing(false);
-  };
-
-  const approve = () => {
-    if (!deliverable) return;
-    onChange({
-      ...deliverable,
-      approval_status: 'APPROVED',
-      approved_at: new Date().toISOString(),
-      approved_by_name: 'You',
-    });
-  };
-
-  const cancel = () => {
-    setBody(deliverable?.content.body_text ?? '');
-    setScope(deliverable?.content.scope ?? []);
-    setEditing(false);
-  };
-
-  return (
-    <DeliverableShell
-      kind="Evidence gap summary"
-      objectType="EVIDENCE_GAP_SUMMARY_OBJECT"
-      description="Per scope area: what evidence the register holds and what remains outstanding. Withheld register documents are named as withheld, never silently absent. Optional — approving it is never required to advance."
-      deliverable={deliverable}
-      isLight={isLight}
-      editing={editing}
-      onBeginEdit={() => setEditing(true)}
-      onSave={save}
-      onCancel={cancel}
-      onApprove={approve}
-      canSave={!!body.trim()}
-      previewLocked={previewLocked}
-    >
-      {previewLocked && !deliverable ? (
-        <p className="text-fg-muted text-sm">Nothing recorded yet.</p>
-      ) : !editing && deliverable ? (
-        <div className="space-y-4">
-          <SubSection label="Body" isLight={isLight}>
-            <p className={`text-sm whitespace-pre-wrap leading-relaxed ${isLight ? 'text-[#0F172A]' : 'text-white'}`}>
-              {deliverable.content.body_text}
-            </p>
-          </SubSection>
-          {deliverable.content.scope.length > 0 && (
-            <SubSection label="Scope areas covered" isLight={isLight}>
-              <ul className="space-y-1">
-                {deliverable.content.scope.map((s, i) => (
-                  <li
-                    key={i}
-                    className={`text-sm flex items-start gap-2 ${isLight ? 'text-[#0F172A]' : 'text-white'}`}
-                  >
-                    <span
-                      className={`mt-1.5 w-1 h-1 rounded-full flex-shrink-0 ${
-                        isLight ? 'bg-brand-600/55' : 'bg-brand-300/55'
-                      }`}
-                    />
-                    {s}
-                  </li>
-                ))}
-              </ul>
-            </SubSection>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <FieldLabel label="Body text" isLight={isLight}>
-            <textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              rows={10}
-              placeholder="Summarize per scope area what evidence is on file and what remains outstanding. Name withheld documents as withheld."
-              className={textareaClass(isLight)}
-            />
-          </FieldLabel>
-          <ChipListEditor
-            label="Scope areas covered"
-            placeholder="One scope area per entry"
+            label={config.scopeLabel}
+            placeholder={config.scopePlaceholder}
             items={scope}
             onChange={setScope}
             isLight={isLight}
