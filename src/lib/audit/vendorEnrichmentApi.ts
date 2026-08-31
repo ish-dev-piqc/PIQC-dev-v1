@@ -106,23 +106,6 @@ export async function updateVendorService(
   return flattenService(data as VendorServiceRow);
 }
 
-export async function deleteVendorService(
-  serviceId: string,
-  reason?: string
-): Promise<boolean> {
-  const { data, error } = await supabase.rpc('audit_mode_delete_vendor_service', {
-    p_id: serviceId,
-    p_reason: reason ?? null,
-  });
-
-  if (error) {
-    console.error('[vendorEnrichmentApi] deleteVendorService error:', error);
-    return false;
-  }
-
-  return Boolean(data);
-}
-
 // ============================================================================
 // Service Mappings
 // ============================================================================
@@ -299,25 +282,4 @@ export async function upsertTrustAssessment(
   }
 
   return flattenTrust(data as TrustAssessmentRow);
-}
-
-// Back-compat alias — older callers used updateTrustAssessment with an id.
-// The RPC keys on audit_id (1:1), so id is only used to look up the audit_id.
-export async function updateTrustAssessment(
-  assessmentId: string,
-  updates: Partial<Omit<MockTrustAssessment, 'id' | 'audit_id'>>,
-  reason?: string
-): Promise<MockTrustAssessment | null> {
-  const { data: existing, error: fetchErr } = await supabase
-    .from('trust_assessment_objects')
-    .select('audit_id')
-    .eq('id', assessmentId)
-    .maybeSingle();
-
-  if (fetchErr || !existing) {
-    console.error('[vendorEnrichmentApi] updateTrustAssessment: lookup failed', fetchErr);
-    return null;
-  }
-
-  return upsertTrustAssessment(existing.audit_id as string, updates, reason);
 }

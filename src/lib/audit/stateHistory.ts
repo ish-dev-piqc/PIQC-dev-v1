@@ -13,7 +13,6 @@
 
 import { supabase } from '../supabase';
 import type {
-  ChangedFields,
   HistoryEntry,
   TrackedObjectType,
 } from '../../types/audit';
@@ -34,30 +33,4 @@ export async function getObjectHistory(
 
   if (error) throw error;
   return (data ?? []) as HistoryEntry[];
-}
-
-// -----------------------------------------------------------------------------
-// diffFields — compute a ChangedFields payload from two object snapshots.
-//
-// Mirrors the rv1_code Prisma helper. Only keys present in `after` are
-// considered (caller controls the keyset). Comparison uses JSON.stringify so
-// arrays and nested objects diff correctly without deep-equal libs.
-//
-// Use this when calling a Phase B RPC that takes a pre-computed delta. RPCs
-// that compute their own deltas server-side (via audit_mode_diff_jsonb) do not
-// need this.
-// -----------------------------------------------------------------------------
-export function diffFields<T extends Record<string, unknown>>(
-  before: T,
-  after: Partial<T>,
-): ChangedFields {
-  const delta: ChangedFields = {};
-  for (const key of Object.keys(after) as Array<keyof T>) {
-    const prev = before[key];
-    const next = after[key];
-    if (JSON.stringify(prev) !== JSON.stringify(next)) {
-      delta[key as string] = { from: prev, to: next };
-    }
-  }
-  return delta;
 }

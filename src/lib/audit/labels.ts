@@ -22,8 +22,6 @@ import type {
   ProvisionalImpact,
   QuestionAnswerType,
   QuestionnaireInstanceStatus,
-  ResponseSource,
-  ResponseStatus,
   TrustPosture,
 } from '../../types/audit';
 
@@ -121,22 +119,6 @@ export const CAPA_STATUS_LABELS: Record<CapaStatus, string> = {
   DRAFT: 'Draft',
   NEEDS_REVISION: 'Needs revision',
   ACCEPTED: 'Accepted',
-};
-
-export const RESPONSE_STATUS_LABELS: Record<ResponseStatus, string> = {
-  ANSWERED: 'Answered',
-  UNANSWERED: 'Unanswered',
-  PARTIAL: 'Partial',
-  DEFERRED: 'Deferred',
-};
-
-export const RESPONSE_SOURCE_LABELS: Record<ResponseSource, string> = {
-  PENDING: 'Pending',
-  AUDITOR_PREFILL_WEB: 'Pre-filled from web',
-  AUDITOR_PREFILL_PRIOR_AUDIT: 'Pre-filled from prior audit',
-  AUDITOR_AUTHORED: 'Auditor authored',
-  VENDOR: 'Vendor response',
-  NOT_APPLICABLE: 'Not applicable',
 };
 
 // =============================================================================

@@ -200,9 +200,6 @@ export async function fetchQuestionnaireBundle(
   return { instance, questions, responses };
 }
 
-// Back-compat alias used by callers that still import the old name.
-export const fetchQuestionnaireInstance = fetchQuestionnaireBundle;
-
 // ============================================================================
 // Mutations
 // ============================================================================

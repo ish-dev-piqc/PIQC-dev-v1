@@ -1,12 +1,18 @@
 // =============================================================================
 // Deliverable shapes for the PRE_AUDIT_DRAFTING stage.
 //
-// Five 1:1 deliverables per audit (D-010 step 7 + PR-D1 + PR-D3):
-//   - ConfirmationLetterObject     — sent to vendor confirming dates/scope
-//   - AgendaObject                 — multi-day audit plan
-//   - ChecklistObject              — auditor's working checklist
-//   - InternalNotificationObject   — internal heads-up inviting scope input
-//   - EvidenceGapSummaryObject     — per-scope-area coverage vs the register
+// TYPE RULING (PR-3, quality review 2026-08-31): these ARE the canonical
+// real-Supabase row/display shapes — the parallel "domain object" shells in
+// src/types/audit/objects.ts were dead and have been deleted. The `Mock`
+// prefix and the mock* filename are LEGACY-FROZEN (renaming ~380 call sites
+// is churn without payoff): rename a module only when a PR is already
+// rewriting it. New domains use real names in properly-named modules —
+// D4's FindingsReport first.
+//
+// Five 1:1 deliverables per audit (D-010 step 7 + PR-D1 + PR-D3): the
+// confirmation letter (sent to vendor confirming dates/scope), agenda,
+// checklist, internal notification (internal heads-up inviting scope
+// input), and evidence gap summary (per-scope-area coverage vs register).
 //
 // All share the DRAFT/APPROVED lifecycle; editing demotes APPROVED → DRAFT.
 // Letter, agenda, and checklist must be APPROVED to unlock AUDIT_CONDUCT; the

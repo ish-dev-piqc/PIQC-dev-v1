@@ -192,23 +192,3 @@ export async function updateWorkspaceEntry(
 // Delete is intentionally NOT supported. Audit observations are corrected
 // (via update) or annotated, not deleted. This matches the rv1_code reference
 // and the GxP-trail invariant that history is append-only.
-
-export async function confirmWorkspaceEntryRiskContext(
-  entryId: string,
-  reason?: string,
-): Promise<MockWorkspaceEntry | null> {
-  const { data, error } = await supabase.rpc(
-    'audit_mode_confirm_workspace_entry_risk_context',
-    {
-      p_id: entryId,
-      p_reason: reason ?? null,
-    },
-  );
-
-  if (error) {
-    console.error('[workspaceEntriesApi] confirmRiskContext error:', error);
-    return null;
-  }
-
-  return flattenEntry(data as WorkspaceEntryRow);
-}
