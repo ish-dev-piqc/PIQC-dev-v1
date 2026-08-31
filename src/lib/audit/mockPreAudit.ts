@@ -2,12 +2,12 @@
 // Deliverable shapes for the PRE_AUDIT_DRAFTING stage.
 //
 // TYPE RULING (PR-3, quality review 2026-08-31): these ARE the canonical
-// real-Supabase row/display shapes — the parallel "domain object" shells in
-// src/types/audit/objects.ts were dead and have been deleted. The `Mock`
-// prefix and the mock* filename are LEGACY-FROZEN (renaming ~380 call sites
-// is churn without payoff): rename a module only when a PR is already
-// rewriting it. New domains use real names in properly-named modules —
-// D4's FindingsReport first.
+// real-Supabase row/display shapes — the parallel "domain object" shells
+// that existed for the original trio in src/types/audit/objects.ts were
+// dead and have been deleted. The `Mock` prefix and the mock* filename are
+// LEGACY-FROZEN (renaming ~380 call sites is churn without payoff): rename
+// a module only when a PR is already rewriting it. New domains use real
+// names in properly-named modules — D4's FindingsReport first.
 //
 // Five 1:1 deliverables per audit (D-010 step 7 + PR-D1 + PR-D3): the
 // confirmation letter (sent to vendor confirming dates/scope), agenda,

@@ -88,6 +88,7 @@ const LETTER_PROPOSAL: DeliverableDraftProposal = {
 
 function evidenceRow(overrides: Partial<AuditEvidenceListRow>): AuditEvidenceListRow {
   return {
+    kind: 'AUDIT_EVIDENCE',
     audit_id: 'a1',
     document_id: 'd1',
     added_by: 'u1',

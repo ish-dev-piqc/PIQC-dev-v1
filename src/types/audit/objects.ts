@@ -126,7 +126,7 @@ export interface RiskSummaryStudyContext {
 }
 
 // -----------------------------------------------------------------------------
-// Audit-scoped: questionnaire instance + response
+// Audit-scoped: questionnaire instance
 // -----------------------------------------------------------------------------
 export interface QuestionnaireInstance {
   id: string;
@@ -221,10 +221,6 @@ export interface DeliverableGroundingSnapshot {
 }
 
 // -----------------------------------------------------------------------------
-// Pre-Audit Drafting deliverables (D-010 step 7)
-// -----------------------------------------------------------------------------
-
-// -----------------------------------------------------------------------------
 // Issues & CAPA (Phase 3) — triage a Stage 6 finding into an Issue; the Issue
 // carries at most one draft-only CAPA (DRAFT → NEEDS_REVISION → ACCEPTED).
 // Issue lifecycle is deliberately column-free: derived from its CAPA's state.
@@ -262,7 +258,7 @@ export interface CapaObject {
 
 // Freeform fieldwork note on an Investigator Site Audit (ISA_CONDUCT pad).
 // Working papers, not findings: freely editable and soft-deletable, unlike
-// the append-only AuditWorkspaceEntryObject. Soft delete keeps the note's
+// the append-only workspace-entry rows. Soft delete keeps the note's
 // state-history deltas resolvable and (S2) protects findings' evidence
 // trails. 1:1 with audit_note_objects
 // (20260723000000_audit_mode_isa_notes_schema.sql).

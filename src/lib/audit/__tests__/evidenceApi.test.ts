@@ -200,7 +200,12 @@ describe('ingestAuditEvidence', () => {
     });
     expect(res).toEqual({
       ok: true,
-      data: { ...JOIN_ROW, title: 'Completed questionnaire', status: 'ready' },
+      data: {
+        ...JOIN_ROW,
+        title: 'Completed questionnaire',
+        status: 'ready',
+        kind: 'AUDIT_EVIDENCE',
+      },
     });
   });
 

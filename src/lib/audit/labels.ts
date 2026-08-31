@@ -174,7 +174,7 @@ export const VENDOR_DEPENDENCY_FLAG_OPTIONS = OPERATIONAL_DOMAIN_OPTIONS;
 // =============================================================================
 
 // Service-type controlled vocab. Mirrors OPERATIONAL_DOMAIN_OPTIONS but is
-// stored on VendorServiceObject.service_type. Kept as a separate const because
+// stored on vendor_service_objects.service_type. Kept as a separate const because
 // the lists may diverge as new vendor categories appear.
 export const SERVICE_TYPE_OPTIONS: ReadonlyArray<{
   value: string;

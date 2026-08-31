@@ -79,6 +79,8 @@ in properly-named modules — D4's `FindingsReport` first.
 - src/lib/audit/mockPreAudit.ts (header comment only)
 - src/lib/audit/mockWorkspaceEntries.ts (header comment only)
 - src/lib/audit/__tests__/evidenceApi.test.ts
+- src/lib/audit/__tests__/deliverableGenerationApi.test.ts (evidenceRow
+  fixture gains the now-required kind field)
 - plans/sixonelabs-piqc/audit-dead-code-and-type-ruling.md
 
 ## Out of scope
@@ -90,6 +92,22 @@ in properly-named modules — D4's `FindingsReport` first.
 - AuditDataContext stale comments (2-reviewer), ProtocolTab.tsx dead import
   (Ishika's file — in the team notification)
 - Other modes
+
+## Adversarial verification outcomes (applied before PR)
+
+The verifier found two CI-blocking typecheck breaks (both invisible to
+vitest — the required `kind` field was missing from ingestAuditEvidence's
+return literal and from deliverableGenerationApi.test's evidenceRow
+fixture) and one false claim: the mapper's null-embed fallback coerced an
+UNKNOWN row into the very kind the filter admits — the opposite of the
+engine's `if (!doc || doc.kind !== ...) drop`. All fixed: the mapper now
+drops null-embed rows (true same-language parity), the ingest path states
+the kind it mints, fixtures updated, and the orphaned comments the sweep
+left behind (empty section banner, stale type names in prose) cleaned in
+the in-scope files. Stale prose mentions of deleted type names in
+out-of-scope files (mockVendorEnrichment, heatmap, RiskSummaryPanel,
+AuditConduct, the vendor-enrichment forms) are harmless DB-concept prose —
+left for their owners' next edits.
 
 ## Architecture layers touched
 

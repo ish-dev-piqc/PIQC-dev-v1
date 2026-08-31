@@ -141,24 +141,27 @@ export async function listAuditEvidence(
 
   // PostgREST may return the joined row as an array or a single object
   // depending on the version + relationship cardinality. Normalize both.
-  // The kind filter is ALSO applied here in JS — the same-language mirror of
-  // the engine's normalizeRegister predicate — so a PostgREST embed-behavior
-  // change can never silently break the invariant on the client side.
+  // The kind predicate is ALSO applied here in JS — the same-language mirror
+  // of the engine's normalizeRegister (`if (!doc || doc.kind !== ...) drop`)
+  // — so a PostgREST embed-behavior change can never silently break the
+  // invariant client-side. A NULL embed drops too: an unknown row must never
+  // be coerced into the very kind the filter admits.
   return {
     ok: true,
-    data: rows
-      .map((row) => {
-        const doc = Array.isArray(row.documents) ? row.documents[0] : row.documents;
-        const { documents: _drop, ...join } = row;
-        void _drop;
-        return {
+    data: rows.flatMap((row) => {
+      const doc = Array.isArray(row.documents) ? row.documents[0] : row.documents;
+      if (!doc || doc.kind !== AUDIT_EVIDENCE_KIND) return [];
+      const { documents: _drop, ...join } = row;
+      void _drop;
+      return [
+        {
           ...join,
-          title: doc?.title ?? '(untitled)',
-          status: doc?.status ?? 'failed',
-          kind: doc?.kind ?? AUDIT_EVIDENCE_KIND,
-        };
-      })
-      .filter((row) => row.kind === AUDIT_EVIDENCE_KIND),
+          title: doc.title ?? '(untitled)',
+          status: doc.status ?? 'failed',
+          kind: doc.kind,
+        },
+      ];
+    }),
   };
 }
 
@@ -235,7 +238,14 @@ export async function ingestAuditEvidence(
   const join = data as AuditSourceDocument;
   return {
     ok: true,
-    data: { ...join, title: params.title.trim() || 'Untitled evidence', status: 'ready' },
+    data: {
+      ...join,
+      title: params.title.trim() || 'Untitled evidence',
+      status: 'ready',
+      // This path MINTS the document with kind AUDIT_EVIDENCE (ingest body
+      // above) — stating it here keeps the row honest without a re-read.
+      kind: AUDIT_EVIDENCE_KIND,
+    },
   };
 }
 

@@ -6,9 +6,8 @@
 //
 // Phase B per-mutation RPCs (e.g. update_audit_stage) are responsible for
 // writing deltas server-side inside a transaction — the client should never
-// call write_delta directly. The exports here are read-only (history) plus a
-// small client-side diff utility for cases where a Phase B RPC wants the
-// caller to pass a pre-computed ChangedFields payload.
+// call write_delta directly. The exports here are read-only (history); the
+// RPCs compute their own deltas server-side via audit_mode_diff_jsonb.
 // =============================================================================
 
 import { supabase } from '../supabase';
