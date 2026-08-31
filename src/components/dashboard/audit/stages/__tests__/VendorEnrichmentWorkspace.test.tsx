@@ -196,11 +196,19 @@ describe('VendorEnrichmentWorkspace — load-path honesty (hardening PR-2)', () 
     render(<VendorEnrichmentWorkspace />);
     await screen.findByText('Vendor service');
 
+    // The form's own validation requires BOTH fields — without picking a
+    // service type, handleSubmit short-circuits and onSubmit never fires
+    // (the first version of this test died exactly there).
     fireEvent.change(
       screen.getByPlaceholderText(/central laboratory services/i),
       { target: { value: 'Phantom service' } },
     );
+    fireEvent.click(screen.getByRole('button', { name: /^central laboratory$/i }));
     fireEvent.click(screen.getByRole('button', { name: /save vendor service/i }));
+
+    // Pin that the handler actually reached the RPC wrapper — a validation
+    // short-circuit must fail THIS line, not surface as a missing banner.
+    await waitFor(() => expect(createVendorService).toHaveBeenCalled());
 
     const banner = await screen.findByTestId('vendor-mutation-error');
     expect(banner.textContent).toMatch(/was not saved/i);
