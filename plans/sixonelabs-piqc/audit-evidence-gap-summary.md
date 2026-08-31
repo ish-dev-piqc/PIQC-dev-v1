@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: Evidence Gap Summary (PR-D3) — 5th deliverable kind; non-gating Stage-5 tab grounded in the evidence register + risk domains + checklist
-status: active
+status: in-review
 started: 2026-08-30
 target_pr:
 ---
