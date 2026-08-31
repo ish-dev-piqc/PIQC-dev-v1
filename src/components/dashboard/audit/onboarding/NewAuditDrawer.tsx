@@ -67,6 +67,7 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
   const [workflowType, setWorkflowType] = useState<AuditWorkflowType>('VENDOR_AUDIT');
   const [auditType, setAuditType] = useState<AuditType>('REMOTE');
   const [scheduledDate, setScheduledDate] = useState<string>('');
+  const [scheduledEndDate, setScheduledEndDate] = useState<string>('');
 
   // Vendors (VENDOR_AUDIT auditee)
   const [vendors, setVendors] = useState<VendorRow[]>([]);
@@ -227,6 +228,7 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
         protocolVersionId: versionId,
         auditType,
         scheduledDate: scheduledDate || null,
+        scheduledEndDate: scheduledEndDate || null,
       });
       // Surface the RPC's specific reason (bad auditee pairing, missing protocol
       // version, etc.) instead of a flat "Audit creation failed."
@@ -784,10 +786,28 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
               <input
                 type="date"
                 value={scheduledDate}
-                onChange={(e) => setScheduledDate(e.target.value)}
+                onChange={(e) => {
+                  setScheduledDate(e.target.value);
+                  // A window can't outlive its start — clearing the start
+                  // clears the end (the RPC rejects end-without-start).
+                  if (!e.target.value) setScheduledEndDate('');
+                }}
                 className={`w-full rounded-md border px-3 py-2 text-sm ${inputBg} ${inputBorder} ${headingColor} focus:outline-none`}
                 disabled={submitting}
               />
+            </Field>
+            <Field label="End date" labelColor={labelColor}>
+              <input
+                type="date"
+                value={scheduledEndDate}
+                min={scheduledDate || undefined}
+                onChange={(e) => setScheduledEndDate(e.target.value)}
+                className={`w-full rounded-md border px-3 py-2 text-sm ${inputBg} ${inputBorder} ${headingColor} focus:outline-none disabled:opacity-50`}
+                disabled={submitting || !scheduledDate}
+              />
+              <p className={`mt-1 text-[11px] ${mutedColor}`}>
+                Leave empty for a single-day audit.
+              </p>
             </Field>
           </div>
 

@@ -51,6 +51,38 @@ export async function advanceAuditStage(
   return { ok: true, currentStage: (data as AuditRow).current_stage };
 }
 
+export interface RescheduleAuditResult {
+  ok: boolean;
+  /** Returned when ok = false — the RPC's specific reason (window validation, not found). */
+  errorMessage?: string;
+}
+
+// Wraps audit_mode_reschedule_audit (20260902000000) — the sole writer of the
+// scheduled window. The RPC SETS both columns verbatim: there is no
+// keep-current mode. start = null clears both dates; end = null with a start
+// collapses the window to a single day — callers must always send the full
+// intended window, not just the field that changed.
+export async function rescheduleAudit(
+  auditId: string,
+  start: string | null,
+  end: string | null,
+  reason?: string,
+): Promise<RescheduleAuditResult> {
+  const { error } = await supabase.rpc('audit_mode_reschedule_audit', {
+    p_audit_id: auditId,
+    p_start: start,
+    p_end: end,
+    p_reason: reason ?? null,
+  });
+
+  if (error) {
+    console.error('[auditApi] rescheduleAudit error:', error);
+    return { ok: false, errorMessage: error.message };
+  }
+
+  return { ok: true };
+}
+
 export interface StageReadout {
   currentStage: AuditStage;
   position: number;

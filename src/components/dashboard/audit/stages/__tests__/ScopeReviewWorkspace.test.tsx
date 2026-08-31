@@ -13,9 +13,11 @@ vi.mock('../../../../../context/ThemeContext', () => ({
 }));
 
 const mockAdvanceStage = vi.fn();
+// workflow_type feeds hasReachedStage (UX2 preview banner).
 let mockActiveAudit: {
   id: string;
   current_stage: string;
+  workflow_type: string;
   protocol_id: string;
   protocol_code: string;
 } | null = null;
@@ -126,6 +128,7 @@ describe('ScopeReviewWorkspace gate feed', () => {
     mockActiveAudit = {
       id: AUDIT_ID,
       current_stage: 'SCOPE_AND_RISK_REVIEW',
+      workflow_type: 'VENDOR_AUDIT',
       protocol_id: 'protocol-1',
       protocol_code: 'PROTO-001',
     };
@@ -194,6 +197,7 @@ describe('ScopeReviewWorkspace gate feed', () => {
     mockActiveAudit = {
       id: AUDIT_ID,
       current_stage: 'QUESTIONNAIRE_REVIEW',
+      workflow_type: 'VENDOR_AUDIT',
       protocol_id: 'protocol-1',
       protocol_code: 'PROTO-001',
     };

@@ -23,6 +23,8 @@ import {
 import { fetchQuestionnaireBundle } from '../../../../lib/audit/questionnaireApi';
 import { fetchRiskSummary } from '../../../../lib/audit/riskSummaryApi';
 import { getStageReadout } from '../../../../lib/audit/auditApi';
+import { hasReachedStage } from '../../../../lib/audit/workflowStages';
+import StagePreviewNotice from '../StagePreviewNotice';
 import WorksheetItemsList from '../../../sotr/WorksheetItemsList';
 
 const AUDIT_EMPTY_STATE_MESSAGE =
@@ -145,6 +147,12 @@ export default function ScopeReviewWorkspace() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
+      {/* UX2: same preview banner as every other stage. Banner only — the
+          advance gate below stays readout-driven (readoutAtThisStage), which
+          is stricter and test-pinned. */}
+      {!hasReachedStage(activeAudit.workflow_type, activeAudit.current_stage, 'SCOPE_AND_RISK_REVIEW') && (
+        <StagePreviewNotice currentStage={activeAudit.current_stage} />
+      )}
       {/* Header */}
       <div>
         <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>

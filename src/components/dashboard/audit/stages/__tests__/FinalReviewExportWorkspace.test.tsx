@@ -7,7 +7,7 @@
 // This suite pins that 5-of-7 split so a future "just swap all 7" or
 // "swap none" refactor gets caught.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useState } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import type { MockWorkspaceEntry } from '../../../../../lib/audit/mockWorkspaceEntries';
@@ -17,9 +17,17 @@ vi.mock('../../../../../context/ThemeContext', () => ({
   useTheme: () => ({ theme: 'dark' as const, toggleTheme: () => {} }),
 }));
 
-const ACTIVE_AUDIT = { id: 'audit-1', audit_name: 'Vendor audit' };
+// workflow_type + current_stage feed hasReachedStage (UX2 one-ahead preview
+// guard). Default: the audit is really at Stage 8, so legacy tests see the
+// pre-UX2 behavior unchanged.
+let mockActiveAudit = {
+  id: 'audit-1',
+  audit_name: 'Vendor audit',
+  workflow_type: 'VENDOR_AUDIT',
+  current_stage: 'FINAL_REVIEW_EXPORT',
+};
 vi.mock('../../../../../context/AuditContext', () => ({
-  useAudit: () => ({ activeAudit: ACTIVE_AUDIT }),
+  useAudit: () => ({ activeAudit: mockActiveAudit }),
 }));
 
 let mockWorkspaceEntries: Record<string, MockWorkspaceEntry[]> = {};
@@ -76,7 +84,9 @@ let mockBundle: {
   confirmation_letter: unknown;
   agenda: unknown;
   checklist: unknown;
-} = { confirmation_letter: null, agenda: null, checklist: null };
+  internal_notification?: unknown;
+  evidence_gap_summary?: unknown;
+} = { confirmation_letter: null, agenda: null, checklist: null, internal_notification: null };
 vi.mock('../../../../../lib/audit/preAuditApi', () => ({
   fetchPreAuditDeliverables: vi.fn(() => Promise.resolve(mockBundle)),
 }));
@@ -218,7 +228,7 @@ describe('FinalReviewExportWorkspace grounding currency (flag, never block)', ()
     mockReportsMap = {};
     initialStageReadouts = {};
     mockReadout = null;
-    mockBundle = { confirmation_letter: null, agenda: null, checklist: null };
+    mockBundle = { confirmation_letter: null, agenda: null, checklist: null, internal_notification: null };
     mockRegister = { ok: true, data: [] };
   });
 
@@ -233,7 +243,7 @@ describe('FinalReviewExportWorkspace grounding currency (flag, never block)', ()
     mockBundle = {
       confirmation_letter: null,
       agenda: null,
-      checklist: { grounding_snapshot: SNAPSHOT },
+      checklist: { grounding_snapshot: SNAPSHOT, content: { items: [] } },
     };
     mockRegister = { ok: true, data: [REGISTER_ROW] };
     render(<FinalReviewExportWorkspace />);
@@ -245,7 +255,7 @@ describe('FinalReviewExportWorkspace grounding currency (flag, never block)', ()
     mockBundle = {
       confirmation_letter: null,
       agenda: { grounding_snapshot: SNAPSHOT },
-      checklist: { grounding_snapshot: SNAPSHOT },
+      checklist: { grounding_snapshot: SNAPSHOT, content: { items: [] } },
     };
     mockRegister = {
       ok: true,
@@ -262,12 +272,150 @@ describe('FinalReviewExportWorkspace grounding currency (flag, never block)', ()
     expect(notice.textContent).toContain('never blocks export');
   });
 
+  it('lists a PIQC-drafted internal notification in the currency panel (PR-D1)', async () => {
+    mockBundle = {
+      confirmation_letter: null,
+      agenda: null,
+      checklist: null,
+      internal_notification: { grounding_snapshot: SNAPSHOT },
+    };
+    mockRegister = {
+      ok: true,
+      data: [
+        REGISTER_ROW,
+        { ...REGISTER_ROW, document_id: 'd2', title: 'Training matrix' },
+      ],
+    };
+    render(<FinalReviewExportWorkspace />);
+    const notice = await screen.findByTestId('export-currency-notice');
+    expect(notice.textContent).toContain('Internal notification:');
+    expect(notice.textContent).toContain('Training matrix');
+  });
+
   it('renders no verdict at all when the register read fails', async () => {
-    mockBundle = { confirmation_letter: null, agenda: null, checklist: { grounding_snapshot: SNAPSHOT } };
+    mockBundle = {
+      confirmation_letter: null,
+      agenda: null,
+      checklist: { grounding_snapshot: SNAPSHOT, content: { items: [] } },
+    };
     mockRegister = { ok: false, error: 'permission denied' };
     render(<FinalReviewExportWorkspace />);
     await waitFor(() => expect(screen.getByText(/Pre-export checklist/)).toBeTruthy());
     expect(screen.queryByTestId('export-currency-notice')).toBeNull();
     expect(screen.queryByTestId('export-currency-current')).toBeNull();
+  });
+
+  it('gap summary uses full-register currency: a withheld doc added after drafting flags IT, not legacy kinds (PR-D3)', async () => {
+    mockBundle = {
+      confirmation_letter: null,
+      agenda: null,
+      checklist: { grounding_snapshot: SNAPSHOT, content: { items: [] } },
+      evidence_gap_summary: {
+        grounding_snapshot: {
+          ...SNAPSHOT,
+          register: [{ document_id: 'd1', title: 'QA SOP v3', status: 'ready', included: true }],
+          checklist_item_ids: [],
+        },
+      },
+    };
+    mockRegister = {
+      ok: true,
+      data: [
+        REGISTER_ROW,
+        // Withheld → invisible to the legacy included-only diff, but part of
+        // the gap summary's basis (it must NAME withheld docs).
+        { ...REGISTER_ROW, document_id: 'd2', title: 'Withheld doc', include_in_generation: false },
+      ],
+    };
+    render(<FinalReviewExportWorkspace />);
+    const notice = await screen.findByTestId('export-currency-notice');
+    expect(notice.textContent).toContain('Evidence gap summary:');
+    expect(notice.textContent).toContain('Withheld doc');
+    // The legacy checklist snapshot stays current — one drifted row only.
+    expect(notice.textContent).not.toContain('Checklist:');
+  });
+
+  it('gap summary flags checklist-identity drift via the live checklist items (PR-D3)', async () => {
+    mockBundle = {
+      confirmation_letter: null,
+      agenda: null,
+      checklist: { content: { items: [{ id: 'i1' }, { id: 'i2' }] } }, // never PIQC-drafted itself
+      evidence_gap_summary: {
+        grounding_snapshot: {
+          ...SNAPSHOT,
+          register: [{ document_id: 'd1', title: 'QA SOP v3', status: 'ready', included: true }],
+          checklist_item_ids: ['i1'], // drafted when the checklist had one item
+        },
+      },
+    };
+    mockRegister = { ok: true, data: [REGISTER_ROW] };
+    render(<FinalReviewExportWorkspace />);
+    const notice = await screen.findByTestId('export-currency-notice');
+    expect(notice.textContent).toContain('Evidence gap summary:');
+    expect(notice.textContent).toContain('checklist items changed');
+  });
+});
+
+// -----------------------------------------------------------------------------
+// PR-UX2 — one-ahead preview guard. Stage 8 is viewable while the audit is
+// still at Stage 7, and the sign-off/export RPCs carry no server-side stage
+// check — the preview must therefore never offer the sign-off latch, even
+// with every artefact gate green.
+// -----------------------------------------------------------------------------
+
+describe('FinalReviewExportWorkspace — one-ahead preview guard (PR-UX2)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockActiveAudit = {
+      id: 'audit-1',
+      audit_name: 'Vendor audit',
+      workflow_type: 'VENDOR_AUDIT',
+      current_stage: 'REPORT_DRAFTING', // one behind — previewing Stage 8
+    };
+    mockWorkspaceEntries = { 'audit-1': [makeEntry()] };
+    mockReportsMap = {
+      'audit-1': {
+        id: 'rd-1',
+        audit_id: 'audit-1',
+        executive_summary: '',
+        conclusions: '',
+        approval_status: 'APPROVED',
+        approved_at: '2026-08-01T00:00:00Z',
+        approved_by_name: 'Auditor',
+        updated_at: '2026-08-01T00:00:00Z',
+        final_signed_off_at: null,
+        final_signed_off_by_name: null,
+        exported_at: null,
+      } as MockReportDraft,
+    };
+    mockReadout = {
+      riskSummaryApproved: true,
+      questionnaireApproved: true,
+      letterApproved: true,
+      agendaApproved: true,
+      checklistApproved: true,
+    };
+    initialStageReadouts = {};
+  });
+
+  afterEach(() => {
+    // Restore the at-stage default so test-order changes never leak the
+    // preview stage into other describes.
+    mockActiveAudit = {
+      id: 'audit-1',
+      audit_name: 'Vendor audit',
+      workflow_type: 'VENDOR_AUDIT',
+      current_stage: 'FINAL_REVIEW_EXPORT',
+    };
+  });
+
+  it('all 7 gates green but audit still at Stage 7 → sign-off disabled, preview notice up', async () => {
+    render(<FinalReviewExportWorkspace />);
+
+    await waitFor(() => {
+      expect(screen.getByText('7 of 7 gates passed')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/has not reached this stage yet/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /sign off audit/i })).toBeDisabled();
   });
 });

@@ -30,10 +30,12 @@ vi.mock('../../supabase', () => ({
 
 import {
   applyDeliverableGeneration,
+  checklistLiveIds,
   computeDeliverableCurrency,
   requestDeliverableDraft,
   type DeliverableDraftProposal,
 } from '../deliverableGenerationApi';
+import type { MockChecklist } from '../mockPreAudit';
 import type { AuditEvidenceListRow, DeliverableGroundingSnapshot } from '../../../types/audit';
 
 const mockFetch = vi.fn();
@@ -196,6 +198,40 @@ describe('applyDeliverableGeneration', () => {
     expect(mockRpc.mock.calls[0][1].p_content.recipients).toEqual([]);
   });
 
+  it('routes the internal notification letter-shaped WITHOUT a recipients field (PR-D1)', async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: null });
+    await applyDeliverableGeneration(
+      'a1',
+      { ...LETTER_PROPOSAL, deliverable: 'internal_notification', mode: 'generate' },
+      // Even if a caller passes recipients, the notification content must
+      // never carry them — the deliverable is name-free by design.
+      { currentRecipients: ['Quality Assurance Team'] },
+    );
+    const [rpcName, args] = mockRpc.mock.calls[0];
+    expect(rpcName).toBe('audit_mode_apply_internal_notification_generation');
+    expect(args.p_content).toEqual({
+      body_text: 'This letter confirms the audit…',
+      scope: ['Quality management system', 'Data integrity'],
+    });
+    expect(args.p_reason).toBe('Internal notification drafted by PIQC from protocol + evidence');
+  });
+
+  it('routes the evidence gap summary letter-shaped WITHOUT recipients to its own RPC (PR-D3)', async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: null });
+    await applyDeliverableGeneration(
+      'a1',
+      { ...LETTER_PROPOSAL, deliverable: 'evidence_gap_summary', mode: 'generate' },
+      { currentRecipients: ['Quality Assurance Team'] },
+    );
+    const [rpcName, args] = mockRpc.mock.calls[0];
+    expect(rpcName).toBe('audit_mode_apply_evidence_gap_summary_generation');
+    expect(args.p_content).toEqual({
+      body_text: 'This letter confirms the audit…',
+      scope: ['Quality management system', 'Data integrity'],
+    });
+    expect(args.p_reason).toBe('Evidence gap summary drafted by PIQC from protocol + evidence');
+  });
+
   it('prefers the RPC hint over the raw message on failure', async () => {
     mockRpc.mockResolvedValueOnce({
       data: null,
@@ -245,5 +281,145 @@ describe('computeDeliverableCurrency', () => {
       evidenceRow({ document_id: 'd3', title: 'Withheld doc', include_in_generation: false }),
     ]);
     expect(currency?.isCurrent).toBe(true);
+  });
+
+  it('a legacy snapshot ignores liveChecklistItemIds entirely (no gap axes leak in)', () => {
+    const currency = computeDeliverableCurrency(SNAPSHOT, [evidenceRow({})], ['i1', 'i2']);
+    expect(currency).toEqual({
+      newSinceGeneration: [],
+      removedSinceGeneration: [],
+      isCurrent: true,
+    });
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Kind-aware currency (PR-D3) — a snapshot carrying `register` diffs the FULL
+// live register (withheld rows are part of the gap summary's basis: it must
+// NAME them) plus checklist identity. Legacy snapshots above stay untouched.
+// -----------------------------------------------------------------------------
+describe('computeDeliverableCurrency — gap-summary snapshot (register present)', () => {
+  const GAP_SNAPSHOT: DeliverableGroundingSnapshot = {
+    ...GROUNDING,
+    register: [
+      { document_id: 'd1', title: 'QA SOP v3', status: 'ready', included: true },
+      { document_id: 'dw', title: 'Withheld doc', status: 'ready', included: false },
+    ],
+    checklist_item_ids: ['i1', 'i2'],
+  };
+  const LIVE_MATCHING = [
+    evidenceRow({}),
+    evidenceRow({ document_id: 'dw', title: 'Withheld doc', include_in_generation: false }),
+  ];
+
+  it('is current when the full register (withheld row included) and checklist ids match', () => {
+    const currency = computeDeliverableCurrency(GAP_SNAPSHOT, LIVE_MATCHING, ['i1', 'i2']);
+    expect(currency).toEqual({
+      newSinceGeneration: [],
+      removedSinceGeneration: [],
+      withholdFlippedSinceGeneration: [],
+      checklistChanged: false,
+      isCurrent: true,
+    });
+  });
+
+  it('a WITHHELD doc added after generation flags stale (unlike the legacy path)', () => {
+    const currency = computeDeliverableCurrency(
+      GAP_SNAPSHOT,
+      [...LIVE_MATCHING, evidenceRow({ document_id: 'd9', title: 'New withheld doc', include_in_generation: false })],
+      ['i1', 'i2'],
+    );
+    expect(currency?.isCurrent).toBe(false);
+    expect(currency?.newSinceGeneration).toEqual([
+      { document_id: 'd9', title: 'New withheld doc' },
+    ]);
+  });
+
+  it('flipping a withhold lever flags stale with the flipped doc named', () => {
+    const currency = computeDeliverableCurrency(
+      GAP_SNAPSHOT,
+      [
+        evidenceRow({}),
+        // Was withheld at generation; now included.
+        evidenceRow({ document_id: 'dw', title: 'Withheld doc', include_in_generation: true }),
+      ],
+      ['i1', 'i2'],
+    );
+    expect(currency?.isCurrent).toBe(false);
+    expect(currency?.withholdFlippedSinceGeneration).toEqual([
+      { document_id: 'dw', title: 'Withheld doc' },
+    ]);
+    expect(currency?.newSinceGeneration).toEqual([]);
+  });
+
+  it('a changed checklist item set flags stale on identity, not just count', () => {
+    // Same length, one id swapped — .length alone would miss this.
+    const currency = computeDeliverableCurrency(GAP_SNAPSHOT, LIVE_MATCHING, ['i1', 'i3']);
+    expect(currency?.checklistChanged).toBe(true);
+    expect(currency?.isCurrent).toBe(false);
+  });
+
+  it('missing live checklist ids → checklistChanged unknowable, never stales on its own', () => {
+    const currency = computeDeliverableCurrency(GAP_SNAPSHOT, LIVE_MATCHING);
+    expect(currency?.checklistChanged).toBeUndefined();
+    expect(currency?.isCurrent).toBe(true);
+  });
+
+  it('a removed register row flags stale by full-register diff', () => {
+    const currency = computeDeliverableCurrency(GAP_SNAPSHOT, [evidenceRow({})], ['i1', 'i2']);
+    expect(currency?.isCurrent).toBe(false);
+    expect(currency?.removedSinceGeneration).toEqual([
+      { document_id: 'dw', title: 'Withheld doc' },
+    ]);
+  });
+
+  it('checklist axis is independent of the register axis (checklist_item_ids without register)', () => {
+    // The type declares the two snapshot fields independently — a future kind
+    // that records checklist identity without a register snapshot still gets
+    // its axis measured, composed into the legacy-shaped diff.
+    const snapshot = { ...GROUNDING, checklist_item_ids: ['i1'] };
+    const currency = computeDeliverableCurrency(snapshot, [evidenceRow({})], ['i1', 'i2']);
+    expect(currency?.checklistChanged).toBe(true);
+    expect(currency?.isCurrent).toBe(false);
+    // And with matching ids the axis reports clean, not unknowable.
+    const clean = computeDeliverableCurrency(snapshot, [evidenceRow({})], ['i1']);
+    expect(clean?.checklistChanged).toBe(false);
+    expect(clean?.isCurrent).toBe(true);
+  });
+
+  it('set semantics catch a duplicate-id collapse the one-way scan would miss', () => {
+    // live [a, a] vs snapshot [a, b]: same length, every live id present in
+    // the snapshot — but item b is gone. Set sizes differ → changed.
+    const snapshot = { ...GROUNDING, checklist_item_ids: ['a', 'b'] };
+    const currency = computeDeliverableCurrency(snapshot, [evidenceRow({})], ['a', 'a']);
+    expect(currency?.checklistChanged).toBe(true);
+  });
+});
+
+describe('checklistLiveIds', () => {
+  const item = (id: string) => ({
+    id,
+    prompt: 'Verify something',
+    checkpoint_ref: null,
+    evidence_expected: false,
+  });
+  const row = (items: ReturnType<typeof item>[]): MockChecklist => ({
+    id: 'ch1',
+    audit_id: 'a1',
+    content: { items },
+    approval_status: 'DRAFT',
+    approved_by_name: null,
+    approved_at: null,
+    updated_at: '2026-09-05T00:00:00Z',
+  });
+
+  it('maps item ids; no checklist row means genuinely zero items', () => {
+    expect(checklistLiveIds(row([item('i1'), item('i2')]))).toEqual(['i1', 'i2']);
+    expect(checklistLiveIds(null)).toEqual([]);
+  });
+
+  it('tolerates a malformed jsonb content missing the items array', () => {
+    const malformed = { ...row([]), content: {} } as unknown as MockChecklist;
+    expect(checklistLiveIds(malformed)).toEqual([]);
   });
 });

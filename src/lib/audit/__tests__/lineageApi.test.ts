@@ -48,6 +48,7 @@ const AUDIT: AuditWithContext = {
   status: 'IN_PROGRESS',
   current_stage: 'AUDIT_CONDUCT',
   scheduled_date: null,
+  scheduled_end_date: null,
   vendor_name: 'Acme ePRO GmbH',
   auditee_name: 'Acme ePRO GmbH',
   site_number: null,
@@ -71,6 +72,8 @@ beforeEach(() => {
     confirmation_letter: null,
     agenda: null,
     checklist: null,
+    internal_notification: null,
+    evidence_gap_summary: null,
   });
   m(fetchWorkspaceEntries).mockResolvedValue([]);
   m(fetchIssuesWithCapas).mockResolvedValue({ issues: [], capasByIssue: {} });

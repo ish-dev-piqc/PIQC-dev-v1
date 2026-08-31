@@ -3,7 +3,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useAudit } from '../../../context/AuditContext';
 import type { AuditStage, AuditWorkflowType } from '../../../types/audit';
 import { STAGE_LABELS, AUDIT_TYPE_LABELS, AUDIT_STATUS_LABELS } from '../../../lib/audit/labels';
-import { ChevronDown, Sparkles, FileSearch, Plus, GitBranch, AlertOctagon, Paperclip, FolderOpen } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Sparkles, FileSearch, Plus, GitBranch, AlertOctagon, Paperclip, FolderOpen, History } from 'lucide-react';
 import StageNav from './StageNav';
 import AuditRequiredGate from './AuditRequiredGate';
 import RiskSummaryPanel from './RiskSummaryPanel';
@@ -12,6 +12,8 @@ import NewAuditDrawer from './onboarding/NewAuditDrawer';
 import TraceabilityDrawer from './TraceabilityDrawer';
 import IssuesCapaDrawer from './IssuesCapaDrawer';
 import EvidenceDrawer from './EvidenceDrawer';
+import HistoryDrawer from './HistoryDrawer';
+import RescheduleAuditPopover from './RescheduleAuditPopover';
 import { EvidenceOpenContext } from './evidenceDrawerContext';
 import AuditChatPanel from './AuditChatPanel';
 import PiqcDock from './PiqcDock';
@@ -36,6 +38,13 @@ import IsaStagePlaceholder from './stages/investigator/IsaStagePlaceholder';
 // keeps vendor and investigator stage sets isolated: an ISA_* stage never
 // resolves to a vendor component and vice versa. Investigator stages without a
 // real workspace yet fall through to IsaStagePlaceholder (see the render below).
+//
+// EVERY workspace listed here is reachable one stage AHEAD of the audit's
+// position (the nav allows current+1). A new workspace MUST derive
+// hasReachedStage(...) and, while previewing, render StagePreviewNotice and
+// suppress its mutating actions and mount-time writes — see any sibling for
+// the pattern. Nothing enforces this mechanically (yet); forget it and the
+// preview silently writes.
 const STAGE_COMPONENTS: Record<
   AuditWorkflowType,
   Partial<Record<AuditStage, React.ComponentType>>
@@ -77,7 +86,7 @@ const STAGE_COMPONENTS: Record<
 
 export default function AuditWorkspaceShell() {
   const { theme } = useTheme();
-  const { activeAudit, audits, setActiveAudit } = useAudit();
+  const { activeAudit, audits, setActiveAudit, refresh } = useAudit();
   const isLight = theme === 'light';
 
   // Reset viewedStage to the audit's current stage whenever the active audit changes.
@@ -102,7 +111,11 @@ export default function AuditWorkspaceShell() {
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   // Stable identity: handed to stage workspaces via EvidenceOpenContext.
   const openEvidence = useCallback(() => setEvidenceOpen(true), []);
-  // Records menu (header IA pass) — one dropdown for the four record
+  // Audit history slide-over — the audit-level delta trail ('AUDIT' deltas:
+  // stage advances, reschedules, evidence attach/remove). Before PR-UX1 these
+  // deltas were written but had no UI surface.
+  const [auditHistoryOpen, setAuditHistoryOpen] = useState(false);
+  // Records menu (header IA pass) — one dropdown for the record
   // surfaces. Transient UI: closes on selection, Escape, outside click,
   // and audit switch.
   const [recordsOpen, setRecordsOpen] = useState(false);
@@ -176,6 +189,7 @@ export default function AuditWorkspaceShell() {
     setTraceabilityOpen(false);
     setIssuesCapaOpen(false);
     setEvidenceOpen(false);
+    setAuditHistoryOpen(false);
     setRecordsOpen(false);
     setChatOpen(false);
     setChatThreads((prev) => {
@@ -221,6 +235,17 @@ export default function AuditWorkspaceShell() {
   // VENDOR_AUDIT resolves to the canonical 8 stages (behavior-preserving).
   const stages = stagesForWorkflow(activeAudit.workflow_type);
 
+  // Prev/next stepping for the header chevrons. Same lock rule as StageNav and
+  // MobileStagePicker: anything ≤ current+1 is navigable, beyond is locked.
+  const viewedIdx = stages.indexOf(viewedStage);
+  const currentIdx = stages.indexOf(activeAudit.current_stage);
+  const prevStage = viewedIdx > 0 ? stages[viewedIdx - 1] : null;
+  const nextStage =
+    viewedIdx >= 0 && viewedIdx < stages.length - 1 ? stages[viewedIdx + 1] : null;
+  // Locked iff stepping forward would pass current+1 — i.e. already viewing
+  // ahead of current.
+  const nextLocked = nextStage !== null && viewedIdx > currentIdx;
+
   const headerBg = isLight
     ? 'bg-white border-[#E2E8F0]'
     : 'bg-[#0F172A] border-white/5';
@@ -230,6 +255,11 @@ export default function AuditWorkspaceShell() {
   const chipBg = isLight
     ? 'bg-brand-600/10 border-brand-600/20 text-brand-600'
     : 'bg-brand-600/15 border-brand-600/30 text-brand-300';
+  // Shared by both stage-step chevrons.
+  const stepBtnOn = isLight
+    ? 'text-[#334155] hover:bg-[#0F172A]/[0.04]'
+    : 'text-[#CBD5E1] hover:bg-white/[0.04]';
+  const stepBtnOff = `${mutedColor} opacity-40 cursor-default`;
 
   return (
     <div className="flex-1 flex" style={{ minHeight: 0 }}>
@@ -246,13 +276,86 @@ export default function AuditWorkspaceShell() {
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap mb-1">
+                {/* Prev/next stepping — the literal "back and forth". Adjacent
+                    stage names ride the buttons (visible ≥lg, always in the
+                    accessible name); disabled at the pipeline ends and at the
+                    current+1 lock. */}
+                <button
+                  type="button"
+                  disabled={!prevStage}
+                  onClick={() => prevStage && setViewedStage(prevStage)}
+                  aria-label={prevStage ? `Previous stage: ${STAGE_LABELS[prevStage]}` : 'No previous stage'}
+                  title={prevStage ? `Previous: ${STAGE_LABELS[prevStage]}` : undefined}
+                  className={`inline-flex items-center gap-1 px-1 py-0.5 rounded-md transition-colors ${
+                    prevStage ? stepBtnOn : stepBtnOff
+                  }`}
+                >
+                  <ChevronLeft size={14} />
+                  {prevStage && (
+                    <span className={`hidden lg:inline text-[11px] ${mutedColor} max-w-[9rem] truncate`}>
+                      {STAGE_LABELS[prevStage]}
+                    </span>
+                  )}
+                </button>
                 <span className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] uppercase tracking-wider font-semibold ${chipBg}`}>
                   {STAGE_LABELS[viewedStage]}
                 </span>
-                {viewedStage !== activeAudit.current_stage && (
-                  <span className={`text-[11px] ${mutedColor} hidden sm:inline`}>
-                    Viewing earlier stage
+                <button
+                  type="button"
+                  disabled={!nextStage || nextLocked}
+                  onClick={() => nextStage && !nextLocked && setViewedStage(nextStage)}
+                  aria-label={
+                    !nextStage
+                      ? 'No next stage'
+                      : nextLocked
+                      ? 'Next stage locked until the audit advances'
+                      : `Next stage: ${STAGE_LABELS[nextStage]}`
+                  }
+                  title={
+                    !nextStage
+                      ? undefined
+                      : nextLocked
+                      ? 'Locked until the audit advances'
+                      : `Next: ${STAGE_LABELS[nextStage]}`
+                  }
+                  className={`inline-flex items-center gap-1 px-1 py-0.5 rounded-md transition-colors ${
+                    nextStage && !nextLocked ? stepBtnOn : stepBtnOff
+                  }`}
+                >
+                  {nextStage && !nextLocked && (
+                    <span className={`hidden lg:inline text-[11px] ${mutedColor} max-w-[9rem] truncate`}>
+                      {STAGE_LABELS[nextStage]}
+                    </span>
+                  )}
+                  <ChevronRight size={14} />
+                </button>
+                {/* Position cue for <md, where the StageNav rail (which carries
+                    "N of M") is hidden. viewedIdx guard: for one paint after a
+                    cross-workflow audit switch, viewedStage belongs to the old
+                    pipeline (indexOf -1) until the snap effect fires. */}
+                {viewedIdx >= 0 && (
+                  <span className={`md:hidden text-[11px] ${mutedColor}`}>
+                    Stage {viewedIdx + 1} of {stages.length}
                   </span>
+                )}
+                {/* Off-current indicator as an ACTION (all breakpoints). Replaces
+                    dead "Viewing earlier stage" text that was hidden below sm and
+                    wrong when previewing ahead. */}
+                {viewedIdx >= 0 && viewedStage !== activeAudit.current_stage && (
+                  <button
+                    type="button"
+                    onClick={() => setViewedStage(activeAudit.current_stage)}
+                    className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border transition-colors ${
+                      isLight
+                        ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+                        : 'bg-[#0F172A] border-white/[0.08] text-[#CBD5E1] hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    {/* Direction-aware: current is forward of a past view,
+                        behind an ahead preview. */}
+                    {viewedIdx < currentIdx ? <ChevronRight size={11} /> : <ChevronLeft size={11} />}
+                    Back to current stage
+                  </button>
                 )}
               </div>
               <h2 className={`${headingColor} font-semibold text-base truncate`}>
@@ -265,13 +368,21 @@ export default function AuditWorkspaceShell() {
                   {AUDIT_STATUS_LABELS[activeAudit.status]}
                 </span>
               </p>
+              {/* Date line — visible at every breakpoint (mobile included);
+                  the date itself is the reschedule affordance. */}
+              <RescheduleAuditPopover
+                audit={activeAudit}
+                isLight={isLight}
+                onRescheduled={refresh}
+              />
             </div>
-            {/* The grouping pass landed: the four record surfaces (Protocol
-                source / Traceability / Issues & CAPA / Evidence) live in the
-                Records dropdown, so the row is stage picker (mobile) ·
-                New audit · Records · Risk summary (xl-hidden, vendor).
-                flex-wrap kept for narrow viewports. A new always-on button
-                here should justify itself against the menu first. */}
+            {/* The grouping pass landed: the record surfaces (Protocol
+                source / Traceability / Issues & CAPA / Evidence / Audit
+                history) live in the Records dropdown, so the row is stage
+                picker (mobile) · New audit · Records · Risk summary
+                (xl-hidden, vendor). flex-wrap kept for narrow viewports.
+                A new always-on button here should justify itself against
+                the menu first. */}
             <div className="flex items-center gap-2 flex-wrap justify-end flex-shrink-0 self-start">
               {/* Mobile-only stage picker — replaces the StageNav rail below md: */}
               <MobileStagePicker
@@ -297,7 +408,7 @@ export default function AuditWorkspaceShell() {
                 <Plus size={12} />
                 New audit
               </button>
-              {/* Records — one dropdown for the four record surfaces (all
+              {/* Records — one dropdown for the record surfaces (all
                   answer "show me this audit's records/provenance"). Drawer
                   state and mounts are unchanged — this is trigger-only IA.
                   Lightweight local menu pattern: backdrop for outside click,
@@ -314,7 +425,7 @@ export default function AuditWorkspaceShell() {
                   onClick={() => setRecordsOpen((o) => !o)}
                   aria-haspopup="menu"
                   aria-expanded={recordsOpen}
-                  title="Protocol source, traceability, issues & CAPA, evidence"
+                  title="Protocol source, traceability, issues & CAPA, evidence, history"
                   data-testid="audit-records-button"
                   className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors ${
                     isLight
@@ -410,6 +521,22 @@ export default function AuditWorkspaceShell() {
                       >
                         <Paperclip size={12} />
                         Evidence
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setRecordsOpen(false);
+                          setAuditHistoryOpen(true);
+                        }}
+                        title="Audit-level change history: stage moves, reschedules, evidence"
+                        data-testid="audit-history-button"
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-left transition-colors ${
+                          isLight ? 'text-[#334155] hover:bg-[#F8FAFC]' : 'text-[#CBD5E1] hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <History size={12} />
+                        Audit history
                       </button>
                     </div>
                   </>
@@ -531,6 +658,19 @@ export default function AuditWorkspaceShell() {
         <EvidenceDrawer
           audit={activeAudit}
           onClose={() => setEvidenceOpen(false)}
+        />
+      )}
+
+      {/* Audit history drawer — the 'AUDIT' delta trail (stage advances,
+          reschedules, evidence attach/remove). Generic HistoryDrawer, first
+          mounted at the audit level in PR-UX1. */}
+      {auditHistoryOpen && (
+        <HistoryDrawer
+          objectType="AUDIT"
+          objectId={activeAudit.id}
+          title={activeAudit.audit_name}
+          subTitle="Audit · change history"
+          onClose={() => setAuditHistoryOpen(false)}
         />
       )}
 
@@ -704,34 +844,40 @@ function MobileStagePicker({
   const currentIdx = stages.indexOf(currentStage);
 
   return (
-    <div className="md:hidden flex-shrink-0 self-start relative">
-      <select
-        value={viewedStage}
-        onChange={(e) => onSelectStage(e.target.value as AuditStage)}
-        aria-label="Audit stage"
-        className={`appearance-none text-xs font-semibold pl-3 pr-8 py-1.5 rounded-md border transition-colors cursor-pointer ${
-          isLight
-            ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
-            : 'bg-[#0F172A] border-white/[0.08] text-[#CBD5E1] hover:bg-white/[0.04]'
-        }`}
-      >
-        {stages.map((s, idx) => {
-          // Mirror StageNav locking: anything > current+1 is unreachable.
-          const locked = idx > currentIdx + 1;
-          return (
-            <option key={s} value={s} disabled={locked}>
-              {idx + 1}. {STAGE_LABELS[s]}
-              {locked ? ' 🔒' : idx === currentIdx ? ' ← current' : ''}
-            </option>
-          );
-        })}
-      </select>
-      <ChevronDown
-        size={12}
-        className={`pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 ${
-          isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'
-        }`}
-      />
-    </div>
+    // Visible "Stage" label (wrapping <label> also names the select — the old
+    // aria-label-only control read as an unlabeled dropdown).
+    <label className="md:hidden flex-shrink-0 self-start flex items-center gap-1.5">
+      <span className="text-[10px] uppercase tracking-wider font-semibold text-fg-label">
+        Stage
+      </span>
+      <span className="relative">
+        <select
+          value={viewedStage}
+          onChange={(e) => onSelectStage(e.target.value as AuditStage)}
+          className={`appearance-none text-xs font-semibold pl-3 pr-8 py-1.5 rounded-md border transition-colors cursor-pointer ${
+            isLight
+              ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+              : 'bg-[#0F172A] border-white/[0.08] text-[#CBD5E1] hover:bg-white/[0.04]'
+          }`}
+        >
+          {stages.map((s, idx) => {
+            // Mirror StageNav locking: anything > current+1 is unreachable.
+            const locked = idx > currentIdx + 1;
+            return (
+              <option key={s} value={s} disabled={locked}>
+                {idx + 1}. {STAGE_LABELS[s]}
+                {locked ? ' 🔒' : idx === currentIdx ? ' ← current' : ''}
+              </option>
+            );
+          })}
+        </select>
+        <ChevronDown
+          size={12}
+          className={`pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 ${
+            isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'
+          }`}
+        />
+      </span>
+    </label>
   );
 }
