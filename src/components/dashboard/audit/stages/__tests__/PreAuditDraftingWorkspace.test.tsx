@@ -6,7 +6,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useState } from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 vi.mock('../../../../../context/ThemeContext', () => ({
   useTheme: () => ({ theme: 'light' as const, toggleTheme: () => {} }),
@@ -38,7 +38,12 @@ vi.mock('../../../../../context/AuditDataContext', () => ({
   },
 }));
 
-const EMPTY_BUNDLE = { confirmation_letter: null, agenda: null, checklist: null };
+const EMPTY_BUNDLE = {
+  confirmation_letter: null,
+  agenda: null,
+  checklist: null,
+  internal_notification: null,
+};
 vi.mock('../../../../../lib/audit/preAuditApi', () => ({
   fetchPreAuditDeliverables: vi.fn(() => Promise.resolve(EMPTY_BUNDLE)),
   upsertConfirmationLetter: vi.fn(),
@@ -47,6 +52,8 @@ vi.mock('../../../../../lib/audit/preAuditApi', () => ({
   approveAgenda: vi.fn(),
   upsertChecklist: vi.fn(),
   approveChecklist: vi.fn(),
+  upsertInternalNotification: vi.fn(),
+  approveInternalNotification: vi.fn(),
   prefillStage5Deliverables: vi.fn(() => Promise.resolve(undefined)),
 }));
 
@@ -130,6 +137,7 @@ describe('PreAuditDraftingWorkspace — one-ahead preview guard (PR-UX2)', () =>
       },
       agenda: null,
       checklist: null,
+      internal_notification: null,
     });
 
     render(<PreAuditDraftingWorkspace />);
@@ -139,5 +147,89 @@ describe('PreAuditDraftingWorkspace — one-ahead preview guard (PR-UX2)', () =>
     expect(screen.queryByRole('button', { name: /^approve$/i })).not.toBeInTheDocument();
     expect(screen.getByTestId('confirmation_letter-generate-button')).toBeDisabled();
     expect(mockPrefill).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PR-D1 — internal notification: 4th tab exists but NEVER gates advance.
+// ---------------------------------------------------------------------------
+
+const approvedRow = (id: string, content: Record<string, unknown>) => ({
+  id,
+  audit_id: 'audit-1',
+  content,
+  approval_status: 'APPROVED',
+  approved_at: '2026-09-01T00:00:00Z',
+  approved_by_name: 'You',
+  updated_at: '2026-09-01T00:00:00Z',
+});
+
+const TRIO_APPROVED_BUNDLE = {
+  confirmation_letter: approvedRow('cl-1', { body_text: 'Letter body.', recipients: [], scope: [] }),
+  agenda: approvedRow('ag-1', { items: [] }),
+  checklist: approvedRow('ch-1', { items: [] }),
+  internal_notification: null,
+};
+
+describe('PreAuditDraftingWorkspace — internal notification is non-gating (PR-D1)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initialBundles = {};
+    mockActiveAudit = {
+      id: 'audit-1',
+      workflow_type: 'VENDOR_AUDIT',
+      current_stage: 'PRE_AUDIT_DRAFTING',
+    };
+  });
+
+  it('advance unlocks with the trio approved while the notification is absent', async () => {
+    mockFetch.mockResolvedValue(TRIO_APPROVED_BUNDLE);
+
+    render(<PreAuditDraftingWorkspace />);
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /advance to audit conduct/i })).toBeEnabled(),
+    );
+    expect(screen.getByText(/gating deliverables approved/i)).toBeInTheDocument();
+  });
+
+  it('the gate list names only the three gating kinds', async () => {
+    // Notification exists as DRAFT; letter still DRAFT → gate list renders.
+    mockFetch.mockResolvedValue({
+      ...TRIO_APPROVED_BUNDLE,
+      confirmation_letter: {
+        ...TRIO_APPROVED_BUNDLE.confirmation_letter,
+        approval_status: 'DRAFT',
+        approved_at: null,
+        approved_by_name: null,
+      },
+      internal_notification: approvedRow('in-1', { body_text: 'Heads-up.', scope: [] }),
+    });
+
+    render(<PreAuditDraftingWorkspace />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/approve the confirmation letter, agenda, and checklist to advance/i),
+      ).toBeInTheDocument(),
+    );
+    // 'Internal notification' appears exactly once — the tab button. The
+    // transition gate list must not add a second occurrence.
+    expect(screen.getAllByText('Internal notification')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /advance to audit conduct/i })).toBeDisabled();
+  });
+
+  it('the 4th tab opens to its scratch form at stage (no prefill for this kind)', async () => {
+    mockFetch.mockResolvedValue({ ...TRIO_APPROVED_BUNDLE });
+
+    render(<PreAuditDraftingWorkspace />);
+
+    await waitFor(() => expect(screen.getByText('Internal notification')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /internal notification/i }));
+
+    expect(screen.getByTestId('internal_notification-generate-button')).toBeEnabled();
+    expect(
+      screen.getByPlaceholderText(/announce the audit to internal stakeholders/i),
+    ).toBeInTheDocument();
   });
 });
