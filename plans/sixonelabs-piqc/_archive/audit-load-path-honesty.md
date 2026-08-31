@@ -1,8 +1,9 @@
 ---
-status: in-review
+status: merged
+merged: 2026-08-31
 owner: sixonelabs-piqc
 feature: audit-load-path-honesty
-target_pr: TBD
+target_pr: #573
 ---
 
 # Audit load-path honesty — absence is not failure
