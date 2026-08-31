@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: Stage navigation pass (PR-UX2) — prev/next controls, back-to-current, mobile cue, off-current hardening
-status: active
+status: in-review
 started: 2026-08-30
 target_pr:
 ---
@@ -26,6 +26,7 @@ This PR changes no gating rules and no schema — component/test layers plus one
 - `src/components/dashboard/audit/StagePreviewNotice.tsx` — new shared preview banner (presentational)
 - `src/components/dashboard/audit/StagePlaceholder.tsx` — **delete** (dead code; shell uses `IsaStagePlaceholder`)
 - `src/components/dashboard/audit/stages/ScopeReviewWorkspace.tsx` — **banner only** (scope expanded 2026-08-30 by review finding: Stage 4 was the one stage without the preview banner, making the preview signal inconsistent across the pipeline; its readout-driven guard logic stays untouched)
+- `src/components/dashboard/audit/stages/__tests__/ScopeReviewWorkspace.test.tsx` — fixture-only (`workflow_type` added to the mock audits; assertions untouched)
 - Stage workspaces gaining the ahead-guard (+ their tests, extended or new):
   - `src/components/dashboard/audit/stages/ReportDraftingWorkspace.tsx` (+ existing test file)
   - `src/components/dashboard/audit/stages/PreAuditDraftingWorkspace.tsx` (+ new test)
