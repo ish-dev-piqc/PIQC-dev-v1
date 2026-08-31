@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: Delete dead MOCK_PRE_AUDIT constant (house rule 4 cleanup)
-status: active
+status: in-review
 started: 2026-08-30
 target_pr:
 ---
