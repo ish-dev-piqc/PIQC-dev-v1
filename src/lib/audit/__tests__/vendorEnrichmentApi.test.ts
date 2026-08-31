@@ -4,7 +4,7 @@
 // both into null/[] is what let a failed read render create-mode forms over
 // rows that exist, and let a legitimate empty fail to clear a stale cache.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   fetchVendorService,
   fetchServiceMappingsByAudit,
@@ -72,6 +72,11 @@ let errorSpy: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
   vi.clearAllMocks();
   errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+});
+
+afterEach(() => {
+  // Restore rather than letting spies nest one level per test.
+  errorSpy.mockRestore();
 });
 
 describe('fetchVendorService — Result contract (PR-2)', () => {

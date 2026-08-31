@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle2, Lock, Pencil, History as HistoryIcon } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Lock, Pencil, History as HistoryIcon } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useAudit } from '../../../../context/AuditContext';
 import { useAuditData } from '../../../../context/AuditDataContext';
@@ -30,6 +30,7 @@ import ServiceMappingTable from './vendor-enrichment/ServiceMappingTable';
 import TrustAssessmentForm, { type TrustAssessmentFormValues } from './vendor-enrichment/TrustAssessmentForm';
 import HistoryDrawer from '../HistoryDrawer';
 import StagePreviewNotice from '../StagePreviewNotice';
+import { fetchProtocolRisksForAudit } from '../../../../lib/audit/intakeApi';
 import { hasReachedStage } from '../../../../lib/audit/workflowStages';
 import type { TrackedObjectType } from '../../../../types/audit';
 
@@ -69,6 +70,7 @@ export default function VendorEnrichmentWorkspace() {
     trustAssessments: assessments,
     setTrustAssessments: setAssessments,
     protocolRisks,
+    setProtocolRisks,
   } = useAuditData();
 
   // Form modes
@@ -78,15 +80,27 @@ export default function VendorEnrichmentWorkspace() {
 
   // Load-path honesty (hardening PR-2). Keyed by audit (a slow response must
   // never write another audit's state — PR-1's lesson) and re-earned per
-  // mount: 'failed' replaces the section cards with an honest error card,
-  // because pending/create forms over unknown server state invite retyping
-  // and upserting over rows that exist.
+  // mount. Failure is PER READ (PR-1's per-axis rule): a failed trust read
+  // must not lock the auditor out of the two healthy sections — only a
+  // section whose own state is unknown swaps its form for an error card.
+  // Each flag carries the read's OWN error message (null = healthy):
+  // Result<T> exists to surface the specific reason, and a permanent
+  // "permission denied" must read differently from a network blip.
+  type VendorLoadFlags = {
+    service: string | null;
+    mappings: string | null;
+    trust: string | null;
+  };
   const [loadStates, setLoadStates] = useState<
-    Record<string, 'loading' | 'ok' | 'failed'>
+    Record<string, 'loading' | VendorLoadFlags>
   >({});
   // Retry re-runs the load effect (nonce dep) so it keeps the effect's
   // cancellation semantics instead of duplicating the fetch logic.
   const [reloadNonce, setReloadNonce] = useState(0);
+  // Write-path honesty (review fix): the write RPC wrappers return null on
+  // failure — a null must revert the optimistic row AND say so, or the card
+  // renders unsaved content as saved (PR-1's headline bug, write-side).
+  const [mutationError, setMutationError] = useState<string | null>(null);
 
   // Load vendor data when active audit changes
   useEffect(() => {
@@ -97,42 +111,80 @@ export default function VendorEnrichmentWorkspace() {
     const loadVendorData = async () => {
       setLoadStates((prev) => ({ ...prev, [auditIdLocal]: 'loading' }));
       try {
-        const [serviceRes, mappingsRes, assessmentRes] = await Promise.all([
+        const [serviceRes, mappingsRes, assessmentRes, risks] = await Promise.all([
           fetchVendorService(auditIdLocal),
           fetchServiceMappingsByAudit(auditIdLocal),
           fetchTrustAssessment(auditIdLocal),
+          // The mapping picker renders from protocolRisks, but only Stage 1
+          // used to fetch them — deep-linking straight to Stage 2 showed an
+          // empty picker that read as "no tagged sections". Same hydrate
+          // ScopeReview does. (intakeApi still returns a bare array —
+          // its Result-ification is on the opportunistic ledger.)
+          fetchProtocolRisksForAudit(auditIdLocal),
         ]);
         if (cancelled) return;
+        setProtocolRisks((prev) => ({ ...prev, [auditIdLocal]: risks }));
 
-        // ok → set UNCONDITIONALLY: a legitimate null/[] is server truth and
-        // must clear a stale cache entry (the old truthiness guards made
-        // "server emptied" indistinguishable from "load failed", so deleted
-        // mappings kept rendering forever).
+        // ok → write server truth, INCLUDING a legitimate null/[] (the old
+        // truthiness guards made "server emptied" indistinguishable from
+        // "load failed", so deleted rows kept rendering forever). The
+        // identity/empty bailouts skip no-op writes — the context value is
+        // unmemoized and every consumer re-renders on a store change.
+        //
+        // Mappings write ALSO requires the service read to be healthy: the
+        // mappings query inner-joins vendor_service_objects, so when the
+        // service read failed, an ok-[] may mean "join filtered", not
+        // "no mappings" — writing it would wipe a good cache with a lie
+        // that downstream cache-only readers (Stage 7's report scope)
+        // would silently trust.
         if (serviceRes.ok) {
-          setServices((prev) => ({ ...prev, [auditIdLocal]: serviceRes.data }));
+          setServices((prev) =>
+            prev[auditIdLocal] === serviceRes.data
+              ? prev
+              : { ...prev, [auditIdLocal]: serviceRes.data },
+          );
         }
-        if (mappingsRes.ok) {
-          setMappings((prev) => ({ ...prev, [auditIdLocal]: mappingsRes.data }));
+        if (mappingsRes.ok && serviceRes.ok) {
+          setMappings((prev) =>
+            (prev[auditIdLocal]?.length ?? 0) === 0 && mappingsRes.data.length === 0 && prev[auditIdLocal]
+              ? prev
+              : { ...prev, [auditIdLocal]: mappingsRes.data },
+          );
         }
         if (assessmentRes.ok) {
-          setAssessments((prev) => ({ ...prev, [auditIdLocal]: assessmentRes.data }));
+          setAssessments((prev) =>
+            prev[auditIdLocal] === assessmentRes.data
+              ? prev
+              : { ...prev, [auditIdLocal]: assessmentRes.data },
+          );
         }
         setLoadStates((prev) => ({
           ...prev,
-          [auditIdLocal]:
-            serviceRes.ok && mappingsRes.ok && assessmentRes.ok ? 'ok' : 'failed',
+          [auditIdLocal]: {
+            service: serviceRes.ok ? null : serviceRes.error,
+            // Mappings are unknowable when the service read failed (join
+            // semantics above), even if their own query returned ok.
+            mappings: !mappingsRes.ok
+              ? mappingsRes.error
+              : !serviceRes.ok
+              ? 'depends on the vendor service read, which failed'
+              : null,
+            trust: assessmentRes.ok ? null : assessmentRes.error,
+          },
         }));
       } catch (err) {
         console.error('[VendorEnrichmentWorkspace] Load error:', err);
         if (!cancelled) {
-          setLoadStates((prev) => ({ ...prev, [auditIdLocal]: 'failed' }));
+          const msg = 'the request failed before the server answered';
+          setLoadStates((prev) => ({
+            ...prev,
+            [auditIdLocal]: { service: msg, mappings: msg, trust: msg },
+          }));
         }
       }
     };
 
     loadVendorData();
-    setServiceMode('view');
-    setTrustMode('view');
     return () => {
       cancelled = true;
     };
@@ -140,6 +192,14 @@ export default function VendorEnrichmentWorkspace() {
     // reloadNonce lets the error card's Retry re-run this effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAudit?.id, reloadNonce, setServices, setMappings, setAssessments]);
+
+  // Mode/banner resets are AUDIT-SWITCH concerns only — a Retry (nonce bump)
+  // re-runs the load effect but must not discard an open edit form.
+  useEffect(() => {
+    setServiceMode('view');
+    setTrustMode('view');
+    setMutationError(null);
+  }, [activeAudit?.id]);
 
   if (!activeAudit) return null;
 
@@ -162,30 +222,28 @@ export default function VendorEnrichmentWorkspace() {
         };
     
     // Optimistic update
+    setMutationError(null);
     setServices((prev) => ({ ...prev, [auditId]: next }));
     setServiceMode('view');
 
-    // Persist to database
+    // Persist to database. The wrappers return null on RPC failure (they
+    // don't throw), so null MUST revert — the old `if (result)` skip left
+    // the optimistic row rendering as saved when nothing existed server-side.
     try {
       const result = service
         ? await updateVendorService(service.id, values)
         : await createVendorService(auditId, values);
-      
+
       if (result) {
         setServices((prev) => ({ ...prev, [auditId]: result }));
+      } else {
+        setServices((prev) => ({ ...prev, [auditId]: service }));
+        setMutationError('Saving the vendor service failed — your change was not saved. Retry when ready.');
       }
     } catch (err) {
       console.error('[VendorEnrichmentWorkspace] Save service error:', err);
-      // Revert on error
-      if (service) {
-        setServices((prev) => ({ ...prev, [auditId]: service }));
-      } else {
-        setServices((prev) => {
-          const updated = { ...prev };
-          delete updated[auditId];
-          return updated;
-        });
-      }
+      setServices((prev) => ({ ...prev, [auditId]: service }));
+      setMutationError('Saving the vendor service failed — your change was not saved. Retry when ready.');
     }
   };
 
@@ -193,14 +251,24 @@ export default function VendorEnrichmentWorkspace() {
     if (!service) return;
     
     const newMapping: MockServiceMapping = { ...m, id: `sm-${auditId}-${Date.now()}` };
-    
+
     // Optimistic update
+    setMutationError(null);
     setMappings((prev) => ({
       ...prev,
       [auditId]: [...(prev[auditId] ?? []), newMapping],
     }));
 
-    // Persist to database — RPC derives criticality from the protocol risk
+    const revert = () => {
+      setMappings((prev) => ({
+        ...prev,
+        [auditId]: (prev[auditId] ?? []).filter((x) => x.id !== newMapping.id),
+      }));
+      setMutationError('Adding the mapping failed — it was not saved. Retry when ready.');
+    };
+
+    // Persist to database — RPC derives criticality from the protocol risk.
+    // null return = RPC failure (the wrapper doesn't throw): revert + banner.
     try {
       const result = await createServiceMapping(
         service.id,
@@ -215,19 +283,20 @@ export default function VendorEnrichmentWorkspace() {
             x.id === newMapping.id ? result : x
           ),
         }));
+      } else {
+        revert();
       }
     } catch (err) {
       console.error('[VendorEnrichmentWorkspace] Add mapping error:', err);
-      // Revert on error
-      setMappings((prev) => ({
-        ...prev,
-        [auditId]: (prev[auditId] ?? []).filter((x) => x.id !== newMapping.id),
-      }));
+      revert();
     }
   };
 
   const updateMapping = async (mappingId: string, updates: Partial<MockServiceMapping>) => {
+    const currentMapping = auditMappings.find((m) => m.id === mappingId);
+
     // Optimistic update
+    setMutationError(null);
     setMappings((prev) => ({
       ...prev,
       [auditId]: (prev[auditId] ?? []).map((m) =>
@@ -235,13 +304,7 @@ export default function VendorEnrichmentWorkspace() {
       ),
     }));
 
-    // Persist to database
-    try {
-      await updateServiceMapping(mappingId, updates);
-    } catch (err) {
-      console.error('[VendorEnrichmentWorkspace] Update mapping error:', err);
-      // Revert on error
-      const currentMapping = auditMappings.find((m) => m.id === mappingId);
+    const revert = () => {
       if (currentMapping) {
         setMappings((prev) => ({
           ...prev,
@@ -250,30 +313,47 @@ export default function VendorEnrichmentWorkspace() {
           ),
         }));
       }
+      setMutationError('Updating the mapping failed — your change was not saved. Retry when ready.');
+    };
+
+    // Persist to database. null return = RPC failure: revert + banner (the
+    // old fire-and-forget kept the optimistic patch rendering as saved).
+    try {
+      const result = await updateServiceMapping(mappingId, updates);
+      if (!result) revert();
+    } catch (err) {
+      console.error('[VendorEnrichmentWorkspace] Update mapping error:', err);
+      revert();
     }
   };
 
   const removeMapping = async (mappingId: string) => {
     const removedMapping = auditMappings.find((m) => m.id === mappingId);
-    
+
     // Optimistic update
+    setMutationError(null);
     setMappings((prev) => ({
       ...prev,
       [auditId]: (prev[auditId] ?? []).filter((m) => m.id !== mappingId),
     }));
 
-    // Persist to database
-    try {
-      await deleteServiceMapping(mappingId);
-    } catch (err) {
-      console.error('[VendorEnrichmentWorkspace] Remove mapping error:', err);
-      // Revert on error
+    const revert = () => {
       if (removedMapping) {
         setMappings((prev) => ({
           ...prev,
           [auditId]: [...(prev[auditId] ?? []), removedMapping],
         }));
       }
+      setMutationError('Removing the mapping failed — it still exists. Retry when ready.');
+    };
+
+    // Persist to database. false return = RPC failure: restore + banner.
+    try {
+      const deleted = await deleteServiceMapping(mappingId);
+      if (!deleted) revert();
+    } catch (err) {
+      console.error('[VendorEnrichmentWorkspace] Remove mapping error:', err);
+      revert();
     }
   };
 
@@ -283,27 +363,24 @@ export default function VendorEnrichmentWorkspace() {
       : { id: `ta-${auditId}-${Date.now()}`, audit_id: auditId, ...values };
     
     // Optimistic update
+    setMutationError(null);
     setAssessments((prev) => ({ ...prev, [auditId]: next }));
     setTrustMode('view');
 
     // Persist to database — upsert handles both create and update.
+    // null return = RPC failure: revert + banner (see saveService).
     try {
       const result = await upsertTrustAssessment(auditId, values);
       if (result) {
         setAssessments((prev) => ({ ...prev, [auditId]: result }));
+      } else {
+        setAssessments((prev) => ({ ...prev, [auditId]: assessment }));
+        setMutationError('Saving the trust assessment failed — your change was not saved. Retry when ready.');
       }
     } catch (err) {
       console.error('[VendorEnrichmentWorkspace] Save assessment error:', err);
-      // Revert on error
-      if (assessment) {
-        setAssessments((prev) => ({ ...prev, [auditId]: assessment }));
-      } else {
-        setAssessments((prev) => {
-          const updated = { ...prev };
-          delete updated[auditId];
-          return updated;
-        });
-      }
+      setAssessments((prev) => ({ ...prev, [auditId]: assessment }));
+      setMutationError('Saving the trust assessment failed — your change was not saved. Retry when ready.');
     }
   };
 
@@ -326,11 +403,12 @@ export default function VendorEnrichmentWorkspace() {
   const sectionHeader = 'text-fg-label';
   const subColor = 'text-fg-sub';
 
-  // Load-path honesty: until this audit's reads settle ok, the section cards
-  // don't render — a 'pending' create form over unknown server state is an
-  // invitation to retype and upsert over rows that exist.
+  // Load-path honesty: until this audit's reads settle, no section renders —
+  // a 'pending' create form over unknown server state is an invitation to
+  // retype and upsert over rows that exist. After settling, failure is per
+  // section: only a section whose OWN read failed swaps to an error card.
   const loadState = loadStates[auditId] ?? 'loading';
-  if (loadState !== 'ok') {
+  if (loadState === 'loading') {
     return (
       <div className="p-6 max-w-4xl mx-auto space-y-6">
         {!hasReached && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
@@ -342,36 +420,11 @@ export default function VendorEnrichmentWorkspace() {
             Vendor service, mapping, and trust
           </h2>
         </div>
-        {loadState === 'loading' ? (
-          <p className={`${subColor} text-sm`}>Loading vendor enrichment…</p>
-        ) : (
-          <div
-            role="alert"
-            data-testid="vendor-load-error"
-            className={`border rounded-xl p-5 space-y-3 ${
-              isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5'
-            }`}
-          >
-            <p className={`text-sm leading-relaxed ${isLight ? 'text-red-700' : 'text-red-300'}`}>
-              Vendor enrichment could not be loaded — records may exist on the server, so the
-              entry forms are hidden (typing into one would overwrite whatever is really there).
-            </p>
-            <button
-              type="button"
-              onClick={() => setReloadNonce((n) => n + 1)}
-              className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors ${
-                isLight
-                  ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
-                  : 'bg-[#0F172A] border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]'
-              }`}
-            >
-              Retry
-            </button>
-          </div>
-        )}
+        <p className={`${subColor} text-sm`}>Loading vendor enrichment…</p>
       </div>
     );
   }
+  const loadFailed = loadState;
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -391,7 +444,29 @@ export default function VendorEnrichmentWorkspace() {
         </p>
       </div>
 
+      {mutationError && (
+        <div
+          role="alert"
+          data-testid="vendor-mutation-error"
+          className={`text-xs px-3 py-2 rounded-md border ${
+            isLight
+              ? 'bg-red-50 border-red-200 text-red-700'
+              : 'bg-red-500/15 border-red-500/30 text-red-300'
+          }`}
+        >
+          {mutationError}
+        </div>
+      )}
+
       {/* Section 1: Vendor service */}
+      {loadFailed.service ? (
+        <SectionLoadError
+          noun="vendor service"
+          detail={loadFailed.service ?? ''}
+          isLight={isLight}
+          onRetry={() => setReloadNonce((n) => n + 1)}
+        />
+      ) : (
       <SectionCard
         step={1}
         title="Vendor service"
@@ -417,8 +492,17 @@ export default function VendorEnrichmentWorkspace() {
           />
         )}
       </SectionCard>
+      )}
 
       {/* Section 2: Protocol section mapping */}
+      {loadFailed.mappings ? (
+        <SectionLoadError
+          noun="service mappings"
+          detail={loadFailed.mappings ?? ''}
+          isLight={isLight}
+          onRetry={() => setReloadNonce((n) => n + 1)}
+        />
+      ) : (
       <SectionCard
         step={2}
         title="Protocol section mapping"
@@ -448,8 +532,17 @@ export default function VendorEnrichmentWorkspace() {
           </p>
         )}
       </SectionCard>
+      )}
 
       {/* Section 3: Trust intelligence */}
+      {loadFailed.trust ? (
+        <SectionLoadError
+          noun="trust assessment"
+          detail={loadFailed.trust ?? ''}
+          isLight={isLight}
+          onRetry={() => setReloadNonce((n) => n + 1)}
+        />
+      ) : (
       <SectionCard
         step={3}
         title="Trust intelligence"
@@ -475,6 +568,7 @@ export default function VendorEnrichmentWorkspace() {
           />
         )}
       </SectionCard>
+      )}
 
       {historyTarget && (
         <HistoryDrawer
@@ -484,6 +578,58 @@ export default function VendorEnrichmentWorkspace() {
           onClose={() => setHistoryTarget(null)}
         />
       )}
+    </div>
+  );
+}
+
+// ============================================================================
+// SectionLoadError — honest stand-in for a section whose read failed.
+// Markup mirrors PreAuditDraftingWorkspace's DeliverableLoadError so PR-6's
+// extraction is a mechanical lift (no retrying prop here: Retry flips the
+// whole page to its loading state, so the card unmounts immediately).
+// ============================================================================
+
+function SectionLoadError({
+  noun,
+  detail,
+  isLight,
+  onRetry,
+}: {
+  noun: string;
+  /** The read's own error message — a permanent RLS denial must read
+   *  differently from a transient blip. */
+  detail: string;
+  isLight: boolean;
+  onRetry: () => void;
+}) {
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
+  return (
+    <div
+      role="alert"
+      data-testid="vendor-load-error"
+      className={`${cardBg} border rounded-xl p-5 space-y-3`}
+    >
+      <div className="flex items-start gap-2">
+        <AlertTriangle
+          size={14}
+          className={`flex-shrink-0 mt-0.5 ${isLight ? 'text-red-600' : 'text-red-400'}`}
+        />
+        <p className={`text-sm leading-relaxed ${isLight ? 'text-red-700' : 'text-red-300'}`}>
+          The {noun} could not be loaded — it may exist on the server, so no entry form is
+          shown (typing into one would overwrite whatever is really there). ({detail})
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onRetry}
+        className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors ${
+          isLight
+            ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+            : 'bg-[#0F172A] border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]'
+        }`}
+      >
+        Retry
+      </button>
     </div>
   );
 }

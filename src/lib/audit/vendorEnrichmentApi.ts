@@ -147,22 +147,8 @@ function flattenMapping(row: ServiceMappingRow): MockServiceMapping {
   };
 }
 
-export async function fetchServiceMappings(
-  vendorServiceId: string
-): Promise<MockServiceMapping[]> {
-  const { data, error } = await supabase
-    .from('vendor_service_mapping_objects')
-    .select('*')
-    .eq('vendor_service_id', vendorServiceId)
-    .order('created_at', { ascending: true });
-
-  if (error) {
-    console.error('[vendorEnrichmentApi] fetchServiceMappings error:', error);
-    return [];
-  }
-
-  return ((data ?? []) as ServiceMappingRow[]).map(flattenMapping);
-}
+// (The old by-service-id fetchServiceMappings was deleted here: zero callers,
+// and it was the last read in this file collapsing error into [].)
 
 // Convenience for the load effect: get mappings via the audit's vendor_service.
 // { ok: true, data: [] } if the audit has no vendor service yet.

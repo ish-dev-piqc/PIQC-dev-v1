@@ -289,17 +289,26 @@ describe('ScopeReviewWorkspace — vendor trio Result absorption (PR-2)', () => 
     await waitFor(() => expect(mockSetVendorServices).toHaveBeenCalled());
     expect(mockSetServiceMappings).toHaveBeenCalled();
     expect(mockSetTrustAssessments).toHaveBeenCalled();
+    // Value-level pin: the functional updater writes the ok-empty truth
+    // (null / []), not a truthiness-filtered skip.
+    const serviceUpdater = mockSetVendorServices.mock.calls[0][0];
+    expect(serviceUpdater({})).toEqual({ [AUDIT_ID]: null });
+    const mappingsUpdater = mockSetServiceMappings.mock.calls[0][0];
+    expect(mappingsUpdater({})).toEqual({ [AUDIT_ID]: [] });
   });
 
   it('an errored read keeps the known cache — the setter is never called', async () => {
     const { fetchVendorService, fetchTrustAssessment } = await import(
       '../../../../../lib/audit/vendorEnrichmentApi'
     );
-    (fetchVendorService as ReturnType<typeof vi.fn>).mockResolvedValue({
+    // Once, not persistent: vi.clearAllMocks clears calls, NOT
+    // implementations — a persistent override would leak into any test
+    // appended after this one.
+    (fetchVendorService as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ok: false,
       error: 'permission denied',
     });
-    (fetchTrustAssessment as ReturnType<typeof vi.fn>).mockResolvedValue({
+    (fetchTrustAssessment as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ok: false,
       error: 'permission denied',
     });

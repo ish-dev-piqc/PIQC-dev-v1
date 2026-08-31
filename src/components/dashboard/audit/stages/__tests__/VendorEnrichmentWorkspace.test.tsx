@@ -43,8 +43,13 @@ vi.mock('../../../../../context/AuditDataContext', () => ({
       trustAssessments,
       setTrustAssessments,
       protocolRisks: {},
+      setProtocolRisks: vi.fn(),
     };
   },
+}));
+
+vi.mock('../../../../../lib/audit/intakeApi', () => ({
+  fetchProtocolRisksForAudit: vi.fn(() => Promise.resolve([])),
 }));
 
 vi.mock('../../../../../lib/audit/vendorEnrichmentApi', () => ({
@@ -132,15 +137,26 @@ describe('VendorEnrichmentWorkspace — load-path honesty (hardening PR-2)', () 
     initialTrustAssessments = {};
   });
 
-  it('a failed read renders the error card — never entry forms over unknown server state', async () => {
+  it('audit id threads into all three fetches', async () => {
+    render(<VendorEnrichmentWorkspace />);
+    await waitFor(() => expect(mockFetchService).toHaveBeenCalledWith('audit-1'));
+    expect(mockFetchMappings).toHaveBeenCalledWith('audit-1');
+    expect(mockFetchTrust).toHaveBeenCalledWith('audit-1');
+  });
+
+  it('a failed read swaps ITS sections for error cards — healthy sections survive (per-axis)', async () => {
+    // Service read fails; trust read is healthy. The service section AND the
+    // mapping section (unknowable — its query inner-joins the service) show
+    // error cards, while the trust section still renders its form.
     mockFetchService.mockResolvedValue({ ok: false, error: 'permission denied' });
 
     render(<VendorEnrichmentWorkspace />);
 
-    expect(await screen.findByTestId('vendor-load-error')).toBeInTheDocument();
-    // No section cards, no forms, no save affordances.
+    expect(await screen.findAllByTestId('vendor-load-error')).toHaveLength(2);
     expect(screen.queryByText('Vendor service')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /save/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('Protocol section mapping')).not.toBeInTheDocument();
+    // The healthy section is NOT locked out by an unrelated failure.
+    expect(screen.getByText('Trust intelligence')).toBeInTheDocument();
   });
 
   it('Retry recovers from a failed read', async () => {
@@ -149,9 +165,9 @@ describe('VendorEnrichmentWorkspace — load-path honesty (hardening PR-2)', () 
       .mockResolvedValue({ ok: true, data: SERVICE_ROW });
 
     render(<VendorEnrichmentWorkspace />);
-    await screen.findByTestId('vendor-load-error');
+    await screen.findAllByTestId('vendor-load-error');
 
-    fireEvent.click(screen.getByRole('button', { name: /^retry$/i }));
+    fireEvent.click(screen.getAllByRole('button', { name: /^retry$/i })[0]);
 
     expect(await screen.findByText('eCOA hosting')).toBeInTheDocument();
     expect(screen.queryByTestId('vendor-load-error')).not.toBeInTheDocument();
@@ -161,15 +177,36 @@ describe('VendorEnrichmentWorkspace — load-path honesty (hardening PR-2)', () 
     // Cache claims a service exists; the server says it no longer does.
     // The old truthiness guard (`if (service)`) kept the stale record
     // rendering forever — absence must win when the read is healthy.
+    // Order matters: wait out the loading gate FIRST, then assert the stale
+    // record is gone — asserting absence during 'loading' is vacuous.
     initialVendorServices = { 'audit-1': SERVICE_ROW };
-    resetTrioMocks(); // all three reads ok and empty
 
     render(<VendorEnrichmentWorkspace />);
 
-    await waitFor(() =>
-      expect(screen.queryByText('eCOA hosting')).not.toBeInTheDocument(),
-    );
-    // The section is back to its pending/entry state, not the stale record.
     expect(await screen.findByText('Vendor service')).toBeInTheDocument();
+    expect(screen.queryByText('eCOA hosting')).not.toBeInTheDocument();
+  });
+
+  it('a failed WRITE reverts the optimistic row and banners — never shown as saved', async () => {
+    const { createVendorService } = await import(
+      '../../../../../lib/audit/vendorEnrichmentApi'
+    );
+    (createVendorService as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+    render(<VendorEnrichmentWorkspace />);
+    await screen.findByText('Vendor service');
+
+    fireEvent.change(
+      screen.getByPlaceholderText(/central laboratory services/i),
+      { target: { value: 'Phantom service' } },
+    );
+    fireEvent.click(screen.getByRole('button', { name: /save vendor service/i }));
+
+    const banner = await screen.findByTestId('vendor-mutation-error');
+    expect(banner.textContent).toMatch(/was not saved/i);
+    // Reverted: the section is back to its entry form — no summary card
+    // rendering the phantom row as a saved service.
+    expect(screen.getByRole('button', { name: /save vendor service/i })).toBeInTheDocument();
+    expect(screen.queryByText('Phantom service')).not.toBeInTheDocument();
   });
 });
