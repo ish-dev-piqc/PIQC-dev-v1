@@ -45,13 +45,16 @@ const ENTITY_LABELS: Record<LineageEntityType, string> = {
   AGENDA: 'Agenda',
   CHECKLIST: 'Checklist',
   INTERNAL_NOTIFICATION: 'Internal notification',
+  EVIDENCE_GAP_SUMMARY: 'Evidence gap summary',
   WORKSPACE_ENTRY: 'Finding / observation',
   ISSUE: 'Issue',
   CAPA: 'CAPA',
   REPORT: 'Report',
 };
 
-// Filter groups keep the select scannable — 13 raw entity types would be noise.
+// Filter groups keep the select scannable — the raw entity-type list would be
+// noise. NOT compiler-checked: a new LineageEntityType missing from every
+// group is silently unfilterable, so extend the right group when adding one.
 const FILTER_GROUPS: Array<{ value: string; label: string; types: LineageEntityType[] }> = [
   { value: 'ALL', label: 'All records', types: [] },
   { value: 'RISKS', label: 'Protocol risks', types: ['PROTOCOL_RISK'] },
@@ -63,7 +66,7 @@ const FILTER_GROUPS: Array<{ value: string; label: string; types: LineageEntityT
   {
     value: 'DELIVERABLES',
     label: 'Deliverables',
-    types: ['QUESTIONNAIRE', 'RISK_SUMMARY', 'CONFIRMATION_LETTER', 'AGENDA', 'CHECKLIST', 'INTERNAL_NOTIFICATION', 'REPORT'],
+    types: ['QUESTIONNAIRE', 'RISK_SUMMARY', 'CONFIRMATION_LETTER', 'AGENDA', 'CHECKLIST', 'INTERNAL_NOTIFICATION', 'EVIDENCE_GAP_SUMMARY', 'REPORT'],
   },
   {
     value: 'FINDINGS',
