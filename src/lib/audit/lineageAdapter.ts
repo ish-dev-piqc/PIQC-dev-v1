@@ -63,6 +63,7 @@ export type LineageEntityType =
   | 'AGENDA'
   | 'CHECKLIST'
   | 'INTERNAL_NOTIFICATION'
+  | 'EVIDENCE_GAP_SUMMARY'
   | 'WORKSPACE_ENTRY'
   | 'ISSUE'
   | 'CAPA'
@@ -294,10 +295,15 @@ export function buildLineageGraph(input: LineageInput): LineageGraph {
       | MockPreAuditBundle['confirmation_letter']
       | MockPreAuditBundle['agenda']
       | MockPreAuditBundle['checklist']
-      | MockPreAuditBundle['internal_notification'];
+      | MockPreAuditBundle['internal_notification']
+      | MockPreAuditBundle['evidence_gap_summary'];
     entityType: Extract<
       LineageEntityType,
-      'CONFIRMATION_LETTER' | 'AGENDA' | 'CHECKLIST' | 'INTERNAL_NOTIFICATION'
+      | 'CONFIRMATION_LETTER'
+      | 'AGENDA'
+      | 'CHECKLIST'
+      | 'INTERNAL_NOTIFICATION'
+      | 'EVIDENCE_GAP_SUMMARY'
     >;
     title: string;
     tracked: TrackedObjectType;
@@ -320,6 +326,12 @@ export function buildLineageGraph(input: LineageInput): LineageGraph {
       entityType: 'INTERNAL_NOTIFICATION',
       title: 'Internal notification',
       tracked: 'INTERNAL_NOTIFICATION_OBJECT',
+    },
+    {
+      obj: input.preAudit.evidence_gap_summary,
+      entityType: 'EVIDENCE_GAP_SUMMARY',
+      title: 'Evidence gap summary',
+      tracked: 'EVIDENCE_GAP_SUMMARY_OBJECT',
     },
   ];
   for (const d of deliverables) {

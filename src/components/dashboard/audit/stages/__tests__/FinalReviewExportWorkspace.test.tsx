@@ -85,6 +85,7 @@ let mockBundle: {
   agenda: unknown;
   checklist: unknown;
   internal_notification?: unknown;
+  evidence_gap_summary?: unknown;
 } = { confirmation_letter: null, agenda: null, checklist: null, internal_notification: null };
 vi.mock('../../../../../lib/audit/preAuditApi', () => ({
   fetchPreAuditDeliverables: vi.fn(() => Promise.resolve(mockBundle)),
@@ -242,7 +243,7 @@ describe('FinalReviewExportWorkspace grounding currency (flag, never block)', ()
     mockBundle = {
       confirmation_letter: null,
       agenda: null,
-      checklist: { grounding_snapshot: SNAPSHOT },
+      checklist: { grounding_snapshot: SNAPSHOT, content: { items: [] } },
     };
     mockRegister = { ok: true, data: [REGISTER_ROW] };
     render(<FinalReviewExportWorkspace />);
@@ -254,7 +255,7 @@ describe('FinalReviewExportWorkspace grounding currency (flag, never block)', ()
     mockBundle = {
       confirmation_letter: null,
       agenda: { grounding_snapshot: SNAPSHOT },
-      checklist: { grounding_snapshot: SNAPSHOT },
+      checklist: { grounding_snapshot: SNAPSHOT, content: { items: [] } },
     };
     mockRegister = {
       ok: true,
@@ -292,12 +293,66 @@ describe('FinalReviewExportWorkspace grounding currency (flag, never block)', ()
   });
 
   it('renders no verdict at all when the register read fails', async () => {
-    mockBundle = { confirmation_letter: null, agenda: null, checklist: { grounding_snapshot: SNAPSHOT } };
+    mockBundle = {
+      confirmation_letter: null,
+      agenda: null,
+      checklist: { grounding_snapshot: SNAPSHOT, content: { items: [] } },
+    };
     mockRegister = { ok: false, error: 'permission denied' };
     render(<FinalReviewExportWorkspace />);
     await waitFor(() => expect(screen.getByText(/Pre-export checklist/)).toBeTruthy());
     expect(screen.queryByTestId('export-currency-notice')).toBeNull();
     expect(screen.queryByTestId('export-currency-current')).toBeNull();
+  });
+
+  it('gap summary uses full-register currency: a withheld doc added after drafting flags IT, not legacy kinds (PR-D3)', async () => {
+    mockBundle = {
+      confirmation_letter: null,
+      agenda: null,
+      checklist: { grounding_snapshot: SNAPSHOT, content: { items: [] } },
+      evidence_gap_summary: {
+        grounding_snapshot: {
+          ...SNAPSHOT,
+          register: [{ document_id: 'd1', title: 'QA SOP v3', status: 'ready', included: true }],
+          checklist_item_ids: [],
+        },
+      },
+    };
+    mockRegister = {
+      ok: true,
+      data: [
+        REGISTER_ROW,
+        // Withheld → invisible to the legacy included-only diff, but part of
+        // the gap summary's basis (it must NAME withheld docs).
+        { ...REGISTER_ROW, document_id: 'd2', title: 'Withheld doc', include_in_generation: false },
+      ],
+    };
+    render(<FinalReviewExportWorkspace />);
+    const notice = await screen.findByTestId('export-currency-notice');
+    expect(notice.textContent).toContain('Evidence gap summary:');
+    expect(notice.textContent).toContain('Withheld doc');
+    // The legacy checklist snapshot stays current — one drifted row only.
+    expect(notice.textContent).not.toContain('Checklist:');
+  });
+
+  it('gap summary flags checklist-identity drift via the live checklist items (PR-D3)', async () => {
+    mockBundle = {
+      confirmation_letter: null,
+      agenda: null,
+      checklist: { content: { items: [{ id: 'i1' }, { id: 'i2' }] } }, // never PIQC-drafted itself
+      evidence_gap_summary: {
+        grounding_snapshot: {
+          ...SNAPSHOT,
+          register: [{ document_id: 'd1', title: 'QA SOP v3', status: 'ready', included: true }],
+          checklist_item_ids: ['i1'], // drafted when the checklist had one item
+        },
+      },
+    };
+    mockRegister = { ok: true, data: [REGISTER_ROW] };
+    render(<FinalReviewExportWorkspace />);
+    const notice = await screen.findByTestId('export-currency-notice');
+    expect(notice.textContent).toContain('Evidence gap summary:');
+    expect(notice.textContent).toContain('checklist items changed');
   });
 });
 
