@@ -214,6 +214,22 @@ describe('applyDeliverableGeneration', () => {
     expect(args.p_reason).toBe('Internal notification drafted by PIQC from protocol + evidence');
   });
 
+  it('routes the evidence gap summary letter-shaped WITHOUT recipients to its own RPC (PR-D3)', async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: null });
+    await applyDeliverableGeneration(
+      'a1',
+      { ...LETTER_PROPOSAL, deliverable: 'evidence_gap_summary', mode: 'generate' },
+      { currentRecipients: ['Quality Assurance Team'] },
+    );
+    const [rpcName, args] = mockRpc.mock.calls[0];
+    expect(rpcName).toBe('audit_mode_apply_evidence_gap_summary_generation');
+    expect(args.p_content).toEqual({
+      body_text: 'This letter confirms the audit…',
+      scope: ['Quality management system', 'Data integrity'],
+    });
+    expect(args.p_reason).toBe('Evidence gap summary drafted by PIQC from protocol + evidence');
+  });
+
   it('prefers the RPC hint over the raw message on failure', async () => {
     mockRpc.mockResolvedValueOnce({
       data: null,
@@ -263,5 +279,95 @@ describe('computeDeliverableCurrency', () => {
       evidenceRow({ document_id: 'd3', title: 'Withheld doc', include_in_generation: false }),
     ]);
     expect(currency?.isCurrent).toBe(true);
+  });
+
+  it('a legacy snapshot ignores liveChecklistItemIds entirely (no gap axes leak in)', () => {
+    const currency = computeDeliverableCurrency(SNAPSHOT, [evidenceRow({})], ['i1', 'i2']);
+    expect(currency).toEqual({
+      newSinceGeneration: [],
+      removedSinceGeneration: [],
+      isCurrent: true,
+    });
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Kind-aware currency (PR-D3) — a snapshot carrying `register` diffs the FULL
+// live register (withheld rows are part of the gap summary's basis: it must
+// NAME them) plus checklist identity. Legacy snapshots above stay untouched.
+// -----------------------------------------------------------------------------
+describe('computeDeliverableCurrency — gap-summary snapshot (register present)', () => {
+  const GAP_SNAPSHOT: DeliverableGroundingSnapshot = {
+    ...GROUNDING,
+    register: [
+      { document_id: 'd1', title: 'QA SOP v3', status: 'ready', included: true },
+      { document_id: 'dw', title: 'Withheld doc', status: 'ready', included: false },
+    ],
+    checklist_item_ids: ['i1', 'i2'],
+  };
+  const LIVE_MATCHING = [
+    evidenceRow({}),
+    evidenceRow({ document_id: 'dw', title: 'Withheld doc', include_in_generation: false }),
+  ];
+
+  it('is current when the full register (withheld row included) and checklist ids match', () => {
+    const currency = computeDeliverableCurrency(GAP_SNAPSHOT, LIVE_MATCHING, ['i1', 'i2']);
+    expect(currency).toEqual({
+      newSinceGeneration: [],
+      removedSinceGeneration: [],
+      withholdFlippedSinceGeneration: [],
+      checklistChanged: false,
+      isCurrent: true,
+    });
+  });
+
+  it('a WITHHELD doc added after generation flags stale (unlike the legacy path)', () => {
+    const currency = computeDeliverableCurrency(
+      GAP_SNAPSHOT,
+      [...LIVE_MATCHING, evidenceRow({ document_id: 'd9', title: 'New withheld doc', include_in_generation: false })],
+      ['i1', 'i2'],
+    );
+    expect(currency?.isCurrent).toBe(false);
+    expect(currency?.newSinceGeneration).toEqual([
+      { document_id: 'd9', title: 'New withheld doc' },
+    ]);
+  });
+
+  it('flipping a withhold lever flags stale with the flipped doc named', () => {
+    const currency = computeDeliverableCurrency(
+      GAP_SNAPSHOT,
+      [
+        evidenceRow({}),
+        // Was withheld at generation; now included.
+        evidenceRow({ document_id: 'dw', title: 'Withheld doc', include_in_generation: true }),
+      ],
+      ['i1', 'i2'],
+    );
+    expect(currency?.isCurrent).toBe(false);
+    expect(currency?.withholdFlippedSinceGeneration).toEqual([
+      { document_id: 'dw', title: 'Withheld doc' },
+    ]);
+    expect(currency?.newSinceGeneration).toEqual([]);
+  });
+
+  it('a changed checklist item set flags stale on identity, not just count', () => {
+    // Same length, one id swapped — .length alone would miss this.
+    const currency = computeDeliverableCurrency(GAP_SNAPSHOT, LIVE_MATCHING, ['i1', 'i3']);
+    expect(currency?.checklistChanged).toBe(true);
+    expect(currency?.isCurrent).toBe(false);
+  });
+
+  it('missing live checklist ids → checklistChanged unknowable, never stales on its own', () => {
+    const currency = computeDeliverableCurrency(GAP_SNAPSHOT, LIVE_MATCHING);
+    expect(currency?.checklistChanged).toBeUndefined();
+    expect(currency?.isCurrent).toBe(true);
+  });
+
+  it('a removed register row flags stale by full-register diff', () => {
+    const currency = computeDeliverableCurrency(GAP_SNAPSHOT, [evidenceRow({})], ['i1', 'i2']);
+    expect(currency?.isCurrent).toBe(false);
+    expect(currency?.removedSinceGeneration).toEqual([
+      { document_id: 'dw', title: 'Withheld doc' },
+    ]);
   });
 });

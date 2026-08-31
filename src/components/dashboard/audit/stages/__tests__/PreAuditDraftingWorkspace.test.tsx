@@ -43,6 +43,7 @@ const EMPTY_BUNDLE = {
   agenda: null,
   checklist: null,
   internal_notification: null,
+  evidence_gap_summary: null,
 };
 vi.mock('../../../../../lib/audit/preAuditApi', () => ({
   fetchPreAuditDeliverables: vi.fn(() => Promise.resolve(EMPTY_BUNDLE)),
@@ -54,6 +55,8 @@ vi.mock('../../../../../lib/audit/preAuditApi', () => ({
   approveChecklist: vi.fn(),
   upsertInternalNotification: vi.fn(),
   approveInternalNotification: vi.fn(),
+  upsertEvidenceGapSummary: vi.fn(),
+  approveEvidenceGapSummary: vi.fn(),
   prefillStage5Deliverables: vi.fn(() => Promise.resolve(undefined)),
 }));
 
@@ -138,6 +141,7 @@ describe('PreAuditDraftingWorkspace — one-ahead preview guard (PR-UX2)', () =>
       agenda: null,
       checklist: null,
       internal_notification: null,
+      evidence_gap_summary: null,
     });
 
     render(<PreAuditDraftingWorkspace />);
@@ -169,6 +173,7 @@ const TRIO_APPROVED_BUNDLE = {
   agenda: approvedRow('ag-1', { items: [] }),
   checklist: approvedRow('ch-1', { items: [] }),
   internal_notification: null,
+  evidence_gap_summary: null,
 };
 
 describe('PreAuditDraftingWorkspace — internal notification is non-gating (PR-D1)', () => {
@@ -255,5 +260,117 @@ describe('PreAuditDraftingWorkspace — internal notification is non-gating (PR-
     expect(upsertChecklist).not.toHaveBeenCalled();
     // The trio's one-click stub bootstrap stays reachable from the tabbed view.
     expect(screen.getByRole('button', { name: /generate all three stubs/i })).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PR-D3 — evidence gap summary: 5th tab exists but NEVER gates advance.
+// ---------------------------------------------------------------------------
+
+describe('PreAuditDraftingWorkspace — evidence gap summary is non-gating (PR-D3)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initialBundles = {};
+    mockActiveAudit = {
+      id: 'audit-1',
+      workflow_type: 'VENDOR_AUDIT',
+      current_stage: 'PRE_AUDIT_DRAFTING',
+    };
+  });
+
+  it('advance unlocks with the trio approved while the gap summary sits in DRAFT', async () => {
+    mockFetch.mockResolvedValue({
+      ...TRIO_APPROVED_BUNDLE,
+      evidence_gap_summary: {
+        ...approvedRow('egs-1', { body_text: 'Coverage.', scope: [] }),
+        approval_status: 'DRAFT',
+        approved_at: null,
+        approved_by_name: null,
+      },
+    });
+
+    render(<PreAuditDraftingWorkspace />);
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /advance to audit conduct/i })).toBeEnabled(),
+    );
+    expect(screen.getByText(/gating deliverables approved/i)).toBeInTheDocument();
+  });
+
+  it('the gate list never names the gap summary', async () => {
+    // Letter DRAFT → gate list renders; gap summary exists as DRAFT.
+    mockFetch.mockResolvedValue({
+      ...TRIO_APPROVED_BUNDLE,
+      confirmation_letter: {
+        ...TRIO_APPROVED_BUNDLE.confirmation_letter,
+        approval_status: 'DRAFT',
+        approved_at: null,
+        approved_by_name: null,
+      },
+      evidence_gap_summary: {
+        ...approvedRow('egs-1', { body_text: 'Coverage.', scope: [] }),
+        approval_status: 'DRAFT',
+        approved_at: null,
+        approved_by_name: null,
+      },
+    });
+
+    render(<PreAuditDraftingWorkspace />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/approve the confirmation letter, agenda, and checklist to advance/i),
+      ).toBeInTheDocument(),
+    );
+    // 'Evidence gap summary' appears exactly once — the tab button. The
+    // transition gate list must not add a second occurrence.
+    expect(screen.getAllByText('Evidence gap summary')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /advance to audit conduct/i })).toBeDisabled();
+  });
+
+  it('the 5th tab opens to its scratch form at stage (no prefill for this kind)', async () => {
+    mockFetch.mockResolvedValue({ ...TRIO_APPROVED_BUNDLE });
+
+    render(<PreAuditDraftingWorkspace />);
+
+    await waitFor(() => expect(screen.getByText('Evidence gap summary')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /evidence gap summary/i }));
+
+    expect(screen.getByTestId('evidence_gap_summary-generate-button')).toBeEnabled();
+    expect(
+      screen.getByPlaceholderText(/what evidence is on file and what remains outstanding/i),
+    ).toBeInTheDocument();
+  });
+
+  it('PREVIEW: the 5th tab is read-only — no scratch form, generation CTA disabled', async () => {
+    mockActiveAudit = {
+      id: 'audit-1',
+      workflow_type: 'VENDOR_AUDIT',
+      current_stage: 'SCOPE_AND_RISK_REVIEW',
+    };
+    // A letter row exists so the tab UI renders instead of the stub screen.
+    mockFetch.mockResolvedValue({
+      ...EMPTY_BUNDLE,
+      confirmation_letter: {
+        id: 'cl-1',
+        audit_id: 'audit-1',
+        content: { body_text: 'Letter body.', recipients: [], scope: [] },
+        approval_status: 'DRAFT',
+        approved_at: null,
+        approved_by_name: null,
+        updated_at: '2026-08-01T00:00:00Z',
+      },
+    });
+
+    render(<PreAuditDraftingWorkspace />);
+
+    await waitFor(() => expect(screen.getByText('Letter body.')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /evidence gap summary/i }));
+
+    expect(screen.getByText('Nothing recorded yet.')).toBeInTheDocument();
+    expect(screen.getByTestId('evidence_gap_summary-generate-button')).toBeDisabled();
+    expect(
+      screen.queryByPlaceholderText(/what evidence is on file and what remains outstanding/i),
+    ).not.toBeInTheDocument();
   });
 });

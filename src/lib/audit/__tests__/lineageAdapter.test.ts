@@ -245,6 +245,27 @@ describe('buildLineageGraph', () => {
     expect(g.edges.filter((e) => e.fromId === n?.id)).toHaveLength(0);
   });
 
+  it('the evidence gap summary renders as a deliverable node with its tracked type (PR-D3)', () => {
+    const input = fullInput();
+    input.preAudit.evidence_gap_summary = {
+      id: 'egs1',
+      audit_id: 'a1',
+      content: { body_text: 'Coverage per scope area.', scope: ['data_management'] },
+      approval_status: 'DRAFT',
+      approved_by_name: null,
+      approved_at: null,
+      updated_at: '2026-09-05T00:00:00Z',
+    };
+    const g = buildLineageGraph(input);
+    const n = g.nodes.find((x) => x.entityType === 'EVIDENCE_GAP_SUMMARY');
+    expect(n?.title).toBe('Evidence gap summary');
+    expect(n?.trackedObjectType).toBe('EVIDENCE_GAP_SUMMARY_OBJECT');
+    expect(n?.stage).toBe(5);
+    // Never prefilled → drafted-in-stage origin, no provenance edges.
+    expect(n?.origin).toBe('Drafted in Pre-audit drafting.');
+    expect(g.edges.filter((e) => e.fromId === n?.id)).toHaveLength(0);
+  });
+
   it('every stage object carries a trackedObjectType for history lookups', () => {
     const g = buildLineageGraph(fullInput());
     const untracked = g.nodes.filter((n) => n.entityType !== 'AUDITEE' && !n.trackedObjectType);
