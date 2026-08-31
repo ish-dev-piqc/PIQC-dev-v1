@@ -64,7 +64,14 @@ vi.mock('../../../../../lib/audit/evidenceApi', () => ({
   listAuditEvidence: vi.fn(() => Promise.resolve({ ok: true, data: [] })),
 }));
 
-vi.mock('../../../../../lib/audit/deliverableGenerationApi', () => ({
+// Spread the real module so pure helpers (checklistLiveIds today) stay live —
+// only the network-touching functions are stubbed. An explicit-only factory
+// broke in CI when the component gained a checklistLiveIds import the mock
+// didn't declare.
+vi.mock('../../../../../lib/audit/deliverableGenerationApi', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('../../../../../lib/audit/deliverableGenerationApi')
+  >()),
   applyDeliverableGeneration: vi.fn(),
   computeDeliverableCurrency: vi.fn(() => null),
   requestDeliverableDraft: vi.fn(),
