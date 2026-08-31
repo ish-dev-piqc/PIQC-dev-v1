@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stagesForWorkflow } from '../workflowStages';
+import { hasReachedStage, stagesForWorkflow } from '../workflowStages';
 import { AUDIT_STAGES, AUDIT_WORKFLOW_TYPES } from '../../../types/audit';
 
 // Regression gate for the two-workflow foundation: VENDOR_AUDIT must resolve to
@@ -47,5 +47,30 @@ describe('stagesForWorkflow', () => {
     for (const wf of AUDIT_WORKFLOW_TYPES) {
       expect(stagesForWorkflow(wf).length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('hasReachedStage', () => {
+  it('current and past stages are reached; the one-ahead preview is not', () => {
+    expect(hasReachedStage('VENDOR_AUDIT', 'AUDIT_CONDUCT', 'AUDIT_CONDUCT')).toBe(true);
+    expect(hasReachedStage('VENDOR_AUDIT', 'AUDIT_CONDUCT', 'INTAKE')).toBe(true);
+    expect(hasReachedStage('VENDOR_AUDIT', 'AUDIT_CONDUCT', 'REPORT_DRAFTING')).toBe(false);
+  });
+
+  it('holds at both pipeline ends', () => {
+    expect(hasReachedStage('VENDOR_AUDIT', 'INTAKE', 'INTAKE')).toBe(true);
+    expect(hasReachedStage('VENDOR_AUDIT', 'INTAKE', 'FINAL_REVIEW_EXPORT')).toBe(false);
+    expect(hasReachedStage('VENDOR_AUDIT', 'FINAL_REVIEW_EXPORT', 'INTAKE')).toBe(true);
+    expect(hasReachedStage('VENDOR_AUDIT', 'FINAL_REVIEW_EXPORT', 'FINAL_REVIEW_EXPORT')).toBe(true);
+  });
+
+  it('works for the investigator pipeline', () => {
+    expect(hasReachedStage('INVESTIGATOR_SITE_AUDIT', 'ISA_CONDUCT', 'ISA_PREP')).toBe(true);
+    expect(hasReachedStage('INVESTIGATOR_SITE_AUDIT', 'ISA_PREP', 'ISA_CONDUCT')).toBe(false);
+  });
+
+  it('fails safe when a stage does not belong to the workflow pipeline', () => {
+    expect(hasReachedStage('VENDOR_AUDIT', 'AUDIT_CONDUCT', 'ISA_CONDUCT')).toBe(false);
+    expect(hasReachedStage('INVESTIGATOR_SITE_AUDIT', 'ISA_CONDUCT', 'AUDIT_CONDUCT')).toBe(false);
   });
 });

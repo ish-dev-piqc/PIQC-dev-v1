@@ -22,7 +22,9 @@ import {
 import { coverageByDomain, escalationSignals } from '../../../../../lib/audit/isaInsights';
 import { formatProtocolRefWhere } from '../../../../../lib/audit/isaReportModel';
 import IsaClosingMeetingView from './IsaClosingMeetingView';
+import { hasReachedStage } from '../../../../../lib/audit/workflowStages';
 import PiqcMark from '../../PiqcMark';
+import StagePreviewNotice from '../../StagePreviewNotice';
 import type {
   AuditNoteObject,
   IsaDomain,
@@ -121,6 +123,13 @@ export default function IsaConductWorkspace() {
   const { theme } = useTheme();
   const { activeAudit } = useAudit();
   const isLight = theme === 'light';
+
+  // One-ahead preview guard (UX2): ISA Stage 5 is viewable from ISA_PREP.
+  // Fieldwork notes record what happened on site — capture, edits, agentic
+  // drafting, and accepting findings wait until the stage is real.
+  const hasReached =
+    !!activeAudit &&
+    hasReachedStage(activeAudit.workflow_type, activeAudit.current_stage, 'ISA_CONDUCT');
 
   const [notes, setNotes] = useState<AuditNoteObject[]>([]);
   const [findings, setFindings] = useState<IsaFindingObject[]>([]);
@@ -552,6 +561,7 @@ export default function IsaConductWorkspace() {
     // Container + type scale match the other stage workspaces (p-6 max-w-4xl,
     // text-xl heading) so the pipelines read as siblings in the same shell.
     <div className="p-6 max-w-4xl mx-auto space-y-6">
+      {!hasReached && activeAudit && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
       {/* Header */}
       <div>
         <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold">
@@ -585,7 +595,8 @@ export default function IsaConductWorkspace() {
         </div>
       )}
 
-      {/* Capture */}
+      {/* Capture — pure mutation surface, hidden entirely in preview. */}
+      {hasReached && (
       <section className={`rounded-lg border ${cardBase}`}>
         <div className={`flex items-center gap-2 px-4 py-3 border-b ${rowBorder}`}>
           <NotebookPen size={15} className={brandText} />
@@ -648,6 +659,7 @@ export default function IsaConductWorkspace() {
           </p>
         </div>
       </section>
+      )}
 
       {/* Coverage strip — which domains have fieldwork behind them. The
           auditor's worst failure mode is the blind spot the auditee finds
@@ -679,12 +691,15 @@ export default function IsaConductWorkspace() {
                 <button
                   key={row.domain}
                   type="button"
+                  // In preview the capture section is hidden, so the "tag new
+                  // notes" affordance would be a silent no-op — disable it.
+                  disabled={!hasReached}
                   onClick={() => {
                     setDomain(row.domain);
                     captureRef.current?.focus();
                   }}
-                  title={`${label}: ${row.noteCount} ${row.noteCount === 1 ? 'note' : 'notes'}, ${row.findingCount} ${row.findingCount === 1 ? 'finding' : 'findings'} — click to tag new notes with this domain`}
-                  className={`rounded border px-1.5 py-0.5 text-[10px] transition-colors ${state}`}
+                  title={`${label}: ${row.noteCount} ${row.noteCount === 1 ? 'note' : 'notes'}, ${row.findingCount} ${row.findingCount === 1 ? 'finding' : 'findings'}${hasReached ? ' — click to tag new notes with this domain' : ''}`}
+                  className={`rounded border px-1.5 py-0.5 text-[10px] transition-colors disabled:cursor-default ${state}`}
                 >
                   {label}
                   {row.noteCount > 0 && ` · ${row.noteCount}`}
@@ -799,6 +814,7 @@ export default function IsaConductWorkspace() {
                           Finding
                         </span>
                       )}
+                      {hasReached && (
                       <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                         {confirmDeleteId === n.id ? (
                           <>
@@ -847,6 +863,7 @@ export default function IsaConductWorkspace() {
                           </>
                         )}
                       </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -878,7 +895,7 @@ export default function IsaConductWorkspace() {
             <button
               type="button"
               onClick={() => void runDrafting()}
-              disabled={drafting || draftableNotes.length === 0}
+              disabled={drafting || draftableNotes.length === 0 || !hasReached}
               className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40 ${primaryBtn}`}
             >
               {drafting
@@ -1069,7 +1086,7 @@ export default function IsaConductWorkspace() {
                   <button
                     type="button"
                     onClick={() => void acceptDraft(d)}
-                    disabled={acceptingKey !== null || !d.title.trim() || !d.observation.trim()}
+                    disabled={acceptingKey !== null || !d.title.trim() || !d.observation.trim() || !hasReached}
                     className={`rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40 ${primaryBtn}`}
                   >
                     {acceptingKey === d.key ? 'Accepting…' : 'Accept as finding'}

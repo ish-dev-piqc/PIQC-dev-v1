@@ -62,6 +62,8 @@ export type LineageEntityType =
   | 'CONFIRMATION_LETTER'
   | 'AGENDA'
   | 'CHECKLIST'
+  | 'INTERNAL_NOTIFICATION'
+  | 'EVIDENCE_GAP_SUMMARY'
   | 'WORKSPACE_ENTRY'
   | 'ISSUE'
   | 'CAPA'
@@ -292,8 +294,17 @@ export function buildLineageGraph(input: LineageInput): LineageGraph {
     obj:
       | MockPreAuditBundle['confirmation_letter']
       | MockPreAuditBundle['agenda']
-      | MockPreAuditBundle['checklist'];
-    entityType: Extract<LineageEntityType, 'CONFIRMATION_LETTER' | 'AGENDA' | 'CHECKLIST'>;
+      | MockPreAuditBundle['checklist']
+      | MockPreAuditBundle['internal_notification']
+      | MockPreAuditBundle['evidence_gap_summary'];
+    entityType: Extract<
+      LineageEntityType,
+      | 'CONFIRMATION_LETTER'
+      | 'AGENDA'
+      | 'CHECKLIST'
+      | 'INTERNAL_NOTIFICATION'
+      | 'EVIDENCE_GAP_SUMMARY'
+    >;
     title: string;
     tracked: TrackedObjectType;
   }> = [
@@ -310,11 +321,25 @@ export function buildLineageGraph(input: LineageInput): LineageGraph {
       title: 'Checklist',
       tracked: 'CHECKLIST_OBJECT',
     },
+    {
+      obj: input.preAudit.internal_notification,
+      entityType: 'INTERNAL_NOTIFICATION',
+      title: 'Internal notification',
+      tracked: 'INTERNAL_NOTIFICATION_OBJECT',
+    },
+    {
+      obj: input.preAudit.evidence_gap_summary,
+      entityType: 'EVIDENCE_GAP_SUMMARY',
+      title: 'Evidence gap summary',
+      tracked: 'EVIDENCE_GAP_SUMMARY_OBJECT',
+    },
   ];
   for (const d of deliverables) {
     if (!d.obj) continue;
     const id = nid(d.entityType, d.obj.id);
-    const prefilled = Boolean(d.obj.prefilled_at);
+    // 'in' guard: the internal notification is never prefilled and carries no
+    // prefill fields at all.
+    const prefilled = 'prefilled_at' in d.obj && Boolean(d.obj.prefilled_at);
     nodes.push({
       id,
       entityType: d.entityType,

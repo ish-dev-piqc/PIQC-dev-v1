@@ -72,6 +72,8 @@ beforeEach(() => {
     confirmation_letter: null,
     agenda: null,
     checklist: null,
+    internal_notification: null,
+    evidence_gap_summary: null,
   });
   m(fetchWorkspaceEntries).mockResolvedValue([]);
   m(fetchIssuesWithCapas).mockResolvedValue({ issues: [], capasByIssue: {} });

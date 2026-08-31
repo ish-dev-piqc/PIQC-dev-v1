@@ -5,7 +5,7 @@ import type {
   DeliverableGenerationRef,
   DeliverableGroundingSnapshot,
 } from '../../types/audit';
-import type { MockAgendaItem, MockChecklistItem } from './mockPreAudit';
+import type { MockAgendaItem, MockChecklist, MockChecklistItem } from './mockPreAudit';
 
 // =============================================================================
 // Grounded deliverable generation API (PR-C1 checklist, PR-C2 fan-out).
@@ -27,12 +27,17 @@ import type { MockAgendaItem, MockChecklistItem } from './mockPreAudit';
 // snapshot vs live register. Pure — unit-tested directly.
 // =============================================================================
 
-export type DeliverableKind = 'checklist' | 'agenda' | 'confirmation_letter';
+export type DeliverableKind =
+  | 'checklist'
+  | 'agenda'
+  | 'confirmation_letter'
+  | 'internal_notification'
+  | 'evidence_gap_summary';
 
 export interface DeliverableDraftProposal {
   mode: 'generate' | 'revise';
   deliverable: DeliverableKind;
-  // items for checklist/agenda; body_text + scope for the letter.
+  // items for items-shaped kinds; body_text + scope for letter-shaped ones.
   content_patch: {
     items?: MockChecklistItem[] | MockAgendaItem[];
     body_text?: string;
@@ -46,16 +51,32 @@ export interface DeliverableDraftProposal {
   evidence_doc_count: number;
 }
 
+// Client mirror of the engine's per-kind shape (audit-deliverable-draft
+// DELIVERABLES config). Record-typed so a new kind cannot compile without
+// declaring its shape — the alternative (a kind-ternary with an items
+// fall-through) silently wipes a letter-shaped kind's body on apply.
+const KIND_SHAPE: Record<DeliverableKind, 'items' | 'letter'> = {
+  checklist: 'items',
+  agenda: 'items',
+  confirmation_letter: 'letter',
+  internal_notification: 'letter',
+  evidence_gap_summary: 'letter',
+};
+
 const APPLY_RPC: Record<DeliverableKind, string> = {
   checklist: 'audit_mode_apply_checklist_generation',
   agenda: 'audit_mode_apply_agenda_generation',
   confirmation_letter: 'audit_mode_apply_confirmation_letter_generation',
+  internal_notification: 'audit_mode_apply_internal_notification_generation',
+  evidence_gap_summary: 'audit_mode_apply_evidence_gap_summary_generation',
 };
 
 const DRAFT_NOUN: Record<DeliverableKind, string> = {
   checklist: 'Checklist',
   agenda: 'Agenda',
   confirmation_letter: 'Confirmation letter',
+  internal_notification: 'Internal notification',
+  evidence_gap_summary: 'Evidence gap summary',
 };
 
 export async function requestDeliverableDraft(
@@ -108,11 +129,15 @@ export async function applyDeliverableGeneration(
   opts?: { currentRecipients?: string[] },
 ): Promise<Result<null>> {
   const content =
-    proposal.deliverable === 'confirmation_letter'
+    KIND_SHAPE[proposal.deliverable] === 'letter'
       ? {
           body_text: proposal.content_patch.body_text ?? '',
           scope: proposal.content_patch.scope ?? [],
-          recipients: opts?.currentRecipients ?? [],
+          // Recipients exist only on the vendor-facing letter; the internal
+          // notification is name-free by design.
+          ...(proposal.deliverable === 'confirmation_letter'
+            ? { recipients: opts?.currentRecipients ?? [] }
+            : {}),
         }
       : { items: proposal.content_patch.items ?? [] };
 
@@ -145,19 +170,92 @@ export async function applyDeliverableGeneration(
 export interface DeliverableCurrency {
   newSinceGeneration: Array<{ document_id: string; title: string }>;
   removedSinceGeneration: Array<{ document_id: string; title: string }>;
+  // Gap-summary axes, populated only when the snapshot carries them (PR-D3):
+  // register rows whose withhold flag flipped since generation, and whether
+  // the checklist's item set changed (undefined when unknowable — snapshot or
+  // live ids missing).
+  withholdFlippedSinceGeneration?: Array<{ document_id: string; title: string }>;
+  checklistChanged?: boolean;
   isCurrent: boolean;
+}
+
+/**
+ * The live half of the checklist-identity axis. One place owns the policy:
+ * no checklist row means genuinely ZERO items ([]), never "unknowable" —
+ * checklist rows are upsert-only and cannot be deleted. The lone `?.` past
+ * the null-check tolerates a malformed jsonb `content` (the upsert RPC does
+ * not validate its shape); everything typed beyond that is trusted.
+ */
+export function checklistLiveIds(checklist: MockChecklist | null): string[] {
+  return checklist?.content.items?.map((i) => i.id) ?? [];
 }
 
 /**
  * Set-diff of the generation's grounding snapshot against the live register.
  * null when the deliverable was never generated (currency has no meaning), so
  * callers can distinguish "current" from "not applicable".
+ *
+ * Each axis gates on ITS OWN snapshot field, so the snapshot — the only
+ * honest record of what generation measured — decides what gets compared:
+ * - No extra fields (the four original kinds, every pre-D3 snapshot):
+ *   included live docs vs `snapshot.evidence`. Byte-identical legacy shape.
+ * - `register` present (gap summary): the FULL live register — withheld docs
+ *   are part of this deliverable's basis (it must NAME them), so filing a doc
+ *   as withheld, or flipping a withhold lever, stales the summary.
+ * - `checklist_item_ids` present: item identity vs `liveChecklistItemIds`.
+ *   Callers surfacing a kind with this axis MUST pass the live ids (use
+ *   `checklistLiveIds`) — omitting them silently reports the axis as
+ *   unknowable, never as stale.
  */
 export function computeDeliverableCurrency(
   snapshot: DeliverableGroundingSnapshot | null | undefined,
   liveRegister: AuditEvidenceListRow[],
+  liveChecklistItemIds?: string[],
 ): DeliverableCurrency | null {
   if (!snapshot) return null;
+
+  // Checklist axis — independent of the register axis (the type declares the
+  // two snapshot fields independently; the code must honor that). Identity
+  // compares as sets, both directions: size catches duplicates collapsing,
+  // membership catches swaps.
+  const snapChecklistIds = snapshot.checklist_item_ids;
+  let checklistChanged: boolean | undefined;
+  if (liveChecklistItemIds !== undefined && snapChecklistIds !== undefined) {
+    const snapSet = new Set(snapChecklistIds);
+    const liveSet = new Set(liveChecklistItemIds);
+    checklistChanged =
+      liveSet.size !== snapSet.size || [...liveSet].some((id) => !snapSet.has(id));
+  }
+
+  if (snapshot.register) {
+    const snapById = new Map(snapshot.register.map((e) => [e.document_id, e]));
+    const liveIds = new Set(liveRegister.map((r) => r.document_id));
+
+    const newSinceGeneration = liveRegister
+      .filter((r) => !snapById.has(r.document_id))
+      .map((r) => ({ document_id: r.document_id, title: r.title }));
+    const removedSinceGeneration = snapshot.register
+      .filter((e) => !liveIds.has(e.document_id))
+      .map((e) => ({ document_id: e.document_id, title: e.title }));
+    const withholdFlippedSinceGeneration = liveRegister
+      .filter((r) => {
+        const snap = snapById.get(r.document_id);
+        return snap !== undefined && snap.included !== r.include_in_generation;
+      })
+      .map((r) => ({ document_id: r.document_id, title: r.title }));
+
+    return {
+      newSinceGeneration,
+      removedSinceGeneration,
+      withholdFlippedSinceGeneration,
+      checklistChanged,
+      isCurrent:
+        newSinceGeneration.length === 0 &&
+        removedSinceGeneration.length === 0 &&
+        withholdFlippedSinceGeneration.length === 0 &&
+        checklistChanged !== true,
+    };
+  }
 
   const included = liveRegister.filter((r) => r.include_in_generation);
   const snapshotIds = new Set(snapshot.evidence.map((e) => e.document_id));
@@ -170,9 +268,16 @@ export function computeDeliverableCurrency(
     .filter((e) => !liveIds.has(e.document_id))
     .map((e) => ({ document_id: e.document_id, title: e.title }));
 
+  // The conditional spread keeps every legacy snapshot's return byte-identical
+  // (no new keys); a future no-register snapshot that DID record checklist
+  // identity still gets its axis measured here.
   return {
     newSinceGeneration,
     removedSinceGeneration,
-    isCurrent: newSinceGeneration.length === 0 && removedSinceGeneration.length === 0,
+    ...(checklistChanged !== undefined ? { checklistChanged } : {}),
+    isCurrent:
+      newSinceGeneration.length === 0 &&
+      removedSinceGeneration.length === 0 &&
+      checklistChanged !== true,
   };
 }

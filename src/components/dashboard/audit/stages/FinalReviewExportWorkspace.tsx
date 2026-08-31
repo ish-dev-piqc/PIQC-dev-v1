@@ -23,6 +23,7 @@ import { formatAuditWindow } from '../../../../lib/audit/dateWindow';
 import { fetchPreAuditDeliverables } from '../../../../lib/audit/preAuditApi';
 import { listAuditEvidence } from '../../../../lib/audit/evidenceApi';
 import {
+  checklistLiveIds,
   computeDeliverableCurrency,
   type DeliverableCurrency,
 } from '../../../../lib/audit/deliverableGenerationApi';
@@ -35,7 +36,9 @@ import type { AuditWithContext } from '../../../../context/AuditContext';
 import type { MockReportDraft } from '../../../../lib/audit/mockReport';
 import type { MockWorkspaceEntry } from '../../../../lib/audit/mockWorkspaceEntries';
 import type { MockRiskSummary } from '../../../../lib/audit/mockRiskSummary';
+import { hasReachedStage } from '../../../../lib/audit/workflowStages';
 import HistoryDrawer from '../HistoryDrawer';
+import StagePreviewNotice from '../StagePreviewNotice';
 
 // =============================================================================
 // FinalReviewExportWorkspace — FINAL_REVIEW_EXPORT (Stage 8) center pane.
@@ -56,6 +59,14 @@ export default function FinalReviewExportWorkspace() {
   const { activeAudit } = useAudit();
   const { reports, setReports, ...data } = useAuditData();
   const isLight = theme === 'light';
+
+  // One-ahead preview guard (UX2): Stage 8 is viewable while the audit is
+  // still at Stage 7, and the sign-off/export RPCs do NOT re-check
+  // current_stage server-side (20260730000000) — so without this gate an
+  // audit could be signed off and exported before it ever reached Stage 8.
+  const hasReached =
+    !!activeAudit &&
+    hasReachedStage(activeAudit.workflow_type, activeAudit.current_stage, 'FINAL_REVIEW_EXPORT');
 
   const [confirmingSignoff, setConfirmingSignoff] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -89,13 +100,26 @@ export default function FinalReviewExportWorkspace() {
         ]);
         if (cancelled || !register.ok) return;
         const rows: Array<{ label: string; currency: DeliverableCurrency }> = [];
-        const push = (label: string, snapshot: DeliverableGroundingSnapshot | null | undefined) => {
-          const currency = computeDeliverableCurrency(snapshot, register.data);
+        const push = (
+          label: string,
+          snapshot: DeliverableGroundingSnapshot | null | undefined,
+          liveChecklistItemIds?: string[],
+        ) => {
+          const currency = computeDeliverableCurrency(snapshot, register.data, liveChecklistItemIds);
           if (currency) rows.push({ label, currency });
         };
         push('Confirmation letter', bundle.confirmation_letter?.grounding_snapshot);
         push('Agenda', bundle.agenda?.grounding_snapshot);
         push('Checklist', bundle.checklist?.grounding_snapshot);
+        push('Internal notification', bundle.internal_notification?.grounding_snapshot);
+        // Gap summary (PR-D3): its snapshot carries the extra axes (full
+        // register + checklist identity), so its currency also needs the LIVE
+        // checklist item ids — checklistLiveIds owns the no-row-means-[] policy.
+        push(
+          'Evidence gap summary',
+          bundle.evidence_gap_summary?.grounding_snapshot,
+          checklistLiveIds(bundle.checklist),
+        );
         setGroundingCurrency(rows);
       } catch (err) {
         console.error('[FinalReviewExportWorkspace] grounding currency load error:', err);
@@ -278,6 +302,7 @@ export default function FinalReviewExportWorkspace() {
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-5">
+      {!hasReached && activeAudit && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
       {/* Header */}
       <div>
         <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
@@ -390,7 +415,7 @@ export default function FinalReviewExportWorkspace() {
             }`}
           >
             <p className="font-semibold">
-              The evidence register changed after PIQC drafted{' '}
+              The evidence register or checklist changed after PIQC drafted{' '}
               {groundingCurrency.filter((r) => !r.currency.isCurrent).length === 1
                 ? 'a deliverable'
                 : 'deliverables'}
@@ -398,17 +423,23 @@ export default function FinalReviewExportWorkspace() {
             </p>
             {groundingCurrency
               .filter((r) => !r.currency.isCurrent)
-              .map((r) => (
-                <p key={r.label}>
-                  <span className="font-semibold">{r.label}:</span>{' '}
-                  {r.currency.newSinceGeneration.length > 0 &&
-                    `new — ${r.currency.newSinceGeneration.map((d) => d.title).join(', ')}`}
-                  {r.currency.newSinceGeneration.length > 0 &&
-                    r.currency.removedSinceGeneration.length > 0 && '; '}
-                  {r.currency.removedSinceGeneration.length > 0 &&
-                    `removed — ${r.currency.removedSinceGeneration.map((d) => d.title).join(', ')}`}
-                </p>
-              ))}
+              .map((r) => {
+                const flips = r.currency.withholdFlippedSinceGeneration ?? [];
+                const parts = [
+                  r.currency.newSinceGeneration.length > 0 &&
+                    `new — ${r.currency.newSinceGeneration.map((d) => d.title).join(', ')}`,
+                  r.currency.removedSinceGeneration.length > 0 &&
+                    `removed — ${r.currency.removedSinceGeneration.map((d) => d.title).join(', ')}`,
+                  flips.length > 0 &&
+                    `withhold flag changed — ${flips.map((d) => d.title).join(', ')}`,
+                  r.currency.checklistChanged === true && 'checklist items changed',
+                ].filter(Boolean);
+                return (
+                  <p key={r.label}>
+                    <span className="font-semibold">{r.label}:</span> {parts.join('; ')}
+                  </p>
+                );
+              })}
             <p>
               This never blocks export — revise at Stage 5 if the drift matters for this audit.
             </p>
@@ -448,8 +479,10 @@ export default function FinalReviewExportWorkspace() {
             </div>
             <button
               type="button"
-              onClick={() => allPassed && setConfirmingSignoff(true)}
-              disabled={!allPassed}
+              onClick={() => allPassed && hasReached && setConfirmingSignoff(true)}
+              // !hasReached: the sign-off RPC has no server-side stage check,
+              // so the one-ahead preview must not offer the latch.
+              disabled={!allPassed || !hasReached}
               className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${buttonApprove}`}
             >
               <Lock size={14} />
@@ -525,7 +558,9 @@ export default function FinalReviewExportWorkspace() {
             // Both the sign-off latch AND the live gate checklist must hold —
             // a post-sign-off edit demotes upstream approvals, and the export
             // must not ride the stale latch (spec: audit-export-readiness H4).
-            disabled={!finalSignedOff || !allPassed}
+            // !hasReached: a legacy pre-UX2 preview sign-off (the RPC never
+            // checked current_stage) must not leave export live from a preview.
+            disabled={!finalSignedOff || !allPassed || !hasReached}
             className={`inline-flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-md transition-colors ${buttonPrimary} disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             <Download size={14} />
@@ -534,7 +569,9 @@ export default function FinalReviewExportWorkspace() {
           <button
             type="button"
             onClick={exportDocx}
-            disabled={!finalSignedOff || !allPassed}
+            // !hasReached: a legacy pre-UX2 preview sign-off (the RPC never
+            // checked current_stage) must not leave export live from a preview.
+            disabled={!finalSignedOff || !allPassed || !hasReached}
             className={`inline-flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-md transition-colors ${buttonSecondary} disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             <FileText size={14} />
