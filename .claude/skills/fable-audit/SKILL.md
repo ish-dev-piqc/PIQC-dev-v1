@@ -148,6 +148,9 @@ never verified, never block, never affect the decision — they surface only in 
 
 ## Companions
 
+`methodology.md` — **the playbook**: model architecture, the three modes (audit / bug-hunt /
+security), risk tiers, lens weighting, verification doctrine, the refactor/apply path, and the
+hard-won operational rules. Read this to understand *why* the pipeline is shaped this way ·
 `surfaces.md` — globs, spines, hotspots, tier triggers, CI suppression · `lenses.md` — 4 lens
 rubrics at 2 altitudes · `findings-schema.md` — candidate YAML, severity, caps, verification rules ·
 `report-template.md` — final report shape · `../fable-apply/` — approval record + apply contract.
