@@ -44,6 +44,7 @@ const ENTITY_LABELS: Record<LineageEntityType, string> = {
   CONFIRMATION_LETTER: 'Confirmation letter',
   AGENDA: 'Agenda',
   CHECKLIST: 'Checklist',
+  INTERNAL_NOTIFICATION: 'Internal notification',
   WORKSPACE_ENTRY: 'Finding / observation',
   ISSUE: 'Issue',
   CAPA: 'CAPA',
@@ -62,7 +63,7 @@ const FILTER_GROUPS: Array<{ value: string; label: string; types: LineageEntityT
   {
     value: 'DELIVERABLES',
     label: 'Deliverables',
-    types: ['QUESTIONNAIRE', 'RISK_SUMMARY', 'CONFIRMATION_LETTER', 'AGENDA', 'CHECKLIST', 'REPORT'],
+    types: ['QUESTIONNAIRE', 'RISK_SUMMARY', 'CONFIRMATION_LETTER', 'AGENDA', 'CHECKLIST', 'INTERNAL_NOTIFICATION', 'REPORT'],
   },
   {
     value: 'FINDINGS',

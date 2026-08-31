@@ -11,6 +11,7 @@ import {
   CalendarDays,
   ListChecks,
   History as HistoryIcon,
+  Megaphone,
   Paperclip,
 } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
@@ -22,6 +23,7 @@ import {
   type MockConfirmationLetter,
   type MockAgenda,
   type MockChecklist,
+  type MockInternalNotification,
   type MockPreAuditBundle,
 } from '../../../../lib/audit/mockPreAudit';
 import {
@@ -32,6 +34,8 @@ import {
   approveAgenda,
   upsertChecklist,
   approveChecklist,
+  upsertInternalNotification,
+  approveInternalNotification,
   prefillStage5Deliverables,
 } from '../../../../lib/audit/preAuditApi';
 import type { DeliverableApprovalStatus, TrackedObjectType } from '../../../../types/audit';
@@ -51,18 +55,21 @@ import StagePreviewNotice from '../StagePreviewNotice';
 // =============================================================================
 // PreAuditDraftingWorkspace — PRE_AUDIT_DRAFTING stage center pane.
 //
-// Three tabs sharing the Revise / Save / Cancel / Approve pattern:
-//   - Confirmation Letter (sent to vendor)
-//   - Agenda (multi-item audit plan)
-//   - Checklist (auditor's working checklist)
+// Four tabs sharing the Revise / Save / Cancel / Approve pattern:
+//   - Confirmation Letter      (sent to vendor)
+//   - Agenda                   (multi-item audit plan)
+//   - Checklist                (auditor's working checklist)
+//   - Internal Notification    (internal heads-up inviting scope input — PR-D1)
 //
-// All three deliverables follow D-010 step 7 lifecycle:
+// All follow the D-010 step 7 lifecycle:
 //   - DRAFT until explicitly Approved
 //   - Editing an APPROVED deliverable demotes it to DRAFT (re-approval needed)
-//   - When all three are APPROVED, AUDIT_CONDUCT unlocks
+//   - When letter + agenda + checklist are APPROVED, AUDIT_CONDUCT unlocks.
+//     The internal notification NEVER gates advance (v8 rule) — its approval
+//     is its own latch only.
 // =============================================================================
 
-type TabKey = 'confirmation_letter' | 'agenda' | 'checklist';
+type TabKey = 'confirmation_letter' | 'agenda' | 'checklist' | 'internal_notification';
 
 interface TabDef {
   key: TabKey;
@@ -90,7 +97,18 @@ const TAB_DEFS: TabDef[] = [
     description: "The auditor's working checklist — what to observe, evidence to collect, checkpoints to verify.",
     icon: ListChecks,
   },
+  {
+    key: 'internal_notification',
+    label: 'Internal notification',
+    description: 'Internal heads-up announcing the audit and inviting scope input. Optional — never blocks advance.',
+    icon: Megaphone,
+  },
 ];
+
+// The 5→6 gate is exactly these (server truth: 20260730000000 readout).
+// The internal notification deliberately stays out — rendering the gate list
+// from TAB_DEFS would wrongly imply it blocks advance.
+const GATING_TAB_DEFS = TAB_DEFS.filter((t) => t.key !== 'internal_notification');
 
 export default function PreAuditDraftingWorkspace() {
   const { theme } = useTheme();
@@ -210,6 +228,7 @@ export default function PreAuditDraftingWorkspace() {
     confirmation_letter: null,
     agenda: null,
     checklist: null,
+    internal_notification: null,
   };
 
   // ---------------------------------------------------------------------------
@@ -352,11 +371,45 @@ export default function PreAuditDraftingWorkspace() {
     }
   };
 
+  const persistInternalNotification = async (
+    prev: MockInternalNotification | null,
+    next: MockInternalNotification | null,
+  ) => {
+    if (!next) return;
+    try {
+      const isApprovalTransition =
+        !!prev &&
+        prev.approval_status !== 'APPROVED' &&
+        next.approval_status === 'APPROVED';
+
+      if (isApprovalTransition) {
+        const result = await approveInternalNotification(prev.id, prev.updated_at);
+        if (result.ok) {
+          setBundle({ ...bundle, internal_notification: result.data });
+        } else {
+          await reloadAfterStaleApprove('approveInternalNotification', result.error);
+        }
+        return;
+      }
+
+      const persisted = await upsertInternalNotification(auditId, next.content);
+      if (persisted) {
+        setBundle({ ...bundle, internal_notification: persisted });
+      }
+    } catch (err) {
+      console.error('[PreAuditDraftingWorkspace] persistInternalNotification error:', err);
+      setBundle({ ...bundle, internal_notification: prev });
+    }
+  };
+
   const generateAllStubs = async () => {
+    // Stubs cover the three gating deliverables only — the internal
+    // notification has no stub by design (drafted from its tab when wanted).
     const stubs = {
       confirmation_letter: createConfirmationStub(auditId),
       agenda: createAgendaStub(auditId),
       checklist: createChecklistStub(auditId),
+      internal_notification: bundle.internal_notification,
     };
     setBundle(stubs);
 
@@ -370,6 +423,7 @@ export default function PreAuditDraftingWorkspace() {
         confirmation_letter: letter ?? stubs.confirmation_letter,
         agenda: agenda ?? stubs.agenda,
         checklist: checklist ?? stubs.checklist,
+        internal_notification: bundle.internal_notification,
       });
     } catch (err) {
       console.error('[PreAuditDraftingWorkspace] generateAllStubs error:', err);
@@ -399,10 +453,15 @@ export default function PreAuditDraftingWorkspace() {
     : 'bg-emerald-500 text-[#020617] hover:bg-emerald-400 disabled:bg-white/10 disabled:text-white/35';
 
   // ---------------------------------------------------------------------------
-  // Empty state — all three deliverables missing
+  // Empty state — nothing drafted yet. The notification is included in the
+  // check so an existing notification row is never hidden behind the stub
+  // screen (data on the server must always render).
   // ---------------------------------------------------------------------------
   const allMissing =
-    !bundle.confirmation_letter && !bundle.agenda && !bundle.checklist;
+    !bundle.confirmation_letter &&
+    !bundle.agenda &&
+    !bundle.checklist &&
+    !bundle.internal_notification;
 
   if (allMissing) {
     return (
@@ -415,9 +474,10 @@ export default function PreAuditDraftingWorkspace() {
           Draft pre-audit deliverables
         </h2>
         <p className={`${subColor} text-sm mt-1.5 leading-relaxed max-w-2xl`}>
-          The three deliverables — confirmation letter, agenda, and checklist — are drafted
-          here from your approved risk summary and vendor service mappings. Generate stubs
-          to start, then edit each down to your judgment.
+          The pre-audit deliverables — confirmation letter, agenda, checklist, and an
+          optional internal notification — are drafted here from your approved risk summary
+          and vendor service mappings. Generate stubs to start, then edit each down to your
+          judgment.
         </p>
         {hasReached && (
           <button
@@ -440,7 +500,10 @@ export default function PreAuditDraftingWorkspace() {
     confirmation_letter: bundle.confirmation_letter?.approval_status ?? null,
     agenda: bundle.agenda?.approval_status ?? null,
     checklist: bundle.checklist?.approval_status ?? null,
+    internal_notification: bundle.internal_notification?.approval_status ?? null,
   };
+  // Gate = the three gating deliverables only; the internal notification's
+  // approval is its own latch and never feeds this.
   const allApproved =
     approvalStatuses.confirmation_letter === 'APPROVED' &&
     approvalStatuses.agenda === 'APPROVED' &&
@@ -471,8 +534,9 @@ export default function PreAuditDraftingWorkspace() {
           Draft pre-audit deliverables
         </h2>
         <p className={`${subColor} text-sm mt-1.5 leading-relaxed max-w-2xl`}>
-          Three deliverables share this stage. All must be Approved before audit conduct unlocks.
-          Editing an Approved deliverable reverts it to Draft.
+          Four deliverables share this stage. The confirmation letter, agenda, and checklist
+          must be Approved before audit conduct unlocks; the internal notification is
+          optional and never blocks. Editing an Approved deliverable reverts it to Draft.
         </p>
       </div>
 
@@ -607,6 +671,31 @@ export default function PreAuditDraftingWorkspace() {
           />
         </>
       )}
+      {activeTab === 'internal_notification' && (
+        <>
+          <DeliverableGenerationPanel
+            kind="internal_notification"
+            deliverable={bundle.internal_notification}
+            evidenceRows={evidenceRows}
+            generating={generatingTab === 'internal_notification'}
+            editing={editingTabs['internal_notification'] === true}
+            error={generationError}
+            isLight={isLight}
+            previewLocked={!hasReached}
+            onGenerate={() => void runDeliverableGeneration('internal_notification')}
+          />
+          <InternalNotificationTab
+            deliverable={bundle.internal_notification}
+            isLight={isLight}
+            onChange={(next) => {
+              setBundle({ ...bundle, internal_notification: next });
+              persistInternalNotification(bundle.internal_notification, next);
+            }}
+            onEditingChange={(e) => setTabEditing('internal_notification', e)}
+            previewLocked={!hasReached}
+          />
+        </>
+      )}
 
       {/* Stage advance */}
       <div className={`${cardBg} border rounded-xl p-5`}>
@@ -619,12 +708,12 @@ export default function PreAuditDraftingWorkspace() {
               {alreadyAdvanced
                 ? 'Audit has already advanced past this stage'
                 : allApproved
-                ? 'All deliverables approved — ready to advance'
-                : 'Approve all three deliverables to advance'}
+                ? 'Gating deliverables approved — ready to advance'
+                : 'Approve the confirmation letter, agenda, and checklist to advance'}
             </p>
             {!alreadyAdvanced && !allApproved && (
               <ul className={`${subColor} text-xs mt-2 space-y-1`}>
-                {TAB_DEFS.map((t) => {
+                {GATING_TAB_DEFS.map((t) => {
                   const s = approvalStatuses[t.key];
                   const ok = s === 'APPROVED';
                   return (
@@ -859,6 +948,143 @@ function ConfirmationLetterTab({ deliverable, isLight, onChange, onEditingChange
             onChange={setRecipients}
             isLight={isLight}
           />
+          <ChipListEditor
+            label="Scope"
+            placeholder="One scope item per entry"
+            items={scope}
+            onChange={setScope}
+            isLight={isLight}
+            multiline
+          />
+        </div>
+      )}
+    </DeliverableShell>
+  );
+}
+
+// ============================================================================
+// Internal notification tab (PR-D1) — letter-shaped, deliberately without a
+// recipients editor: internal distribution happens outside PIQC, and
+// roles-only body text keeps the deliverable name-free end to end.
+// ============================================================================
+
+interface InternalNotificationTabProps {
+  deliverable: MockInternalNotification | null;
+  isLight: boolean;
+  onChange: (next: MockInternalNotification | null) => void;
+  // Reports the tab's edit mode so the generation panel can disable
+  // Revise while unsaved edits exist (rule: persist human edits first).
+  onEditingChange?: (editing: boolean) => void;
+  /** One-ahead preview (UX2): no scratch form, no Edit/Approve. */
+  previewLocked?: boolean;
+}
+
+function InternalNotificationTab({ deliverable, isLight, onChange, onEditingChange, previewLocked = false }: InternalNotificationTabProps) {
+  const [editing, setEditingRaw] = useState(!deliverable);
+  const setEditing = (next: boolean) => {
+    setEditingRaw(next);
+    onEditingChange?.(next);
+  };
+  const [body, setBody] = useState(deliverable?.content.body_text ?? '');
+  const [scope, setScope] = useState<string[]>(deliverable?.content.scope ?? []);
+
+  // updated_at in the deps: grounded generation mutates this row under the
+  // SAME id (see ChecklistTab for the full rationale). The workspace disables
+  // Draft/Revise while editing, so this resync never fires over unsaved edits.
+  useEffect(() => {
+    setEditing(!deliverable);
+    setBody(deliverable?.content.body_text ?? '');
+    setScope(deliverable?.content.scope ?? []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deliverable?.id, deliverable?.updated_at]);
+
+  const save = () => {
+    onChange({
+      id: deliverable?.id ?? `in-${Date.now()}`,
+      audit_id: deliverable?.audit_id ?? '',
+      content: { body_text: body, scope },
+      // Editing demotes APPROVED → DRAFT
+      approval_status: 'DRAFT',
+      approved_by_name: null,
+      approved_at: null,
+      // Optimistic placeholder; the persist round-trip replaces this with the
+      // server row (whose updated_at the approve CAS then uses).
+      updated_at: deliverable?.updated_at ?? new Date().toISOString(),
+    });
+    setEditing(false);
+  };
+
+  const approve = () => {
+    if (!deliverable) return;
+    onChange({
+      ...deliverable,
+      approval_status: 'APPROVED',
+      approved_at: new Date().toISOString(),
+      approved_by_name: 'You',
+    });
+  };
+
+  const cancel = () => {
+    setBody(deliverable?.content.body_text ?? '');
+    setScope(deliverable?.content.scope ?? []);
+    setEditing(false);
+  };
+
+  return (
+    <DeliverableShell
+      kind="Internal notification"
+      objectType="INTERNAL_NOTIFICATION_OBJECT"
+      description="Circulated inside your organization to announce the audit and invite scope input before the opening meeting. Optional — approving it is never required to advance. Address roles, not names; distribution happens outside PIQC."
+      deliverable={deliverable}
+      isLight={isLight}
+      editing={editing}
+      onBeginEdit={() => setEditing(true)}
+      onSave={save}
+      onCancel={cancel}
+      onApprove={approve}
+      canSave={!!body.trim()}
+      previewLocked={previewLocked}
+    >
+      {previewLocked && !deliverable ? (
+        <p className="text-fg-muted text-sm">Nothing recorded yet.</p>
+      ) : !editing && deliverable ? (
+        <div className="space-y-4">
+          <SubSection label="Body" isLight={isLight}>
+            <p className={`text-sm whitespace-pre-wrap leading-relaxed ${isLight ? 'text-[#0F172A]' : 'text-white'}`}>
+              {deliverable.content.body_text}
+            </p>
+          </SubSection>
+          {deliverable.content.scope.length > 0 && (
+            <SubSection label="Scope" isLight={isLight}>
+              <ul className="space-y-1">
+                {deliverable.content.scope.map((s, i) => (
+                  <li
+                    key={i}
+                    className={`text-sm flex items-start gap-2 ${isLight ? 'text-[#0F172A]' : 'text-white'}`}
+                  >
+                    <span
+                      className={`mt-1.5 w-1 h-1 rounded-full flex-shrink-0 ${
+                        isLight ? 'bg-brand-600/55' : 'bg-brand-300/55'
+                      }`}
+                    />
+                    {s}
+                  </li>
+                ))}
+              </ul>
+            </SubSection>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <FieldLabel label="Body text" isLight={isLight}>
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={10}
+              placeholder="Announce the audit to internal stakeholders and invite scope input before the opening meeting. Address roles, not names."
+              className={textareaClass(isLight)}
+            />
+          </FieldLabel>
           <ChipListEditor
             label="Scope"
             placeholder="One scope item per entry"
@@ -1123,11 +1349,12 @@ const PANEL_NOUNS: Record<TabKey, string> = {
   confirmation_letter: 'confirmation letter',
   agenda: 'agenda',
   checklist: 'checklist',
+  internal_notification: 'internal notification',
 };
 
 interface DeliverableGenerationPanelProps {
   kind: TabKey;
-  deliverable: MockConfirmationLetter | MockAgenda | MockChecklist | null;
+  deliverable: MockConfirmationLetter | MockAgenda | MockChecklist | MockInternalNotification | null;
   evidenceRows: AuditEvidenceListRow[] | null;
   generating: boolean;
   editing: boolean;
