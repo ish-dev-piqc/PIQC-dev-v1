@@ -53,26 +53,39 @@ const ENTITY_LABELS: Record<LineageEntityType, string> = {
 };
 
 // Filter groups keep the select scannable — the raw entity-type list would be
-// noise. NOT compiler-checked: a new LineageEntityType missing from every
-// group is silently unfilterable, so extend the right group when adding one.
+// noise. GROUP_OF is Record-typed so a new LineageEntityType cannot compile
+// without declaring where it filters (same rule as the API layer's
+// KIND_SHAPE); 'SPINE' = the seed/audit backbone, always visible via the
+// ancestor-path rule, member of no group.
+const GROUP_OF: Record<LineageEntityType, 'SPINE' | 'RISKS' | 'VENDOR' | 'DELIVERABLES' | 'FINDINGS'> = {
+  AUDITEE: 'SPINE',
+  AUDIT: 'SPINE',
+  PROTOCOL_RISK: 'RISKS',
+  VENDOR_SERVICE: 'VENDOR',
+  SERVICE_MAPPING: 'VENDOR',
+  TRUST_ASSESSMENT: 'VENDOR',
+  QUESTIONNAIRE: 'DELIVERABLES',
+  RISK_SUMMARY: 'DELIVERABLES',
+  CONFIRMATION_LETTER: 'DELIVERABLES',
+  AGENDA: 'DELIVERABLES',
+  CHECKLIST: 'DELIVERABLES',
+  INTERNAL_NOTIFICATION: 'DELIVERABLES',
+  EVIDENCE_GAP_SUMMARY: 'DELIVERABLES',
+  WORKSPACE_ENTRY: 'FINDINGS',
+  ISSUE: 'FINDINGS',
+  CAPA: 'FINDINGS',
+  REPORT: 'DELIVERABLES',
+};
+
+const typesInGroup = (group: string): LineageEntityType[] =>
+  (Object.keys(GROUP_OF) as LineageEntityType[]).filter((t) => GROUP_OF[t] === group);
+
 const FILTER_GROUPS: Array<{ value: string; label: string; types: LineageEntityType[] }> = [
   { value: 'ALL', label: 'All records', types: [] },
-  { value: 'RISKS', label: 'Protocol risks', types: ['PROTOCOL_RISK'] },
-  {
-    value: 'VENDOR',
-    label: 'Service & trust',
-    types: ['VENDOR_SERVICE', 'SERVICE_MAPPING', 'TRUST_ASSESSMENT'],
-  },
-  {
-    value: 'DELIVERABLES',
-    label: 'Deliverables',
-    types: ['QUESTIONNAIRE', 'RISK_SUMMARY', 'CONFIRMATION_LETTER', 'AGENDA', 'CHECKLIST', 'INTERNAL_NOTIFICATION', 'EVIDENCE_GAP_SUMMARY', 'REPORT'],
-  },
-  {
-    value: 'FINDINGS',
-    label: 'Findings, issues & CAPAs',
-    types: ['WORKSPACE_ENTRY', 'ISSUE', 'CAPA'],
-  },
+  { value: 'RISKS', label: 'Protocol risks', types: typesInGroup('RISKS') },
+  { value: 'VENDOR', label: 'Service & trust', types: typesInGroup('VENDOR') },
+  { value: 'DELIVERABLES', label: 'Deliverables', types: typesInGroup('DELIVERABLES') },
+  { value: 'FINDINGS', label: 'Findings, issues & CAPAs', types: typesInGroup('FINDINGS') },
 ];
 
 // Node fill colors for the SVG mini-map. Hex constants from the brand palette

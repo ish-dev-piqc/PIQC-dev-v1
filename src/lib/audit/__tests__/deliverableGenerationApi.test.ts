@@ -30,10 +30,12 @@ vi.mock('../../supabase', () => ({
 
 import {
   applyDeliverableGeneration,
+  checklistLiveIds,
   computeDeliverableCurrency,
   requestDeliverableDraft,
   type DeliverableDraftProposal,
 } from '../deliverableGenerationApi';
+import type { MockChecklist } from '../mockPreAudit';
 import type { AuditEvidenceListRow, DeliverableGroundingSnapshot } from '../../../types/audit';
 
 const mockFetch = vi.fn();
@@ -369,5 +371,55 @@ describe('computeDeliverableCurrency — gap-summary snapshot (register present)
     expect(currency?.removedSinceGeneration).toEqual([
       { document_id: 'dw', title: 'Withheld doc' },
     ]);
+  });
+
+  it('checklist axis is independent of the register axis (checklist_item_ids without register)', () => {
+    // The type declares the two snapshot fields independently — a future kind
+    // that records checklist identity without a register snapshot still gets
+    // its axis measured, composed into the legacy-shaped diff.
+    const snapshot = { ...GROUNDING, checklist_item_ids: ['i1'] };
+    const currency = computeDeliverableCurrency(snapshot, [evidenceRow({})], ['i1', 'i2']);
+    expect(currency?.checklistChanged).toBe(true);
+    expect(currency?.isCurrent).toBe(false);
+    // And with matching ids the axis reports clean, not unknowable.
+    const clean = computeDeliverableCurrency(snapshot, [evidenceRow({})], ['i1']);
+    expect(clean?.checklistChanged).toBe(false);
+    expect(clean?.isCurrent).toBe(true);
+  });
+
+  it('set semantics catch a duplicate-id collapse the one-way scan would miss', () => {
+    // live [a, a] vs snapshot [a, b]: same length, every live id present in
+    // the snapshot — but item b is gone. Set sizes differ → changed.
+    const snapshot = { ...GROUNDING, checklist_item_ids: ['a', 'b'] };
+    const currency = computeDeliverableCurrency(snapshot, [evidenceRow({})], ['a', 'a']);
+    expect(currency?.checklistChanged).toBe(true);
+  });
+});
+
+describe('checklistLiveIds', () => {
+  const item = (id: string) => ({
+    id,
+    prompt: 'Verify something',
+    checkpoint_ref: null,
+    evidence_expected: false,
+  });
+  const row = (items: ReturnType<typeof item>[]): MockChecklist => ({
+    id: 'ch1',
+    audit_id: 'a1',
+    content: { items },
+    approval_status: 'DRAFT',
+    approved_by_name: null,
+    approved_at: null,
+    updated_at: '2026-09-05T00:00:00Z',
+  });
+
+  it('maps item ids; no checklist row means genuinely zero items', () => {
+    expect(checklistLiveIds(row([item('i1'), item('i2')]))).toEqual(['i1', 'i2']);
+    expect(checklistLiveIds(null)).toEqual([]);
+  });
+
+  it('tolerates a malformed jsonb content missing the items array', () => {
+    const malformed = { ...row([]), content: {} } as unknown as MockChecklist;
+    expect(checklistLiveIds(malformed)).toEqual([]);
   });
 });

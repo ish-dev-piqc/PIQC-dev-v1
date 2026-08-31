@@ -23,6 +23,7 @@ import { formatAuditWindow } from '../../../../lib/audit/dateWindow';
 import { fetchPreAuditDeliverables } from '../../../../lib/audit/preAuditApi';
 import { listAuditEvidence } from '../../../../lib/audit/evidenceApi';
 import {
+  checklistLiveIds,
   computeDeliverableCurrency,
   type DeliverableCurrency,
 } from '../../../../lib/audit/deliverableGenerationApi';
@@ -113,12 +114,11 @@ export default function FinalReviewExportWorkspace() {
         push('Internal notification', bundle.internal_notification?.grounding_snapshot);
         // Gap summary (PR-D3): its snapshot carries the extra axes (full
         // register + checklist identity), so its currency also needs the LIVE
-        // checklist item ids. No checklist row = genuinely zero items ([]),
-        // not "unknowable" — rows are upsert-only, never deleted.
+        // checklist item ids — checklistLiveIds owns the no-row-means-[] policy.
         push(
           'Evidence gap summary',
           bundle.evidence_gap_summary?.grounding_snapshot,
-          bundle.checklist?.content.items.map((i) => i.id) ?? [],
+          checklistLiveIds(bundle.checklist),
         );
         setGroundingCurrency(rows);
       } catch (err) {

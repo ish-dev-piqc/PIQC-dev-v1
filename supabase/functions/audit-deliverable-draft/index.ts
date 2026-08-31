@@ -408,6 +408,19 @@ async function loadGapSummaryContext(
     evidence_expected: e.raw.evidence_expected === true,
   }));
 
+  // Snapshot identity comes from the RAW item list, NOT the capped/filtered
+  // prompt extraction above: the client diffs these ids against the FULL live
+  // checklist, so a capped snapshot would flag a >maxItems checklist as
+  // permanently stale the instant it is drafted — and Revise could never
+  // clear it (regeneration re-caps).
+  const rawChecklistItems = Array.isArray((checklistContent as Record<string, unknown> | null)?.items)
+    ? ((checklistContent as Record<string, unknown>).items as unknown[])
+    : [];
+  const checklistItemIds = rawChecklistItems
+    .filter((it): it is Record<string, unknown> => !!it && typeof it === "object")
+    .map((it) => it.id)
+    .filter((id): id is string => typeof id === "string");
+
   return {
     scopeAreas,
     registerListing,
@@ -416,7 +429,7 @@ async function loadGapSummaryContext(
     registerSnapshot: register.map((d) => ({
       document_id: d.document_id, title: d.title, status: d.status, included: d.included,
     })),
-    checklistItemIds: checklistEntries.map((e) => e.id),
+    checklistItemIds,
   };
 }
 

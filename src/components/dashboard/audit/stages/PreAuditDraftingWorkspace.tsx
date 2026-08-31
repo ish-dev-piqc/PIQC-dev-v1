@@ -47,6 +47,7 @@ import type { DeliverableApprovalStatus, TrackedObjectType } from '../../../../t
 import { listAuditEvidence } from '../../../../lib/audit/evidenceApi';
 import {
   applyDeliverableGeneration,
+  checklistLiveIds,
   computeDeliverableCurrency,
   requestDeliverableDraft,
 } from '../../../../lib/audit/deliverableGenerationApi';
@@ -205,15 +206,15 @@ export default function PreAuditDraftingWorkspace() {
   // network-noise optimisation.
   const attemptedPrefillRef = useRef<Set<string>>(new Set());
 
-  // Notification-first escape hatch: the guided stub screen (below) renders
-  // when nothing is drafted, but the internal notification has no stub — this
-  // flag lets the auditor skip straight to its tab without creating three
-  // unwanted stub rows first.
-  const [notificationFirst, setNotificationFirst] = useState(false);
+  // Optional-first escape hatch: the guided stub screen (below) renders when
+  // nothing is drafted, but the two optional kinds (notification, gap
+  // summary) have no stubs — this flag lets the auditor skip straight to
+  // either tab without creating three unwanted stub rows first.
+  const [optionalFirst, setOptionalFirst] = useState(false);
 
   useEffect(() => {
     setActiveTab('confirmation_letter');
-    setNotificationFirst(false);
+    setOptionalFirst(false);
   }, [activeAudit?.id]);
 
   useEffect(() => {
@@ -323,7 +324,7 @@ export default function PreAuditDraftingWorkspace() {
     setBundles((prevBundles) => ({ ...prevBundles, [auditId]: fresh }));
   };
 
-  // One persist flow for all four deliverables (the 4th copy was the
+  // One persist flow for all five deliverables (the 4th copy was the
   // rule-of-three moment). Approval transitions CAS on the row version the
   // reviewer saw — the latch attests to exactly the content they reviewed.
   // An upsert that FAILS (null; the API layer already logged it) REVERTS the
@@ -477,7 +478,7 @@ export default function PreAuditDraftingWorkspace() {
   const allMissing =
     trioMissing && !bundle.internal_notification && !bundle.evidence_gap_summary;
 
-  if (allMissing && !notificationFirst) {
+  if (allMissing && !optionalFirst) {
     return (
       <div className="p-6 max-w-3xl mx-auto">
         {!hasReached && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
@@ -507,12 +508,22 @@ export default function PreAuditDraftingWorkspace() {
             <button
               type="button"
               onClick={() => {
-                setNotificationFirst(true);
+                setOptionalFirst(true);
                 setActiveTab('internal_notification');
               }}
               className={`${subColor} text-sm font-medium underline underline-offset-2 hover:opacity-80`}
             >
               Start with the internal notification instead
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOptionalFirst(true);
+                setActiveTab('evidence_gap_summary');
+              }}
+              className={`${subColor} text-sm font-medium underline underline-offset-2 hover:opacity-80`}
+            >
+              …or the evidence gap summary
             </button>
           </div>
         )}
@@ -754,7 +765,7 @@ export default function PreAuditDraftingWorkspace() {
             error={generationError}
             isLight={isLight}
             previewLocked={!hasReached}
-            liveChecklistItemIds={bundle.checklist?.content.items.map((i) => i.id) ?? []}
+            liveChecklistItemIds={checklistLiveIds(bundle.checklist)}
             onGenerate={() => void runDeliverableGeneration('evidence_gap_summary')}
           />
           <EvidenceGapSummaryTab
@@ -1640,9 +1651,12 @@ function DeliverableGenerationPanel({
               {deliverable?.generated_at
                 ? ` on ${new Date(deliverable.generated_at).toLocaleDateString()}`
                 : ''}
-              {' '}from the protocol and{' '}
-              {deliverable?.grounding_snapshot?.evidence.length ?? 0} evidence source
-              {(deliverable?.grounding_snapshot?.evidence.length ?? 0) === 1 ? '' : 's'}
+              {/* A register-carrying snapshot (gap summary) is grounded in the
+                  FULL register — quoting the included-only evidence count
+                  would contradict a body that names withheld docs too. */}
+              {deliverable?.grounding_snapshot?.register
+                ? ` from the protocol and the full evidence register (${deliverable.grounding_snapshot.register.length} document${deliverable.grounding_snapshot.register.length === 1 ? '' : 's'})`
+                : ` from the protocol and ${deliverable?.grounding_snapshot?.evidence.length ?? 0} evidence source${(deliverable?.grounding_snapshot?.evidence.length ?? 0) === 1 ? '' : 's'}`}
               {refCount > 0 ? ` · ${refCount} cited passage${refCount === 1 ? '' : 's'}` : ''}.
               {' '}Every citation quotes its source verbatim — invalid ones are stripped, never repaired.
             </p>

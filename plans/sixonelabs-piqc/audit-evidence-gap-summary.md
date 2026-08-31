@@ -83,8 +83,8 @@ byte-identical).
 - src/lib/audit/deliverableGenerationApi.ts (DeliverableKind union; KIND_SHAPE/APPLY_RPC/DRAFT_NOUN — all three are exhaustive Records, compiler-forced; apply content flows through the existing letter arm untouched)
 - src/lib/audit/lineageAdapter.ts (LineageEntityType + 'EVIDENCE_GAP_SUMMARY'; the two hand-written unions at :293-301; 5th deliverables entry — the no-prefill guards already handle it)
 - src/components/dashboard/audit/TraceabilityDrawer.tsx (ENTITY_LABELS (Record, compiler-forced) + FILTER_GROUPS DELIVERABLES membership (NOT type-checked — silent-drop hazard, must not forget); fix the stale ":54 13 raw entity types" comment in passing)
-- src/components/dashboard/audit/stages/PreAuditDraftingWorkspace.tsx (5th TabKey + TAB_DEFS entry `gating: false` (gate list + allApproved derive from TAB_DEFS — zero gate changes); EMPTY_BUNDLE; approvalStatuses; persistEvidenceGapSummary wrapper (persistDeliverable's generic widens automatically); PANEL_NOUNS + generation-panel deliverable union; EvidenceGapSummaryTab cloning InternalNotificationTab incl. preview guard; `allMissing` conjunction gains the 5th kind (hand-written — an existing row must not hide behind the stub screen); header/empty-state copy "Four/four" → "Five/five"; notification-first escape hatch stays notification-only)
-- src/components/dashboard/audit/stages/FinalReviewExportWorkspace.tsx (one `push('Evidence gap summary', …)` line at :110)
+- src/components/dashboard/audit/stages/PreAuditDraftingWorkspace.tsx (5th TabKey + TAB_DEFS entry `gating: false` (gate list + allApproved derive from TAB_DEFS — zero gate changes); EMPTY_BUNDLE; approvalStatuses; persistEvidenceGapSummary wrapper (persistDeliverable's generic widens automatically); PANEL_NOUNS + generation-panel deliverable union; EvidenceGapSummaryTab cloning InternalNotificationTab incl. preview guard; `allMissing` conjunction gains the 5th kind (hand-written — an existing row must not hide behind the stub screen); header/empty-state copy "Four/four" → "Five/five"; the empty-state escape hatch generalized to optional-first with a second link for the gap summary — the copy names both optional kinds' tabs, so both need a direct route [review finding, supersedes the earlier notification-only pin])
+- src/components/dashboard/audit/stages/FinalReviewExportWorkspace.tsx (5th `push('Evidence gap summary', …)` feeding the gap kind the live checklist item ids; the drift-line render generalized to a parts-join so the two new axes — withhold flips, checklist drift — display; header sentence widened to "register or checklist")
 - src/lib/audit/__tests__/preAuditApi.test.ts (extend: upsert/approve pair incl. CAS/STALE_CONTENT, mirroring the D1 section)
 - src/lib/audit/__tests__/deliverableGenerationApi.test.ts (extend: gap summary routes letter-shaped to `audit_mode_apply_evidence_gap_summary_generation`)
 - src/lib/audit/__tests__/lineageAdapter.test.ts (fixture 5th field; gap-summary node test; the exhaustive trackedObjectType test covers it)
@@ -180,8 +180,13 @@ none
   detection — partner's-return migration.
 - **Client currency filter lacks the engine's `kind === 'AUDIT_EVIDENCE'` filter**
   (pre-existing, all kinds): a non-evidence doc in `audit_source_documents` with
-  `include_in_generation=true` is permanently flagged `newSinceGeneration`. Fix when
-  next touching `computeDeliverableCurrency` (the D3 client slice is a natural moment).
+  `include_in_generation=true` is permanently flagged `newSinceGeneration`. Examined at
+  the D3 client slice ("natural moment"): NOT fixable inside
+  `computeDeliverableCurrency` — `AuditEvidenceListRow` carries no `kind` field, so the
+  real fix is a `documents.kind` filter (or exposed column) in `listAuditEvidence`
+  (evidenceApi.ts), which is out of D3 scope. In practice every attach flows through
+  ingest with kind='AUDIT_EVIDENCE' (evidenceApi.ts:182), so only a hand-crafted RPC
+  call can create the mismatch. Punted to its own PR; trigger unchanged.
 - **Names-in-titles is a prompt-level soft control**: the gap prompt now instructs
   referring to person-titled documents by type + non-name detail, but freetext titles
   have no mechanical name scrubber and a bad model call persists into the append-only
@@ -190,7 +195,31 @@ none
 - **Register cap discloses, withheld rows exempt**: on-file rows past
   `GAP_MAX_REGISTER_DOCS` (120) are dropped deterministically (newest-first order) and
   the count is disclosed to the model; withheld rows are never dropped. Revisit the cap
-  if real registers approach it.
+  if real registers approach it. Related smaller gap (client-slice review): checklist
+  expectations in the gap prompt reuse `DELIVERABLES.checklist.maxItems` (40) WITHOUT a
+  disclosure line — align with the register cap's disclosure if real checklists approach
+  40. (The snapshot's `checklist_item_ids` is deliberately NOT capped — see below.)
+- **Checklist currency axis is identity-only** (client-slice review, decided): the
+  snapshot records item IDS (raw, uncapped — the capped prompt extraction would flag
+  >40-item checklists permanently stale, fixed in review); rewording an item's PROMPT
+  keeps its id, so a rewrite of the expectation the summary was written against never
+  flags drift, while a mere withhold-lever flip does. Accepted asymmetry: a prompt edit
+  demotes the checklist itself to DRAFT (visible in its own tab), and hashing prompt
+  text into the snapshot is a content-comparison channel we don't want yet. Trigger:
+  auditors reporting stale summaries after checklist rewording.
+- **Register `status` is snapshotted but not compared**: a doc drafted as
+  `[on file, pending]` that later flips to ready/failed changes what the summary says
+  without staling it. Harmless today — text intake resolves status synchronously, so
+  the window is seconds. Trigger: PR-B3+ async ingestion (Reducto) makes status
+  transitions real → add a status axis, and take that same moment to consolidate the
+  drift-axis prose now duplicated across the Stage-5 panel and Stage-8 currency panel
+  (two hand-maintained renderings of the same four axes).
+- **Client API lifecycle is now a 5th clone too** (mirror of the SQL-lifecycle entry):
+  `flattenEvidenceGapSummary` + upsert/approve wrappers clone the notification's, and
+  all five upsert wrappers return `T | null` rather than the `Result<T>` the
+  architecture rule prescribes (pre-existing file-wide shape; `persistDeliverable`'s
+  revert-on-null contract depends on it). Fold both into the generic-deliverable
+  rework. Trigger: the 6th kind, or the partner's return, whichever first.
 
 ## Verification
 

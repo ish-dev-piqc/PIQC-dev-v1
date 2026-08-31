@@ -342,6 +342,28 @@ describe('PreAuditDraftingWorkspace — evidence gap summary is non-gating (PR-D
     ).toBeInTheDocument();
   });
 
+  it('empty state offers a gap-summary-first path that creates NO stub rows', async () => {
+    const { upsertConfirmationLetter, upsertAgenda, upsertChecklist } = await import(
+      '../../../../../lib/audit/preAuditApi'
+    );
+    mockFetch.mockResolvedValue(EMPTY_BUNDLE);
+
+    render(<PreAuditDraftingWorkspace />);
+
+    const escape = await screen.findByRole('button', {
+      name: /or the evidence gap summary/i,
+    });
+    fireEvent.click(escape);
+
+    // Straight into the 5th tab's scratch form — and no stub upserts fired.
+    expect(
+      screen.getByPlaceholderText(/what evidence is on file and what remains outstanding/i),
+    ).toBeInTheDocument();
+    expect(upsertConfirmationLetter).not.toHaveBeenCalled();
+    expect(upsertAgenda).not.toHaveBeenCalled();
+    expect(upsertChecklist).not.toHaveBeenCalled();
+  });
+
   it('PREVIEW: the 5th tab is read-only — no scratch form, generation CTA disabled', async () => {
     mockActiveAudit = {
       id: 'audit-1',
