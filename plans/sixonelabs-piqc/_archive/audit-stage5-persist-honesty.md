@@ -1,8 +1,9 @@
 ---
-status: in-review
+status: merged
+merged: 2026-08-31
 owner: sixonelabs-piqc
 feature: audit-stage5-persist-honesty
-target_pr: TBD
+target_pr: #571
 ---
 
 # Audit Stage-5 persist honesty — silent data-loss fix
