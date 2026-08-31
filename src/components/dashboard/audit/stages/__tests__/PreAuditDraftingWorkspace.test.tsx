@@ -232,4 +232,28 @@ describe('PreAuditDraftingWorkspace — internal notification is non-gating (PR-
       screen.getByPlaceholderText(/announce the audit to internal stakeholders/i),
     ).toBeInTheDocument();
   });
+
+  it('empty state offers a notification-first path that creates NO stub rows', async () => {
+    const { upsertConfirmationLetter, upsertAgenda, upsertChecklist } = await import(
+      '../../../../../lib/audit/preAuditApi'
+    );
+    mockFetch.mockResolvedValue(EMPTY_BUNDLE);
+
+    render(<PreAuditDraftingWorkspace />);
+
+    const escape = await screen.findByRole('button', {
+      name: /start with the internal notification instead/i,
+    });
+    fireEvent.click(escape);
+
+    // Straight into the 4th tab's scratch form — and no stub upserts fired.
+    expect(
+      screen.getByPlaceholderText(/announce the audit to internal stakeholders/i),
+    ).toBeInTheDocument();
+    expect(upsertConfirmationLetter).not.toHaveBeenCalled();
+    expect(upsertAgenda).not.toHaveBeenCalled();
+    expect(upsertChecklist).not.toHaveBeenCalled();
+    // The trio's one-click stub bootstrap stays reachable from the tabbed view.
+    expect(screen.getByRole('button', { name: /generate all three stubs/i })).toBeInTheDocument();
+  });
 });

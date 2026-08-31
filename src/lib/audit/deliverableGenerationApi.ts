@@ -36,7 +36,7 @@ export type DeliverableKind =
 export interface DeliverableDraftProposal {
   mode: 'generate' | 'revise';
   deliverable: DeliverableKind;
-  // items for checklist/agenda; body_text + scope for the letter.
+  // items for items-shaped kinds; body_text + scope for letter-shaped ones.
   content_patch: {
     items?: MockChecklistItem[] | MockAgendaItem[];
     body_text?: string;
@@ -49,6 +49,17 @@ export interface DeliverableDraftProposal {
   protocol_source: 'ready' | 'unavailable';
   evidence_doc_count: number;
 }
+
+// Client mirror of the engine's per-kind shape (audit-deliverable-draft
+// DELIVERABLES config). Record-typed so a new kind cannot compile without
+// declaring its shape — the alternative (a kind-ternary with an items
+// fall-through) silently wipes a letter-shaped kind's body on apply.
+const KIND_SHAPE: Record<DeliverableKind, 'items' | 'letter'> = {
+  checklist: 'items',
+  agenda: 'items',
+  confirmation_letter: 'letter',
+  internal_notification: 'letter',
+};
 
 const APPLY_RPC: Record<DeliverableKind, string> = {
   checklist: 'audit_mode_apply_checklist_generation',
@@ -114,19 +125,17 @@ export async function applyDeliverableGeneration(
   opts?: { currentRecipients?: string[] },
 ): Promise<Result<null>> {
   const content =
-    proposal.deliverable === 'confirmation_letter'
+    KIND_SHAPE[proposal.deliverable] === 'letter'
       ? {
           body_text: proposal.content_patch.body_text ?? '',
           scope: proposal.content_patch.scope ?? [],
-          recipients: opts?.currentRecipients ?? [],
+          // Recipients exist only on the vendor-facing letter; the internal
+          // notification is name-free by design.
+          ...(proposal.deliverable === 'confirmation_letter'
+            ? { recipients: opts?.currentRecipients ?? [] }
+            : {}),
         }
-      : proposal.deliverable === 'internal_notification'
-        ? {
-            // Letter-shaped but deliberately recipient-free (roles-only body).
-            body_text: proposal.content_patch.body_text ?? '',
-            scope: proposal.content_patch.scope ?? [],
-          }
-        : { items: proposal.content_patch.items ?? [] };
+      : { items: proposal.content_patch.items ?? [] };
 
   const noun = DRAFT_NOUN[proposal.deliverable];
   const { error } = await supabase.rpc(APPLY_RPC[proposal.deliverable], {

@@ -202,14 +202,22 @@ BEGIN
   WHERE id = v_before.id
   RETURNING * INTO v_after;
 
+  -- approved_at/approved_by are in the diff (unlike the letter's clone
+  -- source): when a demote voids an approval, the forensic trail must record
+  -- WHOSE approval was cleared, not just APPROVED→DRAFT. Extending the three
+  -- sibling upserts the same way needs a migration — partner's-return ledger.
   v_diff := audit_mode_diff_jsonb(
     jsonb_build_object(
       'content',         v_before.content,
-      'approval_status', v_before.approval_status
+      'approval_status', v_before.approval_status,
+      'approved_at',     v_before.approved_at,
+      'approved_by',     v_before.approved_by
     ),
     jsonb_build_object(
       'content',         v_after.content,
-      'approval_status', v_after.approval_status
+      'approval_status', v_after.approval_status,
+      'approved_at',     v_after.approved_at,
+      'approved_by',     v_after.approved_by
     )
   );
 

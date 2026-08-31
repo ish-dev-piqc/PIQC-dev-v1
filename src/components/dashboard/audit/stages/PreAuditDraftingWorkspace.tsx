@@ -37,6 +37,7 @@ import {
   upsertInternalNotification,
   approveInternalNotification,
   prefillStage5Deliverables,
+  type DeliverableApproveResult,
 } from '../../../../lib/audit/preAuditApi';
 import type { DeliverableApprovalStatus, TrackedObjectType } from '../../../../types/audit';
 import { listAuditEvidence } from '../../../../lib/audit/evidenceApi';
@@ -76,6 +77,10 @@ interface TabDef {
   label: string;
   description: string;
   icon: typeof FileText;
+  // Whether this deliverable's approval feeds the 5→6 gate (server truth:
+  // 20260730000000 readout). Declared here ONCE — the gate checklist and the
+  // advance condition both derive from it, so they can never disagree.
+  gating: boolean;
 }
 
 const TAB_DEFS: TabDef[] = [
@@ -84,31 +89,41 @@ const TAB_DEFS: TabDef[] = [
     label: 'Confirmation letter',
     description: 'Sent to the vendor confirming dates, attendees, and scope.',
     icon: FileText,
+    gating: true,
   },
   {
     key: 'agenda',
     label: 'Agenda',
     description: 'Multi-day audit plan: time slots, topics, owners, and notes.',
     icon: CalendarDays,
+    gating: true,
   },
   {
     key: 'checklist',
     label: 'Checklist',
     description: "The auditor's working checklist — what to observe, evidence to collect, checkpoints to verify.",
     icon: ListChecks,
+    gating: true,
   },
   {
     key: 'internal_notification',
     label: 'Internal notification',
     description: 'Internal heads-up announcing the audit and inviting scope input. Optional — never blocks advance.',
     icon: Megaphone,
+    gating: false,
   },
 ];
 
-// The 5→6 gate is exactly these (server truth: 20260730000000 readout).
-// The internal notification deliberately stays out — rendering the gate list
-// from TAB_DEFS would wrongly imply it blocks advance.
-const GATING_TAB_DEFS = TAB_DEFS.filter((t) => t.key !== 'internal_notification');
+const GATING_TAB_DEFS = TAB_DEFS.filter((t) => t.gating);
+
+// One place for "nothing loaded yet" — the render fallback and the functional
+// bundle merges below both use it.
+const EMPTY_BUNDLE: MockPreAuditBundle = {
+  confirmation_letter: null,
+  agenda: null,
+  checklist: null,
+  internal_notification: null,
+};
 
 export default function PreAuditDraftingWorkspace() {
   const { theme } = useTheme();
@@ -172,8 +187,15 @@ export default function PreAuditDraftingWorkspace() {
   // network-noise optimisation.
   const attemptedPrefillRef = useRef<Set<string>>(new Set());
 
+  // Notification-first escape hatch: the guided stub screen (below) renders
+  // when nothing is drafted, but the internal notification has no stub — this
+  // flag lets the auditor skip straight to its tab without creating three
+  // unwanted stub rows first.
+  const [notificationFirst, setNotificationFirst] = useState(false);
+
   useEffect(() => {
     setActiveTab('confirmation_letter');
+    setNotificationFirst(false);
   }, [activeAudit?.id]);
 
   useEffect(() => {
@@ -224,12 +246,7 @@ export default function PreAuditDraftingWorkspace() {
   if (!activeAudit) return null;
 
   const auditId = activeAudit.id;
-  const bundle: MockPreAuditBundle = bundles[auditId] ?? {
-    confirmation_letter: null,
-    agenda: null,
-    checklist: null,
-    internal_notification: null,
-  };
+  const bundle: MockPreAuditBundle = bundles[auditId] ?? EMPTY_BUNDLE;
 
   // ---------------------------------------------------------------------------
   // Mutations
@@ -238,8 +255,20 @@ export default function PreAuditDraftingWorkspace() {
   // to figure out: was content edited? was approval transitioned?
   // Then call the right RPC. Optimistic update, revert on failure.
   // ---------------------------------------------------------------------------
-  const setBundle = (next: MockPreAuditBundle) => {
-    setBundles((prev) => ({ ...prev, [auditId]: next }));
+
+  // Functional per-field merge: every async completion folds into the LATEST
+  // cache state. Writing `{ ...bundle, field }` from a render-time closure
+  // instead lets interleaved persists clobber each other — save the
+  // notification, approve the checklist while the save is in flight, and the
+  // checklist's APPROVED reverts in cache when the notification write lands.
+  const setBundleField = (
+    key: keyof MockPreAuditBundle,
+    value: MockPreAuditBundle[keyof MockPreAuditBundle],
+  ) => {
+    setBundles((prev) => ({
+      ...prev,
+      [auditId]: { ...(prev[auditId] ?? EMPTY_BUNDLE), [key]: value } as MockPreAuditBundle,
+    }));
   };
 
   const runDeliverableGeneration = async (tab: TabKey) => {
@@ -276,142 +305,93 @@ export default function PreAuditDraftingWorkspace() {
     setBundles((prevBundles) => ({ ...prevBundles, [auditId]: fresh }));
   };
 
-  const persistConfirmationLetter = async (
+  // One persist flow for all four deliverables (the 4th copy was the
+  // rule-of-three moment). Approval transitions CAS on the row version the
+  // reviewer saw — the latch attests to exactly the content they reviewed.
+  // An upsert that FAILS (null; the API layer already logged it) REVERTS the
+  // optimistic row: the UI must never show unsaved content as saved, because
+  // a later Approve would CAS-pass against the unchanged server row and latch
+  // content the reviewer never wrote.
+  async function persistDeliverable<
+    T extends { id: string; approval_status: DeliverableApprovalStatus; updated_at: string },
+  >(
+    key: keyof MockPreAuditBundle,
+    noun: string,
+    prev: T | null,
+    next: T | null,
+    ops: {
+      upsert: (n: T) => Promise<T | null>;
+      approve: (p: T) => Promise<DeliverableApproveResult<T>>;
+    },
+  ): Promise<void> {
+    if (!next) return;
+    try {
+      const isApprovalTransition =
+        !!prev &&
+        prev.approval_status !== 'APPROVED' &&
+        next.approval_status === 'APPROVED';
+
+      if (prev && isApprovalTransition) {
+        const result = await ops.approve(prev);
+        if (result.ok) {
+          setBundleField(key, result.data);
+        } else {
+          await reloadAfterStaleApprove(`approve${noun}`, result.error);
+        }
+        return;
+      }
+
+      const persisted = await ops.upsert(next);
+      setBundleField(key, persisted ?? prev);
+    } catch (err) {
+      console.error(`[PreAuditDraftingWorkspace] persist${noun} error:`, err);
+      setBundleField(key, prev);
+    }
+  }
+
+  const persistConfirmationLetter = (
     prev: MockConfirmationLetter | null,
     next: MockConfirmationLetter | null,
-  ) => {
-    if (!next) return;
-    try {
-      const isApprovalTransition =
-        !!prev &&
-        prev.approval_status !== 'APPROVED' &&
-        next.approval_status === 'APPROVED';
+  ) =>
+    persistDeliverable('confirmation_letter', 'ConfirmationLetter', prev, next, {
+      upsert: (n) => upsertConfirmationLetter(auditId, n.content),
+      approve: (p) => approveConfirmationLetter(p.id, p.updated_at),
+    });
 
-      if (isApprovalTransition) {
-        // CAS on the row version this tab rendered — the latch attests to
-        // exactly the content the reviewer saw.
-        const result = await approveConfirmationLetter(prev.id, prev.updated_at);
-        if (result.ok) {
-          setBundle({ ...bundle, confirmation_letter: result.data });
-        } else {
-          await reloadAfterStaleApprove('approveConfirmationLetter', result.error);
-        }
-        return;
-      }
+  const persistAgenda = (prev: MockAgenda | null, next: MockAgenda | null) =>
+    persistDeliverable('agenda', 'Agenda', prev, next, {
+      upsert: (n) => upsertAgenda(auditId, n.content),
+      approve: (p) => approveAgenda(p.id, p.updated_at),
+    });
 
-      const persisted = await upsertConfirmationLetter(auditId, next.content);
-      if (persisted) {
-        setBundle({ ...bundle, confirmation_letter: persisted });
-      }
-    } catch (err) {
-      console.error('[PreAuditDraftingWorkspace] persistConfirmationLetter error:', err);
-      setBundle({ ...bundle, confirmation_letter: prev });
-    }
-  };
+  const persistChecklist = (prev: MockChecklist | null, next: MockChecklist | null) =>
+    persistDeliverable('checklist', 'Checklist', prev, next, {
+      upsert: (n) => upsertChecklist(auditId, n.content),
+      approve: (p) => approveChecklist(p.id, p.updated_at),
+    });
 
-  const persistAgenda = async (
-    prev: MockAgenda | null,
-    next: MockAgenda | null,
-  ) => {
-    if (!next) return;
-    try {
-      const isApprovalTransition =
-        !!prev &&
-        prev.approval_status !== 'APPROVED' &&
-        next.approval_status === 'APPROVED';
-
-      if (isApprovalTransition) {
-        const result = await approveAgenda(prev.id, prev.updated_at);
-        if (result.ok) {
-          setBundle({ ...bundle, agenda: result.data });
-        } else {
-          await reloadAfterStaleApprove('approveAgenda', result.error);
-        }
-        return;
-      }
-
-      const persisted = await upsertAgenda(auditId, next.content);
-      if (persisted) {
-        setBundle({ ...bundle, agenda: persisted });
-      }
-    } catch (err) {
-      console.error('[PreAuditDraftingWorkspace] persistAgenda error:', err);
-      setBundle({ ...bundle, agenda: prev });
-    }
-  };
-
-  const persistChecklist = async (
-    prev: MockChecklist | null,
-    next: MockChecklist | null,
-  ) => {
-    if (!next) return;
-    try {
-      const isApprovalTransition =
-        !!prev &&
-        prev.approval_status !== 'APPROVED' &&
-        next.approval_status === 'APPROVED';
-
-      if (isApprovalTransition) {
-        const result = await approveChecklist(prev.id, prev.updated_at);
-        if (result.ok) {
-          setBundle({ ...bundle, checklist: result.data });
-        } else {
-          await reloadAfterStaleApprove('approveChecklist', result.error);
-        }
-        return;
-      }
-
-      const persisted = await upsertChecklist(auditId, next.content);
-      if (persisted) {
-        setBundle({ ...bundle, checklist: persisted });
-      }
-    } catch (err) {
-      console.error('[PreAuditDraftingWorkspace] persistChecklist error:', err);
-      setBundle({ ...bundle, checklist: prev });
-    }
-  };
-
-  const persistInternalNotification = async (
+  const persistInternalNotification = (
     prev: MockInternalNotification | null,
     next: MockInternalNotification | null,
-  ) => {
-    if (!next) return;
-    try {
-      const isApprovalTransition =
-        !!prev &&
-        prev.approval_status !== 'APPROVED' &&
-        next.approval_status === 'APPROVED';
-
-      if (isApprovalTransition) {
-        const result = await approveInternalNotification(prev.id, prev.updated_at);
-        if (result.ok) {
-          setBundle({ ...bundle, internal_notification: result.data });
-        } else {
-          await reloadAfterStaleApprove('approveInternalNotification', result.error);
-        }
-        return;
-      }
-
-      const persisted = await upsertInternalNotification(auditId, next.content);
-      if (persisted) {
-        setBundle({ ...bundle, internal_notification: persisted });
-      }
-    } catch (err) {
-      console.error('[PreAuditDraftingWorkspace] persistInternalNotification error:', err);
-      setBundle({ ...bundle, internal_notification: prev });
-    }
-  };
+  ) =>
+    persistDeliverable('internal_notification', 'InternalNotification', prev, next, {
+      upsert: (n) => upsertInternalNotification(auditId, n.content),
+      approve: (p) => approveInternalNotification(p.id, p.updated_at),
+    });
 
   const generateAllStubs = async () => {
     // Stubs cover the three gating deliverables only — the internal
     // notification has no stub by design (drafted from its tab when wanted).
+    // Functional merges so a concurrently-landed notification is preserved.
     const stubs = {
       confirmation_letter: createConfirmationStub(auditId),
       agenda: createAgendaStub(auditId),
       checklist: createChecklistStub(auditId),
-      internal_notification: bundle.internal_notification,
     };
-    setBundle(stubs);
+    setBundles((prev) => ({
+      ...prev,
+      [auditId]: { ...(prev[auditId] ?? EMPTY_BUNDLE), ...stubs },
+    }));
 
     try {
       const [letter, agenda, checklist] = await Promise.all([
@@ -419,12 +399,15 @@ export default function PreAuditDraftingWorkspace() {
         upsertAgenda(auditId, stubs.agenda.content, 'Generated stub'),
         upsertChecklist(auditId, stubs.checklist.content, 'Generated stub'),
       ]);
-      setBundle({
-        confirmation_letter: letter ?? stubs.confirmation_letter,
-        agenda: agenda ?? stubs.agenda,
-        checklist: checklist ?? stubs.checklist,
-        internal_notification: bundle.internal_notification,
-      });
+      setBundles((prev) => ({
+        ...prev,
+        [auditId]: {
+          ...(prev[auditId] ?? EMPTY_BUNDLE),
+          confirmation_letter: letter ?? stubs.confirmation_letter,
+          agenda: agenda ?? stubs.agenda,
+          checklist: checklist ?? stubs.checklist,
+        },
+      }));
     } catch (err) {
       console.error('[PreAuditDraftingWorkspace] generateAllStubs error:', err);
     }
@@ -453,17 +436,16 @@ export default function PreAuditDraftingWorkspace() {
     : 'bg-emerald-500 text-[#020617] hover:bg-emerald-400 disabled:bg-white/10 disabled:text-white/35';
 
   // ---------------------------------------------------------------------------
-  // Empty state — nothing drafted yet. The notification is included in the
-  // check so an existing notification row is never hidden behind the stub
-  // screen (data on the server must always render).
+  // Empty state — nothing drafted yet. The notification is part of the check
+  // so an existing notification row is never hidden behind the stub screen
+  // (data on the server must always render); trioMissing separately drives
+  // the in-tab stub affordance below, so the one-click bootstrap stays
+  // reachable when the tabs render with the gating trio still unstarted.
   // ---------------------------------------------------------------------------
-  const allMissing =
-    !bundle.confirmation_letter &&
-    !bundle.agenda &&
-    !bundle.checklist &&
-    !bundle.internal_notification;
+  const trioMissing = !bundle.confirmation_letter && !bundle.agenda && !bundle.checklist;
+  const allMissing = trioMissing && !bundle.internal_notification;
 
-  if (allMissing) {
+  if (allMissing && !notificationFirst) {
     return (
       <div className="p-6 max-w-3xl mx-auto">
         {!hasReached && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
@@ -476,18 +458,30 @@ export default function PreAuditDraftingWorkspace() {
         <p className={`${subColor} text-sm mt-1.5 leading-relaxed max-w-2xl`}>
           The pre-audit deliverables — confirmation letter, agenda, checklist, and an
           optional internal notification — are drafted here from your approved risk summary
-          and vendor service mappings. Generate stubs to start, then edit each down to your
-          judgment.
+          and vendor service mappings. Stubs start the three gating deliverables; the
+          internal notification has no stub and is drafted from its own tab.
         </p>
         {hasReached && (
-          <button
-            type="button"
-            onClick={generateAllStubs}
-            className={`mt-5 inline-flex items-center gap-2 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${buttonPrimary}`}
-          >
-            <Sparkles size={14} />
-            Generate all three stubs
-          </button>
+          <div className="mt-5 flex items-center gap-4 flex-wrap">
+            <button
+              type="button"
+              onClick={generateAllStubs}
+              className={`inline-flex items-center gap-2 text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${buttonPrimary}`}
+            >
+              <Sparkles size={14} />
+              Generate all three stubs
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setNotificationFirst(true);
+                setActiveTab('internal_notification');
+              }}
+              className={`${subColor} text-sm font-medium underline underline-offset-2 hover:opacity-80`}
+            >
+              Start with the internal notification instead
+            </button>
+          </div>
         )}
       </div>
     );
@@ -502,12 +496,10 @@ export default function PreAuditDraftingWorkspace() {
     checklist: bundle.checklist?.approval_status ?? null,
     internal_notification: bundle.internal_notification?.approval_status ?? null,
   };
-  // Gate = the three gating deliverables only; the internal notification's
-  // approval is its own latch and never feeds this.
-  const allApproved =
-    approvalStatuses.confirmation_letter === 'APPROVED' &&
-    approvalStatuses.agenda === 'APPROVED' &&
-    approvalStatuses.checklist === 'APPROVED';
+  // Derived from the SAME gating flags that render the gate checklist, so the
+  // advance button and the list can never disagree about membership. The
+  // internal notification (gating: false) never feeds this.
+  const allApproved = GATING_TAB_DEFS.every((t) => approvalStatuses[t.key] === 'APPROVED');
 
   const alreadyAdvanced = ['AUDIT_CONDUCT', 'REPORT_DRAFTING', 'FINAL_REVIEW_EXPORT'].includes(
     activeAudit.current_stage,
@@ -541,7 +533,7 @@ export default function PreAuditDraftingWorkspace() {
       </div>
 
       {/* Evidence summary chip — grounding matters most at this stage: the
-          three deliverables draft from what the register holds. Opens the
+          deliverables draft from what the register holds. Opens the
           shell's audit-level Evidence drawer (one list, one implementation). */}
       {openEvidence && evidenceCount !== null && (
         <button
@@ -566,8 +558,27 @@ export default function PreAuditDraftingWorkspace() {
       {anyPrefilled && (
         <PrefillAgentNote
           storageKey={`piq-stage5-prefill-note-dismissed:${auditId}`}
-          message="These deliverables were pre-filled from your approved questionnaire and risk summary. Review and approve each before continuing."
+          message="These deliverables were pre-filled from your approved questionnaire and risk summary. Review and approve the letter, agenda, and checklist before continuing."
         />
+      )}
+
+      {/* Stub bootstrap stays reachable when the tabs rendered with the
+          gating trio unstarted (notification-first flow) — without this the
+          one-click stub path exists only on the all-empty screen. */}
+      {trioMissing && hasReached && (
+        <div className={`${cardBg} border rounded-xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap`}>
+          <p className={`${subColor} text-sm`}>
+            The confirmation letter, agenda, and checklist haven't been started.
+          </p>
+          <button
+            type="button"
+            onClick={generateAllStubs}
+            className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-md transition-colors ${buttonPrimary}`}
+          >
+            <Sparkles size={12} />
+            Generate all three stubs
+          </button>
+        </div>
       )}
 
       {/* Tab rail with per-tab approval indicator */}
@@ -613,7 +624,7 @@ export default function PreAuditDraftingWorkspace() {
             deliverable={bundle.confirmation_letter}
             isLight={isLight}
             onChange={(next) => {
-              setBundle({ ...bundle, confirmation_letter: next });
+              setBundleField('confirmation_letter', next);
               persistConfirmationLetter(bundle.confirmation_letter, next);
             }}
             onEditingChange={(e) => setTabEditing('confirmation_letter', e)}
@@ -638,7 +649,7 @@ export default function PreAuditDraftingWorkspace() {
             deliverable={bundle.agenda}
             isLight={isLight}
             onChange={(next) => {
-              setBundle({ ...bundle, agenda: next });
+              setBundleField('agenda', next);
               persistAgenda(bundle.agenda, next);
             }}
             onEditingChange={(e) => setTabEditing('agenda', e)}
@@ -663,7 +674,7 @@ export default function PreAuditDraftingWorkspace() {
             deliverable={bundle.checklist}
             isLight={isLight}
             onChange={(next) => {
-              setBundle({ ...bundle, checklist: next });
+              setBundleField('checklist', next);
               persistChecklist(bundle.checklist, next);
             }}
             onEditingChange={(e) => setTabEditing('checklist', e)}
@@ -688,7 +699,7 @@ export default function PreAuditDraftingWorkspace() {
             deliverable={bundle.internal_notification}
             isLight={isLight}
             onChange={(next) => {
-              setBundle({ ...bundle, internal_notification: next });
+              setBundleField('internal_notification', next);
               persistInternalNotification(bundle.internal_notification, next);
             }}
             onEditingChange={(e) => setTabEditing('internal_notification', e)}

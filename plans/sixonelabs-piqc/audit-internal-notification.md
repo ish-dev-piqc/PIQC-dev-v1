@@ -92,6 +92,15 @@ none (the `internal_notification: null` additions to `MOCK_PRE_AUDIT` are the ty
 - **Edge-fn deploy debt** — generation for the new tab cannot work on the hosted site until `audit-deliverable-draft` is (re)deployed (handover §6; not this PR's to run). Everything non-generation (manual draft, approve, deltas, currency panel) works once the migrations are applied.
 - **Vacation constraint honored** — both migrations are additive/self-appliable via the dashboard SQL editor; apply BOTH in order at merge (schema first). The visibility-helper replace is the one function replace; it only appends a branch.
 
+### From the adversarial review (accepted, not fixed here)
+
+- **Generation provenance survives full human rewrite** (all four kinds, inherited from C1/C2): editing demotes to DRAFT but never clears `generation_refs`/`grounding_snapshot`/`generated_at`, so the "Drafted by PIQC · N cited passages" panel can describe text the model never produced. Product question (historical provenance vs current-content claim) — decide once for all four kinds; changing the trio needs a migration. Trigger: user confusion, or D-series export work that renders refs next to content.
+- **Phantom-id approve race** (all four tabs, inherited optimistic pattern): Approve clicked while a first-save upsert is in flight sends the synthetic `xx-<timestamp>` id to the CAS RPC → 22P02, surfaced only as a silent reload. Narrow window; proper fix is an optimistic-update redesign across the tabs. Trigger: user reports of "Approve did nothing".
+- **`fetchPreAuditDeliverables` swallows per-table errors** (pre-existing): a transient SELECT failure renders as "absent", so a scratch form can sit over real server data under partial failure. Hardening: distinguish error from absence in the bundle. Trigger: any report of a blank tab where data existed.
+- **4× duplicate `user_profiles` lookups** in the bundle fetch when all rows are approved (same lead-auditor id each time) — batch with one `.in('id', …)` when next touching preAuditApi.
+- **Trio demote-delta approver gap**: the letter/agenda/checklist upserts omit `approved_at`/`approved_by` from the demote diff (the new notification upsert includes them). Fixing the trio = CREATE OR REPLACE migration — partner's return.
+- **Consolidation note (fixed, wider than the new tab)**: the four persist handlers were collapsed into one `persistDeliverable` with functional cache merges and revert-on-failed-upsert. This corrects two latent trio bugs (stale-closure cache clobber; failed save leaving optimistic content that a later Approve would silently mis-latch) — strictly corrective, surfaced by this PR's review of the 4th copy.
+
 ## Verification
 
 CI-first: no Node/npm/tsc/vitest on the authoring machine — CI is where typecheck and tests first execute.
