@@ -44,6 +44,7 @@ until the migration stack is applied. Dishonest-broken → honest-degraded.
 ## Scope
 
 - src/lib/audit/preAuditApi.ts
+- src/lib/audit/lineageApi.ts (return-shape absorber only)
 - src/components/dashboard/audit/stages/PreAuditDraftingWorkspace.tsx
 - src/components/dashboard/audit/stages/FinalReviewExportWorkspace.tsx
 - src/lib/audit/__tests__/preAuditApi.test.ts

@@ -94,11 +94,15 @@ export default function FinalReviewExportWorkspace() {
     setGroundingCurrency(null);
     void (async () => {
       try {
-        const [bundle, register] = await Promise.all([
+        const [{ bundle, failedKinds }, register] = await Promise.all([
           fetchPreAuditDeliverables(id),
           listAuditEvidence(id),
         ]);
-        if (cancelled || !register.ok) return;
+        // A failed kind means its snapshot (or the live checklist ids feeding
+        // the gap summary's axis) is unknown, not absent — any verdict built
+        // over it would be false. Same "data unavailable → render nothing"
+        // policy as a failed register read.
+        if (cancelled || !register.ok || failedKinds.length > 0) return;
         const rows: Array<{ label: string; currency: DeliverableCurrency }> = [];
         const push = (
           label: string,

@@ -156,7 +156,19 @@ async function flattenEvidenceGapSummary(
 // Reads
 // ============================================================================
 
-export async function fetchPreAuditDeliverables(auditId: string): Promise<MockPreAuditBundle> {
+/** Bundle read result. The five SELECTs are independent, so one failed table
+ *  must not nuke the other four — but a failed kind is NOT an absent kind:
+ *  `failedKinds` names each table whose read errored, and its bundle slot is
+ *  null-because-unknown, not null-because-missing. Callers that would render
+ *  a scratch form, fire prefill, or compute currency off an absent row must
+ *  check `failedKinds` first, or a transient read failure masquerades as
+ *  "never drafted" (the silent-data-loss class this shape exists to end). */
+export interface PreAuditBundleFetch {
+  bundle: MockPreAuditBundle;
+  failedKinds: (keyof MockPreAuditBundle)[];
+}
+
+export async function fetchPreAuditDeliverables(auditId: string): Promise<PreAuditBundleFetch> {
   const [letterRes, agendaRes, checklistRes, notificationRes, gapSummaryRes] = await Promise.all([
     supabase.from('confirmation_letter_objects').select('*').eq('audit_id', auditId).maybeSingle(),
     supabase.from('agenda_objects').select('*').eq('audit_id', auditId).maybeSingle(),
@@ -165,11 +177,27 @@ export async function fetchPreAuditDeliverables(auditId: string): Promise<MockPr
     supabase.from('evidence_gap_summary_objects').select('*').eq('audit_id', auditId).maybeSingle(),
   ]);
 
-  if (letterRes.error) console.error('[preAuditApi] confirmation_letter fetch error:', letterRes.error);
-  if (agendaRes.error) console.error('[preAuditApi] agenda fetch error:', agendaRes.error);
-  if (checklistRes.error) console.error('[preAuditApi] checklist fetch error:', checklistRes.error);
-  if (notificationRes.error) console.error('[preAuditApi] internal_notification fetch error:', notificationRes.error);
-  if (gapSummaryRes.error) console.error('[preAuditApi] evidence_gap_summary fetch error:', gapSummaryRes.error);
+  const failedKinds: (keyof MockPreAuditBundle)[] = [];
+  if (letterRes.error) {
+    failedKinds.push('confirmation_letter');
+    console.error('[preAuditApi] confirmation_letter fetch error:', letterRes.error);
+  }
+  if (agendaRes.error) {
+    failedKinds.push('agenda');
+    console.error('[preAuditApi] agenda fetch error:', agendaRes.error);
+  }
+  if (checklistRes.error) {
+    failedKinds.push('checklist');
+    console.error('[preAuditApi] checklist fetch error:', checklistRes.error);
+  }
+  if (notificationRes.error) {
+    failedKinds.push('internal_notification');
+    console.error('[preAuditApi] internal_notification fetch error:', notificationRes.error);
+  }
+  if (gapSummaryRes.error) {
+    failedKinds.push('evidence_gap_summary');
+    console.error('[preAuditApi] evidence_gap_summary fetch error:', gapSummaryRes.error);
+  }
 
   const [confirmationLetter, agenda, checklist, internalNotification, evidenceGapSummary] = await Promise.all([
     letterRes.data
@@ -190,11 +218,14 @@ export async function fetchPreAuditDeliverables(auditId: string): Promise<MockPr
   ]);
 
   return {
-    confirmation_letter: confirmationLetter,
-    agenda,
-    checklist,
-    internal_notification: internalNotification,
-    evidence_gap_summary: evidenceGapSummary,
+    bundle: {
+      confirmation_letter: confirmationLetter,
+      agenda,
+      checklist,
+      internal_notification: internalNotification,
+      evidence_gap_summary: evidenceGapSummary,
+    },
+    failedKinds,
   };
 }
 

@@ -48,7 +48,9 @@ export async function fetchAuditLineage(audit: AuditWithContext): Promise<Lineag
       fetchTrustAssessment(audit.id),
       fetchQuestionnaireBundle(audit.id),
       fetchRiskSummary(audit.id),
-      fetchPreAuditDeliverables(audit.id),
+      // Lineage renders what it can see; a failed kind is omitted from the
+      // graph like an absent one (ledgered — the drawer has no error surface).
+      fetchPreAuditDeliverables(audit.id).then((r) => r.bundle),
       fetchWorkspaceEntries(audit.id),
       fetchIssuesWithCapas(audit.id),
       fetchReportDraft(audit.id),

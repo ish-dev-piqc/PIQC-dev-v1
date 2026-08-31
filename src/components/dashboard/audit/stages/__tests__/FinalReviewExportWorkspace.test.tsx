@@ -87,8 +87,13 @@ let mockBundle: {
   internal_notification?: unknown;
   evidence_gap_summary?: unknown;
 } = { confirmation_letter: null, agenda: null, checklist: null, internal_notification: null };
+// PR-1 (persist honesty): the fetch reports per-kind read failures; a failed
+// kind means "unknown", and the currency effect must render no verdict.
+let mockFailedKinds: string[] = [];
 vi.mock('../../../../../lib/audit/preAuditApi', () => ({
-  fetchPreAuditDeliverables: vi.fn(() => Promise.resolve(mockBundle)),
+  fetchPreAuditDeliverables: vi.fn(() =>
+    Promise.resolve({ bundle: mockBundle, failedKinds: mockFailedKinds }),
+  ),
 }));
 
 let mockRegister: { ok: boolean; data?: unknown[]; error?: string } = { ok: true, data: [] };
@@ -229,6 +234,7 @@ describe('FinalReviewExportWorkspace grounding currency (flag, never block)', ()
     initialStageReadouts = {};
     mockReadout = null;
     mockBundle = { confirmation_letter: null, agenda: null, checklist: null, internal_notification: null };
+    mockFailedKinds = [];
     mockRegister = { ok: true, data: [] };
   });
 
@@ -335,6 +341,23 @@ describe('FinalReviewExportWorkspace grounding currency (flag, never block)', ()
     expect(notice.textContent).not.toContain('Checklist:');
   });
 
+  it('renders no verdict when any kind failed to load — a failed read is unknown, not absent (PR-1)', async () => {
+    // The checklist row would show as current, but the failed gap-summary
+    // read means the panel cannot honestly claim anything about the set.
+    mockBundle = {
+      confirmation_letter: null,
+      agenda: null,
+      checklist: { grounding_snapshot: SNAPSHOT, content: { items: [] } },
+      evidence_gap_summary: null,
+    };
+    mockFailedKinds = ['evidence_gap_summary'];
+    mockRegister = { ok: true, data: [REGISTER_ROW] };
+    render(<FinalReviewExportWorkspace />);
+    await waitFor(() => expect(screen.getByText(/Pre-export checklist/)).toBeTruthy());
+    expect(screen.queryByTestId('export-currency-notice')).toBeNull();
+    expect(screen.queryByTestId('export-currency-current')).toBeNull();
+  });
+
   it('gap summary flags checklist-identity drift via the live checklist items (PR-D3)', async () => {
     mockBundle = {
       confirmation_letter: null,
@@ -366,6 +389,7 @@ describe('FinalReviewExportWorkspace grounding currency (flag, never block)', ()
 describe('FinalReviewExportWorkspace — one-ahead preview guard (PR-UX2)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockFailedKinds = [];
     mockActiveAudit = {
       id: 'audit-1',
       audit_name: 'Vendor audit',

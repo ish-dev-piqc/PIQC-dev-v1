@@ -17,6 +17,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
+  fetchPreAuditDeliverables,
   prefillConfirmationLetter,
   prefillAgenda,
   prefillChecklist,
@@ -29,11 +30,13 @@ import {
 
 vi.mock('../../supabase', () => {
   const rpc = vi.fn();
-  return { supabase: { rpc } };
+  const from = vi.fn();
+  return { supabase: { rpc, from } };
 });
 
 import { supabase } from '../../supabase';
 const mockRpc = supabase.rpc as unknown as ReturnType<typeof vi.fn>;
+const mockFrom = supabase.from as unknown as ReturnType<typeof vi.fn>;
 
 // Minimal DeliverableRow shape for each content type. approved_by is null
 // so flatten* helpers don't trigger the user_profiles lookup — keeps the
@@ -433,5 +436,94 @@ describe('approveEvidenceGapSummary', () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.errorHint).toBe('STALE_CONTENT');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Hardening PR-1 — fetchPreAuditDeliverables reports per-kind read failures.
+// A failed SELECT is named in failedKinds; its bundle slot is null-because-
+// unknown, and the four healthy tables still flatten. (The old shape's
+// console-error-only swallow is the mechanism that let a transient read
+// failure render a scratch form over real server data.)
+// ---------------------------------------------------------------------------
+
+describe('fetchPreAuditDeliverables — partial-failure honesty (PR-1)', () => {
+  // .from(table).select('*').eq(...).maybeSingle() chain per table.
+  const tableResult = (result: { data: unknown; error: unknown }) => ({
+    select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve(result) }) }),
+  });
+
+  const OK_EMPTY = { data: null, error: null };
+  const FAILED = { data: null, error: { code: '42P01', message: 'relation does not exist' } };
+
+  const letterRow = {
+    id: 'cl-1',
+    audit_id: 'audit-1',
+    content: { body_text: 'Body.', recipients: [], scope: [] },
+    approval_status: 'DRAFT',
+    approved_by: null,
+    approved_at: null,
+    updated_at: '2026-08-01T00:00:00Z',
+  };
+
+  const wireTables = (byTable: Record<string, { data: unknown; error: unknown }>) => {
+    mockFrom.mockImplementation((table: string) => tableResult(byTable[table] ?? OK_EMPTY));
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns an all-null bundle and empty failedKinds when every read succeeds empty', async () => {
+    wireTables({});
+    const res = await fetchPreAuditDeliverables('audit-1');
+    expect(res.failedKinds).toEqual([]);
+    expect(res.bundle).toEqual({
+      confirmation_letter: null,
+      agenda: null,
+      checklist: null,
+      internal_notification: null,
+      evidence_gap_summary: null,
+    });
+  });
+
+  it('flattens present rows with empty failedKinds', async () => {
+    wireTables({ confirmation_letter_objects: { data: letterRow, error: null } });
+    const res = await fetchPreAuditDeliverables('audit-1');
+    expect(res.failedKinds).toEqual([]);
+    expect(res.bundle.confirmation_letter?.content.body_text).toBe('Body.');
+  });
+
+  it('names each failed table without nuking the healthy ones', async () => {
+    wireTables({
+      agenda_objects: FAILED,
+      evidence_gap_summary_objects: FAILED,
+      confirmation_letter_objects: { data: letterRow, error: null },
+    });
+    const res = await fetchPreAuditDeliverables('audit-1');
+    expect(res.failedKinds).toEqual(['agenda', 'evidence_gap_summary']);
+    // The failed kinds' slots are null-because-unknown…
+    expect(res.bundle.agenda).toBeNull();
+    expect(res.bundle.evidence_gap_summary).toBeNull();
+    // …and the healthy read still flattened.
+    expect(res.bundle.confirmation_letter?.id).toBe('cl-1');
+  });
+
+  it('a failure on every table names all five kinds', async () => {
+    wireTables({
+      confirmation_letter_objects: FAILED,
+      agenda_objects: FAILED,
+      checklist_objects: FAILED,
+      internal_notification_objects: FAILED,
+      evidence_gap_summary_objects: FAILED,
+    });
+    const res = await fetchPreAuditDeliverables('audit-1');
+    expect(res.failedKinds).toEqual([
+      'confirmation_letter',
+      'agenda',
+      'checklist',
+      'internal_notification',
+      'evidence_gap_summary',
+    ]);
   });
 });
