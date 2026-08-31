@@ -23,6 +23,8 @@ import {
   prefillStage5Deliverables,
   upsertInternalNotification,
   approveInternalNotification,
+  upsertEvidenceGapSummary,
+  approveEvidenceGapSummary,
 } from '../preAuditApi';
 
 vi.mock('../../supabase', () => {
@@ -334,6 +336,100 @@ describe('approveInternalNotification', () => {
     });
 
     const result = await approveInternalNotification('notification-1', '2026-09-04T00:00:00Z');
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errorHint).toBe('STALE_CONTENT');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Evidence gap summary (PR-D3) — the 5th deliverable clones the notification's
+// no-prefill lifecycle: plain upsert + CAS-approve pair against its own RPCs.
+// ---------------------------------------------------------------------------
+
+function makeGapSummaryRow() {
+  return {
+    id: 'gap-1',
+    audit_id: 'audit-1',
+    content: {
+      body_text: 'Data management: SOP index on file; audit trail export outstanding.',
+      scope: ['data_management'],
+    },
+    approval_status: 'DRAFT',
+    approved_by: null,
+    approved_at: null,
+    updated_at: '2026-09-05T00:00:00Z',
+  };
+}
+
+describe('upsertEvidenceGapSummary', () => {
+  let errorSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    mockRpc.mockReset();
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  it('calls the RPC with audit id + content and returns the flattened row', async () => {
+    mockRpc.mockResolvedValueOnce({ data: makeGapSummaryRow(), error: null });
+
+    const content = {
+      body_text: 'Data management: SOP index on file; audit trail export outstanding.',
+      scope: ['data_management'],
+    };
+    const result = await upsertEvidenceGapSummary('audit-1', content);
+
+    expect(mockRpc).toHaveBeenCalledWith('audit_mode_upsert_evidence_gap_summary', {
+      p_audit_id: 'audit-1',
+      p_content: content,
+      p_reason: null,
+    });
+    expect(result?.id).toBe('gap-1');
+    expect(result?.content.scope).toEqual(['data_management']);
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  it('returns null and logs on RPC error', async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: PERMISSION_DENIED });
+
+    const result = await upsertEvidenceGapSummary('audit-1', { body_text: 'x', scope: [] });
+
+    expect(result).toBeNull();
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[preAuditApi] upsertEvidenceGapSummary'),
+      expect.anything(),
+    );
+  });
+});
+
+describe('approveEvidenceGapSummary', () => {
+  beforeEach(() => {
+    mockRpc.mockReset();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  it('passes the CAS version (p_expected_updated_at) and returns ok on success', async () => {
+    const approved = { ...makeGapSummaryRow(), approval_status: 'APPROVED' };
+    mockRpc.mockResolvedValueOnce({ data: approved, error: null });
+
+    const result = await approveEvidenceGapSummary('gap-1', '2026-09-05T00:00:00Z');
+
+    expect(mockRpc).toHaveBeenCalledWith('audit_mode_approve_evidence_gap_summary', {
+      p_id: 'gap-1',
+      p_reason: null,
+      p_expected_updated_at: '2026-09-05T00:00:00Z',
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data.approval_status).toBe('APPROVED');
+  });
+
+  it('surfaces the server hint on CAS rejection (STALE_CONTENT)', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: '40001', message: 'changed since reviewed', hint: 'STALE_CONTENT' },
+    });
+
+    const result = await approveEvidenceGapSummary('gap-1', '2026-09-05T00:00:00Z');
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.errorHint).toBe('STALE_CONTENT');
