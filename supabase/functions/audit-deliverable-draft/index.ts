@@ -3,12 +3,13 @@
 // deliverable grounded in the protocol + the audit's evidence register (PR-C2).
 //
 // Consolidates the C1 checklist engine at the rule-of-three moment: takes
-// { audit_id, deliverable: 'checklist' | 'agenda' | 'confirmation_letter' },
-// runs ONE engine (JWT ownership proof → service-role retrieval over protocol
-// + register chunks → OpenAI → verbatim-quote ref gate), and shapes output per
-// deliverable. Supersedes /audit-checklist-draft (deleted).
+// { audit_id, deliverable: 'checklist' | 'agenda' | 'confirmation_letter' |
+// 'internal_notification' (PR-D1) }, runs ONE engine (JWT ownership proof →
+// service-role retrieval over protocol + register chunks → OpenAI →
+// verbatim-quote ref gate), and shapes output per deliverable's `shape`.
+// Supersedes /audit-checklist-draft (deleted).
 //
-// Invariants (all three deliverables):
+// Invariants (all deliverables):
 //   - proposals only — this function never writes to the database. The client
 //     applies via the audit_mode_apply_*_generation RPCs (content through the
 //     existing upserts → demote latch intact; snapshot stamped atomically).
@@ -31,7 +32,7 @@ import {
   type ProtocolCandidate,
   type ProtocolChunkRow,
 } from "../_shared/protocolCandidates.ts";
-import { AGENDA_PROMPT, CHECKLIST_PROMPT, LETTER_PROMPT } from "./prompts.ts";
+import { AGENDA_PROMPT, CHECKLIST_PROMPT, INTERNAL_NOTIFICATION_PROMPT, LETTER_PROMPT } from "./prompts.ts";
 
 // -----------------------------------------------------------------------------
 // CORS + constants
@@ -55,16 +56,21 @@ const MAX_BODY_TEXT_CHARS  = 6_000; // letter body cap
 const MAX_REFS_PER_ENTRY   = 2;
 const EMBEDDING_MODEL      = "text-embedding-3-small";
 
-type DeliverableKind = "checklist" | "agenda" | "confirmation_letter";
+type DeliverableKind = "checklist" | "agenda" | "confirmation_letter" | "internal_notification";
 
+// shape drives every structural branch: "items" kinds carry labeled entry
+// lists (C-label revision mode); "letter" kinds carry a single body_text +
+// scope blob (current-draft revision mode, empty-body 502 guard).
 const DELIVERABLES: Record<DeliverableKind, {
   table: string;
   systemPrompt: string;
   maxItems: number;
+  shape: "items" | "letter";
 }> = {
-  checklist:           { table: "checklist_objects",           systemPrompt: CHECKLIST_PROMPT, maxItems: 40 },
-  agenda:              { table: "agenda_objects",              systemPrompt: AGENDA_PROMPT,    maxItems: 20 },
-  confirmation_letter: { table: "confirmation_letter_objects", systemPrompt: LETTER_PROMPT,    maxItems: 1 },
+  checklist:             { table: "checklist_objects",             systemPrompt: CHECKLIST_PROMPT,             maxItems: 40, shape: "items"  },
+  agenda:                { table: "agenda_objects",                systemPrompt: AGENDA_PROMPT,                maxItems: 20, shape: "items"  },
+  confirmation_letter:   { table: "confirmation_letter_objects",   systemPrompt: LETTER_PROMPT,                maxItems: 1,  shape: "letter" },
+  internal_notification: { table: "internal_notification_objects", systemPrompt: INTERNAL_NOTIFICATION_PROMPT, maxItems: 1,  shape: "letter" },
 };
 
 // Static retrieval lenses — the standard vendor-audit domains. Per-domain
@@ -124,7 +130,7 @@ interface ExistingEntry {
 
 function extractExisting(kind: DeliverableKind, content: unknown, maxItems: number): ExistingEntry[] {
   const c = (content ?? {}) as Record<string, unknown>;
-  if (kind === "confirmation_letter") return []; // letter revision passes body/scope, not labeled entries
+  if (DELIVERABLES[kind].shape === "letter") return []; // letter-shaped revision passes body/scope, not labeled entries
   const rawItems = Array.isArray(c.items) ? c.items : [];
   return rawItems
     .filter((it): it is Record<string, unknown> => !!it && typeof it === "object")
@@ -189,8 +195,11 @@ function buildUserMessage(
     for (const e of existing) lines.push(`[${e.label}] ${e.text.slice(0, MAX_PROMPT_CHARS)}`);
     lines.push("");
   }
-  if (kind === "confirmation_letter" && letterCurrent) {
-    lines.push("CURRENT LETTER (revision mode — preserve substance):");
+  if (letterCurrent) {
+    // Heading mirrors each prompt's REVISION MODE wording.
+    lines.push(kind === "confirmation_letter"
+      ? "CURRENT LETTER (revision mode — preserve substance):"
+      : "CURRENT DRAFT (revision mode — preserve substance):");
     lines.push(`body_text: ${letterCurrent.body_text.slice(0, MAX_BODY_TEXT_CHARS)}`);
     lines.push(`scope: ${letterCurrent.scope.join(" | ").slice(0, 2_000)}`);
     lines.push("");
@@ -316,8 +325,8 @@ Deno.serve(async (req: Request) => {
       { status: 400, headers: jsonHeaders });
   }
   const kind = body.deliverable as DeliverableKind;
-  if (kind !== "checklist" && kind !== "agenda" && kind !== "confirmation_letter") {
-    return new Response(JSON.stringify({ error: "deliverable must be checklist, agenda, or confirmation_letter" }),
+  if (kind !== "checklist" && kind !== "agenda" && kind !== "confirmation_letter" && kind !== "internal_notification") {
+    return new Response(JSON.stringify({ error: "deliverable must be checklist, agenda, confirmation_letter, or internal_notification" }),
       { status: 400, headers: jsonHeaders });
   }
   const config = DELIVERABLES[kind];
@@ -375,7 +384,7 @@ Deno.serve(async (req: Request) => {
 
   const existing = extractExisting(kind, existingContent, config.maxItems);
   let letterCurrent: { body_text: string; scope: string[] } | null = null;
-  if (kind === "confirmation_letter" && existingContent) {
+  if (config.shape === "letter" && existingContent) {
     const bodyText = typeof existingContent.body_text === "string" ? existingContent.body_text : "";
     const scope = Array.isArray(existingContent.scope)
       ? existingContent.scope.filter((sLine): sLine is string => typeof sLine === "string")
@@ -570,18 +579,21 @@ Deno.serve(async (req: Request) => {
   let outCount = 0;
   const keptExistingIds = new Set<string>();
 
-  if (kind === "confirmation_letter") {
+  if (config.shape === "letter") {
     const bodyText = typeof parsed.body_text === "string" ? parsed.body_text.trim().slice(0, MAX_BODY_TEXT_CHARS) : "";
     const scope = (Array.isArray(parsed.scope) ? parsed.scope : [])
       .filter((sLine): sLine is string => typeof sLine === "string" && sLine.trim().length > 0)
       .map((sLine) => sLine.trim().slice(0, MAX_PROMPT_CHARS))
       .slice(0, 20);
     if (bodyText.length === 0) {
-      log("error", "audit_deliverable_draft.empty_letter", { request_id: requestId });
-      return new Response(JSON.stringify({ error: "AI service returned an empty letter draft" }),
+      // Never apply an empty body: in revise mode it would wipe the auditor's
+      // persisted text (apply is automatic client-side).
+      log("error", "audit_deliverable_draft.empty_body", { request_id: requestId, deliverable: kind });
+      return new Response(JSON.stringify({ error: "AI service returned an empty draft" }),
         { status: 502, headers: jsonHeaders });
     }
-    gateRefs(parsed.refs, "letter");
+    // Blob-level refs: one synthetic item_id per kind (see DeliverableGenerationRef).
+    gateRefs(parsed.refs, kind === "confirmation_letter" ? "letter" : "notification");
     contentPatch = { body_text: bodyText, scope };
     outCount = 1;
   } else {

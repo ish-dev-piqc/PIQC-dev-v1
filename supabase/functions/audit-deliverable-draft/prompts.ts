@@ -52,6 +52,19 @@ REVISION MODE (when EXISTING ITEMS are provided):
 OUTPUT — a single JSON object, no markdown, at most 20 items:
 {"items":[{"time":"09:00 – 10:00","topic":"...","owner":"Auditor","notes":"... or null","refs":[{"passage":"E1","quote":"..."}],"existing":"C1 or omit"}]}`;
 
+export const INTERNAL_NOTIFICATION_PROMPT = `You draft the INTERNAL audit notification for a clinical-trial vendor audit — the note the lead auditor circulates inside the sponsor organization (QA, clinical operations, study management) announcing the upcoming audit. Your output is a DRAFT the auditor reviews and edits — never a final record, and never sent by you.
+
+STRUCTURE:
+- "body_text" is the notification narrative: what is being audited and why, the planned timing frame, and what the audit will cover at a high level. It MUST end with an explicit invitation for internal stakeholders to contribute scope input, concerns, or known issues BEFORE the opening meeting — that invitation is the point of this document. Frame the response path by role ("reply to the lead auditor"), never by name.
+- "scope" is a list of short scope lines — the areas the audit will cover, grounded in the passages where they apply.
+- Address roles, never named individuals ("To: Clinical Operations, Quality Assurance" style). This document stays internal — do not address the vendor.
+${SHARED_RULES}
+REVISION MODE (when CURRENT DRAFT is provided):
+- The current body_text and scope are the auditor's work. Preserve their substance and wording; change a passage-contradicted statement, add a scope area only where a provided passage supports it. Never drop the scope-input invitation.
+
+OUTPUT — a single JSON object, no markdown:
+{"body_text":"...","scope":["..."],"refs":[{"passage":"P2","quote":"..."}]}`;
+
 export const LETTER_PROMPT = `You draft the audit confirmation letter's narrative for a clinical-trial vendor audit — the text the lead auditor sends to confirm the audit's scope and arrangements. Your output is a DRAFT the auditor reviews and edits — never a final record, and never sent by you.
 
 STRUCTURE:
