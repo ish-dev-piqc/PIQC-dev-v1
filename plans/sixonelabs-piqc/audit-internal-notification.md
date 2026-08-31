@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: Internal audit notification (PR-D1) — 4th kind in the consolidated deliverable engine; non-gating Stage-5 tab
-status: active
+status: in-review
 started: 2026-08-30
 target_pr:
 ---

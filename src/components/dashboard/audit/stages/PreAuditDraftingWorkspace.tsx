@@ -312,8 +312,11 @@ export default function PreAuditDraftingWorkspace() {
   // optimistic row: the UI must never show unsaved content as saved, because
   // a later Approve would CAS-pass against the unchanged server row and latch
   // content the reviewer never wrote.
+  // T ranges over the bundle's member types so the field writes below
+  // type-check without casts; every member carries the id/approval_status/
+  // updated_at the flow relies on.
   async function persistDeliverable<
-    T extends { id: string; approval_status: DeliverableApprovalStatus; updated_at: string },
+    T extends NonNullable<MockPreAuditBundle[keyof MockPreAuditBundle]>,
   >(
     key: keyof MockPreAuditBundle,
     noun: string,
