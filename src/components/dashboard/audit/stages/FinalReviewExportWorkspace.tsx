@@ -83,6 +83,9 @@ export default function FinalReviewExportWorkspace() {
   const [groundingCurrency, setGroundingCurrency] = useState<
     Array<{ label: string; currency: DeliverableCurrency }> | null
   >(null);
+  // Deliverables whose bundle read failed (PR-1): named out loud so an
+  // unreadable kind never disappears into "nothing flagged = all current".
+  const [currencyUnavailable, setCurrencyUnavailable] = useState<string[] | null>(null);
 
   useEffect(() => {
     if (!activeAudit?.id) return;
@@ -92,39 +95,51 @@ export default function FinalReviewExportWorkspace() {
     // never show under a new one (slow or failed fetch would otherwise leave
     // it standing — a false verdict across audits).
     setGroundingCurrency(null);
+    setCurrencyUnavailable(null);
     void (async () => {
       try {
         const [{ bundle, failedKinds }, register] = await Promise.all([
           fetchPreAuditDeliverables(id),
           listAuditEvidence(id),
         ]);
-        // A failed kind means its snapshot (or the live checklist ids feeding
-        // the gap summary's axis) is unknown, not absent — any verdict built
-        // over it would be false. Same "data unavailable → render nothing"
-        // policy as a failed register read.
-        if (cancelled || !register.ok || failedKinds.length > 0) return;
+        if (cancelled || !register.ok) return;
+        // A failed kind's verdict would be false — but only ITS verdict. The
+        // four healthy reads keep their rows (suppressing known staleness
+        // warnings because an unrelated optional kind is unreadable would be
+        // the absent-vs-unknown conflation in the other direction), and the
+        // failed kinds are named out loud below instead of silently absent.
         const rows: Array<{ label: string; currency: DeliverableCurrency }> = [];
+        const unavailable: string[] = [];
         const push = (
+          kind: (typeof failedKinds)[number],
           label: string,
           snapshot: DeliverableGroundingSnapshot | null | undefined,
           liveChecklistItemIds?: string[],
         ) => {
+          if (failedKinds.includes(kind)) {
+            unavailable.push(label);
+            return;
+          }
           const currency = computeDeliverableCurrency(snapshot, register.data, liveChecklistItemIds);
           if (currency) rows.push({ label, currency });
         };
-        push('Confirmation letter', bundle.confirmation_letter?.grounding_snapshot);
-        push('Agenda', bundle.agenda?.grounding_snapshot);
-        push('Checklist', bundle.checklist?.grounding_snapshot);
-        push('Internal notification', bundle.internal_notification?.grounding_snapshot);
+        push('confirmation_letter', 'Confirmation letter', bundle.confirmation_letter?.grounding_snapshot);
+        push('agenda', 'Agenda', bundle.agenda?.grounding_snapshot);
+        push('checklist', 'Checklist', bundle.checklist?.grounding_snapshot);
+        push('internal_notification', 'Internal notification', bundle.internal_notification?.grounding_snapshot);
         // Gap summary (PR-D3): its snapshot carries the extra axes (full
         // register + checklist identity), so its currency also needs the LIVE
-        // checklist item ids — checklistLiveIds owns the no-row-means-[] policy.
+        // checklist item ids — checklistLiveIds owns the no-row-means-[]
+        // policy. A failed CHECKLIST read makes that axis unknowable:
+        // undefined (no verdict on the axis), never [] (a fake empty).
         push(
+          'evidence_gap_summary',
           'Evidence gap summary',
           bundle.evidence_gap_summary?.grounding_snapshot,
-          checklistLiveIds(bundle.checklist),
+          failedKinds.includes('checklist') ? undefined : checklistLiveIds(bundle.checklist),
         );
         setGroundingCurrency(rows);
+        setCurrencyUnavailable(unavailable.length > 0 ? unavailable : null);
       } catch (err) {
         console.error('[FinalReviewExportWorkspace] grounding currency load error:', err);
       }
@@ -457,6 +472,19 @@ export default function FinalReviewExportWorkspace() {
             .
           </p>
         )
+      )}
+
+      {/* PR-1: a kind whose read failed gets named, never silently omitted —
+          an absent row here would read as "current". */}
+      {currencyUnavailable && (
+        <p
+          role="alert"
+          data-testid="export-currency-unavailable"
+          className={`text-xs px-1 ${isLight ? 'text-red-700' : 'text-red-300'}`}
+        >
+          Couldn’t check grounding currency for {currencyUnavailable.join(', ')} — the
+          deliverable read failed. Reload to retry.
+        </p>
       )}
 
       {/* Final sign-off action */}

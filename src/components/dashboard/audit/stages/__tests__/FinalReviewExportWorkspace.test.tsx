@@ -341,9 +341,10 @@ describe('FinalReviewExportWorkspace grounding currency (flag, never block)', ()
     expect(notice.textContent).not.toContain('Checklist:');
   });
 
-  it('renders no verdict when any kind failed to load — a failed read is unknown, not absent (PR-1)', async () => {
-    // The checklist row would show as current, but the failed gap-summary
-    // read means the panel cannot honestly claim anything about the set.
+  it('a failed kind is named as unavailable while healthy kinds keep their verdicts (PR-1)', async () => {
+    // The checklist read is fine and current — its quiet verdict must NOT be
+    // suppressed by the unreadable gap summary. The gap summary must be
+    // named, never silently absent (absence reads as "current").
     mockBundle = {
       confirmation_letter: null,
       agenda: null,
@@ -353,9 +354,34 @@ describe('FinalReviewExportWorkspace grounding currency (flag, never block)', ()
     mockFailedKinds = ['evidence_gap_summary'];
     mockRegister = { ok: true, data: [REGISTER_ROW] };
     render(<FinalReviewExportWorkspace />);
-    await waitFor(() => expect(screen.getByText(/Pre-export checklist/)).toBeTruthy());
+    const note = await screen.findByTestId('export-currency-unavailable');
+    expect(note.textContent).toContain('Evidence gap summary');
+    expect(screen.getByTestId('export-currency-current')).toBeTruthy();
     expect(screen.queryByTestId('export-currency-notice')).toBeNull();
-    expect(screen.queryByTestId('export-currency-current')).toBeNull();
+  });
+
+  it('a failed CHECKLIST read makes the gap summary checklist axis unknowable, not drifted (PR-1)', async () => {
+    // Same shape as the checklist-identity drift test below, but the live
+    // checklist is UNREADABLE — a fake [] would flag drift that may not
+    // exist. The gap summary's register axis is current, so no notice.
+    mockBundle = {
+      confirmation_letter: null,
+      agenda: null,
+      checklist: null, // read failed
+      evidence_gap_summary: {
+        grounding_snapshot: {
+          ...SNAPSHOT,
+          register: [{ document_id: 'd1', title: 'QA SOP v3', status: 'ready', included: true }],
+          checklist_item_ids: ['i1'],
+        },
+      },
+    };
+    mockFailedKinds = ['checklist'];
+    mockRegister = { ok: true, data: [REGISTER_ROW] };
+    render(<FinalReviewExportWorkspace />);
+    const note = await screen.findByTestId('export-currency-unavailable');
+    expect(note.textContent).toContain('Checklist');
+    expect(screen.queryByTestId('export-currency-notice')).toBeNull();
   });
 
   it('gap summary flags checklist-identity drift via the live checklist items (PR-D3)', async () => {

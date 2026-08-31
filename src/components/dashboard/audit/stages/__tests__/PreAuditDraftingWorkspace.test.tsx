@@ -606,3 +606,51 @@ describe('PreAuditDraftingWorkspace — persist honesty (hardening PR-1)', () =>
     expect(screen.queryByTestId('deliverable-load-error')).not.toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// PR-1 review fix — the preserved draft survives the tab unmounting. Tabs
+// are conditionally rendered, so switching away destroys their local state;
+// the workspace-level draft stash is what makes the banner's "preserved"
+// promise true across a tab round-trip.
+// ---------------------------------------------------------------------------
+
+describe('PreAuditDraftingWorkspace — draft survives tab switches (PR-1 review fix)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initialBundles = {};
+    mockActiveAudit = {
+      id: 'audit-1',
+      workflow_type: 'VENDOR_AUDIT',
+      current_stage: 'PRE_AUDIT_DRAFTING',
+    };
+    mockFetch.mockResolvedValue(fetchOk(DRAFT_LETTER_BUNDLE));
+  });
+
+  it('a failed first save keeps the typed content across a tab round-trip', async () => {
+    const { upsertInternalNotification } = await import('../../../../../lib/audit/preAuditApi');
+    (upsertInternalNotification as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+    render(<PreAuditDraftingWorkspace />);
+    await waitFor(() => expect(screen.getByText('Internal notification')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /internal notification/i }));
+
+    fireEvent.change(
+      screen.getByPlaceholderText(/announce the audit to internal stakeholders/i),
+      { target: { value: 'Draft that must survive a tab switch.' } },
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    await screen.findByTestId('deliverable-persist-error');
+
+    // Away and back — the notification tab unmounts and remounts.
+    fireEvent.click(screen.getByRole('button', { name: /^agenda$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /internal notification/i }));
+
+    // The banner's promise holds: content re-seeded from the draft stash.
+    expect(await screen.findByTestId('deliverable-persist-error')).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText(/announce the audit to internal stakeholders/i),
+    ).toHaveValue('Draft that must survive a tab switch.');
+    // Cancel is available even with no server row — the discard exit exists.
+    expect(screen.getByRole('button', { name: /^cancel$/i })).toBeInTheDocument();
+  });
+});

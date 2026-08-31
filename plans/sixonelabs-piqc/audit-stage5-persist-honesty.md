@@ -40,6 +40,43 @@ data — and the prefill bootstrap fires on that false "all missing" state.
 Honesty note: prod's notification/gap tabs currently lose data silently;
 after this PR they fail visibly (banner, content preserved, approve blocked)
 until the migration stack is applied. Dishonest-broken → honest-degraded.
+The Stage-5 prefill/stub bootstraps are gated on the TRIO's reads only, so
+they keep working in prod while the two optional tables lag the frontend.
+
+## Adversarial review outcomes (applied before PR)
+
+Eight-angle review found and fixed: stale lineageApi.test mock (new return
+shape); load-effect catch now marks all five kinds unknown (throw path no
+longer renders scratch forms); per-audit keying of save errors / unsaved
+drafts / failed kinds (no cross-audit leaks; drafts survive audit switches);
+workspace-level draft stash + `key={auditId}` remounts (typed content
+survives tab switches and can't leak between audits); stale-reload failures
+no longer masquerade as save failures; Retry has in-flight state and never
+floats a rejection; one shared `refreshBundle()` replaces five drifting
+refetch copies; `generateAllStubs` refetches server truth instead of
+hand-merging write results (a 23505 "already exists" is no longer rendered
+as absent); Stage-8 currency is per-kind — failed kinds are NAMED as
+unavailable while healthy kinds keep their verdicts; Cancel renders during a
+first-save failure (the discard exit exists); gate checklist says
+'unavailable', never 'not started', for an unread kind.
+
+## Decision debt ledger (this PR)
+
+- Upsert wrappers still return `T | null` (constant banner text; the real
+  PostgREST error stays console-only) and `fetchPreAuditDeliverables` returns
+  a partial-success shape rather than `Result<T>` — a fan-out read is not
+  ok-or-error, and Result-ifying the five upserts is the PR-2/opportunistic
+  Result rule's territory. Trigger: next time preAuditApi's write layer opens.
+- Tab-rail ApprovalDot renders a failed-read kind with the neutral dot
+  (same as not-started); the gate list and tab body are honest. Cosmetic.
+- Non-stale approve failure against a DELETED row keeps the ghost row in
+  cache until reload (banner shows the real error; retry re-fails). Rare;
+  needs a row-not-found hint from the RPC to distinguish. Trigger: user
+  report of a stuck approve banner.
+- Retry refetches all five tables for one failed kind (no per-kind read
+  path). Acceptable cost; trigger: per-kind reads exist for another reason.
+- The two stubsError banners + three shell banners share shape but stay
+  inline (PR-6 is the extraction PR).
 
 ## Scope
 
@@ -48,6 +85,7 @@ until the migration stack is applied. Dishonest-broken → honest-degraded.
 - src/components/dashboard/audit/stages/PreAuditDraftingWorkspace.tsx
 - src/components/dashboard/audit/stages/FinalReviewExportWorkspace.tsx
 - src/lib/audit/__tests__/preAuditApi.test.ts
+- src/lib/audit/__tests__/lineageApi.test.ts (mock updated to the new return shape)
 - src/components/dashboard/audit/stages/__tests__/PreAuditDraftingWorkspace.test.tsx
 - src/components/dashboard/audit/stages/__tests__/FinalReviewExportWorkspace.test.tsx
 - plans/sixonelabs-piqc/audit-stage5-persist-honesty.md
