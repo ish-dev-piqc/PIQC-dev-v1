@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: Stage navigation pass (PR-UX2) — prev/next controls, back-to-current, mobile cue, off-current hardening
-status: in-review
+status: merged
+merged: 2026-08-31
 started: 2026-08-30
-target_pr:
+target_pr: #559
 ---
 
 # Stage navigation pass (PR-UX2)
