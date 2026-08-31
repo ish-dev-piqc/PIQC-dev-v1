@@ -1,5 +1,5 @@
 ---
-status: active
+status: in-review
 owner: sixonelabs-piqc
 feature: audit-load-path-honesty
 target_pr: TBD
