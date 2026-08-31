@@ -102,12 +102,18 @@ export async function extractEvidenceFile(
 export async function listAuditEvidence(
   auditId: string,
 ): Promise<Result<AuditEvidenceListRow[]>> {
+  // Inner-join filtered to kind='AUDIT_EVIDENCE' — the same filter the
+  // audit-deliverable-draft edge function applies to generation snapshots. A
+  // foreign-kind attach (hand-crafted RPC call) must be invisible to BOTH
+  // registers, or computeDeliverableCurrency flags it newSinceGeneration on
+  // every drafted deliverable forever.
   const { data, error } = await supabase
     .from('audit_source_documents')
     .select(
-      'audit_id, document_id, added_by, added_at, source_type, source_system, source_locator, include_in_generation, documents(title, status)',
+      'audit_id, document_id, added_by, added_at, source_type, source_system, source_locator, include_in_generation, documents!inner(title, status)',
     )
     .eq('audit_id', auditId)
+    .eq('documents.kind', 'AUDIT_EVIDENCE')
     .order('added_at', { ascending: false });
 
   if (error) {
