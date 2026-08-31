@@ -87,8 +87,13 @@ let mockBundle: {
   internal_notification?: unknown;
   evidence_gap_summary?: unknown;
 } = { confirmation_letter: null, agenda: null, checklist: null, internal_notification: null };
+// PR-1 (persist honesty): the fetch reports per-kind read failures; a failed
+// kind means "unknown", and the currency effect must render no verdict.
+let mockFailedKinds: string[] = [];
 vi.mock('../../../../../lib/audit/preAuditApi', () => ({
-  fetchPreAuditDeliverables: vi.fn(() => Promise.resolve(mockBundle)),
+  fetchPreAuditDeliverables: vi.fn(() =>
+    Promise.resolve({ bundle: mockBundle, failedKinds: mockFailedKinds }),
+  ),
 }));
 
 let mockRegister: { ok: boolean; data?: unknown[]; error?: string } = { ok: true, data: [] };
@@ -229,6 +234,7 @@ describe('FinalReviewExportWorkspace grounding currency (flag, never block)', ()
     initialStageReadouts = {};
     mockReadout = null;
     mockBundle = { confirmation_letter: null, agenda: null, checklist: null, internal_notification: null };
+    mockFailedKinds = [];
     mockRegister = { ok: true, data: [] };
   });
 
@@ -335,6 +341,49 @@ describe('FinalReviewExportWorkspace grounding currency (flag, never block)', ()
     expect(notice.textContent).not.toContain('Checklist:');
   });
 
+  it('a failed kind is named as unavailable while healthy kinds keep their verdicts (PR-1)', async () => {
+    // The checklist read is fine and current — its quiet verdict must NOT be
+    // suppressed by the unreadable gap summary. The gap summary must be
+    // named, never silently absent (absence reads as "current").
+    mockBundle = {
+      confirmation_letter: null,
+      agenda: null,
+      checklist: { grounding_snapshot: SNAPSHOT, content: { items: [] } },
+      evidence_gap_summary: null,
+    };
+    mockFailedKinds = ['evidence_gap_summary'];
+    mockRegister = { ok: true, data: [REGISTER_ROW] };
+    render(<FinalReviewExportWorkspace />);
+    const note = await screen.findByTestId('export-currency-unavailable');
+    expect(note.textContent).toContain('Evidence gap summary');
+    expect(screen.getByTestId('export-currency-current')).toBeTruthy();
+    expect(screen.queryByTestId('export-currency-notice')).toBeNull();
+  });
+
+  it('a failed CHECKLIST read makes the gap summary checklist axis unknowable, not drifted (PR-1)', async () => {
+    // Same shape as the checklist-identity drift test below, but the live
+    // checklist is UNREADABLE — a fake [] would flag drift that may not
+    // exist. The gap summary's register axis is current, so no notice.
+    mockBundle = {
+      confirmation_letter: null,
+      agenda: null,
+      checklist: null, // read failed
+      evidence_gap_summary: {
+        grounding_snapshot: {
+          ...SNAPSHOT,
+          register: [{ document_id: 'd1', title: 'QA SOP v3', status: 'ready', included: true }],
+          checklist_item_ids: ['i1'],
+        },
+      },
+    };
+    mockFailedKinds = ['checklist'];
+    mockRegister = { ok: true, data: [REGISTER_ROW] };
+    render(<FinalReviewExportWorkspace />);
+    const note = await screen.findByTestId('export-currency-unavailable');
+    expect(note.textContent).toContain('Checklist');
+    expect(screen.queryByTestId('export-currency-notice')).toBeNull();
+  });
+
   it('gap summary flags checklist-identity drift via the live checklist items (PR-D3)', async () => {
     mockBundle = {
       confirmation_letter: null,
@@ -366,6 +415,7 @@ describe('FinalReviewExportWorkspace grounding currency (flag, never block)', ()
 describe('FinalReviewExportWorkspace — one-ahead preview guard (PR-UX2)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockFailedKinds = [];
     mockActiveAudit = {
       id: 'audit-1',
       audit_name: 'Vendor audit',

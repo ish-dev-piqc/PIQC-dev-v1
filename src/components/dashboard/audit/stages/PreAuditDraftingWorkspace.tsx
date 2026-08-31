@@ -144,6 +144,30 @@ const EMPTY_BUNDLE: MockPreAuditBundle = {
   evidence_gap_summary: null,
 };
 
+const ALL_KINDS: (keyof MockPreAuditBundle)[] = [
+  'confirmation_letter',
+  'agenda',
+  'checklist',
+  'internal_notification',
+  'evidence_gap_summary',
+];
+
+// The prefill/stub bootstraps read and write ONLY these three — their gating
+// must not be poisoned by a failed read of the two optional kinds (in prod
+// today those two tables don't exist yet, so an all-five health gate would
+// switch the Stage-5 bootstrap off entirely).
+const TRIO_KINDS: (keyof MockPreAuditBundle)[] = [
+  'confirmation_letter',
+  'agenda',
+  'checklist',
+];
+
+// The exact rows failed upserts could not save, per audit — the one copy of
+// the user's content. Mapped type so each key keeps its precise member type.
+type UnsavedDraftMap = Partial<{
+  [K in keyof MockPreAuditBundle]: NonNullable<MockPreAuditBundle[K]>;
+}>;
+
 export default function PreAuditDraftingWorkspace() {
   const { theme } = useTheme();
   const { activeAudit, advanceStage, advanceStageError } = useAudit();
@@ -195,6 +219,70 @@ export default function PreAuditDraftingWorkspace() {
   const setTabEditing = (tab: TabKey, editing: boolean) =>
     setEditingTabs((prev) => ({ ...prev, [tab]: editing }));
 
+  // Persist honesty (hardening PR-1). A failed save used to be console-only:
+  // the optimistic row reverted and typed content vanished. Now each tab
+  // carries its own save state — a failed save banners, keeps the user's
+  // content, and blocks Approve until it clears (Approve over a cache/server
+  // mismatch is the CAS-latch hole the old silent revert was guarding).
+  //
+  // The DATA-GUARDING states (save errors, the unsaved drafts they protect,
+  // and failed bundle reads) are keyed by auditId like the bundle cache —
+  // async completions write under their captured audit, so a slow response
+  // can never leak into another audit's view, and switching audits doesn't
+  // discard a preserved draft. The transient UX states (saving spinners,
+  // approve/stale notices) stay flat and reset on audit switch.
+  const [savingTabs, setSavingTabs] = useState<Partial<Record<TabKey, boolean>>>({});
+  // Two failure channels, deliberately separate: a failed UPSERT means we
+  // hold the only copy of the content (banner + editor re-opens over the
+  // preserved draft + Approve blocks until it clears); a failed APPROVE
+  // means the content is safely saved and only the latch didn't move
+  // (banner only — cache matches server, so Approve stays retryable).
+  const [persistErrors, setPersistErrors] = useState<
+    Record<string, Partial<Record<TabKey, string>>>
+  >({});
+  // The exact `next` a failed upsert could not save. Tab components seed
+  // their editors from this on (re)mount — the tab unmounting on a tab
+  // switch must not destroy the content the banner promises is preserved.
+  const [unsavedDrafts, setUnsavedDrafts] = useState<Record<string, UnsavedDraftMap>>({});
+  const [approveErrors, setApproveErrors] = useState<Partial<Record<TabKey, string>>>({});
+  // Informational, never blocking: the approve CAS rejected because the row
+  // changed since review; server truth was reloaded for re-review.
+  const [staleReloadNotices, setStaleReloadNotices] = useState<
+    Partial<Record<TabKey, string>>
+  >({});
+  // Kinds whose bundle read failed, per audit. Their null slots mean
+  // unknown, not absent — those tabs render a load-error card instead of a
+  // scratch form, and the prefill/stub bootstraps stay off (a transient read
+  // failure must never trigger writes meant for a genuinely empty stage).
+  const [failedKindsByAudit, setFailedKindsByAudit] = useState<
+    Record<string, (keyof MockPreAuditBundle)[]>
+  >({});
+  // Audits whose bundle read has resolved (or definitively failed) since
+  // THIS mount. A cached bundle without a settled read this mount is not
+  // trustworthy — failedKindsByAudit is component state and dies with the
+  // component, so a remount over a stale cache must re-earn trust before
+  // any scratch form or bootstrap renders.
+  const [settledAudits, setSettledAudits] = useState<Set<string>>(new Set());
+  const [retryingBundle, setRetryingBundle] = useState(false);
+  const [stubsError, setStubsError] = useState<string | null>(null);
+
+  // NOTE for future readers: the error/draft maps use value-writes of
+  // `undefined` to clear keys — reads must be value-based (`m[k] ?? null`),
+  // never key-based (`'k' in m` / Object.keys length).
+  const setTabPersistError = (aid: string, tab: TabKey, msg: string | undefined) =>
+    setPersistErrors((p) => ({ ...p, [aid]: { ...p[aid], [tab]: msg } }));
+  const setTabUnsavedDraft = (
+    aid: string,
+    tab: TabKey,
+    draft: UnsavedDraftMap[keyof MockPreAuditBundle] | undefined,
+  ) =>
+    setUnsavedDrafts((p) => ({
+      ...p,
+      [aid]: { ...p[aid], [tab]: draft } as UnsavedDraftMap,
+    }));
+  const setAuditFailedKinds = (aid: string, kinds: (keyof MockPreAuditBundle)[]) =>
+    setFailedKindsByAudit((p) => ({ ...p, [aid]: kinds }));
+
   // A generation error belongs to the tab it happened on.
   useEffect(() => {
     setGenerationError(null);
@@ -215,6 +303,14 @@ export default function PreAuditDraftingWorkspace() {
   useEffect(() => {
     setActiveTab('confirmation_letter');
     setOptionalFirst(false);
+    // Only the TRANSIENT UX states reset on audit switch. The data-guarding
+    // states (persistErrors, unsavedDrafts, failedKindsByAudit) are keyed by
+    // audit and deliberately survive it — a preserved draft must still be
+    // there when the auditor comes back.
+    setSavingTabs({});
+    setApproveErrors({});
+    setStaleReloadNotices({});
+    setStubsError(null);
   }, [activeAudit?.id]);
 
   useEffect(() => {
@@ -231,25 +327,45 @@ export default function PreAuditDraftingWorkspace() {
       try {
         const initial = await fetchPreAuditDeliverables(auditIdLocal);
         if (cancelled) return;
+        setAuditFailedKinds(auditIdLocal, initial.failedKinds);
+        setSettledAudits((prev) => new Set(prev).add(auditIdLocal));
 
         // Silent agentic bootstrap: if all three deliverables are missing AND
         // we haven't attempted prefill yet for this audit this session, fire
         // the prefill RPCs in parallel. They server-side-gate on approved
         // Stage 3 + 4 sources and skip silently when not met.
-        const allMissing =
-          !initial.confirmation_letter && !initial.agenda && !initial.checklist;
+        // Gated on the TRIO's reads being healthy — a failed trio read makes
+        // "missing" unknowable (and would burn this session's one attempt on
+        // a state we never observed), but a failed read of the two optional
+        // kinds says nothing about the trio and must not switch the
+        // bootstrap off (in prod those two tables can lag the frontend).
+        const trioReadable = !TRIO_KINDS.some((k) => initial.failedKinds.includes(k));
+        const trioMissingNow =
+          trioReadable &&
+          !initial.bundle.confirmation_letter &&
+          !initial.bundle.agenda &&
+          !initial.bundle.checklist;
 
-        if (allMissing && hasReached && !attemptedPrefillRef.current.has(auditIdLocal)) {
+        if (trioMissingNow && hasReached && !attemptedPrefillRef.current.has(auditIdLocal)) {
           attemptedPrefillRef.current.add(auditIdLocal);
           await prefillStage5Deliverables(auditIdLocal);
           const refreshed = await fetchPreAuditDeliverables(auditIdLocal);
           if (cancelled) return;
-          setBundles((prev) => ({ ...prev, [auditIdLocal]: refreshed }));
+          setAuditFailedKinds(auditIdLocal, refreshed.failedKinds);
+          setBundles((prev) => ({ ...prev, [auditIdLocal]: refreshed.bundle }));
         } else {
-          setBundles((prev) => ({ ...prev, [auditIdLocal]: initial }));
+          setBundles((prev) => ({ ...prev, [auditIdLocal]: initial.bundle }));
         }
       } catch (err) {
+        // A thrown read (network drop, not a per-table PostgREST error) means
+        // the WHOLE bundle is unknown — mark all five failed so nothing
+        // renders a scratch form or bootstrap over state we never saw. The
+        // old console-only catch was the last path that still did.
         console.error('[PreAuditDraftingWorkspace] Load error:', err);
+        if (!cancelled) {
+          setAuditFailedKinds(auditIdLocal, ALL_KINDS);
+          setSettledAudits((prev) => new Set(prev).add(auditIdLocal));
+        }
       }
     };
     load();
@@ -290,38 +406,68 @@ export default function PreAuditDraftingWorkspace() {
     }));
   };
 
+  // THE refetch path — every post-write refresh and every retry goes through
+  // here (the copies had already drifted on error handling). Never throws: a
+  // failed refetch marks all five kinds unknown for this audit rather than
+  // leaving a stale view labeled trustworthy.
+  const refreshBundle = async (): Promise<boolean> => {
+    try {
+      const fresh = await fetchPreAuditDeliverables(auditId);
+      setAuditFailedKinds(auditId, fresh.failedKinds);
+      setBundles((prev) => ({ ...prev, [auditId]: fresh.bundle }));
+      return true;
+    } catch (err) {
+      console.error('[PreAuditDraftingWorkspace] bundle refresh error:', err);
+      setAuditFailedKinds(auditId, ALL_KINDS);
+      return false;
+    }
+  };
+
   const runDeliverableGeneration = async (tab: TabKey) => {
     if (!hasReached) return; // preview — never spend generation from ahead
     setGeneratingTab(tab);
     setGenerationError(null);
-    const draft = await requestDeliverableDraft(auditId, tab);
-    if (!draft.ok) {
-      setGenerationError(draft.error);
+    try {
+      const draft = await requestDeliverableDraft(auditId, tab);
+      if (!draft.ok) {
+        setGenerationError(draft.error);
+        return;
+      }
+      // Letter: generation never sees recipients — merge the current ones here.
+      const applied = await applyDeliverableGeneration(auditId, draft.data, {
+        currentRecipients: bundle.confirmation_letter?.content.recipients ?? [],
+      });
+      if (!applied.ok) {
+        setGenerationError(applied.error);
+        return;
+      }
+      // Refetch server truth — one mapper, one read path.
+      if (!(await refreshBundle())) {
+        setGenerationError(
+          'The draft was applied, but refreshing the view failed — reload the page to see it.',
+        );
+      }
+    } finally {
+      // The panel must never strand at "Drafting…" — whatever happened above.
       setGeneratingTab(null);
-      return;
     }
-    // Letter: generation never sees recipients — merge the current ones here.
-    const applied = await applyDeliverableGeneration(auditId, draft.data, {
-      currentRecipients: bundle.confirmation_letter?.content.recipients ?? [],
-    });
-    if (!applied.ok) {
-      setGenerationError(applied.error);
-      setGeneratingTab(null);
-      return;
-    }
-    // Refetch server truth — one mapper, one read path.
-    const fresh = await fetchPreAuditDeliverables(auditId);
-    setBundles((prev) => ({ ...prev, [auditId]: fresh }));
-    setGeneratingTab(null);
   };
 
   // Approve rejected by the server's compare-and-swap (STALE_CONTENT): the
   // deliverable changed since this tab rendered it. Reload server truth so
-  // the reviewer looks at the current text — invitational, not an alarm.
-  const reloadAfterStaleApprove = async (scope: string, error: string) => {
+  // the reviewer looks at the current text — invitational, not an alarm,
+  // and now SAID OUT LOUD via the per-tab notice (an unexplained content
+  // swap read as "Approve did nothing"). Never throws — a failed reload
+  // must not fall into the persist catch and masquerade as a save failure.
+  const reloadAfterStaleApprove = async (key: TabKey, scope: string, error: string) => {
     console.error(`[PreAuditDraftingWorkspace] ${scope} rejected:`, error);
-    const fresh = await fetchPreAuditDeliverables(auditId);
-    setBundles((prevBundles) => ({ ...prevBundles, [auditId]: fresh }));
+    const refreshed = await refreshBundle();
+    setStaleReloadNotices((prev) => ({
+      ...prev,
+      [key]: refreshed
+        ? 'This deliverable changed since you reviewed it — the latest version is shown. Re-review and approve.'
+        : 'This deliverable changed since you reviewed it, and reloading it failed — reload the page to see the latest before approving.',
+    }));
   };
 
   // One persist flow for all five deliverables (the 4th copy was the
@@ -330,14 +476,16 @@ export default function PreAuditDraftingWorkspace() {
   // An upsert that FAILS (null; the API layer already logged it) REVERTS the
   // optimistic row: the UI must never show unsaved content as saved, because
   // a later Approve would CAS-pass against the unchanged server row and latch
-  // content the reviewer never wrote.
+  // content the reviewer never wrote. The revert is the CACHE's story only —
+  // the tab keeps the typed content in its editor (its resync skips while a
+  // save error is pending) and the banner + blocked Approve say so.
   // T ranges over the bundle's member types so the field writes below
   // type-check without casts; every member carries the id/approval_status/
   // updated_at the flow relies on.
   async function persistDeliverable<
     T extends NonNullable<MockPreAuditBundle[keyof MockPreAuditBundle]>,
   >(
-    key: keyof MockPreAuditBundle,
+    key: TabKey,
     noun: string,
     prev: T | null,
     next: T | null,
@@ -347,6 +495,11 @@ export default function PreAuditDraftingWorkspace() {
     },
   ): Promise<void> {
     if (!next) return;
+    setSavingTabs((p) => ({ ...p, [key]: true }));
+    setTabPersistError(auditId, key, undefined);
+    setTabUnsavedDraft(auditId, key, undefined);
+    setApproveErrors((p) => ({ ...p, [key]: undefined }));
+    setStaleReloadNotices((p) => ({ ...p, [key]: undefined }));
     try {
       const isApprovalTransition =
         !!prev &&
@@ -357,17 +510,49 @@ export default function PreAuditDraftingWorkspace() {
         const result = await ops.approve(prev);
         if (result.ok) {
           setBundleField(key, result.data);
+        } else if (result.errorHint === 'STALE_CONTENT') {
+          // A real CAS miss: the row moved on. Reload is correct here — and
+          // ONLY here. Routing every failure through it made a missing RPC
+          // look like "Approve did nothing".
+          await reloadAfterStaleApprove(key, `approve${noun}`, result.error);
         } else {
-          await reloadAfterStaleApprove(`approve${noun}`, result.error);
+          console.error(`[PreAuditDraftingWorkspace] approve${noun} failed:`, result.error);
+          setBundleField(key, prev); // roll back the optimistic APPROVED flip
+          setApproveErrors((p) => ({
+            ...p,
+            [key]: `Approval didn't save — nothing was approved; your content is unaffected. Retry when ready. (${result.error})`,
+          }));
         }
         return;
       }
 
       const persisted = await ops.upsert(next);
-      setBundleField(key, persisted ?? prev);
+      if (persisted) {
+        setBundleField(key, persisted);
+      } else {
+        // Error + draft BEFORE revert: the tab's resync guard must already
+        // see the error when the cache write lands, or an unbatched render
+        // between the two would sync the editor over the user's only copy.
+        // The draft stash is what survives a tab switch (tabs unmount).
+        setTabPersistError(
+          auditId,
+          key,
+          'Save failed — your text is preserved in the editor. Retry, or Cancel to discard it.',
+        );
+        setTabUnsavedDraft(auditId, key, next);
+        setBundleField(key, prev);
+      }
     } catch (err) {
       console.error(`[PreAuditDraftingWorkspace] persist${noun} error:`, err);
+      setTabPersistError(
+        auditId,
+        key,
+        'Save failed — your text is preserved in the editor. Retry, or Cancel to discard it.',
+      );
+      setTabUnsavedDraft(auditId, key, next);
       setBundleField(key, prev);
+    } finally {
+      setSavingTabs((p) => ({ ...p, [key]: false }));
     }
   }
 
@@ -411,6 +596,7 @@ export default function PreAuditDraftingWorkspace() {
     });
 
   const generateAllStubs = async () => {
+    setStubsError(null);
     // Stubs cover the three gating deliverables only — the internal
     // notification has no stub by design (drafted from its tab when wanted).
     // Functional merges so a concurrently-landed notification is preserved.
@@ -430,17 +616,20 @@ export default function PreAuditDraftingWorkspace() {
         upsertAgenda(auditId, stubs.agenda.content, 'Generated stub'),
         upsertChecklist(auditId, stubs.checklist.content, 'Generated stub'),
       ]);
-      setBundles((prev) => ({
-        ...prev,
-        [auditId]: {
-          ...(prev[auditId] ?? EMPTY_BUNDLE),
-          confirmation_letter: letter ?? stubs.confirmation_letter,
-          agenda: agenda ?? stubs.agenda,
-          checklist: checklist ?? stubs.checklist,
-        },
-      }));
+      // Refetch server truth rather than hand-merging the write results: a
+      // null here can mean "failed" OR "row already existed" (23505 from a
+      // concurrent prefill/tab) — only the read path can tell them apart,
+      // and writing nulls into cache would render a scratch form over a row
+      // that exists. refreshBundle also clears the optimistic stubs on
+      // failure (all-kinds-unknown beats unsaved-shown-as-saved).
+      await refreshBundle();
+      if (!letter || !agenda || !checklist) {
+        setStubsError('Some stubs failed to save — showing what the server actually holds. Retry when ready.');
+      }
     } catch (err) {
       console.error('[PreAuditDraftingWorkspace] generateAllStubs error:', err);
+      await refreshBundle();
+      setStubsError('Generating stubs failed — retry when ready.');
     }
   };
 
@@ -474,9 +663,46 @@ export default function PreAuditDraftingWorkspace() {
   // one-click bootstrap stays reachable when the tabs render with the gating
   // trio still unstarted.
   // ---------------------------------------------------------------------------
-  const trioMissing = !bundle.confirmation_letter && !bundle.agenda && !bundle.checklist;
+  // A failed kind's null is unknown, not absent — the "nothing drafted yet"
+  // screen and the stub bootstrap must not run over a bundle we couldn't
+  // actually read (a scratch form over real server data is the lie this PR
+  // exists to end). Failed tabs render their own load-error card below.
+  // Each derived flag is gated on the health of exactly the kinds it reads:
+  // the trio affordances survive a failed read of the two optional kinds.
+  const failedKinds = failedKindsByAudit[auditId] ?? [];
+  const trioReadable = !TRIO_KINDS.some((k) => failedKinds.includes(k));
+  const trioMissing =
+    trioReadable && !bundle.confirmation_letter && !bundle.agenda && !bundle.checklist;
   const allMissing =
-    trioMissing && !bundle.internal_notification && !bundle.evidence_gap_summary;
+    trioMissing &&
+    failedKinds.length === 0 &&
+    !bundle.internal_notification &&
+    !bundle.evidence_gap_summary;
+
+  const retryBundleLoad = async () => {
+    if (retryingBundle) return;
+    setRetryingBundle(true);
+    try {
+      await refreshBundle(); // never throws; failure re-marks all five unknown
+    } finally {
+      setRetryingBundle(false);
+    }
+  };
+
+  // A cached bundle without a settled read THIS mount must not render
+  // scratch forms or bootstraps — the failed-kinds qualifier died with the
+  // previous mount and hasn't been re-earned yet.
+  if (!settledAudits.has(auditId)) {
+    return (
+      <div className="p-6 max-w-3xl mx-auto">
+        {!hasReached && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
+        <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>
+          Stage 5 · Pre-audit drafting
+        </p>
+        <p className={`${subColor} text-sm mt-2`}>Loading deliverables…</p>
+      </div>
+    );
+  }
 
   if (allMissing && !optionalFirst) {
     return (
@@ -525,6 +751,19 @@ export default function PreAuditDraftingWorkspace() {
             >
               …or the evidence gap summary
             </button>
+          </div>
+        )}
+        {stubsError && (
+          <div
+            role="alert"
+            data-testid="stage5-stubs-error"
+            className={`text-xs px-3 py-2 mt-4 rounded-md border ${
+              isLight
+                ? 'bg-red-50 border-red-200 text-red-700'
+                : 'bg-red-500/15 border-red-500/30 text-red-300'
+            }`}
+          >
+            {stubsError}
           </div>
         )}
       </div>
@@ -627,6 +866,19 @@ export default function PreAuditDraftingWorkspace() {
           </button>
         </div>
       )}
+      {stubsError && (
+        <div
+          role="alert"
+          data-testid="stage5-stubs-error"
+          className={`text-xs px-3 py-2 rounded-md border ${
+            isLight
+              ? 'bg-red-50 border-red-200 text-red-700'
+              : 'bg-red-500/15 border-red-500/30 text-red-300'
+          }`}
+        >
+          {stubsError}
+        </div>
+      )}
 
       {/* Tab rail with per-tab approval indicator */}
       <div className={`border-b ${tabRail}`}>
@@ -653,135 +905,208 @@ export default function PreAuditDraftingWorkspace() {
         </div>
       </div>
 
-      {/* Active tab content */}
-      {activeTab === 'confirmation_letter' && (
-        <>
-          <DeliverableGenerationPanel
-            kind="confirmation_letter"
-            deliverable={bundle.confirmation_letter}
-            evidenceRows={evidenceRows}
-            generating={generatingTab === 'confirmation_letter'}
-            editing={editingTabs['confirmation_letter'] === true}
-            error={generationError}
-            isLight={isLight}
-            previewLocked={!hasReached}
-            onGenerate={() => void runDeliverableGeneration('confirmation_letter')}
-          />
-          <ConfirmationLetterTab
-            deliverable={bundle.confirmation_letter}
-            isLight={isLight}
-            onChange={(next) => {
-              setBundleField('confirmation_letter', next);
-              persistConfirmationLetter(bundle.confirmation_letter, next);
-            }}
-            onEditingChange={(e) => setTabEditing('confirmation_letter', e)}
-            previewLocked={!hasReached}
-          />
-        </>
-      )}
-      {activeTab === 'agenda' && (
-        <>
-          <DeliverableGenerationPanel
-            kind="agenda"
-            deliverable={bundle.agenda}
-            evidenceRows={evidenceRows}
-            generating={generatingTab === 'agenda'}
-            editing={editingTabs['agenda'] === true}
-            error={generationError}
-            isLight={isLight}
-            previewLocked={!hasReached}
-            onGenerate={() => void runDeliverableGeneration('agenda')}
-          />
-          <AgendaTab
-            deliverable={bundle.agenda}
-            isLight={isLight}
-            onChange={(next) => {
-              setBundleField('agenda', next);
-              persistAgenda(bundle.agenda, next);
-            }}
-            onEditingChange={(e) => setTabEditing('agenda', e)}
-            previewLocked={!hasReached}
-          />
-        </>
-      )}
-      {activeTab === 'checklist' && (
-        <>
-          <DeliverableGenerationPanel
-            kind="checklist"
-            deliverable={bundle.checklist}
-            evidenceRows={evidenceRows}
-            generating={generatingTab === 'checklist'}
-            editing={editingTabs['checklist'] === true}
-            error={generationError}
-            isLight={isLight}
-            previewLocked={!hasReached}
-            onGenerate={() => void runDeliverableGeneration('checklist')}
-          />
-          <ChecklistTab
-            deliverable={bundle.checklist}
-            isLight={isLight}
-            onChange={(next) => {
-              setBundleField('checklist', next);
-              persistChecklist(bundle.checklist, next);
-            }}
-            onEditingChange={(e) => setTabEditing('checklist', e)}
-            previewLocked={!hasReached}
-          />
-        </>
-      )}
-      {activeTab === 'internal_notification' && (
-        <>
-          <DeliverableGenerationPanel
-            kind="internal_notification"
-            deliverable={bundle.internal_notification}
-            evidenceRows={evidenceRows}
-            generating={generatingTab === 'internal_notification'}
-            editing={editingTabs['internal_notification'] === true}
-            error={generationError}
-            isLight={isLight}
-            previewLocked={!hasReached}
-            onGenerate={() => void runDeliverableGeneration('internal_notification')}
-          />
-          <SimpleLetterTab
-            config={NOTIFICATION_TAB_CONFIG}
-            deliverable={bundle.internal_notification}
-            isLight={isLight}
-            onChange={(next) => {
-              setBundleField('internal_notification', next);
-              persistInternalNotification(bundle.internal_notification, next);
-            }}
-            onEditingChange={(e) => setTabEditing('internal_notification', e)}
-            previewLocked={!hasReached}
-          />
-        </>
-      )}
-      {activeTab === 'evidence_gap_summary' && (
-        <>
-          <DeliverableGenerationPanel
-            kind="evidence_gap_summary"
-            deliverable={bundle.evidence_gap_summary}
-            evidenceRows={evidenceRows}
-            generating={generatingTab === 'evidence_gap_summary'}
-            editing={editingTabs['evidence_gap_summary'] === true}
-            error={generationError}
-            isLight={isLight}
-            previewLocked={!hasReached}
-            liveChecklistItemIds={checklistLiveIds(bundle.checklist)}
-            onGenerate={() => void runDeliverableGeneration('evidence_gap_summary')}
-          />
-          <SimpleLetterTab
-            config={GAP_SUMMARY_TAB_CONFIG}
-            deliverable={bundle.evidence_gap_summary}
-            isLight={isLight}
-            onChange={(next) => {
-              setBundleField('evidence_gap_summary', next);
-              persistEvidenceGapSummary(bundle.evidence_gap_summary, next);
-            }}
-            onEditingChange={(e) => setTabEditing('evidence_gap_summary', e)}
-            previewLocked={!hasReached}
-          />
-        </>
-      )}
+      {/* Active tab content. A kind whose bundle SELECT failed renders a
+          load-error card in place of its panel + tab: its null slot is
+          unknown, not absent, and a scratch form (or a "Draft with PIQC" CTA)
+          over unknown server state invites overwriting real data. */}
+      {activeTab === 'confirmation_letter' &&
+        (failedKinds.includes('confirmation_letter') ? (
+          <DeliverableLoadError noun="confirmation letter" isLight={isLight} retrying={retryingBundle} onRetry={retryBundleLoad} />
+        ) : (
+          <>
+            <DeliverableGenerationPanel
+              kind="confirmation_letter"
+              deliverable={bundle.confirmation_letter}
+              evidenceRows={evidenceRows}
+              generating={generatingTab === 'confirmation_letter'}
+              editing={editingTabs['confirmation_letter'] === true}
+              error={generationError}
+              isLight={isLight}
+              previewLocked={!hasReached}
+              onGenerate={() => void runDeliverableGeneration('confirmation_letter')}
+            />
+            <ConfirmationLetterTab
+              key={auditId}
+              deliverable={bundle.confirmation_letter}
+              isLight={isLight}
+              onChange={(next) => {
+                setBundleField('confirmation_letter', next);
+                persistConfirmationLetter(bundle.confirmation_letter, next);
+              }}
+              onEditingChange={(e) => setTabEditing('confirmation_letter', e)}
+              previewLocked={!hasReached}
+              saving={savingTabs['confirmation_letter'] === true}
+              saveError={persistErrors[auditId]?.['confirmation_letter'] ?? null}
+              unsavedDraft={unsavedDrafts[auditId]?.['confirmation_letter'] ?? null}
+              approveError={approveErrors['confirmation_letter'] ?? null}
+              staleNotice={staleReloadNotices['confirmation_letter'] ?? null}
+              onDismissSaveError={() => {
+                setTabPersistError(auditId, 'confirmation_letter', undefined);
+                setTabUnsavedDraft(auditId, 'confirmation_letter', undefined);
+              }}
+            />
+          </>
+        ))}
+      {activeTab === 'agenda' &&
+        (failedKinds.includes('agenda') ? (
+          <DeliverableLoadError noun="agenda" isLight={isLight} retrying={retryingBundle} onRetry={retryBundleLoad} />
+        ) : (
+          <>
+            <DeliverableGenerationPanel
+              kind="agenda"
+              deliverable={bundle.agenda}
+              evidenceRows={evidenceRows}
+              generating={generatingTab === 'agenda'}
+              editing={editingTabs['agenda'] === true}
+              error={generationError}
+              isLight={isLight}
+              previewLocked={!hasReached}
+              onGenerate={() => void runDeliverableGeneration('agenda')}
+            />
+            <AgendaTab
+              key={auditId}
+              deliverable={bundle.agenda}
+              isLight={isLight}
+              onChange={(next) => {
+                setBundleField('agenda', next);
+                persistAgenda(bundle.agenda, next);
+              }}
+              onEditingChange={(e) => setTabEditing('agenda', e)}
+              previewLocked={!hasReached}
+              saving={savingTabs['agenda'] === true}
+              saveError={persistErrors[auditId]?.['agenda'] ?? null}
+              unsavedDraft={unsavedDrafts[auditId]?.['agenda'] ?? null}
+              approveError={approveErrors['agenda'] ?? null}
+              staleNotice={staleReloadNotices['agenda'] ?? null}
+              onDismissSaveError={() => {
+                setTabPersistError(auditId, 'agenda', undefined);
+                setTabUnsavedDraft(auditId, 'agenda', undefined);
+              }}
+            />
+          </>
+        ))}
+      {activeTab === 'checklist' &&
+        (failedKinds.includes('checklist') ? (
+          <DeliverableLoadError noun="checklist" isLight={isLight} retrying={retryingBundle} onRetry={retryBundleLoad} />
+        ) : (
+          <>
+            <DeliverableGenerationPanel
+              kind="checklist"
+              deliverable={bundle.checklist}
+              evidenceRows={evidenceRows}
+              generating={generatingTab === 'checklist'}
+              editing={editingTabs['checklist'] === true}
+              error={generationError}
+              isLight={isLight}
+              previewLocked={!hasReached}
+              onGenerate={() => void runDeliverableGeneration('checklist')}
+            />
+            <ChecklistTab
+              key={auditId}
+              deliverable={bundle.checklist}
+              isLight={isLight}
+              onChange={(next) => {
+                setBundleField('checklist', next);
+                persistChecklist(bundle.checklist, next);
+              }}
+              onEditingChange={(e) => setTabEditing('checklist', e)}
+              previewLocked={!hasReached}
+              saving={savingTabs['checklist'] === true}
+              saveError={persistErrors[auditId]?.['checklist'] ?? null}
+              unsavedDraft={unsavedDrafts[auditId]?.['checklist'] ?? null}
+              approveError={approveErrors['checklist'] ?? null}
+              staleNotice={staleReloadNotices['checklist'] ?? null}
+              onDismissSaveError={() => {
+                setTabPersistError(auditId, 'checklist', undefined);
+                setTabUnsavedDraft(auditId, 'checklist', undefined);
+              }}
+            />
+          </>
+        ))}
+      {activeTab === 'internal_notification' &&
+        (failedKinds.includes('internal_notification') ? (
+          <DeliverableLoadError noun="internal notification" isLight={isLight} retrying={retryingBundle} onRetry={retryBundleLoad} />
+        ) : (
+          <>
+            <DeliverableGenerationPanel
+              kind="internal_notification"
+              deliverable={bundle.internal_notification}
+              evidenceRows={evidenceRows}
+              generating={generatingTab === 'internal_notification'}
+              editing={editingTabs['internal_notification'] === true}
+              error={generationError}
+              isLight={isLight}
+              previewLocked={!hasReached}
+              onGenerate={() => void runDeliverableGeneration('internal_notification')}
+            />
+            <SimpleLetterTab
+              key={auditId}
+              config={NOTIFICATION_TAB_CONFIG}
+              deliverable={bundle.internal_notification}
+              isLight={isLight}
+              onChange={(next) => {
+                setBundleField('internal_notification', next);
+                persistInternalNotification(bundle.internal_notification, next);
+              }}
+              onEditingChange={(e) => setTabEditing('internal_notification', e)}
+              previewLocked={!hasReached}
+              saving={savingTabs['internal_notification'] === true}
+              saveError={persistErrors[auditId]?.['internal_notification'] ?? null}
+              unsavedDraft={unsavedDrafts[auditId]?.['internal_notification'] ?? null}
+              approveError={approveErrors['internal_notification'] ?? null}
+              staleNotice={staleReloadNotices['internal_notification'] ?? null}
+              onDismissSaveError={() => {
+                setTabPersistError(auditId, 'internal_notification', undefined);
+                setTabUnsavedDraft(auditId, 'internal_notification', undefined);
+              }}
+            />
+          </>
+        ))}
+      {activeTab === 'evidence_gap_summary' &&
+        (failedKinds.includes('evidence_gap_summary') ? (
+          <DeliverableLoadError noun="evidence gap summary" isLight={isLight} retrying={retryingBundle} onRetry={retryBundleLoad} />
+        ) : (
+          <>
+            <DeliverableGenerationPanel
+              kind="evidence_gap_summary"
+              deliverable={bundle.evidence_gap_summary}
+              evidenceRows={evidenceRows}
+              generating={generatingTab === 'evidence_gap_summary'}
+              editing={editingTabs['evidence_gap_summary'] === true}
+              error={generationError}
+              isLight={isLight}
+              previewLocked={!hasReached}
+              // A failed checklist READ makes the axis unknowable (undefined),
+              // which computeDeliverableCurrency treats as no-verdict — while
+              // a confirmed absent checklist row is genuinely [] (live ids).
+              liveChecklistItemIds={
+                failedKinds.includes('checklist') ? undefined : checklistLiveIds(bundle.checklist)
+              }
+              onGenerate={() => void runDeliverableGeneration('evidence_gap_summary')}
+            />
+            <SimpleLetterTab
+              key={auditId}
+              config={GAP_SUMMARY_TAB_CONFIG}
+              deliverable={bundle.evidence_gap_summary}
+              isLight={isLight}
+              onChange={(next) => {
+                setBundleField('evidence_gap_summary', next);
+                persistEvidenceGapSummary(bundle.evidence_gap_summary, next);
+              }}
+              onEditingChange={(e) => setTabEditing('evidence_gap_summary', e)}
+              previewLocked={!hasReached}
+              saving={savingTabs['evidence_gap_summary'] === true}
+              saveError={persistErrors[auditId]?.['evidence_gap_summary'] ?? null}
+              unsavedDraft={unsavedDrafts[auditId]?.['evidence_gap_summary'] ?? null}
+              approveError={approveErrors['evidence_gap_summary'] ?? null}
+              staleNotice={staleReloadNotices['evidence_gap_summary'] ?? null}
+              onDismissSaveError={() => {
+                setTabPersistError(auditId, 'evidence_gap_summary', undefined);
+                setTabUnsavedDraft(auditId, 'evidence_gap_summary', undefined);
+              }}
+            />
+          </>
+        ))}
 
       {/* Stage advance */}
       <div className={`${cardBg} border rounded-xl p-5`}>
@@ -813,7 +1138,16 @@ export default function PreAuditDraftingWorkspace() {
                       )}
                       <span className={ok ? subColor : mutedColor}>{t.label}</span>
                       <span className={`${mutedColor} text-[10px] uppercase tracking-wider`}>
-                        {s === 'APPROVED' ? 'approved' : s === 'DRAFT' ? 'draft' : 'not started'}
+                        {/* A failed read is 'unavailable', never 'not started' —
+                            the row may be APPROVED on the server. The gate
+                            itself stays fail-closed either way. */}
+                        {s === 'APPROVED'
+                          ? 'approved'
+                          : s === 'DRAFT'
+                          ? 'draft'
+                          : failedKinds.includes(t.key)
+                          ? 'unavailable'
+                          : 'not started'}
                       </span>
                     </li>
                   );
@@ -849,6 +1183,56 @@ export default function PreAuditDraftingWorkspace() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// DeliverableLoadError — honest stand-in for a tab whose bundle SELECT
+// failed. Says "couldn't read" instead of rendering the scratch form that
+// used to sit over unknown server data.
+// ============================================================================
+
+function DeliverableLoadError({
+  noun,
+  isLight,
+  retrying,
+  onRetry,
+}: {
+  noun: string;
+  isLight: boolean;
+  retrying: boolean;
+  onRetry: () => void;
+}) {
+  const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
+  return (
+    <div
+      role="alert"
+      data-testid="deliverable-load-error"
+      className={`${cardBg} border rounded-xl p-5 space-y-3`}
+    >
+      <div className="flex items-start gap-2">
+        <AlertTriangle
+          size={14}
+          className={`flex-shrink-0 mt-0.5 ${isLight ? 'text-red-600' : 'text-red-400'}`}
+        />
+        <p className={`text-sm leading-relaxed ${isLight ? 'text-red-700' : 'text-red-300'}`}>
+          The {noun} could not be loaded — it may exist on the server, so no scratch form is
+          shown (typing into one would overwrite whatever is really there).
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onRetry}
+        disabled={retrying}
+        className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors disabled:opacity-50 ${
+          isLight
+            ? 'bg-white border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC]'
+            : 'bg-[#0F172A] border-white/10 text-[#CBD5E1] hover:bg-white/[0.04]'
+        }`}
+      >
+        {retrying ? 'Retrying…' : 'Retry'}
+      </button>
     </div>
   );
 }
@@ -897,30 +1281,55 @@ interface ConfirmationLetterTabProps {
   onEditingChange?: (editing: boolean) => void;
   /** One-ahead preview (UX2): no scratch form, no Edit/Approve. */
   previewLocked?: boolean;
+  /** Persist honesty (PR-1): save in flight blocks Save/Approve. */
+  saving?: boolean;
+  /** Last save failed — banner shows, editor keeps its content, Approve
+   *  blocks until it clears (retry succeeds or Cancel discards). */
+  saveError?: string | null;
+  /** The row a failed upsert could not save — survives this tab unmounting
+   *  (tab switches). The editor seeds from it so the banner's "preserved"
+   *  promise holds across remounts. */
+  unsavedDraft?: MockConfirmationLetter | null;
+  /** Non-stale approve failure: content is saved, only the latch didn't
+   *  move — banner only; Approve stays retryable, no editor interaction. */
+  approveError?: string | null;
+  /** Informational: approve CAS-missed and server truth was reloaded. */
+  staleNotice?: string | null;
+  onDismissSaveError?: () => void;
 }
 
-function ConfirmationLetterTab({ deliverable, isLight, onChange, onEditingChange, previewLocked = false }: ConfirmationLetterTabProps) {
+function ConfirmationLetterTab({ deliverable, isLight, onChange, onEditingChange, previewLocked = false, saving = false, saveError = null, unsavedDraft = null, approveError = null, staleNotice = null, onDismissSaveError }: ConfirmationLetterTabProps) {
   const [editing, setEditingRaw] = useState(!deliverable);
   const setEditing = (next: boolean) => {
     setEditingRaw(next);
     onEditingChange?.(next);
   };
-  const [body, setBody] = useState(deliverable?.content.body_text ?? '');
+  const [body, setBody] = useState((unsavedDraft ?? deliverable)?.content.body_text ?? '');
   const [recipients, setRecipients] = useState<string[]>(
-    deliverable?.content.recipients ?? [],
+    (unsavedDraft ?? deliverable)?.content.recipients ?? [],
   );
-  const [scope, setScope] = useState<string[]>(deliverable?.content.scope ?? []);
+  const [scope, setScope] = useState<string[]>((unsavedDraft ?? deliverable)?.content.scope ?? []);
 
   // updated_at in the deps: grounded generation mutates this row under the
   // SAME id (see ChecklistTab for the full rationale). The workspace disables
   // Draft/Revise while editing, so this resync never fires over unsaved edits.
+  // While a save error is pending the resync SKIPS: the cache reverted to
+  // server truth (possibly null), but the editor's typed content is the one
+  // copy the user has — syncing over it is the data loss this PR removes.
   useEffect(() => {
+    if (saveError) return;
     setEditing(!deliverable);
     setBody(deliverable?.content.body_text ?? '');
     setRecipients(deliverable?.content.recipients ?? []);
     setScope(deliverable?.content.scope ?? []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deliverable?.id, deliverable?.updated_at]);
+
+  // A failed save re-opens the editor over the preserved content.
+  useEffect(() => {
+    if (saveError) setEditing(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saveError]);
 
   const save = () => {
     onChange({
@@ -949,6 +1358,9 @@ function ConfirmationLetterTab({ deliverable, isLight, onChange, onEditingChange
   };
 
   const cancel = () => {
+    // An explicit discard: form returns to server truth, so the pending
+    // save error (and its Approve block) clears with it.
+    onDismissSaveError?.();
     setBody(deliverable?.content.body_text ?? '');
     setRecipients(deliverable?.content.recipients ?? []);
     setScope(deliverable?.content.scope ?? []);
@@ -969,6 +1381,10 @@ function ConfirmationLetterTab({ deliverable, isLight, onChange, onEditingChange
       onApprove={approve}
       canSave={!!body.trim()}
       previewLocked={previewLocked}
+      saving={saving}
+      saveError={saveError}
+      approveError={approveError}
+      staleNotice={staleNotice}
       prefilledSources={
         deliverable?.prefilled_at
           ? [
@@ -1116,26 +1532,42 @@ interface SimpleLetterTabProps {
   onEditingChange?: (editing: boolean) => void;
   /** One-ahead preview (UX2): no scratch form, no Edit/Approve. */
   previewLocked?: boolean;
+  /** Persist honesty (PR-1) — see ConfirmationLetterTabProps. */
+  saving?: boolean;
+  saveError?: string | null;
+  unsavedDraft?: SimpleLetterDeliverable | null;
+  approveError?: string | null;
+  staleNotice?: string | null;
+  onDismissSaveError?: () => void;
 }
 
-function SimpleLetterTab({ config, deliverable, isLight, onChange, onEditingChange, previewLocked = false }: SimpleLetterTabProps) {
+function SimpleLetterTab({ config, deliverable, isLight, onChange, onEditingChange, previewLocked = false, saving = false, saveError = null, unsavedDraft = null, approveError = null, staleNotice = null, onDismissSaveError }: SimpleLetterTabProps) {
   const [editing, setEditingRaw] = useState(!deliverable);
   const setEditing = (next: boolean) => {
     setEditingRaw(next);
     onEditingChange?.(next);
   };
-  const [body, setBody] = useState(deliverable?.content.body_text ?? '');
-  const [scope, setScope] = useState<string[]>(deliverable?.content.scope ?? []);
+  const [body, setBody] = useState((unsavedDraft ?? deliverable)?.content.body_text ?? '');
+  const [scope, setScope] = useState<string[]>((unsavedDraft ?? deliverable)?.content.scope ?? []);
 
   // updated_at in the deps: grounded generation mutates this row under the
   // SAME id (see ChecklistTab for the full rationale). The workspace disables
   // Draft/Revise while editing, so this resync never fires over unsaved edits.
+  // Skips while a save error is pending — the editor holds the only copy of
+  // the typed content (see ConfirmationLetterTab).
   useEffect(() => {
+    if (saveError) return;
     setEditing(!deliverable);
     setBody(deliverable?.content.body_text ?? '');
     setScope(deliverable?.content.scope ?? []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deliverable?.id, deliverable?.updated_at]);
+
+  // A failed save re-opens the editor over the preserved content.
+  useEffect(() => {
+    if (saveError) setEditing(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saveError]);
 
   const save = () => {
     onChange({
@@ -1164,6 +1596,7 @@ function SimpleLetterTab({ config, deliverable, isLight, onChange, onEditingChan
   };
 
   const cancel = () => {
+    onDismissSaveError?.();
     setBody(deliverable?.content.body_text ?? '');
     setScope(deliverable?.content.scope ?? []);
     setEditing(false);
@@ -1183,6 +1616,10 @@ function SimpleLetterTab({ config, deliverable, isLight, onChange, onEditingChan
       onApprove={approve}
       canSave={!!body.trim()}
       previewLocked={previewLocked}
+      saving={saving}
+      saveError={saveError}
+      approveError={approveError}
+      staleNotice={staleNotice}
     >
       {previewLocked && !deliverable ? (
         <p className="text-fg-muted text-sm">Nothing recorded yet.</p>
@@ -1251,24 +1688,39 @@ interface AgendaTabProps {
   onEditingChange?: (editing: boolean) => void;
   /** One-ahead preview (UX2): no scratch form, no Edit/Approve. */
   previewLocked?: boolean;
+  /** Persist honesty (PR-1) — see ConfirmationLetterTabProps. */
+  saving?: boolean;
+  saveError?: string | null;
+  unsavedDraft?: MockAgenda | null;
+  approveError?: string | null;
+  staleNotice?: string | null;
+  onDismissSaveError?: () => void;
 }
 
-function AgendaTab({ deliverable, isLight, onChange, onEditingChange, previewLocked = false }: AgendaTabProps) {
+function AgendaTab({ deliverable, isLight, onChange, onEditingChange, previewLocked = false, saving = false, saveError = null, unsavedDraft = null, approveError = null, staleNotice = null, onDismissSaveError }: AgendaTabProps) {
   const [editing, setEditingRaw] = useState(!deliverable);
   const setEditing = (next: boolean) => {
     setEditingRaw(next);
     onEditingChange?.(next);
   };
   const [items, setItems] = useState<MockAgendaItem[]>(
-    deliverable?.content.items ?? [],
+    (unsavedDraft ?? deliverable)?.content.items ?? [],
   );
 
   // updated_at in the deps — same same-id resync rationale as ChecklistTab.
+  // Skips while a save error is pending (see ConfirmationLetterTab).
   useEffect(() => {
+    if (saveError) return;
     setEditing(!deliverable);
     setItems(deliverable?.content.items ?? []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deliverable?.id, deliverable?.updated_at]);
+
+  // A failed save re-opens the editor over the preserved content.
+  useEffect(() => {
+    if (saveError) setEditing(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saveError]);
 
   const save = () => {
     onChange({
@@ -1294,6 +1746,7 @@ function AgendaTab({ deliverable, isLight, onChange, onEditingChange, previewLoc
   };
 
   const cancel = () => {
+    onDismissSaveError?.();
     setItems(deliverable?.content.items ?? []);
     setEditing(false);
   };
@@ -1332,6 +1785,10 @@ function AgendaTab({ deliverable, isLight, onChange, onEditingChange, previewLoc
       }
       canSave={items.length > 0 && items.every((it) => it.time.trim() && it.topic.trim())}
       previewLocked={previewLocked}
+      saving={saving}
+      saveError={saveError}
+      approveError={approveError}
+      staleNotice={staleNotice}
     >
       {previewLocked && !deliverable ? (
         <p className="text-fg-muted text-sm">Nothing recorded yet.</p>
@@ -1473,6 +1930,13 @@ interface ChecklistTabProps {
   onEditingChange?: (editing: boolean) => void;
   /** One-ahead preview (UX2): no scratch form, no Edit/Approve. */
   previewLocked?: boolean;
+  /** Persist honesty (PR-1) — see ConfirmationLetterTabProps. */
+  saving?: boolean;
+  saveError?: string | null;
+  unsavedDraft?: MockChecklist | null;
+  approveError?: string | null;
+  staleNotice?: string | null;
+  onDismissSaveError?: () => void;
 }
 
 // ============================================================================
@@ -1663,14 +2127,14 @@ function DeliverableGenerationPanel({
   );
 }
 
-function ChecklistTab({ deliverable, isLight, onChange, onEditingChange, previewLocked = false }: ChecklistTabProps) {
+function ChecklistTab({ deliverable, isLight, onChange, onEditingChange, previewLocked = false, saving = false, saveError = null, unsavedDraft = null, approveError = null, staleNotice = null, onDismissSaveError }: ChecklistTabProps) {
   const [editing, setEditingRaw] = useState(!deliverable);
   const setEditing = (next: boolean) => {
     setEditingRaw(next);
     onEditingChange?.(next);
   };
   const [items, setItems] = useState<MockChecklistItem[]>(
-    deliverable?.content.items ?? [],
+    (unsavedDraft ?? deliverable)?.content.items ?? [],
   );
 
   // updated_at in the deps: grounded generation (PR-C1) mutates this row
@@ -1678,11 +2142,19 @@ function ChecklistTab({ deliverable, isLight, onChange, onEditingChange, preview
   // clicking Edit after a generation would show (and then Save would clobber
   // it with) pre-generation content. The workspace disables Generate/Revise
   // while editing, so this resync can never fire over unsaved edits.
+  // Skips while a save error is pending (see ConfirmationLetterTab).
   useEffect(() => {
+    if (saveError) return;
     setEditing(!deliverable);
     setItems(deliverable?.content.items ?? []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deliverable?.id, deliverable?.updated_at]);
+
+  // A failed save re-opens the editor over the preserved content.
+  useEffect(() => {
+    if (saveError) setEditing(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saveError]);
 
   const save = () => {
     onChange({
@@ -1708,6 +2180,7 @@ function ChecklistTab({ deliverable, isLight, onChange, onEditingChange, preview
   };
 
   const cancel = () => {
+    onDismissSaveError?.();
     setItems(deliverable?.content.items ?? []);
     setEditing(false);
   };
@@ -1759,6 +2232,10 @@ function ChecklistTab({ deliverable, isLight, onChange, onEditingChange, preview
       }
       canSave={items.length > 0 && items.every((it) => it.prompt.trim())}
       previewLocked={previewLocked}
+      saving={saving}
+      saveError={saveError}
+      approveError={approveError}
+      staleNotice={staleNotice}
     >
       {previewLocked && !deliverable ? (
         <p className="text-fg-muted text-sm">Nothing recorded yet.</p>
@@ -1888,6 +2365,17 @@ interface DeliverableShellProps {
   /** One-ahead preview (UX2): hide Edit/Approve — approving from a preview
    *  would pre-flip the Stage 6 gate. History stays. */
   previewLocked?: boolean;
+  /** Persist honesty (PR-1): a save in flight or a pending SAVE error blocks
+   *  Approve — approving while cache and server may disagree is the CAS hole
+   *  the persist flow's revert exists to prevent. NOTE: for saveError the
+   *  PRIMARY enforcement is the tab's force-edit effect (editing hides this
+   *  button entirely); the disabled attribute is a backstop, exercised only
+   *  in the in-flight (`saving`) window. An approve error only banners:
+   *  content is saved, so retrying approve is safe. */
+  saving?: boolean;
+  saveError?: string | null;
+  approveError?: string | null;
+  staleNotice?: string | null;
   children: React.ReactNode;
 }
 
@@ -1905,6 +2393,10 @@ function DeliverableShell({
   canSave,
   prefilledSources,
   previewLocked = false,
+  saving = false,
+  saveError = null,
+  approveError = null,
+  staleNotice = null,
   children,
 }: DeliverableShellProps) {
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -1981,7 +2473,15 @@ function DeliverableShell({
                   <button
                     type="button"
                     onClick={onApprove}
-                    className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-md transition-colors ${buttonApprove}`}
+                    disabled={saving || !!saveError}
+                    title={
+                      saving
+                        ? 'A save is in flight — approve once it lands'
+                        : saveError
+                        ? 'The last save failed — approve only attests to saved content'
+                        : undefined
+                    }
+                    className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${buttonApprove}`}
                   >
                     <CheckCircle2 size={12} />
                     Approve
@@ -2009,6 +2509,53 @@ function DeliverableShell({
         </div>
       )}
 
+      {saveError && (
+        <div
+          role="alert"
+          data-testid="deliverable-persist-error"
+          className={`flex items-start gap-2 px-3 py-2 rounded-md border ${
+            isLight
+              ? 'bg-red-50 border-red-200 text-red-700'
+              : 'bg-red-500/15 border-red-500/30 text-red-300'
+          }`}
+        >
+          <AlertTriangle size={12} className="flex-shrink-0 mt-0.5" />
+          <p className="text-[11px] leading-relaxed">{saveError}</p>
+        </div>
+      )}
+
+      {/* No !saveError guards here: persistDeliverable clears all three
+          channels on entry and sets at most one, so co-occurrence is
+          structurally impossible — a guard would only imply otherwise. */}
+      {approveError && (
+        <div
+          role="alert"
+          data-testid="deliverable-approve-error"
+          className={`flex items-start gap-2 px-3 py-2 rounded-md border ${
+            isLight
+              ? 'bg-red-50 border-red-200 text-red-700'
+              : 'bg-red-500/15 border-red-500/30 text-red-300'
+          }`}
+        >
+          <AlertTriangle size={12} className="flex-shrink-0 mt-0.5" />
+          <p className="text-[11px] leading-relaxed">{approveError}</p>
+        </div>
+      )}
+
+      {staleNotice && (
+        <div
+          data-testid="deliverable-stale-notice"
+          className={`flex items-start gap-2 px-3 py-2 rounded-md border ${
+            isLight
+              ? 'bg-amber-50/60 border-amber-200/80 text-amber-700'
+              : 'bg-amber-500/[0.06] border-amber-500/20 text-amber-300'
+          }`}
+        >
+          <AlertTriangle size={12} className="flex-shrink-0 mt-0.5" />
+          <p className="text-[11px] leading-relaxed">{staleNotice}</p>
+        </div>
+      )}
+
       <div>{children}</div>
 
       {editing && (
@@ -2016,12 +2563,15 @@ function DeliverableShell({
           <button
             type="button"
             onClick={onSave}
-            disabled={!canSave}
+            disabled={!canSave || saving}
             className={`text-sm font-semibold px-3.5 py-2 rounded-md transition-colors ${buttonPrimary} disabled:opacity-50`}
           >
-            Save
+            {saving ? 'Saving…' : 'Save'}
           </button>
-          {deliverable && (
+          {/* Cancel also renders during a first-save failure (no row yet):
+              it is the only way to discard the preserved draft and clear the
+              error — without it that state has no exit. */}
+          {(deliverable || saveError) && (
             <button
               type="button"
               onClick={onCancel}

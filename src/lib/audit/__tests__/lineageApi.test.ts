@@ -68,12 +68,16 @@ beforeEach(() => {
   m(fetchTrustAssessment).mockResolvedValue(null);
   m(fetchQuestionnaireBundle).mockResolvedValue(null);
   m(fetchRiskSummary).mockResolvedValue(null);
+  // PR-1 shape: { bundle, failedKinds } — lineageApi unwraps .bundle.
   m(fetchPreAuditDeliverables).mockResolvedValue({
-    confirmation_letter: null,
-    agenda: null,
-    checklist: null,
-    internal_notification: null,
-    evidence_gap_summary: null,
+    bundle: {
+      confirmation_letter: null,
+      agenda: null,
+      checklist: null,
+      internal_notification: null,
+      evidence_gap_summary: null,
+    },
+    failedKinds: [],
   });
   m(fetchWorkspaceEntries).mockResolvedValue([]);
   m(fetchIssuesWithCapas).mockResolvedValue({ issues: [], capasByIssue: {} });
