@@ -123,6 +123,7 @@ const EMPTY_BUNDLE: MockPreAuditBundle = {
   agenda: null,
   checklist: null,
   internal_notification: null,
+  evidence_gap_summary: null,
 };
 
 export default function PreAuditDraftingWorkspace() {

@@ -31,7 +31,8 @@ export type DeliverableKind =
   | 'checklist'
   | 'agenda'
   | 'confirmation_letter'
-  | 'internal_notification';
+  | 'internal_notification'
+  | 'evidence_gap_summary';
 
 export interface DeliverableDraftProposal {
   mode: 'generate' | 'revise';
@@ -59,6 +60,7 @@ const KIND_SHAPE: Record<DeliverableKind, 'items' | 'letter'> = {
   agenda: 'items',
   confirmation_letter: 'letter',
   internal_notification: 'letter',
+  evidence_gap_summary: 'letter',
 };
 
 const APPLY_RPC: Record<DeliverableKind, string> = {
@@ -66,6 +68,7 @@ const APPLY_RPC: Record<DeliverableKind, string> = {
   agenda: 'audit_mode_apply_agenda_generation',
   confirmation_letter: 'audit_mode_apply_confirmation_letter_generation',
   internal_notification: 'audit_mode_apply_internal_notification_generation',
+  evidence_gap_summary: 'audit_mode_apply_evidence_gap_summary_generation',
 };
 
 const DRAFT_NOUN: Record<DeliverableKind, string> = {
@@ -73,6 +76,7 @@ const DRAFT_NOUN: Record<DeliverableKind, string> = {
   agenda: 'Agenda',
   confirmation_letter: 'Confirmation letter',
   internal_notification: 'Internal notification',
+  evidence_gap_summary: 'Evidence gap summary',
 };
 
 export async function requestDeliverableDraft(
@@ -166,6 +170,12 @@ export async function applyDeliverableGeneration(
 export interface DeliverableCurrency {
   newSinceGeneration: Array<{ document_id: string; title: string }>;
   removedSinceGeneration: Array<{ document_id: string; title: string }>;
+  // Gap-summary axes, populated only when the snapshot carries them (PR-D3):
+  // register rows whose withhold flag flipped since generation, and whether
+  // the checklist's item set changed (undefined when unknowable — snapshot or
+  // live ids missing).
+  withholdFlippedSinceGeneration?: Array<{ document_id: string; title: string }>;
+  checklistChanged?: boolean;
   isCurrent: boolean;
 }
 
@@ -173,12 +183,59 @@ export interface DeliverableCurrency {
  * Set-diff of the generation's grounding snapshot against the live register.
  * null when the deliverable was never generated (currency has no meaning), so
  * callers can distinguish "current" from "not applicable".
+ *
+ * Two comparison modes, discriminated by the snapshot itself:
+ * - Legacy (no `register` field — the four original kinds and every pre-D3
+ *   snapshot): included live docs vs `snapshot.evidence`. Unchanged behavior.
+ * - Gap summary (`register` present): the FULL live register vs
+ *   `snapshot.register` — withheld docs are part of this deliverable's basis
+ *   (it must NAME them), so filing a doc as withheld, or flipping a withhold
+ *   lever, stales the summary. Checklist identity is compared when the caller
+ *   supplies `liveChecklistItemIds`.
  */
 export function computeDeliverableCurrency(
   snapshot: DeliverableGroundingSnapshot | null | undefined,
   liveRegister: AuditEvidenceListRow[],
+  liveChecklistItemIds?: string[],
 ): DeliverableCurrency | null {
   if (!snapshot) return null;
+
+  if (snapshot.register) {
+    const snapById = new Map(snapshot.register.map((e) => [e.document_id, e]));
+    const liveIds = new Set(liveRegister.map((r) => r.document_id));
+
+    const newSinceGeneration = liveRegister
+      .filter((r) => !snapById.has(r.document_id))
+      .map((r) => ({ document_id: r.document_id, title: r.title }));
+    const removedSinceGeneration = snapshot.register
+      .filter((e) => !liveIds.has(e.document_id))
+      .map((e) => ({ document_id: e.document_id, title: e.title }));
+    const withholdFlippedSinceGeneration = liveRegister
+      .filter((r) => {
+        const snap = snapById.get(r.document_id);
+        return snap !== undefined && snap.included !== r.include_in_generation;
+      })
+      .map((r) => ({ document_id: r.document_id, title: r.title }));
+
+    const snapChecklistIds = snapshot.checklist_item_ids;
+    const checklistChanged =
+      liveChecklistItemIds !== undefined && snapChecklistIds !== undefined
+        ? liveChecklistItemIds.length !== snapChecklistIds.length ||
+          liveChecklistItemIds.some((id) => !snapChecklistIds.includes(id))
+        : undefined;
+
+    return {
+      newSinceGeneration,
+      removedSinceGeneration,
+      withholdFlippedSinceGeneration,
+      checklistChanged,
+      isCurrent:
+        newSinceGeneration.length === 0 &&
+        removedSinceGeneration.length === 0 &&
+        withholdFlippedSinceGeneration.length === 0 &&
+        checklistChanged !== true,
+    };
+  }
 
   const included = liveRegister.filter((r) => r.include_in_generation);
   const snapshotIds = new Set(snapshot.evidence.map((e) => e.document_id));

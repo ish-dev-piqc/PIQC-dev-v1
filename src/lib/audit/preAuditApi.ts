@@ -6,6 +6,8 @@ import type {
   MockChecklistContent,
   MockConfirmationLetter,
   MockConfirmationLetterContent,
+  MockEvidenceGapSummary,
+  MockEvidenceGapSummaryContent,
   MockInternalNotification,
   MockInternalNotificationContent,
   MockPreAuditBundle,
@@ -19,10 +21,11 @@ import type {
 // =============================================================================
 // Pre-Audit Drafting (Stage 5) API
 //
-// Four structurally identical 1:1 deliverables: confirmation_letter_objects,
+// Five structurally identical 1:1 deliverables: confirmation_letter_objects,
 // agenda_objects, checklist_objects (RPCs in 20260430170000, approve CAS in
-// 20260730000000) and internal_notification_objects (PR-D1, 20260904000100 —
-// non-gating, no prefill).
+// 20260730000000), internal_notification_objects (PR-D1, 20260904000100) and
+// evidence_gap_summary_objects (PR-D3, 20260905000100) — the last two
+// non-gating, no prefill.
 //
 // Reads: direct SELECT. Writes: RPCs that mutate + write deltas atomically.
 // =============================================================================
@@ -132,24 +135,43 @@ async function flattenInternalNotification(
   };
 }
 
+async function flattenEvidenceGapSummary(
+  row: DeliverableRow<MockEvidenceGapSummaryContent>
+): Promise<MockEvidenceGapSummary> {
+  return {
+    id: row.id,
+    audit_id: row.audit_id,
+    content: row.content,
+    approval_status: row.approval_status,
+    approved_at: row.approved_at,
+    approved_by_name: await resolveApprovedByName(row.approved_by),
+    updated_at: row.updated_at,
+    generation_refs: row.generation_refs ?? null,
+    grounding_snapshot: row.grounding_snapshot ?? null,
+    generated_at: row.generated_at ?? null,
+  };
+}
+
 // ============================================================================
 // Reads
 // ============================================================================
 
 export async function fetchPreAuditDeliverables(auditId: string): Promise<MockPreAuditBundle> {
-  const [letterRes, agendaRes, checklistRes, notificationRes] = await Promise.all([
+  const [letterRes, agendaRes, checklistRes, notificationRes, gapSummaryRes] = await Promise.all([
     supabase.from('confirmation_letter_objects').select('*').eq('audit_id', auditId).maybeSingle(),
     supabase.from('agenda_objects').select('*').eq('audit_id', auditId).maybeSingle(),
     supabase.from('checklist_objects').select('*').eq('audit_id', auditId).maybeSingle(),
     supabase.from('internal_notification_objects').select('*').eq('audit_id', auditId).maybeSingle(),
+    supabase.from('evidence_gap_summary_objects').select('*').eq('audit_id', auditId).maybeSingle(),
   ]);
 
   if (letterRes.error) console.error('[preAuditApi] confirmation_letter fetch error:', letterRes.error);
   if (agendaRes.error) console.error('[preAuditApi] agenda fetch error:', agendaRes.error);
   if (checklistRes.error) console.error('[preAuditApi] checklist fetch error:', checklistRes.error);
   if (notificationRes.error) console.error('[preAuditApi] internal_notification fetch error:', notificationRes.error);
+  if (gapSummaryRes.error) console.error('[preAuditApi] evidence_gap_summary fetch error:', gapSummaryRes.error);
 
-  const [confirmationLetter, agenda, checklist, internalNotification] = await Promise.all([
+  const [confirmationLetter, agenda, checklist, internalNotification, evidenceGapSummary] = await Promise.all([
     letterRes.data
       ? flattenConfirmationLetter(letterRes.data as DeliverableRow<MockConfirmationLetterContent>)
       : null,
@@ -162,6 +184,9 @@ export async function fetchPreAuditDeliverables(auditId: string): Promise<MockPr
     notificationRes.data
       ? flattenInternalNotification(notificationRes.data as DeliverableRow<MockInternalNotificationContent>)
       : null,
+    gapSummaryRes.data
+      ? flattenEvidenceGapSummary(gapSummaryRes.data as DeliverableRow<MockEvidenceGapSummaryContent>)
+      : null,
   ]);
 
   return {
@@ -169,6 +194,7 @@ export async function fetchPreAuditDeliverables(auditId: string): Promise<MockPr
     agenda,
     checklist,
     internal_notification: internalNotification,
+    evidence_gap_summary: evidenceGapSummary,
   };
 }
 
@@ -332,6 +358,44 @@ export async function approveInternalNotification(
   return {
     ok: true,
     data: await flattenInternalNotification(data as DeliverableRow<MockInternalNotificationContent>),
+  };
+}
+
+// ============================================================================
+// Evidence gap summary (PR-D3) — non-gating; no prefill by design
+// ============================================================================
+
+export async function upsertEvidenceGapSummary(
+  auditId: string,
+  content: MockEvidenceGapSummaryContent,
+  reason?: string
+): Promise<MockEvidenceGapSummary | null> {
+  const { data, error } = await supabase.rpc('audit_mode_upsert_evidence_gap_summary', {
+    p_audit_id: auditId,
+    p_content: content,
+    p_reason: reason ?? null,
+  });
+  if (error) {
+    console.error('[preAuditApi] upsertEvidenceGapSummary error:', error);
+    return null;
+  }
+  return flattenEvidenceGapSummary(data as DeliverableRow<MockEvidenceGapSummaryContent>);
+}
+
+export async function approveEvidenceGapSummary(
+  id: string,
+  expectedUpdatedAt: string,
+  reason?: string
+): Promise<DeliverableApproveResult<MockEvidenceGapSummary>> {
+  const { data, error } = await supabase.rpc('audit_mode_approve_evidence_gap_summary', {
+    p_id: id,
+    p_reason: reason ?? null,
+    p_expected_updated_at: expectedUpdatedAt,
+  });
+  if (error) return approveFailure('approveEvidenceGapSummary', error);
+  return {
+    ok: true,
+    data: await flattenEvidenceGapSummary(data as DeliverableRow<MockEvidenceGapSummaryContent>),
   };
 }
 

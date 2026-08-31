@@ -1,15 +1,16 @@
 // =============================================================================
 // Deliverable shapes for the PRE_AUDIT_DRAFTING stage.
 //
-// Four 1:1 deliverables per audit (D-010 step 7 + PR-D1):
+// Five 1:1 deliverables per audit (D-010 step 7 + PR-D1 + PR-D3):
 //   - ConfirmationLetterObject     — sent to vendor confirming dates/scope
 //   - AgendaObject                 — multi-day audit plan
 //   - ChecklistObject              — auditor's working checklist
 //   - InternalNotificationObject   — internal heads-up inviting scope input
+//   - EvidenceGapSummaryObject     — per-scope-area coverage vs the register
 //
 // All share the DRAFT/APPROVED lifecycle; editing demotes APPROVED → DRAFT.
 // Letter, agenda, and checklist must be APPROVED to unlock AUDIT_CONDUCT; the
-// internal notification never gates.
+// internal notification and evidence gap summary never gate.
 //
 // Sponsor-name-free by rule.
 // =============================================================================
@@ -148,6 +149,35 @@ export interface MockInternalNotification {
 }
 
 // -----------------------------------------------------------------------------
+// Evidence gap summary (PR-D3)
+//
+// Letter-shaped ({body_text, scope}): a generated document listing, per scope
+// area, what evidence is on file in the register and what is outstanding —
+// withheld register rows are named as withheld, never silently absent. Never
+// prefilled, never gating. `scope` carries the scope-area list covered.
+// -----------------------------------------------------------------------------
+export interface MockEvidenceGapSummaryContent {
+  body_text: string;
+  scope: string[];
+}
+
+export interface MockEvidenceGapSummary {
+  id: string;
+  audit_id: string;
+  content: MockEvidenceGapSummaryContent;
+  approval_status: DeliverableApprovalStatus;
+  approved_by_name: string | null;
+  approved_at: string | null;
+  // Row version from the touch trigger; approve compare-and-swaps on this.
+  updated_at: string;
+  // Grounded-generation provenance (PR-D3) — set when drafted/revised by
+  // PIQC from the register + protocol/evidence passages.
+  generation_refs?: DeliverableGenerationRef[] | null;
+  grounding_snapshot?: DeliverableGroundingSnapshot | null;
+  generated_at?: string | null;
+}
+
+// -----------------------------------------------------------------------------
 // Per-audit bundle
 // -----------------------------------------------------------------------------
 export interface MockPreAuditBundle {
@@ -155,4 +185,5 @@ export interface MockPreAuditBundle {
   agenda: MockAgenda | null;
   checklist: MockChecklist | null;
   internal_notification: MockInternalNotification | null;
+  evidence_gap_summary: MockEvidenceGapSummary | null;
 }

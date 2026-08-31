@@ -416,7 +416,7 @@ export interface AuditEvidenceListRow extends AuditSourceDocument {
 // must never join back to live rows.
 // -----------------------------------------------------------------------------
 export interface DeliverableGenerationRef {
-  item_id: string;                    // item id the ref supports ('letter'/'notification' for blob-level refs)
+  item_id: string;                    // item id the ref supports ('letter'/'notification'/'gap_summary' for blob-level refs)
   chunk_id: string;
   document_id: string;
   source: 'PROTOCOL' | 'EVIDENCE';
@@ -435,6 +435,17 @@ export interface DeliverableGroundingSnapshot {
     title: string;
     source_type: string;
   }>;
+  // Gap-summary kind only (PR-D3): the extra axes that deliverable depends on
+  // — the FULL register (withheld rows included) and checklist item identity.
+  // Absent on every other kind and on pre-D3 snapshots; currency logic gates
+  // on presence, so legacy behavior is untouched.
+  register?: Array<{
+    document_id: string;
+    title: string;
+    status: string;
+    included: boolean;
+  }>;
+  checklist_item_ids?: string[];
 }
 
 // -----------------------------------------------------------------------------

@@ -38,7 +38,7 @@ const EMPTY: LineageInput = {
   trust: null,
   questionnaire: null,
   riskSummary: null,
-  preAudit: { confirmation_letter: null, agenda: null, checklist: null, internal_notification: null },
+  preAudit: { confirmation_letter: null, agenda: null, checklist: null, internal_notification: null, evidence_gap_summary: null },
   entries: [],
   issues: [],
   capas: [],
@@ -121,6 +121,7 @@ function fullInput(): LineageInput {
         approved_at: null,
         updated_at: '2026-09-04T00:00:00Z',
       },
+      evidence_gap_summary: null,
     },
     entries: [
       {
