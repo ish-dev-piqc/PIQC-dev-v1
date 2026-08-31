@@ -196,6 +196,24 @@ describe('applyDeliverableGeneration', () => {
     expect(mockRpc.mock.calls[0][1].p_content.recipients).toEqual([]);
   });
 
+  it('routes the internal notification letter-shaped WITHOUT a recipients field (PR-D1)', async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: null });
+    await applyDeliverableGeneration(
+      'a1',
+      { ...LETTER_PROPOSAL, deliverable: 'internal_notification', mode: 'generate' },
+      // Even if a caller passes recipients, the notification content must
+      // never carry them — the deliverable is name-free by design.
+      { currentRecipients: ['Quality Assurance Team'] },
+    );
+    const [rpcName, args] = mockRpc.mock.calls[0];
+    expect(rpcName).toBe('audit_mode_apply_internal_notification_generation');
+    expect(args.p_content).toEqual({
+      body_text: 'This letter confirms the audit…',
+      scope: ['Quality management system', 'Data integrity'],
+    });
+    expect(args.p_reason).toBe('Internal notification drafted by PIQC from protocol + evidence');
+  });
+
   it('prefers the RPC hint over the raw message on failure', async () => {
     mockRpc.mockResolvedValueOnce({
       data: null,

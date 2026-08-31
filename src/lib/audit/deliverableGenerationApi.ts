@@ -27,12 +27,16 @@ import type { MockAgendaItem, MockChecklistItem } from './mockPreAudit';
 // snapshot vs live register. Pure — unit-tested directly.
 // =============================================================================
 
-export type DeliverableKind = 'checklist' | 'agenda' | 'confirmation_letter';
+export type DeliverableKind =
+  | 'checklist'
+  | 'agenda'
+  | 'confirmation_letter'
+  | 'internal_notification';
 
 export interface DeliverableDraftProposal {
   mode: 'generate' | 'revise';
   deliverable: DeliverableKind;
-  // items for checklist/agenda; body_text + scope for the letter.
+  // items for items-shaped kinds; body_text + scope for letter-shaped ones.
   content_patch: {
     items?: MockChecklistItem[] | MockAgendaItem[];
     body_text?: string;
@@ -46,16 +50,29 @@ export interface DeliverableDraftProposal {
   evidence_doc_count: number;
 }
 
+// Client mirror of the engine's per-kind shape (audit-deliverable-draft
+// DELIVERABLES config). Record-typed so a new kind cannot compile without
+// declaring its shape — the alternative (a kind-ternary with an items
+// fall-through) silently wipes a letter-shaped kind's body on apply.
+const KIND_SHAPE: Record<DeliverableKind, 'items' | 'letter'> = {
+  checklist: 'items',
+  agenda: 'items',
+  confirmation_letter: 'letter',
+  internal_notification: 'letter',
+};
+
 const APPLY_RPC: Record<DeliverableKind, string> = {
   checklist: 'audit_mode_apply_checklist_generation',
   agenda: 'audit_mode_apply_agenda_generation',
   confirmation_letter: 'audit_mode_apply_confirmation_letter_generation',
+  internal_notification: 'audit_mode_apply_internal_notification_generation',
 };
 
 const DRAFT_NOUN: Record<DeliverableKind, string> = {
   checklist: 'Checklist',
   agenda: 'Agenda',
   confirmation_letter: 'Confirmation letter',
+  internal_notification: 'Internal notification',
 };
 
 export async function requestDeliverableDraft(
@@ -108,11 +125,15 @@ export async function applyDeliverableGeneration(
   opts?: { currentRecipients?: string[] },
 ): Promise<Result<null>> {
   const content =
-    proposal.deliverable === 'confirmation_letter'
+    KIND_SHAPE[proposal.deliverable] === 'letter'
       ? {
           body_text: proposal.content_patch.body_text ?? '',
           scope: proposal.content_patch.scope ?? [],
-          recipients: opts?.currentRecipients ?? [],
+          // Recipients exist only on the vendor-facing letter; the internal
+          // notification is name-free by design.
+          ...(proposal.deliverable === 'confirmation_letter'
+            ? { recipients: opts?.currentRecipients ?? [] }
+            : {}),
         }
       : { items: proposal.content_patch.items ?? [] };
 

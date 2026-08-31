@@ -62,6 +62,7 @@ export type LineageEntityType =
   | 'CONFIRMATION_LETTER'
   | 'AGENDA'
   | 'CHECKLIST'
+  | 'INTERNAL_NOTIFICATION'
   | 'WORKSPACE_ENTRY'
   | 'ISSUE'
   | 'CAPA'
@@ -292,8 +293,12 @@ export function buildLineageGraph(input: LineageInput): LineageGraph {
     obj:
       | MockPreAuditBundle['confirmation_letter']
       | MockPreAuditBundle['agenda']
-      | MockPreAuditBundle['checklist'];
-    entityType: Extract<LineageEntityType, 'CONFIRMATION_LETTER' | 'AGENDA' | 'CHECKLIST'>;
+      | MockPreAuditBundle['checklist']
+      | MockPreAuditBundle['internal_notification'];
+    entityType: Extract<
+      LineageEntityType,
+      'CONFIRMATION_LETTER' | 'AGENDA' | 'CHECKLIST' | 'INTERNAL_NOTIFICATION'
+    >;
     title: string;
     tracked: TrackedObjectType;
   }> = [
@@ -310,11 +315,19 @@ export function buildLineageGraph(input: LineageInput): LineageGraph {
       title: 'Checklist',
       tracked: 'CHECKLIST_OBJECT',
     },
+    {
+      obj: input.preAudit.internal_notification,
+      entityType: 'INTERNAL_NOTIFICATION',
+      title: 'Internal notification',
+      tracked: 'INTERNAL_NOTIFICATION_OBJECT',
+    },
   ];
   for (const d of deliverables) {
     if (!d.obj) continue;
     const id = nid(d.entityType, d.obj.id);
-    const prefilled = Boolean(d.obj.prefilled_at);
+    // 'in' guard: the internal notification is never prefilled and carries no
+    // prefill fields at all.
+    const prefilled = 'prefilled_at' in d.obj && Boolean(d.obj.prefilled_at);
     nodes.push({
       id,
       entityType: d.entityType,

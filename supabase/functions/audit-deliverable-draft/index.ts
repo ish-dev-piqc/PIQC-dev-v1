@@ -3,12 +3,13 @@
 // deliverable grounded in the protocol + the audit's evidence register (PR-C2).
 //
 // Consolidates the C1 checklist engine at the rule-of-three moment: takes
-// { audit_id, deliverable: 'checklist' | 'agenda' | 'confirmation_letter' },
-// runs ONE engine (JWT ownership proof → service-role retrieval over protocol
-// + register chunks → OpenAI → verbatim-quote ref gate), and shapes output per
-// deliverable. Supersedes /audit-checklist-draft (deleted).
+// { audit_id, deliverable: 'checklist' | 'agenda' | 'confirmation_letter' |
+// 'internal_notification' (PR-D1) }, runs ONE engine (JWT ownership proof →
+// service-role retrieval over protocol + register chunks → OpenAI →
+// verbatim-quote ref gate), and shapes output per deliverable's `shape`.
+// Supersedes /audit-checklist-draft (deleted).
 //
-// Invariants (all three deliverables):
+// Invariants (all deliverables):
 //   - proposals only — this function never writes to the database. The client
 //     applies via the audit_mode_apply_*_generation RPCs (content through the
 //     existing upserts → demote latch intact; snapshot stamped atomically).
@@ -31,7 +32,7 @@ import {
   type ProtocolCandidate,
   type ProtocolChunkRow,
 } from "../_shared/protocolCandidates.ts";
-import { AGENDA_PROMPT, CHECKLIST_PROMPT, LETTER_PROMPT } from "./prompts.ts";
+import { AGENDA_PROMPT, CHECKLIST_PROMPT, INTERNAL_NOTIFICATION_PROMPT, LETTER_PROMPT } from "./prompts.ts";
 
 // -----------------------------------------------------------------------------
 // CORS + constants
@@ -55,16 +56,31 @@ const MAX_BODY_TEXT_CHARS  = 6_000; // letter body cap
 const MAX_REFS_PER_ENTRY   = 2;
 const EMBEDDING_MODEL      = "text-embedding-3-small";
 
-type DeliverableKind = "checklist" | "agenda" | "confirmation_letter";
+type DeliverableKind = "checklist" | "agenda" | "confirmation_letter" | "internal_notification";
 
-const DELIVERABLES: Record<DeliverableKind, {
-  table: string;
-  systemPrompt: string;
-  maxItems: number;
-}> = {
-  checklist:           { table: "checklist_objects",           systemPrompt: CHECKLIST_PROMPT, maxItems: 40 },
-  agenda:              { table: "agenda_objects",              systemPrompt: AGENDA_PROMPT,    maxItems: 20 },
-  confirmation_letter: { table: "confirmation_letter_objects", systemPrompt: LETTER_PROMPT,    maxItems: 1 },
+// shape drives every structural branch: "items" kinds carry labeled entry
+// lists (C-label revision mode, capped at maxItems); "letter" kinds carry a
+// single body_text + scope blob (current-draft revision mode, empty-body 502
+// guard). The discriminated union makes per-shape data compiler-forced: a new
+// letter-shaped kind cannot be added without declaring its blob ref id and
+// revision heading, and cannot carry a meaningless maxItems.
+type DeliverableConfig = { table: string; systemPrompt: string } & (
+  | { shape: "items"; maxItems: number }
+  | {
+      shape: "letter";
+      // item_id stamped on the blob-level generation_refs rows (persisted
+      // provenance — never change for an existing kind).
+      blobRefId: string;
+      // Heading for the current-draft block in revision mode; must mirror the
+      // prompt's "REVISION MODE (when <X> is provided)" wording.
+      revisionHeading: string;
+    }
+);
+const DELIVERABLES: Record<DeliverableKind, DeliverableConfig> = {
+  checklist:             { table: "checklist_objects",             systemPrompt: CHECKLIST_PROMPT,             shape: "items", maxItems: 40 },
+  agenda:                { table: "agenda_objects",                systemPrompt: AGENDA_PROMPT,                shape: "items", maxItems: 20 },
+  confirmation_letter:   { table: "confirmation_letter_objects",   systemPrompt: LETTER_PROMPT,                shape: "letter", blobRefId: "letter",       revisionHeading: "CURRENT LETTER" },
+  internal_notification: { table: "internal_notification_objects", systemPrompt: INTERNAL_NOTIFICATION_PROMPT, shape: "letter", blobRefId: "notification", revisionHeading: "CURRENT DRAFT"  },
 };
 
 // Static retrieval lenses — the standard vendor-audit domains. Per-domain
@@ -122,9 +138,11 @@ interface ExistingEntry {
   raw: Record<string, unknown>;          // full original fields for kept-entry fallback
 }
 
-function extractExisting(kind: DeliverableKind, content: unknown, maxItems: number): ExistingEntry[] {
+function extractExisting(kind: DeliverableKind, content: unknown): ExistingEntry[] {
   const c = (content ?? {}) as Record<string, unknown>;
-  if (kind === "confirmation_letter") return []; // letter revision passes body/scope, not labeled entries
+  const config = DELIVERABLES[kind];
+  if (config.shape === "letter") return []; // letter-shaped revision passes body/scope, not labeled entries
+  const maxItems = config.maxItems;
   const rawItems = Array.isArray(c.items) ? c.items : [];
   return rawItems
     .filter((it): it is Record<string, unknown> => !!it && typeof it === "object")
@@ -189,8 +207,9 @@ function buildUserMessage(
     for (const e of existing) lines.push(`[${e.label}] ${e.text.slice(0, MAX_PROMPT_CHARS)}`);
     lines.push("");
   }
-  if (kind === "confirmation_letter" && letterCurrent) {
-    lines.push("CURRENT LETTER (revision mode — preserve substance):");
+  const cfg = DELIVERABLES[kind];
+  if (letterCurrent && cfg.shape === "letter") {
+    lines.push(`${cfg.revisionHeading} (revision mode — preserve substance):`);
     lines.push(`body_text: ${letterCurrent.body_text.slice(0, MAX_BODY_TEXT_CHARS)}`);
     lines.push(`scope: ${letterCurrent.scope.join(" | ").slice(0, 2_000)}`);
     lines.push("");
@@ -315,11 +334,14 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: "audit_id is required" }),
       { status: 400, headers: jsonHeaders });
   }
-  const kind = body.deliverable as DeliverableKind;
-  if (kind !== "checklist" && kind !== "agenda" && kind !== "confirmation_letter") {
-    return new Response(JSON.stringify({ error: "deliverable must be checklist, agenda, or confirmation_letter" }),
+  // The config map IS the allowlist — a new kind added there is accepted (and
+  // named in the error) without touching this check.
+  if (typeof body.deliverable !== "string" || !(body.deliverable in DELIVERABLES)) {
+    return new Response(
+      JSON.stringify({ error: `deliverable must be one of: ${Object.keys(DELIVERABLES).join(", ")}` }),
       { status: 400, headers: jsonHeaders });
   }
+  const kind = body.deliverable as DeliverableKind;
   const config = DELIVERABLES[kind];
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -373,9 +395,9 @@ Deno.serve(async (req: Request) => {
     .maybeSingle();
   const existingContent = (existingRow?.content ?? null) as Record<string, unknown> | null;
 
-  const existing = extractExisting(kind, existingContent, config.maxItems);
+  const existing = extractExisting(kind, existingContent);
   let letterCurrent: { body_text: string; scope: string[] } | null = null;
-  if (kind === "confirmation_letter" && existingContent) {
+  if (config.shape === "letter" && existingContent) {
     const bodyText = typeof existingContent.body_text === "string" ? existingContent.body_text : "";
     const scope = Array.isArray(existingContent.scope)
       ? existingContent.scope.filter((sLine): sLine is string => typeof sLine === "string")
@@ -570,18 +592,21 @@ Deno.serve(async (req: Request) => {
   let outCount = 0;
   const keptExistingIds = new Set<string>();
 
-  if (kind === "confirmation_letter") {
+  if (config.shape === "letter") {
     const bodyText = typeof parsed.body_text === "string" ? parsed.body_text.trim().slice(0, MAX_BODY_TEXT_CHARS) : "";
     const scope = (Array.isArray(parsed.scope) ? parsed.scope : [])
       .filter((sLine): sLine is string => typeof sLine === "string" && sLine.trim().length > 0)
       .map((sLine) => sLine.trim().slice(0, MAX_PROMPT_CHARS))
       .slice(0, 20);
     if (bodyText.length === 0) {
-      log("error", "audit_deliverable_draft.empty_letter", { request_id: requestId });
-      return new Response(JSON.stringify({ error: "AI service returned an empty letter draft" }),
+      // Never apply an empty body: in revise mode it would wipe the auditor's
+      // persisted text (apply is automatic client-side).
+      log("error", "audit_deliverable_draft.empty_body", { request_id: requestId, deliverable: kind });
+      return new Response(JSON.stringify({ error: "AI service returned an empty draft" }),
         { status: 502, headers: jsonHeaders });
     }
-    gateRefs(parsed.refs, "letter");
+    // Blob-level refs: the kind's configured item_id (see DeliverableGenerationRef).
+    gateRefs(parsed.refs, config.blobRefId);
     contentPatch = { body_text: bodyText, scope };
     outCount = 1;
   } else {

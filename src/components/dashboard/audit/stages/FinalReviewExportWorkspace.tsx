@@ -106,6 +106,7 @@ export default function FinalReviewExportWorkspace() {
         push('Confirmation letter', bundle.confirmation_letter?.grounding_snapshot);
         push('Agenda', bundle.agenda?.grounding_snapshot);
         push('Checklist', bundle.checklist?.grounding_snapshot);
+        push('Internal notification', bundle.internal_notification?.grounding_snapshot);
         setGroundingCurrency(rows);
       } catch (err) {
         console.error('[FinalReviewExportWorkspace] grounding currency load error:', err);

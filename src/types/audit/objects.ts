@@ -416,7 +416,7 @@ export interface AuditEvidenceListRow extends AuditSourceDocument {
 // must never join back to live rows.
 // -----------------------------------------------------------------------------
 export interface DeliverableGenerationRef {
-  item_id: string;                    // item id the ref supports ('letter' for the letter's blob-level refs)
+  item_id: string;                    // item id the ref supports ('letter'/'notification' for blob-level refs)
   chunk_id: string;
   document_id: string;
   source: 'PROTOCOL' | 'EVIDENCE';
