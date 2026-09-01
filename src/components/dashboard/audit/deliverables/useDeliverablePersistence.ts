@@ -199,9 +199,13 @@ export function useDeliverablePersistence<B extends BundleShape<B>>({
         if (result.ok) {
           setField(key, result.data);
         } else if (hint === 'STALE_CONTENT' || hint === 'STALE_BASIS') {
-          // A real CAS miss: the row (or its derived basis) moved on. Reload
-          // is correct here — and ONLY here. Routing every failure through it
-          // made a missing RPC look like "Approve did nothing".
+          // A real CAS miss: the row (or its derived basis) moved on. Revert
+          // the caller's optimistic APPROVED flip FIRST — the reload usually
+          // overwrites it with server truth anyway, but if the reload fails
+          // the cache must not keep showing a green latch the server refused.
+          setField(key, prev);
+          // Reload is correct here — and ONLY here. Routing every failure
+          // through it made a missing RPC look like "Approve did nothing".
           await reloadAfterStaleApprove(key, `approve${noun}`, result.error, hint);
         } else {
           console.error(`[${logTag}] approve${noun} failed:`, result.error);

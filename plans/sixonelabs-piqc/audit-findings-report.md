@@ -96,11 +96,14 @@ safe path: two narrative fields, blocks injected by code, no export wiring yet.
   `blobRefId:'findings_report'`, `revisionHeading:'CURRENT NARRATIVE'`);
   report-kind context loader reads `audit_workspace_entry_objects` (JWT/RLS),
   fails closed 503 when unreadable (an unreadable entry set is not an empty
-  one), builds the numbered blocks listing code-side, and snapshots the
-  entry tuples; output arm caps intro/closing, 502s on empty narrative,
-  gates blob-level refs. Snapshot gains optional `entries` (id +
-  vendor_domain + observation_text + checkpoint_ref + impact +
-  classification) — the currency axis's basis.
+  one — and the register read fails closed for this kind too, or a snapshot
+  recording evidence:[] off a read error would flag permanent false drift).
+  The model receives ONLY provisional counts + vendor domains — observation
+  TEXT never enters the prompt at all, making no-restatement mechanical
+  rather than prompted (stronger than the planned blocks listing; no label
+  maps needed engine-side). Output arm caps intro/closing, 502s on empty
+  narrative, gates blob-level refs. Snapshot gains optional `entries` (the
+  digest's exact tuple fields) — the currency axis's basis.
 - **Client**: `findingsReport.ts` (row type, fetch with absence≠failure shape,
   entry-digest fetch, upsert/approve wrappers over the generic RPCs returning
   the workbench-hook-compatible shapes); `deliverableGenerationApi` gains the
@@ -110,12 +113,19 @@ safe path: two narrative fields, blocks injected by code, no export wiring yet.
   basis-specific notice copy (STALE_CONTENT path byte-identical);
   DeliverableGenerationPanel gains optional `liveEntries` + an
   observations-drift line; new `FindingsReportSection.tsx` under `stages/`
-  (mounted `key={auditId}` from ReportDraftingWorkspace after the approval
-  card): honest load (failure banner + retry, no scratch form), narrative
-  editors, code-injected blocks preview with the QA placeholder line,
-  generation panel, approve latch requiring a held digest (approve disabled
-  while digest unknown), divergence banner, HistoryDrawer. Lineage: node +
-  DELIVERABLES filter membership + fetch composition.
+  (mounted `key={auditId}` from ReportDraftingWorkspace, in BOTH the main
+  render and the no-working-report empty state — this deliverable must not
+  be unreachable behind the stub CTA): honest load (failure banner + retry,
+  no scratch form), narrative editors, code-injected blocks preview with the
+  QA placeholder line, generation panel, approve latch requiring a held
+  digest, divergence banner, HistoryDrawer. **The section fetches its own
+  entries in the same read moment as the digest** (adversarial-review
+  finding: the Stage-6 context cache is only populated when Stage 6 mounts,
+  so rendering blocks from it against a fresh digest could seal a pin over
+  blocks the reviewer never saw). Approve additionally refuses on the one
+  client-detectable basis inconsistency: rendered-blocks emptiness vs the
+  known empty-set digest (md5 of ''). Lineage: node + DELIVERABLES filter
+  membership + fetch composition.
 
 ## Scope (files allowed)
 
@@ -128,7 +138,7 @@ safe path: two narrative fields, blocks injected by code, no export wiring yet.
 - src/types/audit/enums.ts
 - src/types/audit/objects.ts
 - src/lib/audit/findingsReport.ts (new)
-- src/lib/audit/preAuditApi.ts (export resolveApprovedByNames helper only)
+- src/lib/audit/preAuditApi.ts (export resolveApprovedByName helper only)
 - src/lib/audit/deliverableGenerationApi.ts
 - src/lib/audit/lineageAdapter.ts
 - src/lib/audit/lineageApi.ts
@@ -188,10 +198,22 @@ None. Test fixtures in __tests__/ only.
 - **Zero-classified-entries generation allowed**: the engine drafts an honest
   "no classified observations yet" narrative rather than refusing. Trigger for
   revisit: users generating premature reports in practice.
-- **Engine label maps duplicated**: the blocks listing in the engine inlines
-  the impact/classification label strings (client's labels.ts is not
-  importable from Deno). Context-only (the rendered document uses the client
-  builder), so drift is cosmetic-to-the-model. Trigger: a third consumer.
+- **Cross-mount draft-stash gap (accepted)**: the persistence hook lives
+  inside the section (remounted per audit), so a failed save's preserved
+  draft survives everything within a mount but NOT an audit/stage switch —
+  Stage 5 has the same limitation on stage nav (its hook dies with the
+  workspace). Hoisting the hook would restructure the mount for a rare path.
+  Trigger: a second Stage-7 deliverable, or a user report of a lost draft.
+- **Direct-PATCH latch forging (parity, partner memo)**: FOR ALL RLS +
+  default table grants let the owner PATCH approval_status/basis_digest/
+  generation_refs trail-free on all six deliverable tables — 20260903000000
+  gave `audits` the column-revoke treatment for exactly this class; the
+  deliverable tables should get it in the partner's-return migration.
+- **Engine honesty behaviors pinned by comments only**: the 503 fail-closed
+  reads and 502 empty-narrative guard have no engine-side unit test (only
+  normalizeRegister has a seam). Trigger: next engine-touching PR extracts
+  the next seam. Same note for the generation panel's drift-blame copy
+  (panel has no test dir; pre-existing gap).
 - **Prod deploy debt grows to 6 unapplied migrations** (D1 pair, D3 pair, D4
   pair) + the `audit-deliverable-draft` redeploy. Until applied, the Stage-7
   section is honest-degraded: load shows the failure banner + retry, saves
@@ -210,9 +232,12 @@ Test pins (new/extended): entry-digest + generic-RPC routing incl. both CAS
 hints; report apply arm; currency entries axis with legacy returns
 byte-identical; normalizeRegister seam (kind filter, embed unwrap, included
 flag); section — load-failure banner (absence ≠ failure), preview lock,
-approve disabled without digest, save-failure preserve + banner, STALE_BASIS
-reload notice, divergence banner, blocks exclude NOT_YET_CLASSIFIED, QA
-placeholder rendered, `findings_report-*` panel testids.
+approve disabled without digest, approve disabled + mismatch notice when
+rendered blocks disagree with the server digest (and enabled when a
+genuinely empty set matches md5('')), save-failure preserve + banner +
+approve blocked while the error stands, STALE_BASIS reload notice,
+divergence banner, blocks exclude NOT_YET_CLASSIFIED, QA placeholder
+rendered, `findings_report-*` panel testids.
 
 E2E (user, after Roger applies 20260906000000/000100 + redeploys
 audit-deliverable-draft):

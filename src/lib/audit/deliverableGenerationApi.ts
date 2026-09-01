@@ -263,8 +263,10 @@ export function computeDeliverableCurrency(
   }
 
   // Entries axis — same per-axis gating idiom. Compares the digest fields
-  // exactly (audit_mode_entry_set_digest's identity), so the currency flag
-  // and the approve basis pin can never disagree about what "changed" means.
+  // with the digest's own semantics (audit_mode_entry_set_digest COALESCEs
+  // checkpoint_ref to '', so NULL ≡ '' here too) — the currency flag and the
+  // approve basis pin measure the same identity and can only differ inside
+  // the fetch-interleave window, never on field semantics.
   // Length + keyed-field check covers adds, removes, and edits (ids are PKs).
   const snapEntries = snapshot.entries;
   let entriesChanged: boolean | undefined;
@@ -278,7 +280,7 @@ export function computeDeliverableCurrency(
           !s ||
           s.vendor_domain !== e.vendor_domain ||
           s.observation_text !== e.observation_text ||
-          (s.checkpoint_ref ?? null) !== (e.checkpoint_ref ?? null) ||
+          (s.checkpoint_ref ?? '') !== (e.checkpoint_ref ?? '') ||
           s.provisional_impact !== e.provisional_impact ||
           s.provisional_classification !== e.provisional_classification
         );

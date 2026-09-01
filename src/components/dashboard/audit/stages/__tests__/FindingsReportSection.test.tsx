@@ -26,6 +26,10 @@ vi.mock('../../../../../lib/audit/evidenceApi', () => ({
   listAuditEvidence: vi.fn(() => Promise.resolve({ ok: true, data: [] })),
 }));
 
+vi.mock('../../../../../lib/audit/workspaceEntriesApi', () => ({
+  fetchWorkspaceEntries: vi.fn(),
+}));
+
 vi.mock('../../../../../lib/audit/deliverableGenerationApi', async (importOriginal) => ({
   ...(await importOriginal<
     typeof import('../../../../../lib/audit/deliverableGenerationApi')
@@ -42,6 +46,7 @@ import {
   fetchFindingsReport,
   upsertFindingsReport,
 } from '../../../../../lib/audit/findingsReport';
+import { fetchWorkspaceEntries } from '../../../../../lib/audit/workspaceEntriesApi';
 import type { FindingsReport } from '../../../../../lib/audit/findingsReport';
 import type { MockWorkspaceEntry } from '../../../../../lib/audit/mockWorkspaceEntries';
 import type {
@@ -92,23 +97,30 @@ const REPORT: FindingsReport = {
   generated_at: null,
 };
 
-function renderSection(
-  overrides: Partial<{ hasReached: boolean; entries: MockWorkspaceEntry[] }> = {},
-) {
+function renderSection(overrides: Partial<{ hasReached: boolean }> = {}) {
   return render(
     <FindingsReportSection
       auditId="audit-1"
       hasReached={overrides.hasReached ?? true}
-      entries={overrides.entries ?? [entry('e1', 'FINDING'), entry('e2', 'NOT_YET_CLASSIFIED')]}
       isLight
     />,
   );
 }
 
+// md5('') — the server's digest for a zero-entry audit. Mirrors the
+// component's constant so the consistency pins below say what they mean.
+const EMPTY_SET_DIGEST = 'd41d8cd98f00b204e9800998ecf8427e';
+
 beforeEach(() => {
   vi.clearAllMocks();
   m(fetchFindingsReport).mockResolvedValue({ report: REPORT, failed: false });
   m(fetchEntrySetDigest).mockResolvedValue('digest-live');
+  // The section fetches its own entries — the blocks' and the pin's data
+  // come from the same read moment, never from the Stage-6 context cache.
+  m(fetchWorkspaceEntries).mockResolvedValue([
+    entry('e1', 'FINDING'),
+    entry('e2', 'NOT_YET_CLASSIFIED'),
+  ]);
 });
 
 describe('load + blocks', () => {
@@ -169,6 +181,29 @@ describe('approve — the dual pin', () => {
     expect(await screen.findByText('Approved')).toBeTruthy();
   });
 
+  it('blocks approve when the rendered blocks disagree with the server digest (stale/failed entries read)', async () => {
+    // Zero blocks rendered, but the server digest names a real set — sealing
+    // here would pin blocks the reviewer never saw.
+    m(fetchWorkspaceEntries).mockResolvedValue([]);
+    renderSection();
+    expect(await screen.findByTestId('findings-report-basis-mismatch')).toBeTruthy();
+    const btn = (await screen.findByTestId(
+      'findings-report-approve-button',
+    )) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  it('a genuinely empty entry set is consistent — no mismatch, approve enabled', async () => {
+    m(fetchWorkspaceEntries).mockResolvedValue([]);
+    m(fetchEntrySetDigest).mockResolvedValue(EMPTY_SET_DIGEST);
+    renderSection();
+    const btn = (await screen.findByTestId(
+      'findings-report-approve-button',
+    )) as HTMLButtonElement;
+    expect(screen.queryByTestId('findings-report-basis-mismatch')).toBeNull();
+    expect(btn.disabled).toBe(false);
+  });
+
   it('STALE_BASIS reloads server truth and shows the basis-specific notice', async () => {
     m(approveFindingsReport).mockResolvedValue({
       ok: false,
@@ -197,8 +232,11 @@ describe('save honesty (PR-1 posture)', () => {
     // Editor re-opened over the preserved content.
     const input = screen.getByTestId('findings-report-intro-input') as HTMLTextAreaElement;
     expect(input.value).toBe('Rewritten intro the save must not lose.');
-    // Approve blocked while the save error stands (button hidden by editing;
-    // dismissing returns to view mode with approve enabled again).
+    // Approve blocked while the save error stands.
+    expect(
+      (screen.getByTestId('findings-report-approve-button') as HTMLButtonElement).disabled,
+    ).toBe(true);
+    // Dismissing clears the error + draft together and returns to view mode.
     fireEvent.click(screen.getByLabelText('Discard the unsaved changes'));
     const btn = (await screen.findByTestId(
       'findings-report-approve-button',

@@ -14,6 +14,7 @@ import {
   type FindingsReport,
 } from '../../../../lib/audit/findingsReport';
 import { listAuditEvidence } from '../../../../lib/audit/evidenceApi';
+import { fetchWorkspaceEntries } from '../../../../lib/audit/workspaceEntriesApi';
 import {
   buildObservationGroups,
   type ReportClassification,
@@ -62,6 +63,14 @@ const DOCUMENT_GROUP_LABELS: Record<ReportClassification, string> = {
 // model-generated; never stored. See the plan's binding decision 2.
 const QA_PLACEHOLDER = 'Final classification: [Classification: to be determined by QA]';
 
+// md5('') — what audit_mode_entry_set_digest returns for a ZERO-entry audit
+// (its string_agg COALESCEs to ''). Lets the client detect the one basis
+// inconsistency it can see: blocks rendered from an empty entry read while
+// the server digest names a non-empty set (stale/failed entries read), or
+// vice versa. Approving in that state would seal a pin over blocks the
+// reviewer never saw — the exact dishonest latch the pin exists to prevent.
+const EMPTY_SET_DIGEST = 'd41d8cd98f00b204e9800998ecf8427e';
+
 interface FindingsReportBundle {
   findings_report: FindingsReport | null;
 }
@@ -69,18 +78,10 @@ interface FindingsReportBundle {
 interface Props {
   auditId: string;
   hasReached: boolean;
-  /** Live Stage-6 entries from AuditDataContext (the parent already has
-   *  them) — the blocks' single source of truth. */
-  entries: MockWorkspaceEntry[];
   isLight: boolean;
 }
 
-export default function FindingsReportSection({
-  auditId,
-  hasReached,
-  entries,
-  isLight,
-}: Props) {
+export default function FindingsReportSection({ auditId, hasReached, isLight }: Props) {
   const [report, setReport] = useState<FindingsReport | null>(null);
   const [loaded, setLoaded] = useState(false);
   // Absence ≠ failure: failed means the row state is UNKNOWN — render the
@@ -93,6 +94,12 @@ export default function FindingsReportSection({
   const [evidenceRows, setEvidenceRows] = useState<AuditEvidenceListRow[] | null>(null);
   // null = live entry-set digest unknown → Approve blocked, honestly labeled.
   const [liveDigest, setLiveDigest] = useState<string | null>(null);
+  // The blocks' data — fetched HERE, alongside the digest, so what renders
+  // and what the pin names come from the same read moment. The context's
+  // Stage-6 cache is deliberately NOT used: it is only populated when Stage 6
+  // mounts, so a direct Stage-7 load would render zero blocks against a
+  // real digest — sealing a pin over blocks the reviewer never saw.
+  const [entries, setEntries] = useState<MockWorkspaceEntry[]>([]);
   const [editing, setEditing] = useState(false);
   const [draftIntro, setDraftIntro] = useState('');
   const [draftClosing, setDraftClosing] = useState('');
@@ -118,16 +125,21 @@ export default function FindingsReportSection({
     refresh: refreshFromServer,
   });
 
-  // THE refetch path (hook contract: never throws; false = refresh failed).
-  // Row + digest together: whenever server truth is re-read, the approve pin
-  // must be re-read with it, or Approve could pin a digest older than the
-  // content on screen.
+  // THE refetch path (hook contract: never throws; false = row refresh
+  // failed). Row + digest + entries + register together: whenever server
+  // truth is re-read, the pin, the blocks it names, and the currency basis
+  // are re-read in the same moment — so "the latest are shown" claims after
+  // a stale-approve reload are actually true.
   async function refreshFromServer(): Promise<boolean> {
-    const [rowFetch, digest] = await Promise.all([
+    const [rowFetch, digest, liveEntries, evidence] = await Promise.all([
       fetchFindingsReport(auditId),
       fetchEntrySetDigest(auditId),
+      fetchWorkspaceEntries(auditId),
+      listAuditEvidence(auditId),
     ]);
     setLiveDigest(digest);
+    setEntries(liveEntries);
+    if (evidence.ok) setEvidenceRows(evidence.data);
     if (rowFetch.failed) return false;
     setReport(rowFetch.report);
     return true;
@@ -136,10 +148,11 @@ export default function FindingsReportSection({
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      const [rowFetch, evidence, digest] = await Promise.all([
+      const [rowFetch, evidence, digest, liveEntries] = await Promise.all([
         fetchFindingsReport(auditId),
         listAuditEvidence(auditId),
         fetchEntrySetDigest(auditId),
+        fetchWorkspaceEntries(auditId),
       ]);
       if (cancelled) return;
       setLoaded(true);
@@ -147,6 +160,7 @@ export default function FindingsReportSection({
       if (!rowFetch.failed) setReport(rowFetch.report);
       setEvidenceRows(evidence.ok ? evidence.data : null);
       setLiveDigest(digest);
+      setEntries(liveEntries);
     };
     load();
     return () => {
@@ -160,24 +174,22 @@ export default function FindingsReportSection({
   const saving = savingTabs['findings_report'] === true;
   const generating = generatingTab === 'findings_report';
 
+  // Exit edit mode and re-seed the editors from the cached row — the one
+  // draft-reset, shared by resync, Cancel, and save-error discard.
+  const resetDrafts = () => {
+    setEditing(false);
+    setDraftIntro(report?.content.intro_text ?? '');
+    setDraftClosing(report?.content.closing_text ?? '');
+  };
+
   useDeliverableResync({
     deliverable: report,
     saveError,
-    syncFromServer: () => {
-      setEditing(false);
-      setDraftIntro(report?.content.intro_text ?? '');
-      setDraftClosing(report?.content.closing_text ?? '');
-    },
+    syncFromServer: resetDrafts,
     forceEdit: () => setEditing(true),
   });
 
-  const persistOps = {
-    upsert: (n: FindingsReport) => upsertFindingsReport(auditId, n.content),
-    // liveDigest is checked before the approve path can run (button gate +
-    // the guard in approveNow); the `?? ''` only satisfies the type.
-    approve: (p: FindingsReport) =>
-      approveFindingsReport(p.id, p.updated_at, liveDigest ?? ''),
-  };
+  const upsertOp = (n: FindingsReport) => upsertFindingsReport(auditId, n.content);
 
   const save = () => {
     const prev = report;
@@ -196,14 +208,30 @@ export default function FindingsReportSection({
     };
     setReport(next);
     setEditing(false);
-    void persistDeliverable('findings_report', 'FindingsReport', prev, next, persistOps);
+    void persistDeliverable('findings_report', 'FindingsReport', prev, next, {
+      upsert: upsertOp,
+      // Unreachable from a save (next stays DRAFT — no approval transition);
+      // present to satisfy the ops contract without a phantom digest.
+      approve: (p) => approveFindingsReport(p.id, p.updated_at, liveDigest ?? ''),
+    });
   };
 
+  // Derived early: approve must refuse while the rendered blocks and the
+  // server digest disagree about even set-emptiness (a failed/stale entries
+  // read renders no blocks while the digest names a real set — sealing there
+  // would pin blocks the reviewer never saw).
+  const emptyMismatch =
+    liveDigest !== null && (entries.length === 0) !== (liveDigest === EMPTY_SET_DIGEST);
+
   const approveNow = () => {
-    if (!report || liveDigest === null || saving || saveError) return;
+    const digest = liveDigest;
+    if (!report || digest === null || emptyMismatch || saving || saveError) return;
     const next: FindingsReport = { ...report, approval_status: 'APPROVED' };
     setReport(next);
-    void persistDeliverable('findings_report', 'FindingsReport', report, next, persistOps);
+    void persistDeliverable('findings_report', 'FindingsReport', report, next, {
+      upsert: upsertOp,
+      approve: (p) => approveFindingsReport(p.id, p.updated_at, digest),
+    });
   };
 
   // ---------------------------------------------------------------------------
@@ -302,9 +330,32 @@ export default function FindingsReportSection({
               isLight={isLight}
               previewLocked={!hasReached}
               privacyNote="Observation text is never sent to the model — PIQC drafts only the narrative around counts and domains."
-              liveEntries={entries}
+              // Under an entries/digest mismatch the axis must read unknowable,
+              // not falsely stale against a bad read.
+              liveEntries={emptyMismatch ? undefined : entries}
               onGenerate={() => void runGeneration('findings_report')}
             />
+
+            {emptyMismatch && (
+              <div
+                data-testid="findings-report-basis-mismatch"
+                className={`flex items-start gap-2 px-3 py-2 rounded-md border ${amberBox}`}
+              >
+                <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
+                <p className="text-xs leading-relaxed flex-1">
+                  The observation blocks shown here don’t match the server’s
+                  record of the audit’s observations — approving is blocked
+                  until they agree. Retry loading.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setReloadNonce((n) => n + 1)}
+                  className={`text-xs font-semibold px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+                >
+                  Retry
+                </button>
+              </div>
+            )}
 
             {staleNotice && (
               <div
@@ -334,9 +385,7 @@ export default function FindingsReportSection({
                   type="button"
                   onClick={() => {
                     dismissSaveError('findings_report');
-                    setEditing(false);
-                    setDraftIntro(report?.content.intro_text ?? '');
-                    setDraftClosing(report?.content.closing_text ?? '');
+                    resetDrafts();
                   }}
                   aria-label="Discard the unsaved changes"
                   className="inline-flex items-center justify-center w-5 h-5 rounded opacity-70 hover:opacity-100"
@@ -408,19 +457,19 @@ export default function FindingsReportSection({
                     >
                       {saving ? 'Saving…' : 'Save'}
                     </button>
-                    {!saveError && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditing(false);
-                          setDraftIntro(report?.content.intro_text ?? '');
-                          setDraftClosing(report?.content.closing_text ?? '');
-                        }}
-                        className={`text-sm font-medium px-3.5 py-2 rounded-md transition-colors ${buttonSecondary}`}
-                      >
-                        Cancel
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      // Cancel = discard, exactly as the save-error banner's
+                      // "Retry, or Cancel to discard it" copy promises — so it
+                      // also clears the error + preserved-draft pair.
+                      onClick={() => {
+                        dismissSaveError('findings_report');
+                        resetDrafts();
+                      }}
+                      className={`text-sm font-medium px-3.5 py-2 rounded-md transition-colors ${buttonSecondary}`}
+                    >
+                      Cancel
+                    </button>
                   </div>
                 </div>
               ) : (
@@ -527,20 +576,22 @@ export default function FindingsReportSection({
                   type="button"
                   onClick={approveNow}
                   // Blocked while: no saved row, save in flight or failed
-                  // (PR-1 invariant), editing, digest unknown (the pin can't
-                  // be stated honestly), preview from ahead.
+                  // (PR-1 invariant), editing, digest unknown or inconsistent
+                  // with the rendered blocks (the pin can't be stated
+                  // honestly), preview from ahead.
                   disabled={
                     !report ||
                     saving ||
                     !!saveError ||
                     editing ||
                     liveDigest === null ||
+                    emptyMismatch ||
                     !hasReached
                   }
                   title={
                     !report
                       ? 'Save a narrative first'
-                      : liveDigest === null
+                      : liveDigest === null || emptyMismatch
                       ? 'Couldn’t verify the current observations — retry loading before approving'
                       : undefined
                   }
@@ -557,7 +608,9 @@ export default function FindingsReportSection({
                   {report.approved_by_name ? ` · ${report.approved_by_name}` : ''}
                 </span>
               )}
-              {report && (
+              {/* !saving: during an in-flight FIRST save the cached row is an
+                  optimistic mint whose id the history RPC would reject. */}
+              {report && !saving && (
                 <button
                   type="button"
                   onClick={() => setHistoryOpen(true)}

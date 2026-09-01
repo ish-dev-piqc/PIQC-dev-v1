@@ -726,9 +726,12 @@ Deno.serve(async (req: Request) => {
     });
     // For the gap summary an unreadable register is NOT an empty register:
     // rendering the failure as "(no evidence documents filed yet)" would
-    // invert the deliverable ("nothing on file, all outstanding"). Other
-    // kinds keep the pre-existing degradation (fewer evidence passages).
-    if (kind === "evidence_gap_summary") {
+    // invert the deliverable ("nothing on file, all outstanding"). The
+    // findings report fails closed too — a snapshot recording evidence: []
+    // off a read error would flag every live doc "new since generation"
+    // forever (false permanent drift). The four legacy kinds keep the
+    // pre-existing degradation (fewer evidence passages).
+    if (kind === "evidence_gap_summary" || kind === "findings_report") {
       return new Response(
         JSON.stringify({ error: "Evidence register could not be read — try again" }),
         { status: 503, headers: jsonHeaders });

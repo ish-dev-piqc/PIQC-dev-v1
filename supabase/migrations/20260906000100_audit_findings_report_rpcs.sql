@@ -314,7 +314,13 @@ BEGIN
 
   SELECT * INTO v_cfg FROM audit_mode_deliverable_kind_config(p_kind);
 
-  EXECUTE format('SELECT to_jsonb(t.*) FROM %I t WHERE t.audit_id = $1', v_cfg.o_table)
+  -- FOR UPDATE: the per-kind clones read their before-image unlocked, so a
+  -- concurrent save/approve between snapshot and UPDATE could compute
+  -- v_content_changed against a row that was no longer current (an approve
+  -- landing in that window survived over content it never covered, and the
+  -- delta diff went quiet). Locking here serializes writers per row — the
+  -- generic pair is the one place the fix covers every kind at once.
+  EXECUTE format('SELECT to_jsonb(t.*) FROM %I t WHERE t.audit_id = $1 FOR UPDATE', v_cfg.o_table)
     INTO v_before USING p_audit_id;
 
   IF v_before IS NULL THEN
@@ -449,13 +455,22 @@ BEGIN
       RAISE EXCEPTION 'The observations this deliverable is built from changed since they were reviewed'
         USING ERRCODE = '40001', HINT = 'STALE_BASIS';
     END IF;
+  ELSIF p_expected_basis_digest IS NOT NULL THEN
+    -- A basis pin passed for a kind that declares none is a caller bug, and
+    -- silently ignoring it would read as protection that quietly isn't there
+    -- (the trap for the day the five legacy kinds migrate onto this pair).
+    RAISE EXCEPTION 'Deliverable kind % declares no approval basis — expected_basis_digest must not be passed', p_kind
+      USING ERRCODE = '22023';
   END IF;
 
   -- Atomic CAS in the UPDATE predicate (see approve_confirmation_letter).
   -- Basis kinds seal the verified digest in the same statement; a concurrent
   -- entry edit between the digest check above and this UPDATE is caught by
   -- the divergence re-check (live digest vs basis_digest), not here.
-  IF v_cfg.o_basis IS NOT NULL THEN
+  -- Gated on the SAME token as the verification block above — a future basis
+  -- token must extend both together, or it could seal a digest it never
+  -- verified (extend the verification, this arm, and the upsert's clear).
+  IF v_cfg.o_basis = 'ENTRY_SET' THEN
     EXECUTE format(
       'UPDATE %I SET
          approval_status = ''APPROVED'',
@@ -566,8 +581,16 @@ $$;
 
 
 -- -----------------------------------------------------------------------------
--- Grants
+-- Grants — anon revoked per the 20260727000000 precedent for data-returning
+-- helpers (the write RPCs already fail closed on auth.uid(), but the posture
+-- should not depend on it). audit_mode_deliverable_kind_config keeps default
+-- EXECUTE like diff_jsonb/write_delta: the INVOKER functions above call it as
+-- the caller's role.
 -- -----------------------------------------------------------------------------
+REVOKE EXECUTE ON FUNCTION audit_mode_entry_set_digest(uuid)                                             FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION audit_mode_upsert_deliverable(text, uuid, jsonb, text)                        FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION audit_mode_approve_deliverable(text, uuid, text, timestamptz, text)           FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION audit_mode_apply_findings_report_generation(uuid, jsonb, jsonb, jsonb, text)  FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION audit_mode_entry_set_digest(uuid)                                              TO authenticated;
 GRANT EXECUTE ON FUNCTION audit_mode_upsert_deliverable(text, uuid, jsonb, text)                         TO authenticated;
 GRANT EXECUTE ON FUNCTION audit_mode_approve_deliverable(text, uuid, text, timestamptz, text)            TO authenticated;
