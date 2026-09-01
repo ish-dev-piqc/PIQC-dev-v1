@@ -3,13 +3,14 @@
 // deliverable grounded in the protocol + the audit's evidence register (PR-C2).
 //
 // Consolidates the C1 checklist engine at the rule-of-three moment: takes
-// { audit_id, deliverable: 'checklist' | 'agenda' | 'confirmation_letter' |
-// 'internal_notification' (PR-D1) | 'evidence_gap_summary' (PR-D3) }, runs
-// ONE engine (JWT ownership proof → service-role retrieval over protocol +
-// register chunks → OpenAI → verbatim-quote ref gate), and shapes output per
-// deliverable's `shape`. The gap summary additionally feeds the FULL register
-// (withheld rows as titles-only), the risk summary's scope areas, and the
-// checklist's expectations into its user message — see the gap-context block.
+// { audit_id, deliverable: <any key of DELIVERABLES — the config map is the
+// allowlist> }, runs ONE engine (JWT ownership proof → service-role retrieval
+// over protocol + register chunks → OpenAI → verbatim-quote ref gate), and
+// shapes output per deliverable's `shape`. The gap summary additionally feeds
+// the FULL register (withheld rows as titles-only), the risk summary's scope
+// areas, and the checklist's expectations into its user message — see the
+// gap-context block. The certificate (PR-D6) feeds the scope areas alone and
+// is sequence-gated: generation refuses until the Stage-7 report is approved.
 // Supersedes /audit-checklist-draft (deleted).
 //
 // Invariants (all deliverables):
@@ -36,7 +37,7 @@ import {
   type ProtocolChunkRow,
 } from "../_shared/protocolCandidates.ts";
 import { normalizeRegister, type RegisterDoc } from "../_shared/evidenceRegister.ts";
-import { AGENDA_PROMPT, CHECKLIST_PROMPT, EVIDENCE_GAP_SUMMARY_PROMPT, FINDINGS_REPORT_PROMPT, INTERNAL_NOTIFICATION_PROMPT, LETTER_PROMPT } from "./prompts.ts";
+import { AGENDA_PROMPT, AUDIT_CERTIFICATE_PROMPT, CHECKLIST_PROMPT, EVIDENCE_GAP_SUMMARY_PROMPT, FINDINGS_REPORT_PROMPT, INTERNAL_NOTIFICATION_PROMPT, LETTER_PROMPT } from "./prompts.ts";
 
 // -----------------------------------------------------------------------------
 // CORS + constants
@@ -62,12 +63,13 @@ const EMBEDDING_MODEL      = "text-embedding-3-small";
 // Gap-summary context caps (PR-D3) — prompt-budget levers, kept here so the
 // whole budget stays reviewable in one block. Withheld register rows are
 // EXEMPT from the register cap (naming them is the deliverable's invariant);
-// on-file rows past it are counted and disclosed to the model.
+// on-file rows past it are counted and disclosed to the model. The scope-area
+// caps also govern the certificate's SCOPE AREAS block (PR-D6, shared loader).
 const GAP_MAX_REGISTER_DOCS = 120;
 const GAP_MAX_SCOPE_AREAS   = 50;
 const GAP_MAX_LINE_CHARS    = 200;  // per register-title / scope-area / checklist line
 
-type DeliverableKind = "checklist" | "agenda" | "confirmation_letter" | "internal_notification" | "evidence_gap_summary" | "findings_report";
+type DeliverableKind = "checklist" | "agenda" | "confirmation_letter" | "internal_notification" | "evidence_gap_summary" | "findings_report" | "audit_certificate";
 
 // shape drives every structural branch: "items" kinds carry labeled entry
 // lists (C-label revision mode, capped at maxItems); "letter" kinds carry a
@@ -108,6 +110,7 @@ const DELIVERABLES: Record<DeliverableKind, DeliverableConfig> = {
   internal_notification: { table: "internal_notification_objects", systemPrompt: INTERNAL_NOTIFICATION_PROMPT, shape: "letter", blobRefId: "notification", revisionHeading: "CURRENT DRAFT"  },
   evidence_gap_summary:  { table: "evidence_gap_summary_objects",  systemPrompt: EVIDENCE_GAP_SUMMARY_PROMPT,  shape: "letter", blobRefId: "gap_summary",  revisionHeading: "CURRENT SUMMARY", maxBodyChars: 12_000 },
   findings_report:       { table: "findings_report_objects",       systemPrompt: FINDINGS_REPORT_PROMPT,       shape: "report", blobRefId: "findings_report", revisionHeading: "CURRENT NARRATIVE" },
+  audit_certificate:     { table: "audit_certificate_objects",     systemPrompt: AUDIT_CERTIFICATE_PROMPT,     shape: "letter", blobRefId: "certificate",  revisionHeading: "CURRENT CERTIFICATE" },
 };
 
 // Static retrieval lenses — the standard vendor-audit domains. Per-domain
@@ -275,6 +278,9 @@ interface UserMessageContext {
   gapContext: GapSummaryContext | null;
   reportContext: FindingsReportContext | null;
   reportCurrent: { intro_text: string; closing_text: string } | null;
+  // Certificate-only (PR-D6): the risk summary's scope areas, without the gap
+  // kind's register/checklist blocks. Same loader, same caps, same heading.
+  certificateScopeAreas: string[] | null;
 }
 
 function buildUserMessage(ctx: UserMessageContext): string {
@@ -290,6 +296,7 @@ function buildUserMessage(ctx: UserMessageContext): string {
     gapContext,
     reportContext,
     reportCurrent,
+    certificateScopeAreas,
   } = ctx;
   const lines: string[] = [];
   lines.push(`Protocol: ${protocolTitle ?? "(unspecified)"}`);
@@ -345,6 +352,11 @@ function buildUserMessage(ctx: UserMessageContext): string {
       }
       lines.push("");
     }
+  }
+  if (certificateScopeAreas && certificateScopeAreas.length > 0) {
+    lines.push("SCOPE AREAS (from the risk summary):");
+    for (const a of certificateScopeAreas) lines.push(`- ${a}`);
+    lines.push("");
   }
   if (reportContext) {
     const classifiedTotal =
@@ -413,45 +425,25 @@ function buildUserMessage(ctx: UserMessageContext): string {
 // cannot forge a register entry.
 const cleanLine = (s: string) => s.replace(/\s+/g, " ").trim();
 
-async function loadGapSummaryContext(
+// Scope areas from the approved risk summary: its focus areas plus the
+// operational-domain tags of its linked protocol risks. Shared by the gap
+// summary (PR-D3) and the certificate (PR-D6). ABSENCE degrades to [] —
+// each caller's prompt block simply doesn't render; read errors are logged
+// and degrade the same way (scope areas are context, never the deliverable's
+// coverage basis).
+async function loadScopeAreas(
   supabase: ReturnType<typeof createClient>,
   auditId: string,
-  register: RegisterDoc[],
   requestId: string,
-): Promise<GapSummaryContext> {
-  // Withheld rows first and exempt from the cap; on-file rows past it are
-  // counted so the prompt can disclose the truncation instead of lying about
-  // register size.
-  const withheldRows = register.filter((d) => !d.included);
-  const onFileRows = register.filter((d) => d.included);
-  const listed = [...withheldRows, ...onFileRows]
-    .slice(0, Math.max(GAP_MAX_REGISTER_DOCS, withheldRows.length));
-  const registerListing = listed.map((d) => ({
-    title: cleanLine(d.title).slice(0, GAP_MAX_LINE_CHARS),
-    status: d.status,
-    withheld: !d.included,
-  }));
-
-  const [riskRes, checklistRes] = await Promise.all([
-    supabase
-      .from("vendor_risk_summary_objects")
-      .select("id, focus_areas")
-      .eq("audit_id", auditId)
-      .maybeSingle(),
-    supabase
-      .from(DELIVERABLES.checklist.table)
-      .select("content")
-      .eq("audit_id", auditId)
-      .maybeSingle(),
-  ]);
+): Promise<string[]> {
+  const riskRes = await supabase
+    .from("vendor_risk_summary_objects")
+    .select("id, focus_areas")
+    .eq("audit_id", auditId)
+    .maybeSingle();
   if (riskRes.error) {
     log("warn", "audit_deliverable_draft.gap_context.risk_summary_read_error", {
       request_id: requestId, error: String(riskRes.error.message),
-    });
-  }
-  if (checklistRes.error) {
-    log("warn", "audit_deliverable_draft.gap_context.checklist_read_error", {
-      request_id: requestId, error: String(checklistRes.error.message),
     });
   }
 
@@ -483,7 +475,41 @@ async function loadGapSummaryContext(
       return [cleanLine(`${p.operational_domain_tag}${section ? ` (§${section})` : ""}`).slice(0, GAP_MAX_LINE_CHARS)];
     });
   }
-  const scopeAreas = [...new Set([...focusAreas, ...domains])].slice(0, GAP_MAX_SCOPE_AREAS);
+  return [...new Set([...focusAreas, ...domains])].slice(0, GAP_MAX_SCOPE_AREAS);
+}
+
+async function loadGapSummaryContext(
+  supabase: ReturnType<typeof createClient>,
+  auditId: string,
+  register: RegisterDoc[],
+  requestId: string,
+): Promise<GapSummaryContext> {
+  // Withheld rows first and exempt from the cap; on-file rows past it are
+  // counted so the prompt can disclose the truncation instead of lying about
+  // register size.
+  const withheldRows = register.filter((d) => !d.included);
+  const onFileRows = register.filter((d) => d.included);
+  const listed = [...withheldRows, ...onFileRows]
+    .slice(0, Math.max(GAP_MAX_REGISTER_DOCS, withheldRows.length));
+  const registerListing = listed.map((d) => ({
+    title: cleanLine(d.title).slice(0, GAP_MAX_LINE_CHARS),
+    status: d.status,
+    withheld: !d.included,
+  }));
+
+  const [scopeAreas, checklistRes] = await Promise.all([
+    loadScopeAreas(supabase, auditId, requestId),
+    supabase
+      .from(DELIVERABLES.checklist.table)
+      .select("content")
+      .eq("audit_id", auditId)
+      .maybeSingle(),
+  ]);
+  if (checklistRes.error) {
+    log("warn", "audit_deliverable_draft.gap_context.checklist_read_error", {
+      request_id: requestId, error: String(checklistRes.error.message),
+    });
+  }
 
   // Checklist expectations through the same parser the checklist kind uses —
   // its cap and item-validity rules come from DELIVERABLES.checklist.
@@ -680,6 +706,39 @@ Deno.serve(async (req: Request) => {
       { status: 409, headers: jsonHeaders });
   }
 
+  // Certificate sequence gate (PR-D6) — creation is ungated, GENERATION is
+  // gated: drafting the terminal certificate for an audit whose Stage-7
+  // report is not approved would describe an audit that has not concluded.
+  // Runs before any model spend. Fails CLOSED on read error: an unreadable
+  // report is not an unapproved one, but it cannot prove approval either.
+  // The client hides the CTA on the same predicate; this check is the gate.
+  if (kind === "audit_certificate") {
+    const { data: reportRow, error: reportErr } = await supabase
+      .from("report_draft_objects")
+      .select("approval_status")
+      .eq("audit_id", auditId)
+      .maybeSingle();
+    if (reportErr) {
+      log("warn", "audit_deliverable_draft.report_gate_read_error", {
+        request_id: requestId, error: String(reportErr.message),
+      });
+      return new Response(
+        JSON.stringify({ error: "The audit report could not be read — try again" }),
+        { status: 503, headers: jsonHeaders });
+    }
+    if (!reportRow || reportRow.approval_status !== "APPROVED") {
+      log("info", "audit_deliverable_draft.report_not_approved", {
+        request_id: requestId, audit_id: auditId,
+      });
+      return new Response(
+        JSON.stringify({
+          error: "The audit report must be approved before the certificate is drafted",
+          hint: "REPORT_NOT_APPROVED",
+        }),
+        { status: 409, headers: jsonHeaders });
+    }
+  }
+
   const protocol = audit.protocol as { title?: string } | { title?: string }[] | null;
   const protocolTitle = (Array.isArray(protocol) ? protocol[0]?.title : protocol?.title) ?? null;
 
@@ -727,11 +786,11 @@ Deno.serve(async (req: Request) => {
     // For the gap summary an unreadable register is NOT an empty register:
     // rendering the failure as "(no evidence documents filed yet)" would
     // invert the deliverable ("nothing on file, all outstanding"). The
-    // findings report fails closed too — a snapshot recording evidence: []
-    // off a read error would flag every live doc "new since generation"
-    // forever (false permanent drift). The four legacy kinds keep the
-    // pre-existing degradation (fewer evidence passages).
-    if (kind === "evidence_gap_summary" || kind === "findings_report") {
+    // findings report and certificate fail closed too — a snapshot recording
+    // evidence: [] off a read error would flag every live doc "new since
+    // generation" forever (false permanent drift). The four legacy kinds
+    // keep the pre-existing degradation (fewer evidence passages).
+    if (kind === "evidence_gap_summary" || kind === "findings_report" || kind === "audit_certificate") {
       return new Response(
         JSON.stringify({ error: "Evidence register could not be read — try again" }),
         { status: 503, headers: jsonHeaders });
@@ -746,6 +805,13 @@ Deno.serve(async (req: Request) => {
   const gapContextPromise: Promise<GapSummaryContext | null> =
     kind === "evidence_gap_summary"
       ? loadGapSummaryContext(supabase, auditId, register, requestId)
+      : Promise.resolve(null);
+
+  // Certificate scope areas — same loader and caps as the gap kind, without
+  // its register/checklist blocks. Fired here, awaited after retrieval.
+  const certScopeAreasPromise: Promise<string[] | null> =
+    kind === "audit_certificate"
+      ? loadScopeAreas(supabase, auditId, requestId)
       : Promise.resolve(null);
 
   // Findings-report basis — the Stage-6 entry set (JWT/RLS-gated; same read
@@ -832,6 +898,7 @@ Deno.serve(async (req: Request) => {
 
   const docTitles = new Map(evidenceDocs.map((d) => [d.document_id, d.title]));
   const gapContext = await gapContextPromise;
+  const certificateScopeAreas = await certScopeAreasPromise;
   if (gapContext) {
     log("info", "audit_deliverable_draft.gap_context", {
       request_id: requestId,
@@ -877,6 +944,7 @@ Deno.serve(async (req: Request) => {
               gapContext,
               reportContext,
               reportCurrent,
+              certificateScopeAreas,
             }),
           },
         ],

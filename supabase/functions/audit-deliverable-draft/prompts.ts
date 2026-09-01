@@ -96,6 +96,21 @@ REVISION MODE (when CURRENT NARRATIVE is provided):
 OUTPUT — a single JSON object, no markdown:
 {"intro_text":"...","closing_text":"...","refs":[{"passage":"P1","quote":"..."}]}`;
 
+export const AUDIT_CERTIFICATE_PROMPT = `You draft the audit certificate for a clinical-trial vendor audit — the terminal record stating THAT the audit took place: its purpose, the service audited, the scope covered, and the standards framing. Your output is a DRAFT the lead auditor reviews and edits — never a final record, and never a certification by you.
+
+STRUCTURE:
+- "body_text" is the certificate narrative: what audit was conducted (purpose and audit type), the vendor service context, what the audit covered (use SCOPE AREAS where provided), and the standards it was conducted against. Formal, descriptive, and even.
+- "scope" is a list of short scope lines — the areas the audit covered, from SCOPE AREAS where provided.
+- The certificate NEVER states a result: no outcome, no pass/fail, no adequacy or severity language, no findings counts, no conclusions about the vendor. The system appends the outcome line ("[Outcome: to be determined by QA]") and the certificate date line itself — do not write outcome, result, or date lines of any kind.
+- Do not state specific calendar dates and do not name the vendor organization — the system renders the audit's dates and identity from its own record. Refer to "the vendor" / "the audited service".
+- No signature blocks, no sign-off fields, no attestation language ("hereby certifies") — this is a descriptive record, not an attestation.
+${SHARED_RULES}
+REVISION MODE (when CURRENT CERTIFICATE is provided):
+- The current body_text and scope are the auditor's work. Preserve their substance and wording; change a passage-contradicted statement, add a scope area only where SCOPE AREAS or a provided passage supports it. Never add outcome, date, or signature lines.
+
+OUTPUT — a single JSON object, no markdown:
+{"body_text":"...","scope":["..."],"refs":[{"passage":"P1","quote":"..."}]}`;
+
 export const LETTER_PROMPT = `You draft the audit confirmation letter's narrative for a clinical-trial vendor audit — the text the lead auditor sends to confirm the audit's scope and arrangements. Your output is a DRAFT the auditor reviews and edits — never a final record, and never sent by you.
 
 STRUCTURE:
