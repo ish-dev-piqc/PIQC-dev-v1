@@ -164,9 +164,12 @@ function renderPanel(
   return { ...utils, onPromoted };
 }
 
+// Waits for the cards to render; returns the FIRST observation textarea
+// (the two-card tests address the rest with getAll* queries).
 async function draft() {
   fireEvent.click(screen.getByTestId('vendor-candidate-generate'));
-  return screen.findByLabelText('Observation');
+  const observations = await screen.findAllByLabelText('Observation');
+  return observations[0];
 }
 
 const acceptButton = () => screen.getByRole('button', { name: /accept as observation/i });
