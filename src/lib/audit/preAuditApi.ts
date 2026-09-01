@@ -50,6 +50,27 @@ interface DeliverableRow<TContent> {
   generated_at?: string | null;
 }
 
+// One user_profiles query for a whole bundle (PR-5): the 5-way fetch used
+// to issue one lookup per approved row. Single-row paths keep the solo
+// resolver — one row is one lookup either way.
+async function resolveApprovedByNames(
+  approvedByIds: ReadonlyArray<string | null>,
+): Promise<Map<string, string | null>> {
+  const unique = [...new Set(approvedByIds.filter((id): id is string => !!id))];
+  if (unique.length === 0) return new Map();
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('id, name')
+    .in('id', unique);
+  if (error) {
+    console.error('[preAuditApi] resolveApprovedByNames error:', error);
+    return new Map();
+  }
+  return new Map(
+    ((data ?? []) as Array<{ id: string; name?: string }>).map((p) => [p.id, p.name ?? null]),
+  );
+}
+
 async function resolveApprovedByName(approvedBy: string | null): Promise<string | null> {
   if (!approvedBy) return null;
   const { data } = await supabase
@@ -61,7 +82,8 @@ async function resolveApprovedByName(approvedBy: string | null): Promise<string 
 }
 
 async function flattenConfirmationLetter(
-  row: DeliverableRow<MockConfirmationLetterContent>
+  row: DeliverableRow<MockConfirmationLetterContent>,
+  resolvedNames?: Map<string, string | null>,
 ): Promise<MockConfirmationLetter> {
   return {
     id: row.id,
@@ -69,7 +91,9 @@ async function flattenConfirmationLetter(
     content: row.content,
     approval_status: row.approval_status,
     approved_at: row.approved_at,
-    approved_by_name: await resolveApprovedByName(row.approved_by),
+    approved_by_name: resolvedNames
+      ? (row.approved_by ? resolvedNames.get(row.approved_by) ?? null : null)
+      : await resolveApprovedByName(row.approved_by),
     updated_at: row.updated_at,
     source_risk_summary_id: row.source_risk_summary_id ?? null,
     source_questionnaire_instance_id: row.source_questionnaire_instance_id ?? null,
@@ -81,7 +105,8 @@ async function flattenConfirmationLetter(
 }
 
 async function flattenAgenda(
-  row: DeliverableRow<MockAgendaContent>
+  row: DeliverableRow<MockAgendaContent>,
+  resolvedNames?: Map<string, string | null>,
 ): Promise<MockAgenda> {
   return {
     id: row.id,
@@ -89,7 +114,9 @@ async function flattenAgenda(
     content: row.content,
     approval_status: row.approval_status,
     approved_at: row.approved_at,
-    approved_by_name: await resolveApprovedByName(row.approved_by),
+    approved_by_name: resolvedNames
+      ? (row.approved_by ? resolvedNames.get(row.approved_by) ?? null : null)
+      : await resolveApprovedByName(row.approved_by),
     updated_at: row.updated_at,
     source_risk_summary_id: row.source_risk_summary_id ?? null,
     prefilled_at: row.prefilled_at ?? null,
@@ -100,7 +127,8 @@ async function flattenAgenda(
 }
 
 async function flattenChecklist(
-  row: DeliverableRow<MockChecklistContent>
+  row: DeliverableRow<MockChecklistContent>,
+  resolvedNames?: Map<string, string | null>,
 ): Promise<MockChecklist> {
   return {
     id: row.id,
@@ -108,7 +136,9 @@ async function flattenChecklist(
     content: row.content,
     approval_status: row.approval_status,
     approved_at: row.approved_at,
-    approved_by_name: await resolveApprovedByName(row.approved_by),
+    approved_by_name: resolvedNames
+      ? (row.approved_by ? resolvedNames.get(row.approved_by) ?? null : null)
+      : await resolveApprovedByName(row.approved_by),
     updated_at: row.updated_at,
     source_questionnaire_instance_id: row.source_questionnaire_instance_id ?? null,
     prefilled_at: row.prefilled_at ?? null,
@@ -119,7 +149,8 @@ async function flattenChecklist(
 }
 
 async function flattenInternalNotification(
-  row: DeliverableRow<MockInternalNotificationContent>
+  row: DeliverableRow<MockInternalNotificationContent>,
+  resolvedNames?: Map<string, string | null>,
 ): Promise<MockInternalNotification> {
   return {
     id: row.id,
@@ -127,7 +158,9 @@ async function flattenInternalNotification(
     content: row.content,
     approval_status: row.approval_status,
     approved_at: row.approved_at,
-    approved_by_name: await resolveApprovedByName(row.approved_by),
+    approved_by_name: resolvedNames
+      ? (row.approved_by ? resolvedNames.get(row.approved_by) ?? null : null)
+      : await resolveApprovedByName(row.approved_by),
     updated_at: row.updated_at,
     generation_refs: row.generation_refs ?? null,
     grounding_snapshot: row.grounding_snapshot ?? null,
@@ -136,7 +169,8 @@ async function flattenInternalNotification(
 }
 
 async function flattenEvidenceGapSummary(
-  row: DeliverableRow<MockEvidenceGapSummaryContent>
+  row: DeliverableRow<MockEvidenceGapSummaryContent>,
+  resolvedNames?: Map<string, string | null>,
 ): Promise<MockEvidenceGapSummary> {
   return {
     id: row.id,
@@ -144,7 +178,9 @@ async function flattenEvidenceGapSummary(
     content: row.content,
     approval_status: row.approval_status,
     approved_at: row.approved_at,
-    approved_by_name: await resolveApprovedByName(row.approved_by),
+    approved_by_name: resolvedNames
+      ? (row.approved_by ? resolvedNames.get(row.approved_by) ?? null : null)
+      : await resolveApprovedByName(row.approved_by),
     updated_at: row.updated_at,
     generation_refs: row.generation_refs ?? null,
     grounding_snapshot: row.grounding_snapshot ?? null,
@@ -199,21 +235,26 @@ export async function fetchPreAuditDeliverables(auditId: string): Promise<PreAud
     console.error('[preAuditApi] evidence_gap_summary fetch error:', gapSummaryRes.error);
   }
 
+  // One profiles lookup for the whole bundle (PR-5) — was one per row.
+  const rowsForNames = [letterRes, agendaRes, checklistRes, notificationRes, gapSummaryRes]
+    .map((r) => (r.data as { approved_by?: string | null } | null)?.approved_by ?? null);
+  const approvedByNames = await resolveApprovedByNames(rowsForNames);
+
   const [confirmationLetter, agenda, checklist, internalNotification, evidenceGapSummary] = await Promise.all([
     letterRes.data
-      ? flattenConfirmationLetter(letterRes.data as DeliverableRow<MockConfirmationLetterContent>)
+      ? flattenConfirmationLetter(letterRes.data as DeliverableRow<MockConfirmationLetterContent>, approvedByNames)
       : null,
     agendaRes.data
-      ? flattenAgenda(agendaRes.data as DeliverableRow<MockAgendaContent>)
+      ? flattenAgenda(agendaRes.data as DeliverableRow<MockAgendaContent>, approvedByNames)
       : null,
     checklistRes.data
-      ? flattenChecklist(checklistRes.data as DeliverableRow<MockChecklistContent>)
+      ? flattenChecklist(checklistRes.data as DeliverableRow<MockChecklistContent>, approvedByNames)
       : null,
     notificationRes.data
-      ? flattenInternalNotification(notificationRes.data as DeliverableRow<MockInternalNotificationContent>)
+      ? flattenInternalNotification(notificationRes.data as DeliverableRow<MockInternalNotificationContent>, approvedByNames)
       : null,
     gapSummaryRes.data
-      ? flattenEvidenceGapSummary(gapSummaryRes.data as DeliverableRow<MockEvidenceGapSummaryContent>)
+      ? flattenEvidenceGapSummary(gapSummaryRes.data as DeliverableRow<MockEvidenceGapSummaryContent>, approvedByNames)
       : null,
   ]);
 
