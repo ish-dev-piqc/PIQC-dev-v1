@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: status-badge-promotion
-status: in-review
+status: merged
+merged: 2026-09-01
 started: 2026-09-01
-target_pr:
+target_pr: #589
 ---
 
 # Promote the Approved/Draft StatusBadge into the deliverables workbench
