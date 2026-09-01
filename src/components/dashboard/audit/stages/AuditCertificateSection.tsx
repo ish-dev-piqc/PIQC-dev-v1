@@ -16,6 +16,7 @@ import {
 } from '../../../../lib/audit/auditCertificate';
 import { listAuditEvidence } from '../../../../lib/audit/evidenceApi';
 import { formatAuditWindow } from '../../../../lib/audit/dateWindow';
+import { AUDIT_TYPE_LABELS } from '../../../../lib/audit/labels';
 import type { AuditWithContext } from '../../../../context/AuditContext';
 import type { AuditEvidenceListRow } from '../../../../types/audit';
 import DeliverableGenerationPanel from '../deliverables/DeliverableGenerationPanel';
@@ -110,17 +111,19 @@ export default function AuditCertificateSection({ audit, hasReached, isLight }: 
   // failed). Row + report basis + register together: whenever server truth is
   // re-read, the pin and the report state it names are re-read in the same
   // moment — so "the latest is shown" claims after a stale-approve reload are
-  // actually true.
+  // actually true. On a failed ROW read nothing advances: committing a fresh
+  // basis next to the stale row would make the divergence predicate compare
+  // across read moments — the exact mismatch this shape exists to prevent.
   async function refreshFromServer(): Promise<boolean> {
     const [rowFetch, basis, evidence] = await Promise.all([
       fetchAuditCertificate(auditId),
       fetchReportBasis(auditId),
       listAuditEvidence(auditId),
     ]);
-    setReportBasis(basis);
-    if (evidence.ok) setEvidenceRows(evidence.data);
     if (rowFetch.failed) return false;
     setCertificate(rowFetch.certificate);
+    setReportBasis(basis);
+    if (evidence.ok) setEvidenceRows(evidence.data);
     return true;
   }
 
@@ -151,12 +154,18 @@ export default function AuditCertificateSection({ audit, hasReached, isLight }: 
   const saving = savingTabs['audit_certificate'] === true;
   const generating = generatingTab === 'audit_certificate';
 
+  // The one place editor state is seeded from the cached row — the
+  // scope join/split pair must never diverge between entry paths.
+  const seedDrafts = () => {
+    setDraftBody(certificate?.content.body_text ?? '');
+    setDraftScope(certificate?.content.scope.join('\n') ?? '');
+  };
+
   // Exit edit mode and re-seed the editors from the cached row — the one
   // draft-reset, shared by resync, Cancel, and save-error discard.
   const resetDrafts = () => {
     setEditing(false);
-    setDraftBody(certificate?.content.body_text ?? '');
-    setDraftScope(certificate?.content.scope.join('\n') ?? '');
+    seedDrafts();
   };
 
   useDeliverableResync({
@@ -305,12 +314,20 @@ export default function AuditCertificateSection({ audit, hasReached, isLight }: 
               error={generationError}
               isLight={isLight}
               previewLocked={!hasReached}
+              // Three honest states, matching the Approve tooltip: unknown is
+              // never asserted as unapproved, and the legacy pin gap names
+              // its own fix. Gates on digest (the approve predicate), not the
+              // bare approved flag — the engine's 409 uses the same rule.
               lockedReason={
-                reportApproved
+                reportBasis === null
+                  ? 'The report’s approval state couldn’t be read — retry loading'
+                  : reportBasis.digest !== null
                   ? undefined
+                  : reportBasis.approved
+                  ? 'Available once the report is re-approved in Stage 7 (its approved version can’t be identified)'
                   : 'Available once the audit report is approved'
               }
-              privacyNote="Dates, vendor identity, and the outcome line never round-trip through the model — PIQC drafts only the descriptive narrative."
+              privacyNote="The outcome line, certificate date, and the audit record's facts are code-owned — the model never writes them; it drafts only the descriptive narrative."
               onGenerate={() => void runGeneration('audit_certificate')}
             />
 
@@ -395,8 +412,9 @@ export default function AuditCertificateSection({ audit, hasReached, isLight }: 
                     The audit report changed — or is no longer approved — since
                     this certificate was approved.
                   </span>{' '}
-                  Re-review once the report is approved again, then approve the
-                  certificate to re-pin it.
+                  Once the report is approved again: revise the certificate
+                  narrative and save (any saved change returns it to Draft),
+                  then approve it again to re-pin it.
                 </p>
               </div>
             )}
@@ -409,7 +427,8 @@ export default function AuditCertificateSection({ audit, hasReached, isLight }: 
                   {audit.audit_name}
                 </p>
                 <p className={`${mutedColor} text-[11px] mt-1`} data-testid="audit-certificate-facts">
-                  Vendor: {audit.vendor_name || '—'} · Audit type: {audit.audit_type}
+                  Vendor: {audit.vendor_name || '—'} · Audit type:{' '}
+                  {AUDIT_TYPE_LABELS[audit.audit_type]}
                   {auditWindow ? ` · Audit dates: ${auditWindow}` : ''}
                   {audit.protocol_code ? ` · Protocol: ${audit.protocol_code}` : ''}
                 </p>
@@ -503,8 +522,7 @@ export default function AuditCertificateSection({ audit, hasReached, isLight }: 
                     type="button"
                     data-testid="audit-certificate-edit-button"
                     onClick={() => {
-                      setDraftBody(certificate?.content.body_text ?? '');
-                      setDraftScope(certificate?.content.scope.join('\n') ?? '');
+                      seedDrafts();
                       setEditing(true);
                     }}
                     disabled={!hasReached || generating}
@@ -563,7 +581,13 @@ export default function AuditCertificateSection({ audit, hasReached, isLight }: 
                       : reportBasis === null
                       ? 'Couldn’t verify the report’s approval — retry loading before approving'
                       : reportBasis.digest === null
-                      ? 'The audit report must be approved before the certificate can be'
+                      ? reportBasis.approved
+                        // Legacy pre-fingerprint approval — same fix the
+                        // banner above names; the report IS approved, so
+                        // "must be approved" would send the auditor chasing
+                        // a nonexistent problem.
+                        ? 'The report’s approved version can’t be identified — re-approve it in Stage 7 first'
+                        : 'The audit report must be approved before the certificate can be'
                       : undefined
                   }
                   data-testid="audit-certificate-approve-button"
@@ -577,6 +601,15 @@ export default function AuditCertificateSection({ audit, hasReached, isLight }: 
                 <span className={`${subColor} text-xs`}>
                   Approved {new Date(certificate.approved_at).toLocaleDateString()}
                   {certificate.approved_by_name ? ` · ${certificate.approved_by_name}` : ''}
+                </span>
+              )}
+              {/* The legible half of the pin. Only while un-diverged: equal
+                  digests prove the live report's approved_at IS the pinned
+                  version's; once they differ, the banner tells the story. */}
+              {approved && !diverged && !!certificate?.basis_digest && reportBasis?.approvedAt && (
+                <span className={`${subColor} text-xs`} data-testid="audit-certificate-pinned-line">
+                  · Pinned to the report approved{' '}
+                  {new Date(reportBasis.approvedAt).toLocaleDateString()}
                 </span>
               )}
               {/* !saving: during an in-flight FIRST save the cached row is an

@@ -558,10 +558,12 @@ export function buildLineageGraph(input: LineageInput): LineageGraph {
       trackedObjectType: 'AUDIT_CERTIFICATE_OBJECT',
       objectId: input.auditCertificate.id,
     });
-    // One upstream, one edge: the certificate certifies the approved report
-    // (its approve pins that report's version) — a single provenance edge is
-    // signal here, unlike the findings report's would-be Stage-6 fan.
-    if (input.report) {
+    // One upstream, one edge — gated on the RECORDED provenance fact like
+    // every other provenance edge here (source_risk_summary_id, prefilled
+    // flags): basis_digest is the sealed pin naming which report version the
+    // approve covered. A draft certificate pins nothing yet, so it claims
+    // nothing.
+    if (input.report && input.auditCertificate.basis_digest) {
       edges.push({
         fromId: certId,
         toId: nid('REPORT', input.report.id),

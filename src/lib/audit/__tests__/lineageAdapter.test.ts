@@ -297,17 +297,17 @@ describe('buildLineageGraph', () => {
     expect(g.edges.filter((e) => e.fromId === n?.id)).toHaveLength(0);
   });
 
-  it('the audit certificate renders as a Stage-8 node with one certifies edge to the report (PR-D6)', () => {
+  it('an APPROVED certificate with a sealed pin renders one certifies edge to the report (PR-D6)', () => {
     const input = fullInput();
     input.auditCertificate = {
       id: 'cert1',
       audit_id: 'a1',
       content: { body_text: 'This certificate records that…', scope: ['data_management'] },
-      approval_status: 'DRAFT',
-      approved_at: null,
-      approved_by_name: null,
+      approval_status: 'APPROVED',
+      approved_at: '2026-09-07T00:00:00Z',
+      approved_by_name: 'QA Lead',
       updated_at: '2026-09-07T00:00:00Z',
-      basis_digest: null,
+      basis_digest: 'fp-1',
       generation_refs: null,
       grounding_snapshot: null,
       generated_at: '2026-09-07T00:00:00Z',
@@ -323,8 +323,8 @@ describe('buildLineageGraph', () => {
     // Generated → PIQC origin line; the outcome always declared QA-owned.
     expect(n?.origin).toContain('PIQC drafted the descriptive record');
     // Exactly ONE provenance edge — the certificate's single upstream is the
-    // report whose version its approve pins (unlike the findings report's
-    // deliberate no-fan).
+    // report whose version its sealed basis_digest names (unlike the
+    // findings report's deliberate no-fan).
     const out = g.edges.filter((e) => e.fromId === n?.id);
     expect(out).toEqual([
       {
@@ -336,9 +336,8 @@ describe('buildLineageGraph', () => {
     ]);
   });
 
-  it('the certifies edge is dropped when the report row is missing (dangling-edge rule)', () => {
+  it('a DRAFT certificate pins nothing and claims no certifies edge', () => {
     const input = fullInput();
-    input.report = null;
     input.auditCertificate = {
       id: 'cert1',
       audit_id: 'a1',
@@ -348,6 +347,30 @@ describe('buildLineageGraph', () => {
       approved_by_name: null,
       updated_at: '2026-09-07T00:00:00Z',
       basis_digest: null,
+      generation_refs: null,
+      grounding_snapshot: null,
+      generated_at: null,
+    };
+    const g = buildLineageGraph(input);
+    const n = g.nodes.find((x) => x.entityType === 'AUDIT_CERTIFICATE');
+    expect(n).toBeDefined();
+    // Provenance edges are gated on RECORDED facts; an unsealed basis is
+    // not a recorded fact.
+    expect(g.edges.filter((e) => e.fromId === n?.id)).toHaveLength(0);
+  });
+
+  it('a sealed certificate whose report row is missing draws no edge (report gate)', () => {
+    const input = fullInput();
+    input.report = null;
+    input.auditCertificate = {
+      id: 'cert1',
+      audit_id: 'a1',
+      content: { body_text: '…', scope: [] },
+      approval_status: 'APPROVED',
+      approved_at: '2026-09-07T00:00:00Z',
+      approved_by_name: 'QA Lead',
+      updated_at: '2026-09-07T00:00:00Z',
+      basis_digest: 'fp-1',
       generation_refs: null,
       grounding_snapshot: null,
       generated_at: null,

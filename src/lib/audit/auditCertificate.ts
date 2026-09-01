@@ -113,12 +113,16 @@ export async function fetchAuditCertificate(auditId: string): Promise<AuditCerti
 
 /** The certificate's approval basis, read from ONE report_draft_objects row so
  *  the displayed report state and the pinned digest cannot disagree. `digest`
- *  mirrors the server's REPORT_VERSION arm: the readiness_fingerprint while
- *  the report is APPROVED, else null — null means the certificate cannot be
- *  approved (an approval that cannot name which report it certifies is the
- *  dishonest latch this kind exists to prevent). A missing row reports
- *  approved: false. Returns null when the read errored (basis UNKNOWN —
- *  approve must stay blocked and the caller renders a retry banner). */
+ *  is a deliberate JS mirror of audit_mode_report_version_digest
+ *  (20260907000100 — the predicate's canonical home, which the approve arm
+ *  calls): the readiness_fingerprint while the report is APPROVED, else null.
+ *  The mirror (not the RPC) is used so error, absence, and unapproved stay
+ *  three distinguishable states — change the two together; the unit tests pin
+ *  both sides. null digest means the certificate cannot be approved (an
+ *  approval that cannot name which report it certifies is the dishonest
+ *  latch this kind exists to prevent). A missing row reports approved:
+ *  false. Returns null when the read errored (basis UNKNOWN — approve must
+ *  stay blocked and the caller renders a retry banner). */
 export interface ReportBasis {
   approved: boolean;
   approvedAt: string | null;

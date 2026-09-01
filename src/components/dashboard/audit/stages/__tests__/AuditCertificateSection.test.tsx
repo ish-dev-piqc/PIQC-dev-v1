@@ -114,7 +114,9 @@ describe('load + code-owned frame', () => {
     // Facts header derives from the audit record — never stored content.
     const facts = screen.getByTestId('audit-certificate-facts');
     expect(facts.textContent).toContain('Acme ePRO GmbH');
-    expect(facts.textContent).toContain('REMOTE');
+    // Human label, never the raw enum — this block is document text.
+    expect(facts.textContent).toContain('Audit type: Remote');
+    expect(facts.textContent).not.toContain('REMOTE');
     expect(facts.textContent).toContain('Sep 15 – 17, 2026');
     expect(facts.textContent).toContain('BRT-2');
     // Code-owned template lines — the outcome and date are QA's, not PIQC's.
@@ -135,7 +137,7 @@ describe('load + code-owned frame', () => {
 });
 
 describe('approve — the report-version pin', () => {
-  it('is blocked while the report basis is unknown (read failed), with the banner', async () => {
+  it('is blocked while the report basis is unknown (read failed), with the banner — and the CTA says unknown, not unapproved', async () => {
     m(fetchReportBasis).mockResolvedValue(null);
     renderSection();
     expect(await screen.findByTestId('audit-certificate-basis-unknown')).toBeTruthy();
@@ -144,6 +146,11 @@ describe('approve — the report-version pin', () => {
     )) as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
     expect(btn.title).toContain('Couldn’t verify the report’s approval');
+    // The generate CTA must not assert "not approved" about a state it
+    // could not read.
+    const generate = screen.getByTestId('audit_certificate-generate-button') as HTMLButtonElement;
+    expect(generate.disabled).toBe(true);
+    expect(generate.title).toContain('couldn’t be read');
   });
 
   it('is blocked while the report is unapproved, and the generate CTA carries the sequence-gate title', async () => {
@@ -159,7 +166,7 @@ describe('approve — the report-version pin', () => {
     expect(generate.title).toBe('Available once the audit report is approved');
   });
 
-  it('names the legacy approved-without-fingerprint report out loud and stays blocked', async () => {
+  it('names the legacy approved-without-fingerprint report out loud and stays blocked — never claiming the report is unapproved', async () => {
     m(fetchReportBasis).mockResolvedValue({
       approved: true,
       approvedAt: '2026-01-01T00:00:00+00:00',
@@ -167,9 +174,15 @@ describe('approve — the report-version pin', () => {
     });
     renderSection();
     expect(await screen.findByTestId('audit-certificate-legacy-report')).toBeTruthy();
-    expect(
-      (screen.getByTestId('audit-certificate-approve-button') as HTMLButtonElement).disabled,
-    ).toBe(true);
+    const approve = screen.getByTestId('audit-certificate-approve-button') as HTMLButtonElement;
+    expect(approve.disabled).toBe(true);
+    // The report IS approved here — the tooltip must name the version-pin
+    // gap and its fix, not send the auditor to approve an approved report.
+    expect(approve.title).toContain('re-approve it in Stage 7');
+    expect(approve.title).not.toContain('must be approved');
+    const generate = screen.getByTestId('audit_certificate-generate-button') as HTMLButtonElement;
+    expect(generate.disabled).toBe(true);
+    expect(generate.title).toContain('re-approved in Stage 7');
   });
 
   it('passes BOTH pins — the certificate version and the held report fingerprint', async () => {
@@ -256,13 +269,27 @@ describe('save honesty (PR-1 posture)', () => {
 });
 
 describe('divergence + preview lock', () => {
-  it('sealed digest ≠ live report fingerprint on an approved certificate banners divergence', async () => {
+  it('an un-diverged approved certificate shows the legible pinned-version line', async () => {
+    m(fetchAuditCertificate).mockResolvedValue({
+      certificate: { ...CERT, approval_status: 'APPROVED', basis_digest: 'fp-live' },
+      failed: false,
+    });
+    renderSection();
+    const pinned = await screen.findByTestId('audit-certificate-pinned-line');
+    // Equal digests prove the live report's approved_at IS the pinned
+    // version's, so the date is honest.
+    expect(pinned.textContent).toContain('Pinned to the report approved');
+    expect(screen.queryByTestId('audit-certificate-diverged')).toBeNull();
+  });
+
+  it('sealed digest ≠ live report fingerprint on an approved certificate banners divergence and hides the pinned line', async () => {
     m(fetchAuditCertificate).mockResolvedValue({
       certificate: { ...CERT, approval_status: 'APPROVED', basis_digest: 'fp-sealed' },
       failed: false,
     });
     renderSection();
     expect(await screen.findByTestId('audit-certificate-diverged')).toBeTruthy();
+    expect(screen.queryByTestId('audit-certificate-pinned-line')).toBeNull();
   });
 
   it('an approved certificate whose report approval was voided also banners divergence', async () => {

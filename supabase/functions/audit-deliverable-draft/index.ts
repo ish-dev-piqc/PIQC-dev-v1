@@ -442,7 +442,7 @@ async function loadScopeAreas(
     .eq("audit_id", auditId)
     .maybeSingle();
   if (riskRes.error) {
-    log("warn", "audit_deliverable_draft.gap_context.risk_summary_read_error", {
+    log("warn", "audit_deliverable_draft.scope_areas.risk_summary_read_error", {
       request_id: requestId, error: String(riskRes.error.message),
     });
   }
@@ -459,7 +459,7 @@ async function loadScopeAreas(
       .select("protocol_risk_objects(section_identifier, section_title, operational_domain_tag)")
       .eq("risk_summary_id", riskSummaryId);
     if (junctionErr) {
-      log("warn", "audit_deliverable_draft.gap_context.junction_read_error", {
+      log("warn", "audit_deliverable_draft.scope_areas.junction_read_error", {
         request_id: requestId, error: String(junctionErr.message),
       });
     }
@@ -711,11 +711,15 @@ Deno.serve(async (req: Request) => {
   // report is not approved would describe an audit that has not concluded.
   // Runs before any model spend. Fails CLOSED on read error: an unreadable
   // report is not an unapproved one, but it cannot prove approval either.
-  // The client hides the CTA on the same predicate; this check is the gate.
+  // The predicate matches the approve pin's (audit_mode_report_version_digest:
+  // fingerprint-while-approved) — a legacy report approved before version
+  // pinning existed can never yield an approvable certificate, so spending a
+  // generation on it would only manufacture a dead end. The client locks the
+  // CTA on the same predicate; this check is the gate.
   if (kind === "audit_certificate") {
     const { data: reportRow, error: reportErr } = await supabase
       .from("report_draft_objects")
-      .select("approval_status")
+      .select("approval_status, readiness_fingerprint")
       .eq("audit_id", auditId)
       .maybeSingle();
     if (reportErr) {
@@ -726,7 +730,11 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({ error: "The audit report could not be read — try again" }),
         { status: 503, headers: jsonHeaders });
     }
-    if (!reportRow || reportRow.approval_status !== "APPROVED") {
+    if (
+      !reportRow ||
+      reportRow.approval_status !== "APPROVED" ||
+      typeof reportRow.readiness_fingerprint !== "string"
+    ) {
       log("info", "audit_deliverable_draft.report_not_approved", {
         request_id: requestId, audit_id: auditId,
       });
@@ -899,6 +907,15 @@ Deno.serve(async (req: Request) => {
   const docTitles = new Map(evidenceDocs.map((d) => [d.document_id, d.title]));
   const gapContext = await gapContextPromise;
   const certificateScopeAreas = await certScopeAreasPromise;
+  if (certificateScopeAreas !== null) {
+    // Zero areas here is either a genuinely empty risk summary or a failed
+    // read (the scope_areas.* warns above say which) — the count makes a
+    // hollow-scope certificate diagnosable per request.
+    log("info", "audit_deliverable_draft.certificate_context", {
+      request_id: requestId,
+      scope_area_count: certificateScopeAreas.length,
+    });
+  }
   if (gapContext) {
     log("info", "audit_deliverable_draft.gap_context", {
       request_id: requestId,

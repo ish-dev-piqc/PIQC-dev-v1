@@ -10,18 +10,21 @@
 -- 'REPORT_VERSION'. The certificate's latch has two pins:
 --   - updated_at CAS           → the certificate text the reviewer saw
 --   - report fingerprint CAS   → WHICH approved Stage-7 report they saw. The
---     live digest is report_draft_objects.readiness_fingerprint, but only
---     while approval_status = 'APPROVED' — the fingerprint is server-sealed
---     by audit_mode_approve_report_draft (20260730000000) and nulled by the
+--     live digest is audit_mode_report_version_digest (below):
+--     report_draft_objects.readiness_fingerprint, but only while
+--     approval_status = 'APPROVED' — the fingerprint is server-sealed by
+--     audit_mode_approve_report_draft (20260730000000) and nulled by the
 --     report upsert's demote-on-edit, so it is precisely "the version a
 --     human approved". Unapproved / absent / legacy-unfingerprinted report
 --     → live digest NULL → any pin mismatches → the certificate cannot be
 --     approved until the report is (re-)approved.
 -- The verified digest seals into basis_digest; demote-on-edit clears it
 -- (the generic upsert's basis clear is kind-agnostic — not replaced here).
--- A report demoted between the digest check and the seal UPDATE falls to the
--- client divergence re-check (live fingerprint vs basis_digest), the same
--- documented window as ENTRY_SET (20260906000100) and GATE_REPORT_DIVERGED.
+-- Unlike ENTRY_SET (whose basis spans another table's row SET, so no lock
+-- can cover it), this basis is ONE row — the approve arm takes FOR SHARE on
+-- it, so a concurrent report demote/re-approve cannot land between the
+-- digest check and the seal. The client divergence re-check still covers
+-- everything after commit, same doctrine as GATE_REPORT_DIVERGED.
 --
 -- audit_mode_deliverable_kind_config and audit_mode_approve_deliverable are
 -- CREATE OR REPLACEd in full (every existing arm kept verbatim; behavior for
@@ -31,6 +34,33 @@
 -- REVOKE/GRANT block. Plus audit_mode_can_view_tracked_object replaced in
 -- full, adding the AUDIT_CERTIFICATE_OBJECT branch.
 -- =============================================================================
+
+
+-- -----------------------------------------------------------------------------
+-- The certificate's live basis — the ONE home of the "fingerprint while
+-- approved" predicate. The approve arm below calls it; the client's
+-- fetchReportBasis (src/lib/audit/auditCertificate.ts) mirrors it in JS to
+-- keep its error/absence distinction — change the two together.
+-- SECURITY INVOKER: under RLS a non-owner sees no row and gets NULL —
+-- harmless, since only the owner can approve anything with it.
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION audit_mode_report_version_digest(p_audit_id uuid)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY INVOKER
+STABLE
+SET search_path = public
+AS $$
+DECLARE
+  v_digest text;
+BEGIN
+  SELECT CASE WHEN r.approval_status = 'APPROVED' THEN r.readiness_fingerprint END
+    INTO v_digest
+    FROM report_draft_objects r
+   WHERE r.audit_id = p_audit_id;
+  RETURN v_digest;
+END;
+$$;
 
 
 -- -----------------------------------------------------------------------------
@@ -277,49 +307,57 @@ BEGIN
     RAISE EXCEPTION '% % not found', v_cfg.o_noun, p_id USING ERRCODE = 'P0002';
   END IF;
 
+  -- Basis pins, fail-closed at every layer: a basis kind without a pin is
+  -- refused; a pin for a basis-less kind is refused (silently ignoring it
+  -- would read as protection that quietly isn't there — the trap for the day
+  -- the five legacy kinds migrate onto this pair); and a basis token with no
+  -- verification arm below is refused AFTER the chain rather than sliding
+  -- into an unpinned approve.
+  IF v_cfg.o_basis IS NOT NULL AND p_expected_basis_digest IS NULL THEN
+    RAISE EXCEPTION 'Approve requires the reviewed basis (expected_basis_digest) for kind %', p_kind
+      USING ERRCODE = '22023', HINT = 'MISSING_EXPECTED_BASIS';
+  ELSIF v_cfg.o_basis IS NULL AND p_expected_basis_digest IS NOT NULL THEN
+    RAISE EXCEPTION 'Deliverable kind % declares no approval basis — expected_basis_digest must not be passed', p_kind
+      USING ERRCODE = '22023';
+  END IF;
+
   IF v_cfg.o_basis = 'ENTRY_SET' THEN
-    IF p_expected_basis_digest IS NULL THEN
-      RAISE EXCEPTION 'Approve requires the observation set being reviewed (expected_basis_digest)'
-        USING ERRCODE = '22023', HINT = 'MISSING_EXPECTED_BASIS';
-    END IF;
     v_live_digest := audit_mode_entry_set_digest((v_before->>'audit_id')::uuid);
     IF v_live_digest IS DISTINCT FROM p_expected_basis_digest THEN
       RAISE EXCEPTION 'The observations this deliverable is built from changed since they were reviewed'
         USING ERRCODE = '40001', HINT = 'STALE_BASIS';
     END IF;
   ELSIF v_cfg.o_basis = 'REPORT_VERSION' THEN
-    IF p_expected_basis_digest IS NULL THEN
-      RAISE EXCEPTION 'Approve requires the approved report version being reviewed (expected_basis_digest)'
-        USING ERRCODE = '22023', HINT = 'MISSING_EXPECTED_BASIS';
-    END IF;
-    -- The live digest is the fingerprint the report's OWN approve sealed,
-    -- and only while that approval stands: an unapproved, absent, or
-    -- legacy-unfingerprinted report yields NULL, which mismatches every
-    -- pin — the certificate cannot be approved until the report is.
-    SELECT CASE WHEN r.approval_status = 'APPROVED' THEN r.readiness_fingerprint END
-      INTO v_live_digest
-      FROM report_draft_objects r
-     WHERE r.audit_id = (v_before->>'audit_id')::uuid;
+    -- Lock the basis row first (this basis IS one row, unlike ENTRY_SET's
+    -- unlockable row set): a concurrent report demote/re-approve now blocks
+    -- until this approve commits, so the digest verified here is the digest
+    -- sealed below. Then read through the canonical predicate: an
+    -- unapproved, absent, or legacy-unfingerprinted report yields NULL,
+    -- which mismatches every pin — the certificate cannot be approved until
+    -- the report is (re-)approved.
+    PERFORM 1 FROM report_draft_objects r
+      WHERE r.audit_id = (v_before->>'audit_id')::uuid
+      FOR SHARE;
+    v_live_digest := audit_mode_report_version_digest((v_before->>'audit_id')::uuid);
     IF v_live_digest IS NULL OR v_live_digest IS DISTINCT FROM p_expected_basis_digest THEN
       RAISE EXCEPTION 'The approved report this certificate certifies changed or is no longer approved'
         USING ERRCODE = '40001', HINT = 'STALE_BASIS';
     END IF;
-  ELSIF p_expected_basis_digest IS NOT NULL THEN
-    -- A basis pin passed for a kind that declares none is a caller bug, and
-    -- silently ignoring it would read as protection that quietly isn't there
-    -- (the trap for the day the five legacy kinds migrate onto this pair).
-    RAISE EXCEPTION 'Deliverable kind % declares no approval basis — expected_basis_digest must not be passed', p_kind
-      USING ERRCODE = '22023';
+  END IF;
+
+  -- Fail closed for basis tokens this function does not know: kind_config
+  -- declaring a token with no verification arm above must never produce an
+  -- unpinned or NULL-sealed approve.
+  IF v_cfg.o_basis IS NOT NULL AND v_live_digest IS NULL THEN
+    RAISE EXCEPTION 'Basis token % has no verification arm in audit_mode_approve_deliverable', v_cfg.o_basis
+      USING ERRCODE = 'XX000';
   END IF;
 
   -- Atomic CAS in the UPDATE predicate (see approve_confirmation_letter).
-  -- Basis kinds seal the verified digest in the same statement; a concurrent
-  -- basis change between the check above and this UPDATE is caught by the
-  -- divergence re-check (live digest vs basis_digest), not here. Gated on
-  -- the SAME tokens as the verification blocks above — a future basis token
-  -- must extend the verification, this arm, and the upsert's clear together,
-  -- or it could seal a digest it never verified.
-  IF v_cfg.o_basis = 'ENTRY_SET' OR v_cfg.o_basis = 'REPORT_VERSION' THEN
+  -- Basis kinds seal the verified digest in the same statement; the guard
+  -- above proves v_live_digest was produced by a real verification arm, so
+  -- this arm generalizes safely over every declared basis.
+  IF v_cfg.o_basis IS NOT NULL THEN
     EXECUTE format(
       'UPDATE %I SET
          approval_status = ''APPROVED'',
@@ -431,8 +469,16 @@ $$;
 
 -- -----------------------------------------------------------------------------
 -- Grants — anon revoked per the 20260727000000 precedent. The replaced
--- functions keep their existing grants (CREATE OR REPLACE preserves ACLs);
--- only the new apply RPC needs the block.
+-- upsert/approve/can_view keep their existing grants (CREATE OR REPLACE
+-- preserves ACLs, and their signatures are unchanged). The new functions get
+-- the block — and so does audit_mode_deliverable_kind_config, which
+-- 20260906000100 left on PostgreSQL's default EXECUTE TO PUBLIC: no data
+-- leaks through it (RLS holds), but the kind→table map and which kinds carry
+-- a basis pin are reconnaissance anon has no business reading.
 -- -----------------------------------------------------------------------------
+REVOKE EXECUTE ON FUNCTION audit_mode_report_version_digest(uuid)                                         FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION audit_mode_deliverable_kind_config(text)                                       FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION audit_mode_apply_audit_certificate_generation(uuid, jsonb, jsonb, jsonb, text) FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION audit_mode_report_version_digest(uuid)                                         TO authenticated;
+GRANT  EXECUTE ON FUNCTION audit_mode_deliverable_kind_config(text)                                       TO authenticated;
 GRANT  EXECUTE ON FUNCTION audit_mode_apply_audit_certificate_generation(uuid, jsonb, jsonb, jsonb, text) TO authenticated;

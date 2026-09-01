@@ -102,7 +102,7 @@ STRUCTURE:
 - "body_text" is the certificate narrative: what audit was conducted (purpose and audit type), the vendor service context, what the audit covered (use SCOPE AREAS where provided), and the standards it was conducted against. Formal, descriptive, and even.
 - "scope" is a list of short scope lines — the areas the audit covered, from SCOPE AREAS where provided.
 - The certificate NEVER states a result: no outcome, no pass/fail, no adequacy or severity language, no findings counts, no conclusions about the vendor. The system appends the outcome line ("[Outcome: to be determined by QA]") and the certificate date line itself — do not write outcome, result, or date lines of any kind.
-- Do not state specific calendar dates and do not name the vendor organization — the system renders the audit's dates and identity from its own record. Refer to "the vendor" / "the audited service".
+- Do not state specific calendar dates and do not name the vendor organization — the system renders the audit's dates and identity from its own record. Refer to "the vendor" / "the audited service". THIS RULE OVERRIDES THE GROUNDING PERMISSION BELOW: even when a cited passage or a document title contains a calendar date or an organization's name, it stays out of your output.
 - No signature blocks, no sign-off fields, no attestation language ("hereby certifies") — this is a descriptive record, not an attestation.
 ${SHARED_RULES}
 REVISION MODE (when CURRENT CERTIFICATE is provided):

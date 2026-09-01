@@ -165,6 +165,9 @@ export default function DeliverableGenerationPanel({
           // to replace the scratch form.
           disabled={generating || (editing && !!deliverable) || previewLocked || !!lockedReason}
           onClick={onGenerate}
+          // Title precedence: the stage-preview lock outranks kind-specific
+          // locks (previewing from ahead is the reason everything is locked,
+          // whatever else is also true), which outrank the edit guard.
           title={
             previewLocked
               ? 'Available when the audit reaches this stage'
