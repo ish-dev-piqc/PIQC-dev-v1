@@ -1,5 +1,5 @@
 ---
-status: active
+status: in-review
 feature: vendor-notes-pad
 owner: sixonelabs-piqc
 branch: sixonelabs-piqc/vendor-notes-pad
