@@ -378,6 +378,15 @@ export function buildLineageGraph(input: LineageInput): LineageGraph {
   }
 
   // --- Stage 6: workspace entries (findings/observations) ----------------------------
+  // The origin line names the provenance an accepted candidate carries
+  // (fieldwork lane); a hand-typed entry keeps the plain line.
+  const entryOriginLine = (entry: MockWorkspaceEntry): string => {
+    if (entry.origin === 'AUDITOR') return `Recorded during Audit conduct (${entry.vendor_domain}).`;
+    const n = entry.source_note_ids.length;
+    const from = n > 0 ? `${n} fieldwork ${n === 1 ? 'note' : 'notes'}` : 'filed evidence';
+    const accepted = entry.origin === 'PIQC_EDITED' ? 'edited and accepted' : 'accepted';
+    return `PIQC-drafted from ${from} during Audit conduct (${entry.vendor_domain}); ${accepted} by the auditor.`;
+  };
   for (const entry of input.entries) {
     const entryId = nid('WORKSPACE_ENTRY', entry.id);
     const isFinding = entry.provisional_classification === 'FINDING';
@@ -391,7 +400,7 @@ export function buildLineageGraph(input: LineageInput): LineageGraph {
       statusTone: isFinding ? 'attention' : 'neutral',
       parentId: auditNodeId,
       stage: 6,
-      origin: `Recorded during Audit conduct (${entry.vendor_domain}).`,
+      origin: entryOriginLine(entry),
       trackedObjectType: 'AUDIT_WORKSPACE_ENTRY_OBJECT',
       objectId: entry.id,
     });

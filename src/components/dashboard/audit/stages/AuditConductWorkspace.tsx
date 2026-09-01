@@ -38,6 +38,7 @@ import HistoryDrawer from '../HistoryDrawer';
 import StagePreviewNotice from '../StagePreviewNotice';
 import VendorNotesPad from './vendor/VendorNotesPad';
 import VendorCandidatePanel from './vendor/VendorCandidatePanel';
+import EntryProvenance from './vendor/EntryProvenance';
 import SourceTruthListDrawer from '../../../sotr/SourceTruthListDrawer';
 import SourceTruthDrawer from '../../../sotr/SourceTruthDrawer';
 import { formatExtractedValue } from '../../../sotr/WorksheetItemRow';
@@ -179,6 +180,8 @@ export default function AuditConductWorkspace() {
   // audit's read — that reads as loading here, never as the wrong notes.
   const notesForAudit: { status: 'loading' | 'ready' | 'failed'; notes: AuditNoteObject[] } =
     notesState.auditId === auditId ? notesState : { status: 'loading', notes: [] };
+  // The same read feeds each row's provenance chain (slice 3).
+  const notesById = new Map(notesForAudit.notes.map((n) => [n.id, n]));
   const entries = entriesByAudit[auditId] ?? [];
   const auditProtocolRisks = protocolRisks[auditId] ?? [];
 
@@ -488,6 +491,7 @@ export default function AuditConductWorkspace() {
                 onEdit={() => openEdit(e)}
                 previewLocked={!hasReached}
                 onHistoryClick={() => setHistoryTarget({ objectId: e.id })}
+                notesById={notesById}
                 isLight={isLight}
                 cardBg={cardBg}
                 headingColor={headingColor}
@@ -849,6 +853,8 @@ interface EntryRowProps {
   /** One-ahead preview (UX2): hide the edit affordance, keep the record readable. */
   previewLocked: boolean;
   onHistoryClick: () => void;
+  /** The workspace's notes read, for the provenance chain of an accepted candidate. */
+  notesById: Map<string, AuditNoteObject>;
   isLight: boolean;
   cardBg: string;
   headingColor: string;
@@ -862,6 +868,7 @@ function EntryRow({
   onEdit,
   previewLocked,
   onHistoryClick,
+  notesById,
   isLight,
   cardBg,
   headingColor,
@@ -916,6 +923,10 @@ function EntryRow({
 
       {/* Observation text */}
       <p className={`${headingColor} text-sm leading-relaxed mt-2`}>{entry.observation_text}</p>
+
+      {/* Provenance (fieldwork lane, slice 3) — renders nothing for a
+          hand-typed entry. */}
+      <EntryProvenance entry={entry} notesById={notesById} isLight={isLight} />
 
       {/* Footer: checkpoint, history, attribution */}
       <div className={`flex items-center gap-3 mt-3 flex-wrap text-[11px] ${mutedColor}`}>

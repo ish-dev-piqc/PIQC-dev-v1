@@ -142,6 +142,11 @@ function fullInput(): LineageInput {
         inherited_time_sensitivity: true,
         risk_context_outdated: false,
         source_extracted_item_id: null,
+        origin: 'AUDITOR',
+        source_note_ids: [],
+        evidence_refs: [],
+        protocol_ref: null,
+        drafting_engine: null,
         created_by_name: 'Auditor',
         created_at: '2026-07-02T00:00:00Z',
       },
@@ -392,6 +397,31 @@ describe('buildLineageGraph', () => {
 // =============================================================================
 // Issues & CAPA layer (Phase 3) — triage lineage off Stage 6.
 // =============================================================================
+describe('buildLineageGraph — Stage-6 provenance (fieldwork lane)', () => {
+  it('names the provenance of an accepted candidate; a hand-typed entry keeps the plain line', () => {
+    const base = fullInput();
+    const typed = base.entries[0];
+    const input: LineageInput = {
+      ...base,
+      entries: [
+        typed,
+        { ...typed, id: 'e2', origin: 'PIQC_EDITED', source_note_ids: ['n1', 'n2'] },
+        { ...typed, id: 'e3', origin: 'PIQC_DRAFTED', source_note_ids: [] },
+      ],
+    };
+    const g = buildLineageGraph(input);
+    const originOf = (id: string) =>
+      g.nodes.find((n) => n.entityType === 'WORKSPACE_ENTRY' && n.objectId === id)?.origin;
+    expect(originOf('e1')).toBe('Recorded during Audit conduct (Validation).');
+    expect(originOf('e2')).toBe(
+      'PIQC-drafted from 2 fieldwork notes during Audit conduct (Validation); edited and accepted by the auditor.',
+    );
+    expect(originOf('e3')).toBe(
+      'PIQC-drafted from filed evidence during Audit conduct (Validation); accepted by the auditor.',
+    );
+  });
+});
+
 describe('buildLineageGraph — issues & CAPA', () => {
   const ISSUE = {
     id: 'i1',

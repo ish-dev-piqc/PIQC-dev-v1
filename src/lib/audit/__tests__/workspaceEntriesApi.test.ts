@@ -355,6 +355,54 @@ describe('fetchWorkspaceEntries — batched read (PR-5)', () => {
       risk_context_outdated: false,
     });
   });
+
+  // Fieldwork lane, slice 3 — the provenance columns (20260909000000) reach
+  // the display shape, and their ABSENCE (pre-apply `select *`) reads as a
+  // hand-typed entry with an empty chain — which is what exists then.
+  it('maps the provenance columns through when present', async () => {
+    const engine = { function: 'audit-observation-draft', model: 'gpt-4o-mini' };
+    const protocolRef = {
+      chunk_id: 'chunk-p1',
+      document_id: 'doc-p',
+      quote: 'any excursion documented and reported to the sponsor',
+      section_heading: '6.3 Storage',
+      page_start: 47,
+      page_end: 47,
+    };
+    const evidence = [{ text: 'Two excursions logged late.', source_note_ids: ['note-a'], source_passages: [] }];
+    mockOrder.mockResolvedValueOnce({
+      data: [
+        makeEntryRow({
+          origin: 'PIQC_EDITED',
+          source_note_ids: ['note-a'],
+          evidence_refs: evidence,
+          protocol_ref: protocolRef,
+          drafting_engine: engine,
+        }),
+      ],
+      error: null,
+    });
+    const entries = await fetchWorkspaceEntries('audit-1');
+    expect(entries[0]).toMatchObject({
+      origin: 'PIQC_EDITED',
+      source_note_ids: ['note-a'],
+      evidence_refs: evidence,
+      protocol_ref: protocolRef,
+      drafting_engine: engine,
+    });
+  });
+
+  it('defaults the provenance fields when the columns are absent (pre-apply pin)', async () => {
+    mockOrder.mockResolvedValueOnce({ data: [makeEntryRow()], error: null });
+    const entries = await fetchWorkspaceEntries('audit-1');
+    expect(entries[0]).toMatchObject({
+      origin: 'AUDITOR',
+      source_note_ids: [],
+      evidence_refs: [],
+      protocol_ref: null,
+      drafting_engine: null,
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

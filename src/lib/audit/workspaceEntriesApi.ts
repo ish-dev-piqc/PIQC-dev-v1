@@ -7,6 +7,7 @@ import type {
   IsaProtocolRef,
   ProvisionalClassification,
   ProvisionalImpact,
+  WorkspaceEntryOrigin,
 } from '../../types/audit';
 
 // =============================================================================
@@ -47,6 +48,15 @@ interface WorkspaceEntryRow {
   risk_context_confirmed_by: string | null;
   /** B2: optional SOTR protocol_extracted_item this finding traces back to. */
   source_extracted_item_id: string | null;
+  // Provenance columns (20260909000000). Optional on the row: absent from
+  // `select *` until the migration applies. The mapper defaults them — true
+  // pre-apply, since the promote RPC that writes anything else does not
+  // exist there yet.
+  origin?: WorkspaceEntryOrigin | null;
+  source_note_ids?: string[] | null;
+  evidence_refs?: CandidateEvidence[] | null;
+  protocol_ref?: IsaProtocolRef | null;
+  drafting_engine?: DraftingEngine | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -97,6 +107,11 @@ function flattenEntry(
     inherited_time_sensitivity: row.inherited_time_sensitivity,
     risk_context_outdated: row.risk_context_outdated,
     source_extracted_item_id: row.source_extracted_item_id,
+    origin: row.origin ?? 'AUDITOR',
+    source_note_ids: row.source_note_ids ?? [],
+    evidence_refs: row.evidence_refs ?? [],
+    protocol_ref: row.protocol_ref ?? null,
+    drafting_engine: row.drafting_engine ?? null,
     created_by_name: creatorNames.get(row.created_by) ?? '(unknown)',
     created_at: row.created_at,
   };

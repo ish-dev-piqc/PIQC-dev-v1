@@ -111,6 +111,11 @@ function entry(): MockWorkspaceEntry {
     inherited_time_sensitivity: null,
     risk_context_outdated: false,
     source_extracted_item_id: null,
+    origin: 'PIQC_DRAFTED',
+    source_note_ids: [NOTE_A],
+    evidence_refs: candidate().evidence,
+    protocol_ref: null,
+    drafting_engine: ENGINE,
     created_by_name: 'Auditor',
     created_at: '2026-09-08T10:00:00Z',
   };
