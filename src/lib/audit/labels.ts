@@ -22,8 +22,6 @@ import type {
   ProvisionalImpact,
   QuestionAnswerType,
   QuestionnaireInstanceStatus,
-  ResponseSource,
-  ResponseStatus,
   TrustPosture,
 } from '../../types/audit';
 
@@ -123,22 +121,6 @@ export const CAPA_STATUS_LABELS: Record<CapaStatus, string> = {
   ACCEPTED: 'Accepted',
 };
 
-export const RESPONSE_STATUS_LABELS: Record<ResponseStatus, string> = {
-  ANSWERED: 'Answered',
-  UNANSWERED: 'Unanswered',
-  PARTIAL: 'Partial',
-  DEFERRED: 'Deferred',
-};
-
-export const RESPONSE_SOURCE_LABELS: Record<ResponseSource, string> = {
-  PENDING: 'Pending',
-  AUDITOR_PREFILL_WEB: 'Pre-filled from web',
-  AUDITOR_PREFILL_PRIOR_AUDIT: 'Pre-filled from prior audit',
-  AUDITOR_AUTHORED: 'Auditor authored',
-  VENDOR: 'Vendor response',
-  NOT_APPLICABLE: 'Not applicable',
-};
-
 // =============================================================================
 // Risk-tagging vocabularies (INTAKE stage)
 // =============================================================================
@@ -192,7 +174,7 @@ export const VENDOR_DEPENDENCY_FLAG_OPTIONS = OPERATIONAL_DOMAIN_OPTIONS;
 // =============================================================================
 
 // Service-type controlled vocab. Mirrors OPERATIONAL_DOMAIN_OPTIONS but is
-// stored on VendorServiceObject.service_type. Kept as a separate const because
+// stored on vendor_service_objects.service_type. Kept as a separate const because
 // the lists may diverge as new vendor categories appear.
 export const SERVICE_TYPE_OPTIONS: ReadonlyArray<{
   value: string;

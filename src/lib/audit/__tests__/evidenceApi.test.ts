@@ -84,30 +84,65 @@ describe('listAuditEvidence', () => {
   it('inner-joins documents filtered to kind AUDIT_EVIDENCE (generation-snapshot parity)', async () => {
     mockOrder.mockResolvedValueOnce({ data: [], error: null });
     await listAuditEvidence('a1');
-    expect(mockSelect.mock.calls[0][0]).toContain('documents!inner(title, status)');
+    expect(mockSelect.mock.calls[0][0]).toContain('documents!inner(title, status, kind)');
     expect(mockEq).toHaveBeenCalledWith('audit_id', 'a1');
     expect(mockEq).toHaveBeenCalledWith('documents.kind', 'AUDIT_EVIDENCE');
   });
 
-  it('flattens the joined document (object form) into list rows', async () => {
+  it('flattens the joined document (object form) into list rows carrying kind', async () => {
     mockOrder.mockResolvedValueOnce({
-      data: [{ ...JOIN_ROW, documents: { title: 'QA SOP v3', status: 'ready' } }],
+      data: [
+        {
+          ...JOIN_ROW,
+          documents: { title: 'QA SOP v3', status: 'ready', kind: 'AUDIT_EVIDENCE' },
+        },
+      ],
       error: null,
     });
     const res = await listAuditEvidence('a1');
     expect(res).toEqual({
       ok: true,
-      data: [{ ...JOIN_ROW, title: 'QA SOP v3', status: 'ready' }],
+      data: [{ ...JOIN_ROW, title: 'QA SOP v3', status: 'ready', kind: 'AUDIT_EVIDENCE' }],
     });
   });
 
   it('normalizes the array form PostgREST may return for the join', async () => {
     mockOrder.mockResolvedValueOnce({
-      data: [{ ...JOIN_ROW, documents: [{ title: 'QA SOP v3', status: 'ready' }] }],
+      data: [
+        {
+          ...JOIN_ROW,
+          documents: [{ title: 'QA SOP v3', status: 'ready', kind: 'AUDIT_EVIDENCE' }],
+        },
+      ],
       error: null,
     });
     const res = await listAuditEvidence('a1');
     expect(res.ok && res.data[0].title).toBe('QA SOP v3');
+  });
+
+  it('drops a foreign-kind row that survives the join — the JS mirror of the engine filter (PR-3)', async () => {
+    // If a PostgREST embed-behavior change ever stops the .eq filter from
+    // excluding the row, the mapper's same-language predicate still must.
+    mockOrder.mockResolvedValueOnce({
+      data: [
+        {
+          ...JOIN_ROW,
+          documents: { title: 'QA SOP v3', status: 'ready', kind: 'AUDIT_EVIDENCE' },
+        },
+        {
+          ...JOIN_ROW,
+          document_id: 'doc-protocol',
+          documents: { title: 'Protocol v2', status: 'ready', kind: 'PROTOCOL' },
+        },
+      ],
+      error: null,
+    });
+    const res = await listAuditEvidence('a1');
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data).toHaveLength(1);
+      expect(res.data[0].title).toBe('QA SOP v3');
+    }
   });
 
   it('returns { ok: false, error } on a query error (never a silent empty list)', async () => {
@@ -165,7 +200,12 @@ describe('ingestAuditEvidence', () => {
     });
     expect(res).toEqual({
       ok: true,
-      data: { ...JOIN_ROW, title: 'Completed questionnaire', status: 'ready' },
+      data: {
+        ...JOIN_ROW,
+        title: 'Completed questionnaire',
+        status: 'ready',
+        kind: 'AUDIT_EVIDENCE',
+      },
     });
   });
 

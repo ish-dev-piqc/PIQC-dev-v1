@@ -1,6 +1,15 @@
 import { supabase } from '../supabase';
 import type { Result } from './auditCreationApi';
-import type { AuditEvidenceListRow, AuditSourceDocument } from '../../types/audit';
+import type {
+  AuditEvidenceListRow,
+  AuditSourceDocument,
+  DocumentKind,
+} from '../../types/audit';
+
+// The register's kind invariant, typed through DocumentKind so a rename of
+// the enum member breaks compilation here instead of silently diverging from
+// the engine's normalizeRegister predicate.
+const AUDIT_EVIDENCE_KIND: DocumentKind = 'AUDIT_EVIDENCE';
 
 // =============================================================================
 // Audit Mode evidence register API (PR-B, text/paste slice).
@@ -110,10 +119,10 @@ export async function listAuditEvidence(
   const { data, error } = await supabase
     .from('audit_source_documents')
     .select(
-      'audit_id, document_id, added_by, added_at, source_type, source_system, source_locator, include_in_generation, documents!inner(title, status)',
+      'audit_id, document_id, added_by, added_at, source_type, source_system, source_locator, include_in_generation, documents!inner(title, status, kind)',
     )
     .eq('audit_id', auditId)
-    .eq('documents.kind', 'AUDIT_EVIDENCE')
+    .eq('documents.kind', AUDIT_EVIDENCE_KIND)
     .order('added_at', { ascending: false });
 
   if (error) {
@@ -121,24 +130,37 @@ export async function listAuditEvidence(
     return { ok: false, error: error.message };
   }
 
-  type JoinedDoc = { title: string; status: AuditEvidenceListRow['status'] };
+  type JoinedDoc = {
+    title: string;
+    status: AuditEvidenceListRow['status'];
+    kind: DocumentKind;
+  };
   const rows = (data ?? []) as Array<
     AuditSourceDocument & { documents: JoinedDoc | JoinedDoc[] | null }
   >;
 
   // PostgREST may return the joined row as an array or a single object
   // depending on the version + relationship cardinality. Normalize both.
+  // The kind predicate is ALSO applied here in JS — the same-language mirror
+  // of the engine's normalizeRegister (`if (!doc || doc.kind !== ...) drop`)
+  // — so a PostgREST embed-behavior change can never silently break the
+  // invariant client-side. A NULL embed drops too: an unknown row must never
+  // be coerced into the very kind the filter admits.
   return {
     ok: true,
-    data: rows.map((row) => {
+    data: rows.flatMap((row) => {
       const doc = Array.isArray(row.documents) ? row.documents[0] : row.documents;
+      if (!doc || doc.kind !== AUDIT_EVIDENCE_KIND) return [];
       const { documents: _drop, ...join } = row;
       void _drop;
-      return {
-        ...join,
-        title: doc?.title ?? '(untitled)',
-        status: doc?.status ?? 'failed',
-      };
+      return [
+        {
+          ...join,
+          title: doc.title ?? '(untitled)',
+          status: doc.status ?? 'failed',
+          kind: doc.kind,
+        },
+      ];
     }),
   };
 }
@@ -185,7 +207,7 @@ export async function ingestAuditEvidence(
         title: params.title.trim() || 'Untitled evidence',
         source: 'Audit evidence paste',
         content: normalizeCheckboxes(params.content),
-        kind: 'AUDIT_EVIDENCE',
+        kind: AUDIT_EVIDENCE_KIND,
       }),
     });
     resOk = res.ok;
@@ -216,7 +238,14 @@ export async function ingestAuditEvidence(
   const join = data as AuditSourceDocument;
   return {
     ok: true,
-    data: { ...join, title: params.title.trim() || 'Untitled evidence', status: 'ready' },
+    data: {
+      ...join,
+      title: params.title.trim() || 'Untitled evidence',
+      status: 'ready',
+      // This path MINTS the document with kind AUDIT_EVIDENCE (ingest body
+      // above) — stating it here keeps the row honest without a re-read.
+      kind: AUDIT_EVIDENCE_KIND,
+    },
   };
 }
 

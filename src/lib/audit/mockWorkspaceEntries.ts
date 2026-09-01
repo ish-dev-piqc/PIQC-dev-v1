@@ -1,8 +1,14 @@
 // =============================================================================
-// AuditWorkspaceEntryObject shape for AUDIT_CONDUCT stage.
+// Workspace-entry shape for the AUDIT_CONDUCT stage (audit_workspace_entry_
+// objects rows).
 //
-// One structured observation per entry. Anchored optionally to a
-// ProtocolRiskObject so risk attributes inherit at link time.
+// TYPE RULING (PR-3): this IS the canonical real-Supabase display shape —
+// the dead AuditWorkspaceEntryObject shell in src/types/audit/objects.ts was
+// deleted. The `Mock` prefix / mock* filename are legacy-frozen; see
+// mockPreAudit.ts for the full ruling.
+//
+// One structured observation per entry. Anchored optionally to a protocol
+// risk row so risk attributes inherit at link time.
 //
 // D-008: only human-governed fields exposed (provisional_impact +
 // provisional_classification). No coherence proposals or automated flags.
@@ -20,7 +26,7 @@ import type {
 export interface MockWorkspaceEntry {
   id: string;
   audit_id: string;
-  protocol_risk_id: string | null;       // optional link to a ProtocolRiskObject
+  protocol_risk_id: string | null;       // optional link to a protocol risk row
   vendor_service_mapping_id: string | null;
   questionnaire_response_id: string | null;
   checkpoint_ref: string | null;          // auditor freetext: vendor SOP/section cite (SOPs are not parsed)
@@ -32,7 +38,7 @@ export interface MockWorkspaceEntry {
   inherited_endpoint_tier: EndpointTier | null;
   inherited_impact_surface: ImpactSurface | null;
   inherited_time_sensitivity: boolean | null;
-  // System-written when the linked ProtocolRiskObject changes via amendment
+  // System-written when the linked protocol risk row changes via amendment
   risk_context_outdated: boolean;
   // B2: optional SOTR protocol_extracted_item this finding traces back to.
   // Same trust-act as Stage 1's source link — auditor-attested provenance.
