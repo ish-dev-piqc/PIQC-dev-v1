@@ -22,6 +22,7 @@ import {
 import type { MockWorkspaceEntry } from '../../../../lib/audit/mockWorkspaceEntries';
 import type { AuditEvidenceListRow } from '../../../../types/audit';
 import DeliverableGenerationPanel from '../deliverables/DeliverableGenerationPanel';
+import StatusBadge from '../deliverables/StatusBadge';
 import { useDeliverablePersistence } from '../deliverables/useDeliverablePersistence';
 import { useDeliverableGeneration } from '../deliverables/useDeliverableGeneration';
 import { useDeliverableResync } from '../deliverables/useDeliverableResync';
@@ -562,16 +563,7 @@ export default function FindingsReportSection({ auditId, hasReached, isLight }: 
             {/* Latch row */}
             <div className="flex items-center gap-2 flex-wrap">
               {approved ? (
-                <span
-                  className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded border ${
-                    isLight
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                      : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
-                  }`}
-                >
-                  <CheckCircle2 size={11} />
-                  Approved
-                </span>
+                <StatusBadge approved isLight={isLight} />
               ) : (
                 <button
                   type="button"
