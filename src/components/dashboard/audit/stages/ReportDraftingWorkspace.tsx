@@ -14,11 +14,11 @@ import { useTheme } from '../../../../context/ThemeContext';
 import { useAudit } from '../../../../context/AuditContext';
 import { useAuditData } from '../../../../context/AuditDataContext';
 import PiqcMark from '../PiqcMark';
+import { SERVICE_TYPE_OPTIONS } from '../../../../lib/audit/labels';
 import {
-  PROVISIONAL_IMPACT_LABELS,
-  PROVISIONAL_CLASSIFICATION_LABELS,
-  SERVICE_TYPE_OPTIONS,
-} from '../../../../lib/audit/labels';
+  buildObservationGroups,
+  type ReportClassification,
+} from '../../../../lib/audit/observationGroups';
 import {
   fetchReportDraft,
   upsertReportDraft,
@@ -28,8 +28,6 @@ import {
   requestLlmConclusions,
   LlmExecutiveSummaryError,
 } from '../../../../lib/audit/reportApi';
-import type { MockWorkspaceEntry } from '../../../../lib/audit/mockWorkspaceEntries';
-import type { ProvisionalClassification } from '../../../../types/audit';
 import { hasPassedStage, hasReachedStage } from '../../../../lib/audit/workflowStages';
 import HistoryDrawer from '../HistoryDrawer';
 import PrefillAgentNote from '../PrefillAgentNote';
@@ -48,12 +46,13 @@ import StagePreviewNotice from '../StagePreviewNotice';
 // Sponsor-name-free by rule.
 // =============================================================================
 
-const CLASSIFICATION_GROUPS: { key: ProvisionalClassification; label: string }[] = [
-  { key: 'FINDING', label: 'Findings' },
-  { key: 'OBSERVATION', label: 'Observations' },
-  { key: 'OPPORTUNITY_FOR_IMPROVEMENT', label: 'Opportunities for improvement' },
-  { key: 'NOT_YET_CLASSIFIED', label: 'Not yet classified' },
-];
+// Screen-heading casing (sentence case) — deliberately different from the
+// Stage 8 exports' Title Case; see observationGroups.ts.
+const SCREEN_GROUP_LABELS: Record<ReportClassification, string> = {
+  FINDING: 'Findings',
+  OBSERVATION: 'Observations',
+  OPPORTUNITY_FOR_IMPROVEMENT: 'Opportunities for improvement',
+};
 
 // Landing notice — transient acknowledgment that a PIQC chat write-back
 // just landed text on Stage 7. Set by AuditWorkspaceShell after a
@@ -310,17 +309,9 @@ export default function ReportDraftingWorkspace({
     [auditId, data.workspaceEntries],
   );
 
-  // Group workspace entries by classification
-  const grouped = useMemo(() => {
-    const result: Record<ProvisionalClassification, MockWorkspaceEntry[]> = {
-      FINDING: [],
-      OBSERVATION: [],
-      OPPORTUNITY_FOR_IMPROVEMENT: [],
-      NOT_YET_CLASSIFIED: [],
-    };
-    for (const e of entries) result[e.provisional_classification].push(e);
-    return result;
-  }, [entries]);
+  // Group workspace entries by classification — the shared report grouping
+  // (same module drives the Stage 8 exports).
+  const observationGroups = useMemo(() => buildObservationGroups(entries), [entries]);
 
   // Defer the no-protocol guard until after all hooks are declared.
   if (!activeAudit || !auditId) return null;
@@ -499,7 +490,9 @@ export default function ReportDraftingWorkspace({
     activeAudit.current_stage,
     'REPORT_DRAFTING',
   );
-  const unclassifiedCount = grouped.NOT_YET_CLASSIFIED.length;
+  const unclassifiedCount = entries.filter(
+    (e) => e.provisional_classification === 'NOT_YET_CLASSIFIED',
+  ).length;
 
   // ---------------------------------------------------------------------------
   // Render
@@ -810,46 +803,46 @@ export default function ReportDraftingWorkspace({
       </Section>
 
       {/* Auto-compiled: Findings / Observations / OFIs */}
-      {CLASSIFICATION_GROUPS.filter((g) => g.key !== 'NOT_YET_CLASSIFIED').map((group) => {
-        const items = grouped[group.key];
+      {observationGroups.map((group) => {
+        const label = SCREEN_GROUP_LABELS[group.key];
         return (
           <Section
             key={group.key}
-            title={`${group.label} (${items.length})`}
+            title={`${label} (${group.items.length})`}
             sectionHeader={sectionHeader}
           >
             <AutoCompiledNote
               mutedColor={mutedColor}
               text="Auto-compiled from Stage 6 (Audit conduct)."
             />
-            {items.length === 0 ? (
-              <Empty subColor={subColor}>No {group.label.toLowerCase()} recorded.</Empty>
+            {group.items.length === 0 ? (
+              <Empty subColor={subColor}>No {label.toLowerCase()} recorded.</Empty>
             ) : (
               <ol className="space-y-2 list-decimal list-inside marker:font-semibold">
-                {items.map((e) => {
-                  const linkedRisk = e.protocol_risk_id
-                    ? protocolRisks.find((r) => r.id === e.protocol_risk_id) ?? null
+                {group.items.map((b) => {
+                  const linkedRisk = b.entry.protocol_risk_id
+                    ? protocolRisks.find((r) => r.id === b.entry.protocol_risk_id) ?? null
                     : null;
                   return (
                     <li
-                      key={e.id}
+                      key={b.entry.id}
                       className={`${cardBg} border rounded-md p-3 ${headingColor} text-sm leading-relaxed`}
                     >
                       <div className="inline-flex items-center gap-1.5 flex-wrap mb-1">
                         <span className={`${mutedColor} text-[11px] font-semibold`}>
-                          {e.vendor_domain}
+                          {b.vendorDomain}
                         </span>
                         <span className={mutedColor}>·</span>
                         <span className={`${subColor} text-[11px]`}>
-                          Impact: {PROVISIONAL_IMPACT_LABELS[e.provisional_impact]}
+                          Impact: {b.impactLabel}
                         </span>
                         <span className={mutedColor}>·</span>
                         <span className={`${subColor} text-[11px]`}>
-                          Class: {PROVISIONAL_CLASSIFICATION_LABELS[e.provisional_classification]}
+                          Class: {b.classificationLabel}
                         </span>
                       </div>
-                      <p>{e.observation_text}</p>
-                      {(linkedRisk || e.checkpoint_ref) && (
+                      <p>{b.observationText}</p>
+                      {(linkedRisk || b.checkpointRef) && (
                         <p className={`${mutedColor} text-[11px] mt-1`}>
                           {linkedRisk && (
                             <>
@@ -857,8 +850,8 @@ export default function ReportDraftingWorkspace({
                               {linkedRisk.section_title}
                             </>
                           )}
-                          {linkedRisk && e.checkpoint_ref && ' · '}
-                          {e.checkpoint_ref && <span className="font-mono">{e.checkpoint_ref}</span>}
+                          {linkedRisk && b.checkpointRef && ' · '}
+                          {b.checkpointRef && <span className="font-mono">{b.checkpointRef}</span>}
                         </p>
                       )}
                     </li>
