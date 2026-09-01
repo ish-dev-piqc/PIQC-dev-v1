@@ -1,19 +1,20 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { AlertTriangle, ArrowRight, NotebookPen, Pencil, ThumbsUp, Trash2, X as XIcon } from 'lucide-react';
 import {
   createVendorNote,
   deleteVendorNote,
-  fetchVendorNotes,
   updateVendorNote,
 } from '../../../../../lib/audit/vendorNotesApi';
 import type { AuditNoteObject } from '../../../../../types/audit';
 
 // =============================================================================
 // VendorNotesPad — the vendor-audit fieldwork notes pad (fieldwork lane,
-// slice 1), rendered as a section of Stage-6 AuditConductWorkspace. Mount
-// with key={auditId}: all state here is audit-scoped and resets by remount
-// (the key is load-bearing — without it the previous audit's notes, draft
-// text, and errors would stay on screen until the refetch resolved).
+// slice 1), rendered as a section of Stage-6 AuditConductWorkspace. Since
+// slice 2 the NOTES are owned by the workspace (one read feeds this pad and
+// the candidate panel) and arrive as props; mutations go back up through
+// onNotesChange. Mount with key={auditId}: the capture/edit/delete state
+// here is audit-scoped and resets by remount (the key is load-bearing —
+// without it draft text and errors would stay on screen across a switch).
 //
 // Copies the ISA pad's PATTERN (IsaConductWorkspace is a no-props 1,217-line
 // file with structural ISA coupling — nothing extractable), not its code:
@@ -28,10 +29,9 @@ import type { AuditNoteObject } from '../../../../../types/audit';
 // reported on the row it concerns.
 // =============================================================================
 
-// The full note is always stored. Slice 2's drafting engine reads only the
-// first 1,000 characters of each note into its prompt (the ISA engine's
-// cap) — so past that point the pad says so instead of silently truncating
-// what the auditor typed.
+// The full note is always stored. The drafting engine reads only the first
+// 1,000 characters of each note into its prompt — so past that point the pad
+// says so instead of silently truncating what the auditor typed.
 const DRAFT_READ_CHARS = 1_000;
 
 // Pinned locale like every other formatter in the repo (dateWindow.ts):
@@ -47,14 +47,22 @@ interface Props {
   auditId: string;
   hasReached: boolean;
   isLight: boolean;
+  notes: AuditNoteObject[];
+  /** The owner's read state — 'failed' is a state, never an empty list. */
+  status: 'loading' | 'ready' | 'failed';
+  onRetry: () => void;
+  onNotesChange: (updater: (prev: AuditNoteObject[]) => AuditNoteObject[]) => void;
 }
 
-export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) {
-  const [notes, setNotes] = useState<AuditNoteObject[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadFailed, setLoadFailed] = useState(false);
-  const [reloadNonce, setReloadNonce] = useState(0);
-
+export default function VendorNotesPad({
+  auditId,
+  hasReached,
+  isLight,
+  notes,
+  status,
+  onRetry,
+  onNotesChange,
+}: Props) {
   const [body, setBody] = useState('');
   const [positive, setPositive] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -73,22 +81,6 @@ export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) 
   // on any row — never a free-floating banner about a note three actions ago.
   const [deleteError, setDeleteError] = useState<{ id: string; message: string } | null>(null);
 
-  // auditId in the deps is inert (the key remounts on change); reloadNonce
-  // is the Retry path.
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    fetchVendorNotes(auditId).then((res) => {
-      if (cancelled) return;
-      setLoading(false);
-      setLoadFailed(!res.ok);
-      if (res.ok) setNotes(res.data);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [auditId, reloadNonce]);
-
   const submitNote = async () => {
     const trimmed = body.trim();
     if (!trimmed || saving) return;
@@ -96,7 +88,7 @@ export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) 
     const res = await createVendorNote(auditId, { body: trimmed, isPositive: positive });
     setSaving(false);
     if (res.ok) {
-      setNotes((prev) => [res.data, ...prev]);
+      onNotesChange((prev) => [res.data, ...prev]);
       setBody('');
       setPositive(false);
       setSaveError(null);
@@ -124,7 +116,7 @@ export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) 
     const res = await updateVendorNote(editingId, { body: trimmed, isPositive: editPositive });
     setSavingEdit(false);
     if (res.ok) {
-      setNotes((prev) => prev.map((n) => (n.id === res.data.id ? res.data : n)));
+      onNotesChange((prev) => prev.map((n) => (n.id === res.data.id ? res.data : n)));
       setEditingId(null);
       setEditError(null);
     } else {
@@ -143,7 +135,7 @@ export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) 
     const res = await deleteVendorNote(id);
     setDeletingId(null);
     if (res.ok) {
-      setNotes((prev) => prev.filter((n) => n.id !== id));
+      onNotesChange((prev) => prev.filter((n) => n.id !== id));
     } else {
       setDeleteError({ id, message: res.error });
     }
@@ -185,7 +177,7 @@ export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) 
         <h3 className="text-fg-heading text-sm font-semibold">Fieldwork notes</h3>
         {/* The count is a claim about the read — never made while the read
             is loading or failed. */}
-        {!loading && !loadFailed && (
+        {status === 'ready' && (
           <span className="text-fg-muted text-xs" data-testid="vendor-notes-count">
             {notes.length === 1 ? '1 note' : `${notes.length} notes`}
           </span>
@@ -195,8 +187,10 @@ export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) 
         </span>
       </div>
 
-      {/* Capture — pure mutation surface, hidden entirely in preview. */}
-      {hasReached && (
+      {/* Capture — pure mutation surface, hidden entirely in preview, and
+          hidden while the read is in flight: a note added mid-read would be
+          overwritten when the read resolved. */}
+      {hasReached && status !== 'loading' && (
         <div data-testid="vendor-notes-capture" className={`p-4 space-y-3 border-b ${rowBorder}`}>
           {saveError && (
             <div
@@ -267,9 +261,9 @@ export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) 
         </div>
       )}
 
-      {loading ? (
+      {status === 'loading' ? (
         <p className="text-fg-muted text-sm px-4 py-6">Loading notes…</p>
-      ) : loadFailed ? (
+      ) : status === 'failed' ? (
         // Honest load failure — absence ≠ failure, so no empty pad over a
         // failed read.
         <div
@@ -283,7 +277,7 @@ export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) 
           </p>
           <button
             type="button"
-            onClick={() => setReloadNonce((n) => n + 1)}
+            onClick={onRetry}
             className={`text-xs font-semibold px-2.5 py-1.5 rounded-md border transition-colors text-fg-body ${inputBase}`}
           >
             Retry

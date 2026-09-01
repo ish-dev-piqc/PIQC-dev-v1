@@ -178,6 +178,14 @@ export type IsaSeverity = 'CRITICAL' | 'MAJOR' | 'MINOR' | 'RECOMMENDATION';
 // ANY content edit (pre- or post-accept) flips to PIQC_EDITED.
 export type IsaFindingOrigin = 'AUDITOR' | 'PIQC_DRAFTED' | 'PIQC_EDITED';
 
+// Provenance for Stage-6 vendor observations (fieldwork lane, slice 2). 1:1
+// with Postgres workspace_entry_origin (20260909000000). AUDITOR = typed by
+// hand; PIQC_DRAFTED = a candidate accepted verbatim; PIQC_EDITED = a
+// candidate edited before acceptance. Lane-specific on purpose — not shared
+// with IsaFindingOrigin: the ISA lane flips DRAFTED→EDITED on later content
+// edits, the vendor lane defers that flip (partner-return item).
+export type WorkspaceEntryOrigin = 'AUDITOR' | 'PIQC_DRAFTED' | 'PIQC_EDITED';
+
 // Who owns the response to a finding (from the Audit Observation Form).
 export type IsaResponseOwner = 'SITE' | 'CLIENT' | 'CRO';
 

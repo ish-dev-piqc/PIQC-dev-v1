@@ -1,8 +1,10 @@
 import { supabase } from '../supabase';
 import type { MockWorkspaceEntry } from './mockWorkspaceEntries';
+import type { CandidateEvidence, DraftedText, DraftingEngine } from './observationDraftApi';
 import type {
   EndpointTier,
   ImpactSurface,
+  IsaProtocolRef,
   ProvisionalClassification,
   ProvisionalImpact,
 } from '../../types/audit';
@@ -210,6 +212,60 @@ export async function updateWorkspaceEntry(
 
   const row = data as WorkspaceEntryRow;
   return flattenEntry(row, await resolveCreatorNames([row.created_by]));
+}
+
+// ----------------------------------------------------------------------------
+// Promote a PIQC-drafted candidate (fieldwork lane, slice 2) — the ONLY path
+// from candidate to record. audit_mode_promote_workspace_candidate
+// (20260909000000) inserts the entry with provenance, consumes the cited
+// notes, and writes one delta — one transaction. The server decides origin
+// (PIQC_DRAFTED vs PIQC_EDITED) by comparing the accepted text with the
+// engine's proposal (`drafted`), derives source_note_ids from the evidence
+// chain, and refuses a repeat of the same candidateKey on the audit — none
+// of that is a client claim. Classification is the auditor's (default
+// NOT_YET_CLASSIFIED blocks Stage-8 sign-off and is excluded from report
+// bodies); impact stays at its default until the entry is edited.
+// ----------------------------------------------------------------------------
+
+export interface PromoteWorkspaceCandidateInput {
+  /** Client-minted per candidate; the RPC's idempotency key. */
+  candidateKey: string;
+  vendorDomain: string;
+  observationText: string;
+  checkpointRef: string | null;
+  /** Post-gate evidence chain from the drafting engine. */
+  evidence: CandidateEvidence[];
+  protocolRef: IsaProtocolRef | null;
+  /** The proposal as the engine returned it. */
+  drafted: DraftedText;
+  engine: DraftingEngine;
+  provisionalClassification: ProvisionalClassification;
+}
+
+export async function promoteWorkspaceCandidate(
+  auditId: string,
+  input: PromoteWorkspaceCandidateInput,
+): Promise<CreateWorkspaceEntryResult> {
+  const { data, error } = await supabase.rpc('audit_mode_promote_workspace_candidate', {
+    p_audit_id: auditId,
+    p_candidate_key: input.candidateKey,
+    p_vendor_domain: input.vendorDomain,
+    p_observation_text: input.observationText,
+    p_evidence: input.evidence,
+    p_drafted: input.drafted,
+    p_engine: input.engine,
+    p_checkpoint_ref: input.checkpointRef,
+    p_protocol_ref: input.protocolRef,
+    p_provisional_classification: input.provisionalClassification,
+  });
+
+  if (error) {
+    console.error('[workspaceEntriesApi] promoteWorkspaceCandidate error:', error);
+    return { ok: false, error: error.message };
+  }
+
+  const row = data as WorkspaceEntryRow;
+  return { ok: true, data: flattenEntry(row, await resolveCreatorNames([row.created_by])) };
 }
 
 // Delete is intentionally NOT supported. Audit observations are corrected
