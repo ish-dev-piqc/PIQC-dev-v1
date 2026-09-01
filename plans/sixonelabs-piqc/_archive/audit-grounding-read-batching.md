@@ -1,8 +1,9 @@
 ---
-status: in-review
+status: merged
+merged: 2026-09-01
 owner: sixonelabs-piqc
 feature: audit-grounding-read-batching
-target_pr: TBD
+target_pr: #579
 ---
 
 # Audit grounding-read batching — kill the user_profiles N+1, pin the read
