@@ -260,6 +260,24 @@ describe('applyDeliverableGeneration', () => {
     expect(args.p_reason).toBe('Findings report drafted by PIQC from protocol + evidence');
   });
 
+  it('routes the audit certificate letter-shaped WITHOUT recipients to its own RPC (PR-D6)', async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: null });
+    await applyDeliverableGeneration(
+      'a1',
+      { ...LETTER_PROPOSAL, deliverable: 'audit_certificate', mode: 'generate' },
+      // Recipients belong to the confirmation letter alone — a certificate
+      // carries no addressees.
+      { currentRecipients: ['Quality Assurance Team'] },
+    );
+    const [rpcName, args] = mockRpc.mock.calls[0];
+    expect(rpcName).toBe('audit_mode_apply_audit_certificate_generation');
+    expect(args.p_content).toEqual({
+      body_text: 'This letter confirms the audit…',
+      scope: ['Quality management system', 'Data integrity'],
+    });
+    expect(args.p_reason).toBe('Audit certificate drafted by PIQC from protocol + evidence');
+  });
+
   it('prefers the RPC hint over the raw message on failure', async () => {
     mockRpc.mockResolvedValueOnce({
       data: null,

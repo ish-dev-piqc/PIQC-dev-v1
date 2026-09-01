@@ -101,6 +101,10 @@ vi.mock('../../../../../lib/audit/evidenceApi', () => ({
   listAuditEvidence: vi.fn(() => Promise.resolve(mockRegister)),
 }));
 
+// The certificate section (PR-D6) has its own suite; here it would drag its
+// module graph (auditCertificate reads) into every workspace test.
+vi.mock('../AuditCertificateSection', () => ({ default: () => null }));
+
 import FinalReviewExportWorkspace from '../FinalReviewExportWorkspace';
 
 function makeEntry(overrides: Partial<MockWorkspaceEntry> = {}): MockWorkspaceEntry {
