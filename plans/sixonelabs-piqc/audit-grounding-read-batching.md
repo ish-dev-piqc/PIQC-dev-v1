@@ -1,5 +1,5 @@
 ---
-status: active
+status: in-review
 owner: sixonelabs-piqc
 feature: audit-grounding-read-batching
 target_pr: TBD
