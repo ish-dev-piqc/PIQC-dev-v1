@@ -32,22 +32,28 @@
 // before. Premature extraction would over-shape the abstraction.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createWorkspaceEntry, updateWorkspaceEntry } from '../workspaceEntriesApi';
+import {
+  createWorkspaceEntry,
+  fetchWorkspaceEntries,
+  updateWorkspaceEntry,
+} from '../workspaceEntriesApi';
 
-// Mock supabase. flattenEntry calls supabase.from('user_profiles') via
-// resolveCreatorName — stub a chainable that returns data: null so the
-// flatten path resolves to '(unknown)' without going through the network.
-vi.mock('../../supabase', () => {
-  const maybeSingle = vi.fn().mockResolvedValue({ data: null });
-  const eq          = vi.fn(() => ({ maybeSingle }));
-  const select      = vi.fn(() => ({ eq }));
-  const from        = vi.fn(() => ({ select }));
-  const rpc         = vi.fn();
-  return { supabase: { rpc, from } };
+// Mock supabase, routed by table (PR-5): the entries read chains
+// .select().eq().order(); the batched creator-name resolve chains
+// .select().in(). Defaults resolve empty so flatten falls back to
+// '(unknown)' without the network; tests override per case.
+const { mockOrder, mockIn, mockFrom, mockRpc } = vi.hoisted(() => {
+  const mockOrder = vi.fn().mockResolvedValue({ data: [], error: null });
+  const mockIn = vi.fn().mockResolvedValue({ data: [], error: null });
+  const entriesChain = { select: vi.fn(() => ({ eq: vi.fn(() => ({ order: mockOrder })) })) };
+  const profilesChain = { select: vi.fn(() => ({ in: mockIn })) };
+  const mockFrom = vi.fn((table: string) =>
+    table === 'user_profiles' ? profilesChain : entriesChain,
+  );
+  return { mockOrder, mockIn, mockFrom, mockRpc: vi.fn() };
 });
 
-import { supabase } from '../../supabase';
-const mockRpc = supabase.rpc as unknown as ReturnType<typeof vi.fn>;
+vi.mock('../../supabase', () => ({ supabase: { rpc: mockRpc, from: mockFrom } }));
 
 // Minimal WorkspaceEntryRow shape. The RPC returns the inserted/updated row
 // and the wrapper flattens it; tests assert the RPC call shape, not the
@@ -261,5 +267,91 @@ describe('updateWorkspaceEntry — three-way source-link semantics', () => {
       expect.anything(),
     );
     errorSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PR-5 — the READ path, tested for the first time (this is PR-D4's primary
+// grounding read), including the batched creator-name resolve.
+// ---------------------------------------------------------------------------
+
+describe('fetchWorkspaceEntries — batched read (PR-5)', () => {
+  beforeEach(() => {
+    mockOrder.mockReset().mockResolvedValue({ data: [], error: null });
+    mockIn.mockReset().mockResolvedValue({ data: [], error: null });
+    mockFrom.mockClear();
+  });
+
+  it('flattens rows with ONE user_profiles query for N entries (unique ids)', async () => {
+    mockOrder.mockResolvedValueOnce({
+      data: [
+        makeEntryRow({ id: 'we-1', created_by: 'user-1' }),
+        makeEntryRow({ id: 'we-2', created_by: 'user-2', observation_text: 'Second.' }),
+        makeEntryRow({ id: 'we-3', created_by: 'user-1', observation_text: 'Third.' }),
+      ],
+      error: null,
+    });
+    mockIn.mockResolvedValueOnce({
+      data: [
+        { id: 'user-1', name: 'Ana Auditor' },
+        { id: 'user-2', name: 'Ben Auditor' },
+      ],
+      error: null,
+    });
+
+    const entries = await fetchWorkspaceEntries('audit-1');
+
+    expect(entries).toHaveLength(3);
+    expect(entries[0].created_by_name).toBe('Ana Auditor');
+    expect(entries[1].created_by_name).toBe('Ben Auditor');
+    expect(entries[2].created_by_name).toBe('Ana Auditor');
+    // The batching pin: exactly one profiles query, deduped ids.
+    expect(mockFrom.mock.calls.filter(([t]) => t === 'user_profiles')).toHaveLength(1);
+    expect(mockIn).toHaveBeenCalledTimes(1);
+    expect(mockIn).toHaveBeenCalledWith('id', ['user-1', 'user-2']);
+  });
+
+  it('a missing profile falls back to (unknown) — same contract as before', async () => {
+    mockOrder.mockResolvedValueOnce({
+      data: [makeEntryRow({ created_by: 'user-gone' })],
+      error: null,
+    });
+    mockIn.mockResolvedValueOnce({ data: [], error: null });
+
+    const entries = await fetchWorkspaceEntries('audit-1');
+    expect(entries[0].created_by_name).toBe('(unknown)');
+  });
+
+  it('empty register → [] with NO profiles query at all', async () => {
+    mockOrder.mockResolvedValueOnce({ data: [], error: null });
+    const entries = await fetchWorkspaceEntries('audit-1');
+    expect(entries).toEqual([]);
+    expect(mockIn).not.toHaveBeenCalled();
+  });
+
+  it('a read error returns [] (current contract, pinned as-is)', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockOrder.mockResolvedValueOnce({ data: null, error: { message: 'permission denied' } });
+    const entries = await fetchWorkspaceEntries('audit-1');
+    expect(entries).toEqual([]);
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it('flatten output carries the row fields through unchanged', async () => {
+    mockOrder.mockResolvedValueOnce({
+      data: [makeEntryRow({ checkpoint_ref: 'SOP-12 §4', provisional_impact: 'MAJOR' })],
+      error: null,
+    });
+    const entries = await fetchWorkspaceEntries('audit-1');
+    expect(entries[0]).toMatchObject({
+      id: 'we-1',
+      audit_id: 'audit-1',
+      vendor_domain: 'Validation',
+      observation_text: 'Vendor SOP signed and current.',
+      checkpoint_ref: 'SOP-12 §4',
+      provisional_impact: 'MAJOR',
+      risk_context_outdated: false,
+    });
   });
 });

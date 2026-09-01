@@ -50,16 +50,35 @@ interface WorkspaceEntryRow {
   updated_at: string;
 }
 
-async function resolveCreatorName(createdBy: string): Promise<string> {
-  const { data } = await supabase
+// One user_profiles query for any number of creators (PR-5): the old
+// per-row lookup made every Stage 6/7 mount cost N+1 round trips. Missing
+// profiles resolve to '(unknown)' exactly as before.
+async function resolveCreatorNames(
+  createdByIds: readonly string[],
+): Promise<Map<string, string>> {
+  const unique = [...new Set(createdByIds)];
+  if (unique.length === 0) return new Map();
+  const { data, error } = await supabase
     .from('user_profiles')
-    .select('name')
-    .eq('id', createdBy)
-    .maybeSingle();
-  return (data as { name?: string } | null)?.name ?? '(unknown)';
+    .select('id, name')
+    .in('id', unique);
+  if (error) {
+    console.error('[workspaceEntriesApi] resolveCreatorNames error:', error);
+    return new Map();
+  }
+  return new Map(
+    ((data ?? []) as Array<{ id: string; name?: string }>).map((p) => [
+      p.id,
+      p.name ?? '(unknown)',
+    ]),
+  );
 }
 
-async function flattenEntry(row: WorkspaceEntryRow): Promise<MockWorkspaceEntry> {
+// Pure — the name is resolved (batched) by the caller.
+function flattenEntry(
+  row: WorkspaceEntryRow,
+  creatorNames: Map<string, string>,
+): MockWorkspaceEntry {
   return {
     id: row.id,
     audit_id: row.audit_id,
@@ -76,7 +95,7 @@ async function flattenEntry(row: WorkspaceEntryRow): Promise<MockWorkspaceEntry>
     inherited_time_sensitivity: row.inherited_time_sensitivity,
     risk_context_outdated: row.risk_context_outdated,
     source_extracted_item_id: row.source_extracted_item_id,
-    created_by_name: await resolveCreatorName(row.created_by),
+    created_by_name: creatorNames.get(row.created_by) ?? '(unknown)',
     created_at: row.created_at,
   };
 }
@@ -97,7 +116,9 @@ export async function fetchWorkspaceEntries(auditId: string): Promise<MockWorksp
     return [];
   }
 
-  return Promise.all(((data ?? []) as WorkspaceEntryRow[]).map(flattenEntry));
+  const rows = (data ?? []) as WorkspaceEntryRow[];
+  const creatorNames = await resolveCreatorNames(rows.map((r) => r.created_by));
+  return rows.map((row) => flattenEntry(row, creatorNames));
 }
 
 // ============================================================================
@@ -145,7 +166,8 @@ export async function createWorkspaceEntry(
     return { ok: false, error: error.message };
   }
 
-  return { ok: true, data: await flattenEntry(data as WorkspaceEntryRow) };
+  const row = data as WorkspaceEntryRow;
+  return { ok: true, data: flattenEntry(row, await resolveCreatorNames([row.created_by])) };
 }
 
 export interface UpdateWorkspaceEntryInput {
@@ -186,7 +208,8 @@ export async function updateWorkspaceEntry(
     return null;
   }
 
-  return flattenEntry(data as WorkspaceEntryRow);
+  const row = data as WorkspaceEntryRow;
+  return flattenEntry(row, await resolveCreatorNames([row.created_by]));
 }
 
 // Delete is intentionally NOT supported. Audit observations are corrected

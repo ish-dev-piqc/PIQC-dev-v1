@@ -509,6 +509,50 @@ describe('fetchPreAuditDeliverables — partial-failure honesty (PR-1)', () => {
     expect(res.bundle.confirmation_letter?.id).toBe('cl-1');
   });
 
+  it('resolves approver names with ONE profiles query for the whole bundle (PR-5)', async () => {
+    const approvedLetter = {
+      ...letterRow,
+      id: 'cl-a',
+      approval_status: 'APPROVED',
+      approved_by: 'user-1',
+      approved_at: '2026-08-02T00:00:00Z',
+    };
+    const approvedAgenda = {
+      id: 'ag-a',
+      audit_id: 'audit-1',
+      content: { items: [] },
+      approval_status: 'APPROVED',
+      approved_by: 'user-2',
+      approved_at: '2026-08-02T00:00:00Z',
+      updated_at: '2026-08-02T00:00:00Z',
+    };
+    const mockIn = vi.fn().mockResolvedValue({
+      data: [
+        { id: 'user-1', name: 'Ana Auditor' },
+        { id: 'user-2', name: 'Ben Auditor' },
+      ],
+      error: null,
+    });
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'user_profiles') {
+        return { select: () => ({ in: mockIn }) };
+      }
+      const byTable: Record<string, { data: unknown; error: unknown }> = {
+        confirmation_letter_objects: { data: approvedLetter, error: null },
+        agenda_objects: { data: approvedAgenda, error: null },
+      };
+      return tableResult(byTable[table] ?? OK_EMPTY);
+    });
+
+    const res = await fetchPreAuditDeliverables('audit-1');
+
+    expect(res.bundle.confirmation_letter?.approved_by_name).toBe('Ana Auditor');
+    expect(res.bundle.agenda?.approved_by_name).toBe('Ben Auditor');
+    // The batching pin: one profiles query for the whole bundle.
+    expect(mockIn).toHaveBeenCalledTimes(1);
+    expect(mockIn).toHaveBeenCalledWith('id', ['user-1', 'user-2']);
+  });
+
   it('a failure on every table names all five kinds', async () => {
     wireTables({
       confirmation_letter_objects: FAILED,
