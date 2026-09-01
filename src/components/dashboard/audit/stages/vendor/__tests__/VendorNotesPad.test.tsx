@@ -56,14 +56,15 @@ const THREE = () => [note('n1'), note('n2', { is_positive: true }), note('n3', {
 interface HostProps {
   initial?: AuditNoteObject[];
   hasReached?: boolean;
-  loading?: boolean;
-  loadFailed?: boolean;
+  status?: 'loading' | 'ready' | 'failed';
   onRetry?: () => void;
 }
 
 // The workspace's role, reduced to what the pad needs: notes state plus the
-// updater the pad calls.
-function Host({ initial = THREE(), hasReached = true, loading = false, loadFailed = false, onRetry = () => {} }: HostProps) {
+// updater the pad calls. Wired exactly as strictly as the real owner — an
+// updater FUNCTION only, so the harness cannot be more permissive than
+// AuditConductWorkspace.handleNotesChange.
+function Host({ initial = THREE(), hasReached = true, status = 'ready', onRetry = () => {} }: HostProps) {
   const [notes, setNotes] = useState(initial);
   return (
     <VendorNotesPad
@@ -71,10 +72,9 @@ function Host({ initial = THREE(), hasReached = true, loading = false, loadFaile
       hasReached={hasReached}
       isLight
       notes={notes}
-      loading={loading}
-      loadFailed={loadFailed}
+      status={status}
       onRetry={onRetry}
-      onNotesChange={setNotes}
+      onNotesChange={(updater) => setNotes((prev) => updater(prev))}
     />
   );
 }
@@ -99,7 +99,7 @@ describe('load states', () => {
 
   it('a failed read renders the retry banner and NO count, never an empty pad; Retry asks the owner', () => {
     const onRetry = vi.fn();
-    render(<Host initial={[]} loadFailed onRetry={onRetry} />);
+    render(<Host initial={[]} status="failed" onRetry={onRetry} />);
     expect(screen.getByTestId('vendor-notes-load-error')).toBeTruthy();
     // "0 notes" above "could not be loaded" would assert the very count the
     // banner disclaims.
@@ -109,11 +109,13 @@ describe('load states', () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
-  it('while loading, neither the count nor the empty copy is asserted', () => {
-    render(<Host initial={[]} loading />);
+  it('while loading, neither the count nor the empty copy is asserted, and capture waits for the read', () => {
+    render(<Host initial={[]} status="loading" />);
     expect(screen.getByText('Loading notes…')).toBeTruthy();
     expect(screen.queryByTestId('vendor-notes-count')).toBeNull();
     expect(screen.queryByText(/No notes yet/)).toBeNull();
+    // A note added mid-read would be overwritten when the read resolved.
+    expect(screen.queryByTestId('vendor-notes-capture')).toBeNull();
   });
 });
 

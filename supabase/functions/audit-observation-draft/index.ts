@@ -15,7 +15,8 @@
 //
 // Forked from isa-finding-draft (same JWT passthrough, rate limit, body
 // guards, abort timeout, counts-only logging); evidence retrieval from
-// audit-deliverable-draft.
+// audit-deliverable-draft, partitioned per corpus so filed evidence can
+// never crowd the protocol out of the retrieval budget (or vice versa).
 //
 // What this function does NOT do:
 //   - write to the database. Candidates are proposals; the auditor accepts
@@ -31,14 +32,14 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { gateCandidates } from "./gates.ts";
+import { gateCandidates, type EvidenceCandidate } from "./gates.ts";
 import {
   labelCandidates,
   MAX_QUOTE_CHARS,
   type ProtocolCandidate,
   type ProtocolChunkRow,
 } from "../_shared/protocolCandidates.ts";
-import { normalizeRegister } from "../_shared/evidenceRegister.ts";
+import { normalizeRegister, type RegisterDoc } from "../_shared/evidenceRegister.ts";
 
 // -----------------------------------------------------------------------------
 // CORS + constants
@@ -58,14 +59,16 @@ const OPENAI_TIMEOUT_MS    = 60_000;
 const MAX_NOTE_CHARS       = 1_000;     // the pad tells the auditor this
 const MAX_NOTES_IN_PROMPT  = 60;
 const MAX_PASSAGE_CHARS    = 700;
-const NOTES_PER_QUERY      = 8;         // retrieval groups, creation order
+// 6 × 10 = 60: every note sent to the model also seeds retrieval.
+const NOTES_PER_QUERY      = 10;
 const MAX_QUERY_GROUPS     = 6;
 const CANDIDATES_PER_GROUP = 4;
 const EMBEDDING_MODEL      = "text-embedding-3-small";
+const CHAT_MODEL           = "gpt-4o-mini";
 
-// Evidence-only runs (no draftable notes) still need a retrieval query.
-const GENERIC_DEFICIENCY_QUERY =
-  "deviation non-compliance not documented not signed expired overdue missing incomplete uncontrolled out of specification unapproved";
+// Recorded on every accepted candidate (drafting_engine) — the model/tool
+// half of the provenance contract.
+const ENGINE = { function: "audit-observation-draft", model: CHAT_MODEL } as const;
 
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 
@@ -152,7 +155,7 @@ function buildUserMessage(
   protocolTitle: string | null,
   auditType: string | null,
   protocol: ProtocolCandidate[],
-  evidence: ProtocolCandidate[],
+  evidence: EvidenceCandidate[],
   evidenceTitles: Map<string, string>,
 ): string {
   const lines: string[] = [];
@@ -187,27 +190,56 @@ function buildUserMessage(
 }
 
 // -----------------------------------------------------------------------------
-// Retrieval — notes embedded in creation-order groups (vendor notes carry no
-// domain to group by); one hybrid_search per group over protocol + evidence
-// documents, partitioned by document id. Any failure degrades to "no
-// passages" — drafting proceeds without the bridge, never 500s.
+// Retrieval.
+//
+// Queries: notes in creation-order groups (vendor notes carry no domain to
+// group by). With no draftable notes, the audit's own material seeds
+// retrieval instead — each filed document's title framed by the audit type
+// and protocol title — never a hardcoded keyword bag.
+//
+// One batched embeddings request, then one hybrid_search per query per
+// NON-EMPTY corpus (protocol documents, evidence documents) — partitioned
+// before retrieval, so each corpus keeps its own budget. Any failure degrades
+// to "no passages"; drafting proceeds without the bridge, never 500s.
 // -----------------------------------------------------------------------------
 
-async function embedText(
+function buildQueries(
+  notes: NoteContext[],
+  evidenceDocs: RegisterDoc[],
+  protocolTitle: string | null,
+  auditType: string | null,
+): string[] {
+  const queries: string[] = [];
+  for (let i = 0; i < notes.length && queries.length < MAX_QUERY_GROUPS; i += NOTES_PER_QUERY) {
+    queries.push(notes.slice(i, i + NOTES_PER_QUERY).map((n) => n.body).join("\n").slice(0, 4_000));
+  }
+  if (queries.length === 0) {
+    const frame = [auditType, protocolTitle].filter(Boolean).join(" — ");
+    for (const d of evidenceDocs.slice(0, MAX_QUERY_GROUPS)) {
+      queries.push(frame ? `${d.title} — ${frame}` : d.title);
+    }
+  }
+  return queries;
+}
+
+async function embedTexts(
   openaiKey: string,
-  text: string,
+  texts: string[],
   signal: AbortSignal,
-): Promise<number[] | null> {
+): Promise<(number[] | null)[]> {
   const res = await fetch("https://api.openai.com/v1/embeddings", {
     method: "POST",
     headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ input: text.slice(0, 8_000), model: EMBEDDING_MODEL }),
+    body: JSON.stringify({ input: texts.map((t) => t.slice(0, 8_000)), model: EMBEDDING_MODEL }),
     signal,
   });
-  if (!res.ok) return null;
+  if (!res.ok) return texts.map(() => null);
   const data = await res.json();
-  const embedding = data?.data?.[0]?.embedding;
-  return Array.isArray(embedding) ? (embedding as number[]) : null;
+  const rows = Array.isArray(data?.data) ? (data.data as { index?: number; embedding?: unknown }[]) : [];
+  return texts.map((_, i) => {
+    const row = rows.find((r) => r?.index === i) ?? rows[i];
+    return Array.isArray(row?.embedding) ? (row.embedding as number[]) : null;
+  });
 }
 
 async function retrieveCandidates(
@@ -215,29 +247,29 @@ async function retrieveCandidates(
   openaiKey: string,
   protocolDocIds: string[],
   evidenceDocIds: string[],
-  notes: NoteContext[],
+  queries: string[],
   signal: AbortSignal,
   requestId: string,
 ): Promise<{ protocol: ProtocolCandidate[]; evidence: ProtocolCandidate[] }> {
   try {
-    const queries: string[] = [];
-    for (let i = 0; i < notes.length && queries.length < MAX_QUERY_GROUPS; i += NOTES_PER_QUERY) {
-      queries.push(notes.slice(i, i + NOTES_PER_QUERY).map((n) => n.body).join("\n").slice(0, 4_000));
-    }
-    if (queries.length === 0) queries.push(GENERIC_DEFICIENCY_QUERY);
-    const allDocIds = [...protocolDocIds, ...evidenceDocIds];
+    if (queries.length === 0) return { protocol: [], evidence: [] };
+    const embeddings = await embedTexts(openaiKey, queries, signal);
+    const corpora = [
+      { key: "protocol" as const, docIds: protocolDocIds },
+      { key: "evidence" as const, docIds: evidenceDocIds },
+    ].filter((c) => c.docIds.length > 0);
 
-    const perGroup = await Promise.all(queries.map(async (queryText) => {
-      const embedding = await embedText(openaiKey, queryText, signal);
-      if (!embedding) return [] as ProtocolChunkRow[];
+    const searches = corpora.flatMap((corpus) => queries.map(async (queryText, i) => {
+      const embedding = embeddings[i];
+      if (!embedding) return { corpus: corpus.key, rows: [] as ProtocolChunkRow[] };
       const { data, error } = await serviceClient.rpc("hybrid_search", {
         query_embedding: embedding,
         query_text: queryText,
         match_count: CANDIDATES_PER_GROUP,
-        filter_document_ids: allDocIds,
+        filter_document_ids: corpus.docIds,
       });
-      if (error || !Array.isArray(data)) return [] as ProtocolChunkRow[];
-      return (data as Record<string, unknown>[]).map((row) => ({
+      if (error || !Array.isArray(data)) return { corpus: corpus.key, rows: [] as ProtocolChunkRow[] };
+      const rows = (data as Record<string, unknown>[]).map((row) => ({
         id: String(row.id),
         document_id: String(row.document_id),
         content: String(row.content ?? ""),
@@ -245,13 +277,13 @@ async function retrieveCandidates(
         page_start: typeof row.page_start === "number" ? row.page_start : null,
         page_end: typeof row.page_end === "number" ? row.page_end : null,
       }));
+      return { corpus: corpus.key, rows };
     }));
+    const results = await Promise.all(searches);
 
-    const evidenceIdSet = new Set(evidenceDocIds);
-    const flat = perGroup.flat();
     return {
-      protocol: labelCandidates(flat.filter((r) => !evidenceIdSet.has(r.document_id)), "P"),
-      evidence: labelCandidates(flat.filter((r) => evidenceIdSet.has(r.document_id)), "E"),
+      protocol: labelCandidates(results.filter((r) => r.corpus === "protocol").flatMap((r) => r.rows), "P"),
+      evidence: labelCandidates(results.filter((r) => r.corpus === "evidence").flatMap((r) => r.rows), "E"),
     };
   } catch (err) {
     log("warn", "audit_observation_draft.retrieval_failed", {
@@ -345,49 +377,70 @@ Deno.serve(async (req: Request) => {
 
   const protocol = audit.protocol as { title?: string } | { title?: string }[] | null;
   const protocolTitle = (Array.isArray(protocol) ? protocol[0]?.title : protocol?.title) ?? null;
+  const auditType = (audit.audit_type as string | null) ?? null;
 
-  // Live, un-promoted (either lane), non-positive notes only. Fails CLOSED:
-  // an unreadable pad is not an empty pad (pre-apply of 20260908000000 the
-  // backlink column is missing and this read errors — the honest answer is
-  // "not yet", never "no notes").
-  const { data: noteRows, error: notesErr } = await supabase
-    .from("audit_note_objects")
-    .select("id, body")
-    .eq("audit_id", auditId)
-    .is("deleted_at", null)
-    .is("promoted_entry_id", null)
-    .is("promoted_finding_id", null)
-    .eq("is_positive", false)
-    .order("created_at", { ascending: true })
-    .limit(MAX_NOTES_IN_PROMPT);
-  if (notesErr) {
+  // Service role from here on is safe: the JWT audit fetch proved ownership.
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const serviceClient = serviceRoleKey
+    ? createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } })
+    : null;
+
+  // Three independent reads, fired together.
+  //   notes    — live, un-promoted (either lane), non-positive only
+  //   register — the filed evidence documents (JWT/RLS-gated)
+  //   protocol — the audit protocol's ready parsed documents (service role)
+  const [notesRes, registerRes, protocolDocsRes] = await Promise.all([
+    supabase
+      .from("audit_note_objects")
+      .select("id, body")
+      .eq("audit_id", auditId)
+      .is("deleted_at", null)
+      .is("promoted_entry_id", null)
+      .is("promoted_finding_id", null)
+      .eq("is_positive", false)
+      .order("created_at", { ascending: true })
+      .limit(MAX_NOTES_IN_PROMPT),
+    supabase
+      .from("audit_source_documents")
+      .select("document_id, source_type, include_in_generation, documents(title, status, content_hash, kind)")
+      .eq("audit_id", auditId)
+      .order("added_at", { ascending: false }),
+    serviceClient && audit.protocol_id
+      ? serviceClient
+          .from("documents")
+          .select("id")
+          .eq("protocol_id", audit.protocol_id as string)
+          .eq("status", "ready")
+      : Promise.resolve({ data: null as { id: unknown }[] | null, error: null }),
+  ]);
+
+  // Both reads fail CLOSED: an unreadable pad is not an empty pad (pre-apply
+  // of 20260908000000 the backlink column is missing and the notes read
+  // errors — the honest answer is "not yet", never "no notes"), and drafting
+  // "from notes only" over a register read error would silently under-ground
+  // every candidate.
+  if (notesRes.error) {
     log("warn", "audit_observation_draft.notes_read_error", {
-      request_id: requestId, error: String(notesErr.message),
+      request_id: requestId, error: String(notesRes.error.message),
     });
     return new Response(JSON.stringify({ error: "Fieldwork notes could not be read — try again" }),
       { status: 503, headers: jsonHeaders });
   }
-  const notes: NoteContext[] = (noteRows ?? []).map((n) => ({
-    id: n.id as string,
-    body: String(n.body ?? "").slice(0, MAX_NOTE_CHARS),
-  }));
-
-  // Evidence register — same read and the same fail-closed stance as the
-  // deliverable engine: drafting "from notes only" over a register read
-  // error would silently under-ground every candidate.
-  const { data: registerRows, error: registerErr } = await supabase
-    .from("audit_source_documents")
-    .select("document_id, source_type, include_in_generation, documents(title, status, content_hash, kind)")
-    .eq("audit_id", auditId)
-    .order("added_at", { ascending: false });
-  if (registerErr) {
+  if (registerRes.error) {
     log("warn", "audit_observation_draft.register_read_error", {
-      request_id: requestId, error: String(registerErr.message),
+      request_id: requestId, error: String(registerRes.error.message),
     });
     return new Response(JSON.stringify({ error: "Evidence register could not be read — try again" }),
       { status: 503, headers: jsonHeaders });
   }
-  const evidenceDocs = normalizeRegister(registerRows).filter((d) => d.included && d.status === "ready");
+
+  const notes: NoteContext[] = (notesRes.data ?? []).map((n) => ({
+    id: n.id as string,
+    body: String(n.body ?? "").slice(0, MAX_NOTE_CHARS),
+  }));
+  const evidenceDocs = normalizeRegister(registerRes.data).filter((d) => d.included && d.status === "ready");
+  const protocolDocIds = (protocolDocsRes.data ?? []).map((d) => String(d.id));
+  const protocolSource: "ready" | "unavailable" = protocolDocIds.length > 0 ? "ready" : "unavailable";
 
   if (notes.length === 0 && evidenceDocs.length === 0) {
     return new Response(JSON.stringify({
@@ -400,6 +453,7 @@ Deno.serve(async (req: Request) => {
     audit_id: auditId,
     note_count: notes.length,
     evidence_doc_count: evidenceDocs.length,
+    protocol_source: protocolSource,
   });
 
   const controller = new AbortController();
@@ -407,42 +461,33 @@ Deno.serve(async (req: Request) => {
   req.signal.addEventListener("abort", () => controller.abort());
 
   // ---------------------------------------------------------------------------
-  // Retrieval — service role, ONLY after the JWT audit fetch proved ownership.
+  // Retrieval — per corpus, per query.
   // ---------------------------------------------------------------------------
 
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  let protocolSource: "ready" | "unavailable" = "unavailable";
+  const evidenceDocIds = evidenceDocs.map((d) => d.document_id);
   let candidates: { protocol: ProtocolCandidate[]; evidence: ProtocolCandidate[] } =
     { protocol: [], evidence: [] };
-
-  if (serviceRoleKey) {
-    const serviceClient = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false },
-    });
-    let protocolDocIds: string[] = [];
-    if (audit.protocol_id) {
-      const { data: docRows } = await serviceClient
-        .from("documents")
-        .select("id")
-        .eq("protocol_id", audit.protocol_id as string)
-        .eq("status", "ready");
-      protocolDocIds = (docRows ?? []).map((d) => String(d.id));
-      if (protocolDocIds.length > 0) protocolSource = "ready";
-    }
-    const evidenceDocIds = evidenceDocs.map((d) => d.document_id);
-    if (protocolDocIds.length > 0 || evidenceDocIds.length > 0) {
-      candidates = await retrieveCandidates(
-        serviceClient, openaiKey, protocolDocIds, evidenceDocIds, notes, controller.signal, requestId,
-      );
-    }
+  if (serviceClient && (protocolDocIds.length > 0 || evidenceDocIds.length > 0)) {
+    candidates = await retrieveCandidates(
+      serviceClient, openaiKey, protocolDocIds, evidenceDocIds,
+      buildQueries(notes, evidenceDocs, protocolTitle, auditType),
+      controller.signal, requestId,
+    );
   }
+  // Document version rides with every evidence passage (content_hash from
+  // the register row) so an accepted citation names WHICH filing it quotes.
+  const hashByDoc = new Map(evidenceDocs.map((d) => [d.document_id, d.content_hash]));
+  const evidenceCandidates: EvidenceCandidate[] = candidates.evidence.map((c) => ({
+    ...c,
+    content_hash: hashByDoc.get(c.document_id) ?? null,
+  }));
 
   log("info", "audit_observation_draft.passages", {
     request_id: requestId,
     audit_id: auditId,
     protocol_source: protocolSource,
     protocol_candidate_count: candidates.protocol.length,
-    evidence_candidate_count: candidates.evidence.length,
+    evidence_candidate_count: evidenceCandidates.length,
   });
 
   // ---------------------------------------------------------------------------
@@ -459,7 +504,7 @@ Deno.serve(async (req: Request) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: CHAT_MODEL,
         temperature: 0.2,
         max_tokens: 4_000,
         response_format: { type: "json_object" },
@@ -468,8 +513,7 @@ Deno.serve(async (req: Request) => {
           {
             role: "user",
             content: buildUserMessage(
-              notes, protocolTitle, (audit.audit_type as string | null) ?? null,
-              candidates.protocol, candidates.evidence, evidenceTitles,
+              notes, protocolTitle, auditType, candidates.protocol, evidenceCandidates, evidenceTitles,
             ),
           },
         ],
@@ -515,7 +559,7 @@ Deno.serve(async (req: Request) => {
 
   const liveNoteIds = new Set(notes.map((n) => n.id));
   const { accepted, withheldCount, strippedProtocolRefCount } =
-    gateCandidates(parsed.candidates, liveNoteIds, candidates.evidence, candidates.protocol);
+    gateCandidates(parsed.candidates, liveNoteIds, evidenceCandidates, candidates.protocol);
 
   log("info", "audit_observation_draft.response", {
     request_id: requestId,
@@ -532,6 +576,8 @@ Deno.serve(async (req: Request) => {
     candidates: accepted,
     withheld_count: withheldCount,
     stripped_protocol_ref_count: strippedProtocolRefCount,
+    engine: ENGINE,
+    drafted_at: new Date().toISOString(),
     protocol_source: protocolSource,
     note_count: notes.length,
     evidence_doc_count: evidenceDocs.length,

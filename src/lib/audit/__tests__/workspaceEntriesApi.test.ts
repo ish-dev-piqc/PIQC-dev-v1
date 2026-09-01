@@ -359,51 +359,65 @@ describe('fetchWorkspaceEntries — batched read (PR-5)', () => {
 
 // ---------------------------------------------------------------------------
 // Fieldwork lane, slice 2 — promoting a PIQC-drafted candidate. The wrapper's
-// contract: origin is derived from `edited` (verbatim → PIQC_DRAFTED, any
-// edit → PIQC_EDITED), the post-gate evidence is forwarded untouched (the RPC
-// derives source_note_ids from it), and the auditor-owned classification /
-// impact default exactly like createWorkspaceEntry.
+// contract is fidelity: the provenance bundle (candidate key, post-gate
+// evidence, the proposal as drafted, the engine) is forwarded untouched and
+// the client asserts NO origin — the RPC derives it by comparing the accepted
+// text with `drafted`, derives source_note_ids from the evidence, and refuses
+// a repeated candidate key.
 // ---------------------------------------------------------------------------
 
 const NOTE_A = 'aaaaaaaa-0000-0000-0000-000000000001';
 const EVIDENCE = [
   { text: 'Two excursions were logged five days late.', source_note_ids: [NOTE_A], source_passages: [] },
 ];
+const DRAFTED = {
+  vendor_domain: 'Data integrity',
+  observation_text: 'Excursions were not documented within the required window.',
+  checkpoint_ref: null,
+};
+const ENGINE = { function: 'audit-observation-draft', model: 'gpt-4o-mini' };
 
-describe('promoteWorkspaceCandidate — origin + defaults', () => {
+describe('promoteWorkspaceCandidate — provenance bundle fidelity', () => {
   beforeEach(() => {
     mockRpc.mockReset();
     mockIn.mockReset().mockResolvedValue({ data: [], error: null });
   });
 
-  it('verbatim acceptance → PIQC_DRAFTED with the create-RPC defaults, evidence forwarded as-is', async () => {
+  it('forwards the bundle as-is and asserts no origin — that is the server\'s comparison to make', async () => {
     mockRpc.mockResolvedValueOnce({ data: makeEntryRow({ id: 'we-9' }), error: null });
 
     const result = await promoteWorkspaceCandidate('audit-1', {
-      vendorDomain: 'Data integrity',
-      observationText: 'Excursions were not documented within the required window.',
+      candidateKey: 'k-1',
+      vendorDomain: DRAFTED.vendor_domain,
+      observationText: DRAFTED.observation_text,
+      checkpointRef: null,
       evidence: EVIDENCE,
-      edited: false,
+      protocolRef: null,
+      drafted: DRAFTED,
+      engine: ENGINE,
+      provisionalClassification: 'NOT_YET_CLASSIFIED',
     });
 
     expect(mockRpc).toHaveBeenCalledOnce();
     expect(mockRpc).toHaveBeenCalledWith('audit_mode_promote_workspace_candidate', {
       p_audit_id: 'audit-1',
-      p_vendor_domain: 'Data integrity',
-      p_observation_text: 'Excursions were not documented within the required window.',
-      p_origin: 'PIQC_DRAFTED',
+      p_candidate_key: 'k-1',
+      p_vendor_domain: DRAFTED.vendor_domain,
+      p_observation_text: DRAFTED.observation_text,
       p_evidence: EVIDENCE,
+      p_drafted: DRAFTED,
+      p_engine: ENGINE,
       p_checkpoint_ref: null,
       p_protocol_ref: null,
-      p_provisional_impact: 'NONE',
       p_provisional_classification: 'NOT_YET_CLASSIFIED',
-      p_reason: null,
     });
+    const params = mockRpc.mock.calls[0][1] as Record<string, unknown>;
+    expect(params).not.toHaveProperty('p_origin');
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.data.id).toBe('we-9');
   });
 
-  it('an edited candidate → PIQC_EDITED, with the auditor classification, checkpoint, and protocol quote forwarded', async () => {
+  it('forwards the auditor classification, checkpoint, and verified protocol quote', async () => {
     mockRpc.mockResolvedValueOnce({ data: makeEntryRow(), error: null });
     const protocolRef = {
       chunk_id: 'chunk-p1',
@@ -415,44 +429,51 @@ describe('promoteWorkspaceCandidate — origin + defaults', () => {
     };
 
     await promoteWorkspaceCandidate('audit-1', {
+      candidateKey: 'k-2',
       vendorDomain: 'Data integrity',
       observationText: 'Edited text.',
-      evidence: EVIDENCE,
-      edited: true,
       checkpointRef: 'SOP-014 rev 3 §4.2',
+      evidence: EVIDENCE,
       protocolRef,
+      drafted: DRAFTED,
+      engine: ENGINE,
       provisionalClassification: 'FINDING',
     });
 
     expect(mockRpc).toHaveBeenCalledWith(
       'audit_mode_promote_workspace_candidate',
       expect.objectContaining({
-        p_origin: 'PIQC_EDITED',
+        p_observation_text: 'Edited text.',
+        p_drafted: DRAFTED,
         p_checkpoint_ref: 'SOP-014 rev 3 §4.2',
         p_protocol_ref: protocolRef,
         p_provisional_classification: 'FINDING',
-        p_provisional_impact: 'NONE',
       }),
     );
   });
 
-  it('an RPC refusal (already-promoted note) surfaces as ok:false with the server message', async () => {
+  it('an RPC refusal (already accepted / already-promoted note) surfaces as ok:false with the server message', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockRpc.mockResolvedValueOnce({
       data: null,
-      error: { message: 'candidate cites a note already promoted into an accepted observation — re-run drafting' },
+      error: { message: 'This candidate was already accepted — it is in the observation record' },
     });
 
     const result = await promoteWorkspaceCandidate('audit-1', {
+      candidateKey: 'k-1',
       vendorDomain: 'x',
       observationText: 'y',
+      checkpointRef: null,
       evidence: EVIDENCE,
-      edited: false,
+      protocolRef: null,
+      drafted: DRAFTED,
+      engine: ENGINE,
+      provisionalClassification: 'NOT_YET_CLASSIFIED',
     });
 
     expect(result).toEqual({
       ok: false,
-      error: 'candidate cites a note already promoted into an accepted observation — re-run drafting',
+      error: 'This candidate was already accepted — it is in the observation record',
     });
     expect(errorSpy).toHaveBeenCalled();
     errorSpy.mockRestore();

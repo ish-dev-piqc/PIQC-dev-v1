@@ -68,31 +68,36 @@ vi.mock('../../../../sotr/WorksheetItemRow', () => ({
 // handed. The panel marker exposes a button that simulates an accepted
 // candidate so the workspace's merge can be pinned.
 vi.mock('../vendor/VendorNotesPad', () => ({
-  default: ({ hasReached, notes, loading, loadFailed }: {
+  default: ({ hasReached, notes, status, onRetry }: {
     hasReached: boolean;
     notes: { promoted_entry_id: string | null }[];
-    loading: boolean;
-    loadFailed: boolean;
+    status: string;
+    onRetry: () => void;
   }) => (
     <div
       data-testid="vendor-notes-pad"
       data-reached={String(hasReached)}
       data-notes={String(notes.length)}
-      data-loading={String(loading)}
-      data-failed={String(loadFailed)}
-    />
+      data-status={status}
+    >
+      <button type="button" onClick={onRetry}>
+        retry notes
+      </button>
+    </div>
   ),
 }));
 vi.mock('../vendor/VendorCandidatePanel', () => ({
-  default: ({ hasReached, notes, onPromoted }: {
+  default: ({ hasReached, notes, notesStatus, onPromoted }: {
     hasReached: boolean;
-    notes: unknown[] | null;
+    notes: unknown[];
+    notesStatus: string;
     onPromoted: (entry: MockWorkspaceEntry, consumedNoteIds: string[]) => void;
   }) => (
     <div
       data-testid="vendor-candidate-panel"
       data-reached={String(hasReached)}
-      data-notes={notes === null ? 'null' : String(notes.length)}
+      data-notes={String(notes.length)}
+      data-notes-status={notesStatus}
     >
       <button type="button" onClick={() => onPromoted({ ...makeEntry(), id: 'entry-promoted' }, ['note-1'])}>
         simulate accept
@@ -193,27 +198,52 @@ describe('AuditConductWorkspace — one-ahead preview guard (PR-UX2) + fieldwork
     expect(panel.compareDocumentPosition(advance) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('reads the notes ONCE per audit and hands them to both the pad and the panel; a failed read is a state, not an empty list', async () => {
+  it('reads the notes ONCE per audit and hands the same status + notes to the pad and the panel', async () => {
     render(<AuditConductWorkspace />);
     const pad = screen.getByTestId('vendor-notes-pad');
-    expect(pad.getAttribute('data-loading')).toBe('true');
-    // The panel's prune must wait while the read is unknown.
-    expect(screen.getByTestId('vendor-candidate-panel').getAttribute('data-notes')).toBe('null');
+    const panel = screen.getByTestId('vendor-candidate-panel');
+    expect(pad.getAttribute('data-status')).toBe('loading');
+    expect(panel.getAttribute('data-notes-status')).toBe('loading');
 
-    await waitFor(() => expect(pad.getAttribute('data-notes')).toBe('1'));
-    expect(pad.getAttribute('data-loading')).toBe('false');
-    expect(screen.getByTestId('vendor-candidate-panel').getAttribute('data-notes')).toBe('1');
+    await waitFor(() => expect(pad.getAttribute('data-status')).toBe('ready'));
+    expect(pad.getAttribute('data-notes')).toBe('1');
+    expect(panel.getAttribute('data-notes-status')).toBe('ready');
+    expect(panel.getAttribute('data-notes')).toBe('1');
     expect(mockFetchVendorNotes).toHaveBeenCalledTimes(1);
     expect(mockFetchVendorNotes).toHaveBeenCalledWith('audit-1');
   });
 
-  it('a failed notes read reaches the pad as loadFailed with no notes asserted, and the panel as unknown', async () => {
-    mockFetchVendorNotes.mockResolvedValue({ ok: false, error: 'permission denied' });
+  it('a failed notes read is a state on both surfaces — never an empty list; Retry refetches', async () => {
+    mockFetchVendorNotes.mockResolvedValueOnce({ ok: false, error: 'permission denied' });
     render(<AuditConductWorkspace />);
     const pad = screen.getByTestId('vendor-notes-pad');
-    await waitFor(() => expect(pad.getAttribute('data-failed')).toBe('true'));
+    await waitFor(() => expect(pad.getAttribute('data-status')).toBe('failed'));
     expect(pad.getAttribute('data-notes')).toBe('0');
-    expect(screen.getByTestId('vendor-candidate-panel').getAttribute('data-notes')).toBe('null');
+    expect(screen.getByTestId('vendor-candidate-panel').getAttribute('data-notes-status')).toBe('failed');
+
+    // The retry path is the workspace's, not the pad's — pinned here.
+    fireEvent.click(screen.getByRole('button', { name: /retry notes/i }));
+    await waitFor(() => expect(pad.getAttribute('data-status')).toBe('ready'));
+    expect(mockFetchVendorNotes).toHaveBeenCalledTimes(2);
+    expect(pad.getAttribute('data-notes')).toBe('1');
+  });
+
+  it('switching audits never hands the previous audit\'s notes to the next one — the slot is keyed by audit', async () => {
+    const { rerender } = render(<AuditConductWorkspace />);
+    const pad = screen.getByTestId('vendor-notes-pad');
+    await waitFor(() => expect(pad.getAttribute('data-status')).toBe('ready'));
+
+    // Audit 2's read never resolves within this test: the pad must show
+    // loading with no notes, not audit 1's ready read.
+    mockFetchVendorNotes.mockImplementation(() => new Promise(() => {}));
+    mockActiveAudit = { ...BASE_AUDIT, id: 'audit-2' };
+    rerender(<AuditConductWorkspace />);
+
+    const pad2 = screen.getByTestId('vendor-notes-pad');
+    expect(pad2.getAttribute('data-status')).toBe('loading');
+    expect(pad2.getAttribute('data-notes')).toBe('0');
+    expect(screen.getByTestId('vendor-candidate-panel').getAttribute('data-notes-status')).toBe('loading');
+    expect(mockFetchVendorNotes).toHaveBeenLastCalledWith('audit-2');
   });
 
   it('an accepted candidate is appended to the shared entry store — the same merge the entry form uses', async () => {

@@ -48,8 +48,8 @@ interface Props {
   hasReached: boolean;
   isLight: boolean;
   notes: AuditNoteObject[];
-  loading: boolean;
-  loadFailed: boolean;
+  /** The owner's read state — 'failed' is a state, never an empty list. */
+  status: 'loading' | 'ready' | 'failed';
   onRetry: () => void;
   onNotesChange: (updater: (prev: AuditNoteObject[]) => AuditNoteObject[]) => void;
 }
@@ -59,8 +59,7 @@ export default function VendorNotesPad({
   hasReached,
   isLight,
   notes,
-  loading,
-  loadFailed,
+  status,
   onRetry,
   onNotesChange,
 }: Props) {
@@ -178,7 +177,7 @@ export default function VendorNotesPad({
         <h3 className="text-fg-heading text-sm font-semibold">Fieldwork notes</h3>
         {/* The count is a claim about the read — never made while the read
             is loading or failed. */}
-        {!loading && !loadFailed && (
+        {status === 'ready' && (
           <span className="text-fg-muted text-xs" data-testid="vendor-notes-count">
             {notes.length === 1 ? '1 note' : `${notes.length} notes`}
           </span>
@@ -188,8 +187,10 @@ export default function VendorNotesPad({
         </span>
       </div>
 
-      {/* Capture — pure mutation surface, hidden entirely in preview. */}
-      {hasReached && (
+      {/* Capture — pure mutation surface, hidden entirely in preview, and
+          hidden while the read is in flight: a note added mid-read would be
+          overwritten when the read resolved. */}
+      {hasReached && status !== 'loading' && (
         <div data-testid="vendor-notes-capture" className={`p-4 space-y-3 border-b ${rowBorder}`}>
           {saveError && (
             <div
@@ -260,9 +261,9 @@ export default function VendorNotesPad({
         </div>
       )}
 
-      {loading ? (
+      {status === 'loading' ? (
         <p className="text-fg-muted text-sm px-4 py-6">Loading notes…</p>
-      ) : loadFailed ? (
+      ) : status === 'failed' ? (
         // Honest load failure — absence ≠ failure, so no empty pad over a
         // failed read.
         <div

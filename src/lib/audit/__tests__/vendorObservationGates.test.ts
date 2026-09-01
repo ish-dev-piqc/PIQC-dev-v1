@@ -13,6 +13,8 @@ const PHANTOM = 'ffffffff-0000-0000-0000-00000000000f';
 
 const live = () => new Set([NOTE_A, NOTE_B]);
 
+// Evidence passages carry the filed document's version (content_hash) so an
+// accepted citation names WHICH filing it quotes.
 const EVIDENCE = labelCandidates(
   [
     {
@@ -33,7 +35,7 @@ const EVIDENCE = labelCandidates(
     },
   ],
   'E',
-);
+).map((c) => ({ ...c, content_hash: 'sha-e' }));
 
 const PROTOCOL = labelCandidates(
   [
@@ -152,10 +154,11 @@ describe('gateCandidates — Gate 1 cite-or-drop', () => {
     );
     expect(withheldCount).toBe(0);
     expect(accepted[0].evidence[0].source_note_ids).toEqual([]);
-    // Deduped by chunk; the label itself never leaves the function.
+    // Deduped by chunk; the label itself never leaves the function; the
+    // document version rides along.
     expect(accepted[0].evidence[0].source_passages).toEqual([
-      { chunk_id: 'chunk-e1', document_id: 'doc-e', section_heading: '4.2 Excursions', page_start: 3, page_end: 3 },
-      { chunk_id: 'chunk-e2', document_id: 'doc-e', section_heading: '4.3 Review', page_start: 4, page_end: 4 },
+      { chunk_id: 'chunk-e1', document_id: 'doc-e', content_hash: 'sha-e', section_heading: '4.2 Excursions', page_start: 3, page_end: 3 },
+      { chunk_id: 'chunk-e2', document_id: 'doc-e', content_hash: 'sha-e', section_heading: '4.3 Review', page_start: 4, page_end: 4 },
     ]);
   });
 

@@ -277,3 +277,13 @@ export const PROVISIONAL_CLASSIFICATION_LABELS: Record<ProvisionalClassification
   OPPORTUNITY_FOR_IMPROVEMENT: 'OFI',
   NOT_YET_CLASSIFIED: 'Not yet classified',
 };
+
+// Picker order shared by the Stage-6 entry form and the candidate panel —
+// one list, so the same four options never appear in two orders on one
+// screen.
+export const PROVISIONAL_CLASSIFICATION_ORDER: readonly ProvisionalClassification[] = [
+  'FINDING',
+  'OBSERVATION',
+  'OPPORTUNITY_FOR_IMPROVEMENT',
+  'NOT_YET_CLASSIFIED',
+];

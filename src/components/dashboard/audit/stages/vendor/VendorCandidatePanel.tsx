@@ -1,15 +1,25 @@
-import { useEffect, useState } from 'react';
-import { AlertTriangle, BookOpen, FileText, Sparkles, X as XIcon } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, BookOpen, FileText, X as XIcon } from 'lucide-react';
+import { useAuth } from '../../../../../context/AuthContext';
 import {
+  EMPTY_CANDIDATE_STASH,
+  isCandidateEdited,
   readCandidateStash,
   requestObservationCandidates,
+  stashCandidate,
   writeCandidateStash,
+  type CandidateStash,
   type ObservationCandidate,
   type StashedCandidate,
 } from '../../../../../lib/audit/observationDraftApi';
 import { promoteWorkspaceCandidate } from '../../../../../lib/audit/workspaceEntriesApi';
 import type { MockWorkspaceEntry } from '../../../../../lib/audit/mockWorkspaceEntries';
-import { PROVISIONAL_CLASSIFICATION_LABELS } from '../../../../../lib/audit/labels';
+import {
+  PROVISIONAL_CLASSIFICATION_LABELS,
+  PROVISIONAL_CLASSIFICATION_ORDER,
+} from '../../../../../lib/audit/labels';
+import { formatProtocolRefWhere } from '../../../../../lib/audit/isaReportModel';
+import PiqcMark from '../../PiqcMark';
 import type { AuditNoteObject, ProvisionalClassification } from '../../../../../types/audit';
 
 // =============================================================================
@@ -21,52 +31,59 @@ import type { AuditNoteObject, ProvisionalClassification } from '../../../../../
 // The latch: PIQC proposes, the auditor accepts / edits / rejects. Nothing is
 // recorded until Accept, and Accept is the ONLY path from a candidate into
 // audit_workspace_entry_objects (promoteWorkspaceCandidate → one RPC, one
-// transaction, one delta with the evidence chain). A candidate carries no
-// severity or classification — the auditor picks the classification here,
-// defaulting to NOT_YET_CLASSIFIED, which keeps the entry out of report
-// bodies and blocks Stage-8 sign-off until it is classified.
+// transaction, one delta). A candidate carries no severity or
+// classification — the auditor picks the classification here, defaulting to
+// NOT_YET_CLASSIFIED, which keeps the entry out of report bodies and blocks
+// Stage-8 sign-off until it is classified. Whether the accepted text was
+// edited is decided by the server against the proposal it was drafted from;
+// the "Edited" chip here is the same comparison, so the two never disagree.
 //
-// Candidates are stashed in localStorage (observationDraftApi) so a reload
-// does not lose an evening of review to a nondeterministic re-run; stashed
-// candidates whose cited notes are gone or already promoted are pruned once
-// the notes are known (an Accept on them would rightly fail the DB gate).
+// Candidates live in ONE state slot — the stash shape — hydrated from
+// localStorage (scoped to the signed-in user and the audit) once the user is
+// known, written back debounced, flushed on unmount. Every state change is a
+// functional update, so an edit made while an Accept is in flight survives
+// the Accept resolving. Stashed candidates whose cited notes are gone or
+// promoted are pruned only once the notes are KNOWN for this audit.
 //
 // Honesty: every evidence line renders side by side with the note it cites
-// (verifying against your own words IS the review act) or the filed
-// document it came from; withheld / stripped counts are disclosed; a failed
-// Generate keeps the cards already on screen; a failed Accept reports on its
-// card and keeps the candidate.
+// (verifying against your own words IS the review act) or the filed document
+// it came from — so while the notes are unknown (loading or failed) neither
+// Draft nor Accept is armed. Withheld / stripped counts are disclosed; a
+// failed Draft keeps the cards already on screen; a failed Accept reports on
+// its card and keeps the candidate.
 // =============================================================================
+
+type NotesStatus = 'loading' | 'ready' | 'failed';
 
 interface Props {
   auditId: string;
   hasReached: boolean;
   isLight: boolean;
-  /** null while the notes read is unknown (loading or failed) — the prune waits. */
-  notes: AuditNoteObject[] | null;
+  notes: AuditNoteObject[];
+  notesStatus: NotesStatus;
   onPromoted: (entry: MockWorkspaceEntry, consumedNoteIds: string[]) => void;
 }
 
-const CLASSIFICATION_OPTIONS = Object.keys(
-  PROVISIONAL_CLASSIFICATION_LABELS,
-) as ProvisionalClassification[];
+const STASH_WRITE_DELAY_MS = 400;
+
+function mintKey(i: number): string {
+  return `${Date.now().toString(36)}-${i}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 function citedNoteIds(c: ObservationCandidate): string[] {
   return [...new Set(c.evidence.flatMap((e) => e.source_note_ids))];
 }
 
+// The shared locator formatter reads only section/pages; a passage carries
+// no quote. Its no-locator fallback names the protocol, which a filed
+// document is not — so that case renders as nothing here.
 function passageWhere(p: {
   section_heading: string | null;
   page_start: number | null;
   page_end: number | null;
 }): string {
-  const parts = [
-    p.section_heading ? `§ ${p.section_heading}` : null,
-    p.page_start !== null
-      ? `p. ${p.page_start}${p.page_end !== null && p.page_end !== p.page_start ? `–${p.page_end}` : ''}`
-      : null,
-  ].filter(Boolean);
-  return parts.length > 0 ? parts.join(', ') : 'filed document';
+  const where = formatProtocolRefWhere({ chunk_id: null, document_id: null, quote: '', ...p });
+  return where === 'Protocol' ? '' : where;
 }
 
 export default function VendorCandidatePanel({
@@ -74,50 +91,66 @@ export default function VendorCandidatePanel({
   hasReached,
   isLight,
   notes,
+  notesStatus,
   onPromoted,
 }: Props) {
-  // Keyed by auditId at the mount, so the initializer runs once per audit.
-  const [stash] = useState(() => readCandidateStash(auditId));
-  const [candidates, setCandidates] = useState<StashedCandidate[]>(stash?.candidates ?? []);
-  const [withheldCount, setWithheldCount] = useState(stash?.withheld_count ?? 0);
-  const [strippedProtoCount, setStrippedProtoCount] = useState(
-    stash?.stripped_protocol_ref_count ?? 0,
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+
+  // ---------------------------------------------------------------------------
+  // Stash: hydrate → (debounced) persist → flush on unmount.
+  // ---------------------------------------------------------------------------
+  const [stash, setStash] = useState<CandidateStash>(EMPTY_CANDIDATE_STASH);
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    if (!userId) return;
+    setStash(readCandidateStash(userId, auditId) ?? EMPTY_CANDIDATE_STASH);
+    setHydrated(true);
+  }, [userId, auditId]);
+
+  const latest = useRef({ stash, hydrated, userId });
+  latest.current = { stash, hydrated, userId };
+  useEffect(() => {
+    if (!hydrated || !userId) return;
+    // Debounced: per-keystroke serialization of every card is wasted disk.
+    const timer = setTimeout(() => writeCandidateStash(userId, auditId, stash), STASH_WRITE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [stash, hydrated, userId, auditId]);
+  useEffect(
+    () => () => {
+      const { stash: s, hydrated: h, userId: u } = latest.current;
+      if (h && u) writeCandidateStash(u, auditId, s);
+    },
+    [auditId],
   );
-  const [classificationByKey, setClassificationByKey] = useState<
-    Record<string, ProvisionalClassification>
-  >({});
+
+  // Prune stashed candidates whose cited notes are gone or promoted — only
+  // once the notes are known for THIS audit (an Accept on them would rightly
+  // fail the DB gate). Evidence-only candidates cite no notes and survive.
+  useEffect(() => {
+    if (!hydrated || notesStatus !== 'ready') return;
+    const citable = new Set(
+      notes
+        .filter((n) => n.promoted_entry_id === null && n.promoted_finding_id === null)
+        .map((n) => n.id),
+    );
+    setStash((prev) => {
+      const still = prev.candidates.filter((c) => citedNoteIds(c).every((id) => citable.has(id)));
+      return still.length === prev.candidates.length ? prev : { ...prev, candidates: still };
+    });
+  }, [hydrated, notes, notesStatus]);
+
   const [drafting, setDrafting] = useState(false);
   const [draftNote, setDraftNote] = useState<string | null>(null);
   const [acceptingKey, setAcceptingKey] = useState<string | null>(null);
+  const acceptingRef = useRef(false);
   const [acceptError, setAcceptError] = useState<{ key: string; message: string } | null>(null);
 
-  const persist = (
-    next: StashedCandidate[],
-    withheld = withheldCount,
-    strippedProto = strippedProtoCount,
-  ) => {
-    setCandidates(next);
-    writeCandidateStash(auditId, {
-      candidates: next,
-      withheld_count: withheld,
-      stripped_protocol_ref_count: strippedProto,
-    });
-  };
-
-  // Prune stashed candidates whose cited notes are gone or promoted.
-  // Evidence-only candidates cite no notes and always survive.
-  useEffect(() => {
-    if (notes === null || candidates.length === 0) return;
-    const citable = new Set(
-      notes.filter((n) => n.promoted_entry_id === null && n.promoted_finding_id === null).map((n) => n.id),
-    );
-    const still = candidates.filter((c) => citedNoteIds(c).every((id) => citable.has(id)));
-    if (still.length !== candidates.length) persist(still);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notes]);
+  const notesKnown = notesStatus === 'ready';
+  const notesById = useMemo(() => new Map(notes.map((n) => [n.id, n])), [notes]);
 
   const runDrafting = async () => {
-    if (drafting) return;
+    if (drafting || !notesKnown) return;
     setDrafting(true);
     setDraftNote(null);
     const res = await requestObservationCandidates(auditId);
@@ -127,58 +160,69 @@ export default function VendorCandidatePanel({
       setDraftNote(res.error);
       return;
     }
-    const stamp = Date.now();
-    const next: StashedCandidate[] = res.data.candidates.map((c, i) => ({
-      ...c,
-      key: `${stamp}-${i}`,
-      dirty: false,
-    }));
-    setWithheldCount(res.data.withheld_count);
-    setStrippedProtoCount(res.data.stripped_protocol_ref_count);
-    setClassificationByKey({});
+    const { candidates, withheld_count, stripped_protocol_ref_count, engine, drafted_at } = res.data;
     setAcceptError(null);
-    persist(next, res.data.withheld_count, res.data.stripped_protocol_ref_count);
-    if (next.length === 0) {
+    setStash({
+      candidates: candidates.map((c, i) => stashCandidate(c, engine, drafted_at, mintKey(i))),
+      withheld_count,
+      stripped_protocol_ref_count,
+    });
+    if (candidates.length === 0) {
       setDraftNote(
-        res.data.withheld_count > 0
-          ? 'Every proposal was withheld — none could be traced to your notes or filed evidence. Add detail to the notes and retry.'
+        withheld_count > 0
+          ? 'Every proposal was withheld — none could be traced to your notes or filed evidence. Add detail and retry.'
           : 'PIQC found nothing to propose from the current notes and evidence.',
       );
     }
   };
 
-  const patch = (key: string, change: Partial<ObservationCandidate>) => {
-    persist(candidates.map((c) => (c.key === key ? { ...c, ...change, dirty: true } : c)));
-  };
+  const patch = (key: string, change: Partial<ObservationCandidate>) =>
+    setStash((prev) => ({
+      ...prev,
+      candidates: prev.candidates.map((c) => (c.key === key ? { ...c, ...change } : c)),
+    }));
+
+  const classify = (key: string, classification: ProvisionalClassification) =>
+    setStash((prev) => ({
+      ...prev,
+      candidates: prev.candidates.map((c) => (c.key === key ? { ...c, classification } : c)),
+    }));
 
   const dismiss = (key: string) => {
-    if (acceptError?.key === key) setAcceptError(null);
-    persist(candidates.filter((c) => c.key !== key));
+    if (!hasReached) return;
+    setAcceptError((e) => (e?.key === key ? null : e));
+    setStash((prev) => ({ ...prev, candidates: prev.candidates.filter((c) => c.key !== key) }));
   };
 
   const accept = async (c: StashedCandidate) => {
-    if (acceptingKey) return;
+    // Ref, not state: two clicks in one frame both read the same render.
+    if (acceptingRef.current || !hasReached || !notesKnown) return;
+    acceptingRef.current = true;
     setAcceptingKey(c.key);
     setAcceptError(null);
     const res = await promoteWorkspaceCandidate(auditId, {
+      candidateKey: c.key,
       vendorDomain: c.vendor_domain.trim(),
       observationText: c.observation_text.trim(),
-      evidence: c.evidence,
-      edited: c.dirty,
       checkpointRef: c.checkpoint_ref?.trim() || null,
+      evidence: c.evidence,
       protocolRef: c.protocol_ref,
-      provisionalClassification: classificationByKey[c.key] ?? 'NOT_YET_CLASSIFIED',
+      drafted: c.drafted,
+      engine: c.engine,
+      provisionalClassification: c.classification,
     });
+    acceptingRef.current = false;
     setAcceptingKey(null);
     if (res.ok) {
-      persist(candidates.filter((x) => x.key !== c.key));
+      setStash((prev) => ({ ...prev, candidates: prev.candidates.filter((x) => x.key !== c.key) }));
       onPromoted(res.data, citedNoteIds(c));
     } else {
       setAcceptError({ key: c.key, message: res.error });
     }
   };
 
-  const notesById = new Map((notes ?? []).map((n) => [n.id, n]));
+  const { candidates, withheld_count: withheldCount, stripped_protocol_ref_count: strippedProtoCount } =
+    stash;
 
   // ---------------------------------------------------------------------------
   // Theme tokens — same palette as the pad.
@@ -206,7 +250,7 @@ export default function VendorCandidatePanel({
   return (
     <section data-testid="vendor-candidate-panel" className={`${cardBg} border rounded-xl`}>
       <div className={`flex flex-wrap items-center gap-2 px-4 py-3 border-b ${rowBorder}`}>
-        <Sparkles size={15} className={brandText} />
+        <PiqcMark size={15} className={brandText} />
         <h3 className="text-fg-heading text-sm font-semibold">PIQC-drafted observations</h3>
         {candidates.length > 0 && (
           <span className="text-fg-muted text-xs" data-testid="vendor-candidate-count">
@@ -217,7 +261,7 @@ export default function VendorCandidatePanel({
           <button
             type="button"
             onClick={() => void runDrafting()}
-            disabled={drafting}
+            disabled={drafting || !notesKnown}
             data-testid="vendor-candidate-generate"
             className={`ml-auto rounded-md px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40 ${primaryBtn}`}
           >
@@ -236,6 +280,17 @@ export default function VendorCandidatePanel({
             be flagged for re-review.
           </span>
         </p>
+
+        {hasReached && notesStatus === 'failed' && (
+          <p
+            role="alert"
+            data-testid="vendor-candidate-notes-hint"
+            className={`px-3 py-2 rounded-md border text-xs ${redBox}`}
+          >
+            Notes could not be loaded — retry in the notes pad above before drafting or
+            accepting. Candidates are reviewed against your notes, not instead of them.
+          </p>
+        )}
 
         {draftNote && (
           <p className="text-fg-sub text-sm" data-testid="vendor-candidate-note" role="status">
@@ -261,9 +316,13 @@ export default function VendorCandidatePanel({
         )}
 
         {candidates.map((c) => {
+          const edited = isCandidateEdited(c);
+          const busy = acceptingKey === c.key;
+          const locked = !hasReached || busy;
           const rowError = acceptError?.key === c.key ? acceptError.message : null;
           const canAccept =
             hasReached &&
+            notesKnown &&
             acceptingKey === null &&
             c.vendor_domain.trim().length > 0 &&
             c.observation_text.trim().length > 0;
@@ -274,11 +333,11 @@ export default function VendorCandidatePanel({
               className={`rounded-lg border ${innerCard}`}
             >
               <div className={`flex flex-wrap items-center gap-2 px-3 py-2 border-b ${rowBorder}`}>
-                <Sparkles size={12} className={brandText} />
+                <PiqcMark size={12} className={brandText} />
                 <span className={`text-[10px] font-semibold uppercase tracking-wider ${brandText}`}>
                   Candidate
                 </span>
-                {c.dirty && (
+                {edited && (
                   <span
                     data-testid={`vendor-candidate-edited-${c.key}`}
                     className={`rounded border px-1.5 py-0.5 text-[10px] ${amberChip}`}
@@ -289,7 +348,7 @@ export default function VendorCandidatePanel({
                 <input
                   value={c.vendor_domain}
                   onChange={(e) => patch(c.key, { vendor_domain: e.target.value })}
-                  disabled={!hasReached}
+                  disabled={locked}
                   aria-label="Domain"
                   data-testid={`vendor-candidate-domain-${c.key}`}
                   className={`ml-auto w-44 rounded-md border px-2 py-1 text-xs text-fg-body outline-none disabled:opacity-70 ${inputBase}`}
@@ -300,7 +359,7 @@ export default function VendorCandidatePanel({
                 <textarea
                   value={c.observation_text}
                   onChange={(e) => patch(c.key, { observation_text: e.target.value })}
-                  disabled={!hasReached}
+                  disabled={locked}
                   rows={3}
                   aria-label="Observation"
                   data-testid={`vendor-candidate-observation-${c.key}`}
@@ -309,23 +368,23 @@ export default function VendorCandidatePanel({
                 <input
                   value={c.checkpoint_ref ?? ''}
                   onChange={(e) => patch(c.key, { checkpoint_ref: e.target.value })}
-                  disabled={!hasReached}
+                  disabled={locked}
                   placeholder="Vendor SOP / document reference (optional)"
                   aria-label="Checkpoint reference"
                   data-testid={`vendor-candidate-checkpoint-${c.key}`}
                   className={`w-full rounded-md border px-3 py-1.5 text-xs text-fg-body placeholder:text-fg-muted outline-none disabled:opacity-70 ${inputBase}`}
                 />
 
-                {/* Verified protocol quote (post-Gate-3). Delta-only provenance
-                    on accept — entries carry no protocol_refs column. */}
+                {/* Verified protocol quote (post-Gate-3) — goes on the record
+                    as protocol_ref when accepted. */}
                 {c.protocol_ref && (
                   <div className={`rounded-md border ${rowBorder} px-3 py-2`}>
                     <div className="flex items-center gap-1.5">
                       <BookOpen size={11} className={brandText} />
                       <span className={`text-[10px] font-semibold ${brandText}`}>
-                        Protocol requirement · {passageWhere(c.protocol_ref)}
+                        Protocol requirement · {formatProtocolRefWhere(c.protocol_ref)}
                       </span>
-                      {hasReached && (
+                      {!locked && (
                         <button
                           type="button"
                           onClick={() => patch(c.key, { protocol_ref: null })}
@@ -357,15 +416,18 @@ export default function VendorCandidatePanel({
                           </p>
                         );
                       })}
-                      {ev.source_passages.map((p) => (
-                        <p
-                          key={p.chunk_id}
-                          className={`flex items-center gap-1 text-fg-muted text-[11px] mt-1 pl-2 border-l-2 ${quoteBorder}`}
-                        >
-                          <FileText size={10} />
-                          Filed evidence · {passageWhere(p)}
-                        </p>
-                      ))}
+                      {ev.source_passages.map((p) => {
+                        const where = passageWhere(p);
+                        return (
+                          <p
+                            key={p.chunk_id}
+                            className={`flex items-center gap-1 text-fg-muted text-[11px] mt-1 pl-2 border-l-2 ${quoteBorder}`}
+                          >
+                            <FileText size={10} />
+                            Filed evidence{where ? ` · ${where}` : ''}
+                          </p>
+                        );
+                      })}
                     </div>
                   ))}
                 </div>
@@ -383,38 +445,35 @@ export default function VendorCandidatePanel({
 
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                   {hasReached && (
-                    <label className="flex items-center gap-1.5 text-fg-muted text-xs">
+                    <div className="flex items-center gap-1.5 text-fg-muted text-xs">
                       Classification
                       <select
-                        value={classificationByKey[c.key] ?? 'NOT_YET_CLASSIFIED'}
-                        onChange={(e) =>
-                          setClassificationByKey((prev) => ({
-                            ...prev,
-                            [c.key]: e.target.value as ProvisionalClassification,
-                          }))
-                        }
+                        value={c.classification}
+                        onChange={(e) => classify(c.key, e.target.value as ProvisionalClassification)}
+                        disabled={busy}
                         aria-label="Classification"
                         data-testid={`vendor-candidate-classification-${c.key}`}
                         className={`rounded-md border px-2 py-1 text-xs text-fg-body outline-none ${inputBase}`}
                       >
-                        {CLASSIFICATION_OPTIONS.map((value) => (
+                        {PROVISIONAL_CLASSIFICATION_ORDER.map((value) => (
                           <option key={value} value={value}>
                             {PROVISIONAL_CLASSIFICATION_LABELS[value]}
                           </option>
                         ))}
                       </select>
-                    </label>
+                    </div>
                   )}
-                  <div className="ml-auto flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => dismiss(c.key)}
-                      data-testid={`vendor-candidate-dismiss-${c.key}`}
-                      className="text-fg-muted text-xs hover:text-fg-body"
-                    >
-                      Dismiss
-                    </button>
-                    {hasReached && (
+                  {hasReached && (
+                    <div className="ml-auto flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => dismiss(c.key)}
+                        disabled={busy}
+                        data-testid={`vendor-candidate-dismiss-${c.key}`}
+                        className="text-fg-muted text-xs hover:text-fg-body disabled:opacity-40"
+                      >
+                        Dismiss
+                      </button>
                       <button
                         type="button"
                         onClick={() => void accept(c)}
@@ -422,12 +481,12 @@ export default function VendorCandidatePanel({
                         data-testid={`vendor-candidate-accept-${c.key}`}
                         className={`rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40 ${primaryBtn}`}
                       >
-                        {acceptingKey === c.key ? 'Accepting…' : 'Accept as observation'}
+                        {busy ? 'Accepting…' : 'Accept as observation'}
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
-                {c.dirty && hasReached && (
+                {edited && hasReached && (
                   <p className="text-fg-muted text-[11px]">
                     Recorded as PIQC-drafted, edited by you — the accepted text is what goes on record.
                   </p>

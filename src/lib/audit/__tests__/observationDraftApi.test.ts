@@ -9,23 +9,59 @@ import {
   CANDIDATE_STASH_PREFIX,
   DRAFTING_ENGINE_NOT_DEPLOYED,
   DRAFTING_ENGINE_UNREACHABLE,
+  candidateStashKey,
+  isCandidateEdited,
   readCandidateStash,
   requestObservationCandidates,
+  stashCandidate,
   writeCandidateStash,
   type CandidateStash,
+  type ObservationCandidate,
 } from '../observationDraftApi';
 
 const getSessionMock = vi.mocked(supabase.auth.getSession);
 
 const NOTE_A = 'aaaaaaaa-0000-0000-0000-000000000001';
+const ENGINE = { function: 'audit-observation-draft', model: 'gpt-4o-mini' };
+const DRAFTED_AT = '2026-09-08T10:00:00Z';
 
-function candidate() {
+function candidate(): ObservationCandidate {
   return {
     vendor_domain: 'Data integrity',
     observation_text: 'Excursions were not documented within the required window.',
     checkpoint_ref: null,
-    evidence: [{ text: 'Two excursions logged late.', source_note_ids: [NOTE_A], source_passages: [] }],
+    evidence: [
+      {
+        text: 'Two excursions logged late.',
+        source_note_ids: [NOTE_A],
+        source_passages: [
+          {
+            chunk_id: 'chunk-e1',
+            document_id: 'doc-e',
+            content_hash: 'sha-e',
+            section_heading: '4.2 Excursions',
+            page_start: 3,
+            page_end: 3,
+          },
+        ],
+      },
+    ],
     protocol_ref: null,
+  };
+}
+
+function okPayload(extra: Record<string, unknown> = {}) {
+  return {
+    candidates: [candidate()],
+    withheld_count: 2,
+    stripped_protocol_ref_count: 0,
+    engine: ENGINE,
+    drafted_at: DRAFTED_AT,
+    // Log-only fields the client does not consume.
+    protocol_source: 'ready',
+    note_count: 4,
+    evidence_doc_count: 1,
+    ...extra,
   };
 }
 
@@ -51,11 +87,8 @@ describe('requestObservationCandidates', () => {
     globalThis.fetch = realFetch;
   });
 
-  it('POSTs the audit id under the session JWT and maps the payload with count defaults', async () => {
-    const fetchMock = fetchResponding({
-      ok: true,
-      json: () => Promise.resolve({ candidates: [candidate()], withheld_count: 2, protocol_source: 'ready' }),
-    });
+  it('POSTs the audit id under the session JWT and maps exactly what the panel consumes', async () => {
+    const fetchMock = fetchResponding({ ok: true, json: () => Promise.resolve(okPayload()) });
 
     const res = await requestObservationCandidates('audit-1');
 
@@ -70,11 +103,28 @@ describe('requestObservationCandidates', () => {
         candidates: [candidate()],
         withheld_count: 2,
         stripped_protocol_ref_count: 0,
-        protocol_source: 'ready',
-        note_count: 0,
-        evidence_doc_count: 0,
+        engine: ENGINE,
+        drafted_at: DRAFTED_AT,
       },
     });
+  });
+
+  it('drops a malformed candidate element instead of handing it to the panel', async () => {
+    fetchResponding({
+      ok: true,
+      json: () =>
+        Promise.resolve(okPayload({ candidates: [candidate(), { vendor_domain: 'no text' }, null] })),
+    });
+    const res = await requestObservationCandidates('audit-1');
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.data.candidates).toEqual([candidate()]);
+  });
+
+  it('a response without the engine provenance is unreadable — never an untraceable success', async () => {
+    fetchResponding({ ok: true, json: () => Promise.resolve(okPayload({ engine: undefined })) });
+    const res = await requestObservationCandidates('audit-1');
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toContain('unreadable');
   });
 
   it("passes the function's own error message through (409 nothing-to-draft, 404 access denied)", async () => {
@@ -125,11 +175,9 @@ describe('requestObservationCandidates', () => {
     });
   });
 
-  it('an OK response without a candidates array is unreadable, never an empty success', async () => {
+  it('an OK response without a candidates array or with a non-JSON body is unreadable', async () => {
     fetchResponding({ ok: true, json: () => Promise.resolve({ drafts: [] }) });
-    const res = await requestObservationCandidates('audit-1');
-    expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.error).toContain('unreadable');
+    expect((await requestObservationCandidates('audit-1')).ok).toBe(false);
 
     fetchResponding({ ok: true, json: () => Promise.reject(new SyntaxError('bad json')) });
     expect((await requestObservationCandidates('audit-1')).ok).toBe(false);
@@ -142,37 +190,66 @@ describe('candidate stash', () => {
   });
 
   const stash = (): CandidateStash => ({
-    candidates: [{ ...candidate(), key: 'k1', dirty: false }],
+    candidates: [stashCandidate(candidate(), ENGINE, DRAFTED_AT, 'k1')],
     withheld_count: 1,
     stripped_protocol_ref_count: 2,
   });
 
-  it('round-trips under the audit-scoped key', () => {
-    writeCandidateStash('audit-1', stash());
-    expect(localStorage.getItem(`${CANDIDATE_STASH_PREFIX}audit-1`)).not.toBeNull();
-    expect(readCandidateStash('audit-1')).toEqual(stash());
-    expect(readCandidateStash('audit-2')).toBeNull();
+  it('is scoped to the user AND the audit — a shared laptop never hands one auditor the next one\'s cards', () => {
+    expect(candidateStashKey('user-1', 'audit-1')).toBe(`${CANDIDATE_STASH_PREFIX}user-1:audit-1`);
+    writeCandidateStash('user-1', 'audit-1', stash());
+    expect(readCandidateStash('user-1', 'audit-1')).toEqual(stash());
+    expect(readCandidateStash('user-2', 'audit-1')).toBeNull();
+    expect(readCandidateStash('user-1', 'audit-2')).toBeNull();
   });
 
   it('an empty or null stash removes the key', () => {
-    writeCandidateStash('audit-1', stash());
-    writeCandidateStash('audit-1', { ...stash(), candidates: [] });
-    expect(readCandidateStash('audit-1')).toBeNull();
-    writeCandidateStash('audit-1', stash());
-    writeCandidateStash('audit-1', null);
-    expect(readCandidateStash('audit-1')).toBeNull();
+    writeCandidateStash('user-1', 'audit-1', stash());
+    writeCandidateStash('user-1', 'audit-1', { ...stash(), candidates: [] });
+    expect(readCandidateStash('user-1', 'audit-1')).toBeNull();
+    writeCandidateStash('user-1', 'audit-1', stash());
+    writeCandidateStash('user-1', 'audit-1', null);
+    expect(readCandidateStash('user-1', 'audit-1')).toBeNull();
   });
 
-  it('corrupt or mis-shaped storage reads as null; missing counts default to 0', () => {
-    localStorage.setItem(`${CANDIDATE_STASH_PREFIX}audit-1`, '{not json');
-    expect(readCandidateStash('audit-1')).toBeNull();
-    localStorage.setItem(`${CANDIDATE_STASH_PREFIX}audit-1`, JSON.stringify({ candidates: 'x' }));
-    expect(readCandidateStash('audit-1')).toBeNull();
-    localStorage.setItem(`${CANDIDATE_STASH_PREFIX}audit-1`, JSON.stringify({ candidates: [] }));
-    expect(readCandidateStash('audit-1')).toEqual({
-      candidates: [],
+  it('corrupt storage reads as null; a malformed element is dropped; missing counts default to 0', () => {
+    const key = candidateStashKey('user-1', 'audit-1');
+    localStorage.setItem(key, '{not json');
+    expect(readCandidateStash('user-1', 'audit-1')).toBeNull();
+    localStorage.setItem(key, JSON.stringify({ candidates: 'x' }));
+    expect(readCandidateStash('user-1', 'audit-1')).toBeNull();
+    // One good card, one written by a shape that never carried provenance.
+    const good = stashCandidate(candidate(), ENGINE, DRAFTED_AT, 'k1');
+    localStorage.setItem(key, JSON.stringify({ candidates: [good, { ...good, engine: undefined }, {}] }));
+    expect(readCandidateStash('user-1', 'audit-1')).toEqual({
+      candidates: [good],
       withheld_count: 0,
       stripped_protocol_ref_count: 0,
     });
+  });
+
+  it('stashCandidate snapshots the proposal and starts unclassified', () => {
+    const s = stashCandidate(candidate(), ENGINE, DRAFTED_AT, 'k1');
+    expect(s.key).toBe('k1');
+    expect(s.drafted).toEqual({
+      vendor_domain: 'Data integrity',
+      observation_text: 'Excursions were not documented within the required window.',
+      checkpoint_ref: null,
+    });
+    expect(s.classification).toBe('NOT_YET_CLASSIFIED');
+    expect(s.engine).toEqual(ENGINE);
+    expect(s.drafted_at).toBe(DRAFTED_AT);
+  });
+
+  it('isCandidateEdited is the same comparison the promote RPC makes: trim-insensitive, blank checkpoint = none, reversible', () => {
+    const s = stashCandidate(candidate(), ENGINE, DRAFTED_AT, 'k1');
+    expect(isCandidateEdited(s)).toBe(false);
+    expect(isCandidateEdited({ ...s, observation_text: `  ${s.observation_text}  ` })).toBe(false);
+    expect(isCandidateEdited({ ...s, checkpoint_ref: '   ' })).toBe(false);
+    expect(isCandidateEdited({ ...s, observation_text: 'Rewritten.' })).toBe(true);
+    expect(isCandidateEdited({ ...s, vendor_domain: 'Training' })).toBe(true);
+    expect(isCandidateEdited({ ...s, checkpoint_ref: 'SOP-1 §2' })).toBe(true);
+    // Typing then deleting a character is not an edit.
+    expect(isCandidateEdited({ ...s, observation_text: s.drafted.observation_text })).toBe(false);
   });
 });

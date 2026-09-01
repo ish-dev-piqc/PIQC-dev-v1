@@ -15,6 +15,7 @@ import { useAuditData } from '../../../../context/AuditDataContext';
 import {
   PROVISIONAL_IMPACT_LABELS,
   PROVISIONAL_CLASSIFICATION_LABELS,
+  PROVISIONAL_CLASSIFICATION_ORDER,
 } from '../../../../lib/audit/labels';
 import { type TaggedSection } from '../../../../lib/audit/mockProtocolRisks';
 import { type MockWorkspaceEntry } from '../../../../lib/audit/mockWorkspaceEntries';
@@ -55,12 +56,8 @@ import { formatExtractedValue } from '../../../sotr/WorksheetItemRow';
 // =============================================================================
 
 const IMPACT_OPTIONS: ProvisionalImpact[] = ['CRITICAL', 'MAJOR', 'MINOR', 'OBSERVATION', 'NONE'];
-const CLASSIFICATION_OPTIONS: ProvisionalClassification[] = [
-  'FINDING',
-  'OBSERVATION',
-  'OPPORTUNITY_FOR_IMPROVEMENT',
-  'NOT_YET_CLASSIFIED',
-];
+// One order for the entry form and the candidate panel (labels.ts).
+const CLASSIFICATION_OPTIONS: ProvisionalClassification[] = [...PROVISIONAL_CLASSIFICATION_ORDER];
 
 interface EntryFormState {
   vendor_domain: string;
@@ -146,21 +143,28 @@ export default function AuditConductWorkspace() {
 
   // Fieldwork notes (vendor lane) — ONE read per audit feeds the notes pad
   // and the candidate panel; both are props-driven. Same hydrate idiom as the
-  // entries read above. 'failed' is a state, not an empty list — the pad
-  // renders it honestly and the panel's stash prune waits.
+  // entries read above, and keyed by audit like the entries store: the slot
+  // names the audit it was read for, so on a switch the stale read is never
+  // handed to the next audit's pad or panel. 'failed' is a state, not an
+  // empty list — the pad renders it honestly and the panel stays unarmed.
   const [notesState, setNotesState] = useState<{
+    auditId: string | null;
     status: 'loading' | 'ready' | 'failed';
     notes: AuditNoteObject[];
-  }>({ status: 'loading', notes: [] });
+  }>({ auditId: null, status: 'loading', notes: [] });
   const [notesReloadNonce, setNotesReloadNonce] = useState(0);
   useEffect(() => {
     if (!activeAudit) return;
     const auditIdLocal = activeAudit.id;
     let cancelled = false;
-    setNotesState({ status: 'loading', notes: [] });
+    setNotesState({ auditId: auditIdLocal, status: 'loading', notes: [] });
     void fetchVendorNotes(auditIdLocal).then((res) => {
       if (cancelled) return;
-      setNotesState(res.ok ? { status: 'ready', notes: res.data } : { status: 'failed', notes: [] });
+      setNotesState(
+        res.ok
+          ? { auditId: auditIdLocal, status: 'ready', notes: res.data }
+          : { auditId: auditIdLocal, status: 'failed', notes: [] },
+      );
     });
     return () => {
       cancelled = true;
@@ -171,6 +175,10 @@ export default function AuditConductWorkspace() {
   if (!activeAudit) return null;
 
   const auditId = activeAudit.id;
+  // Between a switch and the effect above, the slot still holds the previous
+  // audit's read — that reads as loading here, never as the wrong notes.
+  const notesForAudit: { status: 'loading' | 'ready' | 'failed'; notes: AuditNoteObject[] } =
+    notesState.auditId === auditId ? notesState : { status: 'loading', notes: [] };
   const entries = entriesByAudit[auditId] ?? [];
   const auditProtocolRisks = protocolRisks[auditId] ?? [];
 
@@ -227,9 +235,11 @@ export default function AuditConductWorkspace() {
   // Vendor lane — the pad mutates notes through this; an accepted candidate
   // lands in the shared entry store (the saveEntry merge idiom) and marks
   // the notes it consumed as promoted, so the pad hides their affordances
-  // and the next Draft excludes them without a refetch.
+  // and the next Draft excludes them without a refetch. Bound to THIS
+  // audit: a mutation that resolves after a switch (the old pad's closure)
+  // is dropped rather than written into the next audit's notes.
   const handleNotesChange = (updater: (prev: AuditNoteObject[]) => AuditNoteObject[]) =>
-    setNotesState((s) => ({ ...s, notes: updater(s.notes) }));
+    setNotesState((s) => (s.auditId === auditId ? { ...s, notes: updater(s.notes) } : s));
 
   const handleCandidatePromoted = (entry: MockWorkspaceEntry, consumedNoteIds: string[]) => {
     setEntriesByAudit((prev) => ({
@@ -381,9 +391,8 @@ export default function AuditConductWorkspace() {
         auditId={activeAudit.id}
         hasReached={hasReached}
         isLight={isLight}
-        notes={notesState.notes}
-        loading={notesState.status === 'loading'}
-        loadFailed={notesState.status === 'failed'}
+        notes={notesForAudit.notes}
+        status={notesForAudit.status}
         onRetry={() => setNotesReloadNonce((n) => n + 1)}
         onNotesChange={handleNotesChange}
       />
@@ -499,7 +508,8 @@ export default function AuditConductWorkspace() {
         auditId={activeAudit.id}
         hasReached={hasReached}
         isLight={isLight}
-        notes={notesState.status === 'ready' ? notesState.notes : null}
+        notes={notesForAudit.notes}
+        notesStatus={notesForAudit.status}
         onPromoted={handleCandidatePromoted}
       />
 

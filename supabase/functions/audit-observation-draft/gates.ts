@@ -24,8 +24,8 @@
 // the auditor's act at accept time (D4 doctrine).
 //
 // Passage citations are materialized to the retrieved row's facts (chunk /
-// document ids, section, pages). The model's E-labels never leave the
-// function.
+// document ids, the document's content_hash as its version, section, pages).
+// The model's E-labels never leave the function.
 //
 // Pure module — no Deno APIs, no imports beyond the shared pure module. Unit
 // tested from src/lib/audit/__tests__/vendorObservationGates.test.ts.
@@ -37,13 +37,18 @@ import {
   type ProtocolRefSnapshot,
 } from "../_shared/protocolCandidates.ts";
 
-export interface RawCandidateEvidence {
+/** An evidence passage as sent to the model, plus its document's version. */
+export interface EvidenceCandidate extends ProtocolCandidate {
+  content_hash: string | null;
+}
+
+interface RawCandidateEvidence {
   text?: unknown;
   source_note_ids?: unknown;
   source_passages?: unknown;
 }
 
-export interface RawCandidate {
+interface RawCandidate {
   vendor_domain?: unknown;
   observation_text?: unknown;
   checkpoint_ref?: unknown;
@@ -52,21 +57,22 @@ export interface RawCandidate {
 }
 
 /** Row facts of a cited evidence passage — no model text. */
-export interface PassageRef {
+interface PassageRef {
   chunk_id: string;
   document_id: string;
+  content_hash: string | null;
   section_heading: string | null;
   page_start: number | null;
   page_end: number | null;
 }
 
-export interface GatedCandidateEvidence {
+interface GatedCandidateEvidence {
   text: string;
   source_note_ids: string[];
   source_passages: PassageRef[];
 }
 
-export interface GatedCandidate {
+interface GatedCandidate {
   vendor_domain: string;
   observation_text: string;
   checkpoint_ref: string | null;
@@ -74,7 +80,7 @@ export interface GatedCandidate {
   protocol_ref: ProtocolRefSnapshot | null;
 }
 
-export interface CandidateGateResult {
+interface CandidateGateResult {
   accepted: GatedCandidate[];
   withheldCount: number;
   strippedProtocolRefCount: number;
@@ -85,6 +91,7 @@ const MAX_EVIDENCE_ITEMS = 12;
 const MAX_PASSAGES_PER_ITEM = 4;
 const MAX_DOMAIN_CHARS = 80;
 const MAX_OBSERVATION_CHARS = 2_000;
+// Mirrored by the promote RPC's validator (20260909000000).
 const MAX_EVIDENCE_TEXT_CHARS = 1_000;
 const MAX_CHECKPOINT_CHARS = 200;
 
@@ -95,10 +102,11 @@ function asTrimmedString(v: unknown, max: number): string | null {
   return t.slice(0, max);
 }
 
-function toPassageRef(c: ProtocolCandidate): PassageRef {
+function toPassageRef(c: EvidenceCandidate): PassageRef {
   return {
     chunk_id: c.id,
     document_id: c.document_id,
+    content_hash: c.content_hash,
     section_heading: c.section_heading,
     page_start: c.page_start,
     page_end: c.page_end,
@@ -119,7 +127,7 @@ function toPassageRef(c: ProtocolCandidate): PassageRef {
 export function gateCandidates(
   rawCandidates: unknown,
   liveNoteIds: Set<string>,
-  evidenceCandidates: ProtocolCandidate[] = [],
+  evidenceCandidates: EvidenceCandidate[] = [],
   protocolCandidates: ProtocolCandidate[] = [],
 ): CandidateGateResult {
   const accepted: GatedCandidate[] = [];

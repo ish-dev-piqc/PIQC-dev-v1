@@ -1,12 +1,12 @@
 import { supabase } from '../supabase';
 import type { MockWorkspaceEntry } from './mockWorkspaceEntries';
-import type { CandidateEvidence, CandidateProtocolRef } from './observationDraftApi';
+import type { CandidateEvidence, DraftedText, DraftingEngine } from './observationDraftApi';
 import type {
   EndpointTier,
   ImpactSurface,
+  IsaProtocolRef,
   ProvisionalClassification,
   ProvisionalImpact,
-  WorkspaceEntryOrigin,
 } from '../../types/audit';
 
 // =============================================================================
@@ -218,43 +218,45 @@ export async function updateWorkspaceEntry(
 // Promote a PIQC-drafted candidate (fieldwork lane, slice 2) — the ONLY path
 // from candidate to record. audit_mode_promote_workspace_candidate
 // (20260909000000) inserts the entry with provenance, consumes the cited
-// notes, and writes one delta carrying the evidence chain — one transaction.
-// source_note_ids are derived server-side from the evidence, so the client
-// cannot send an inconsistent pair. Classification and impact are the
-// auditor's: same defaults as createWorkspaceEntry (NOT_YET_CLASSIFIED blocks
-// Stage-8 sign-off and is excluded from report bodies).
+// notes, and writes one delta — one transaction. The server decides origin
+// (PIQC_DRAFTED vs PIQC_EDITED) by comparing the accepted text with the
+// engine's proposal (`drafted`), derives source_note_ids from the evidence
+// chain, and refuses a repeat of the same candidateKey on the audit — none
+// of that is a client claim. Classification is the auditor's (default
+// NOT_YET_CLASSIFIED blocks Stage-8 sign-off and is excluded from report
+// bodies); impact stays at its default until the entry is edited.
 // ----------------------------------------------------------------------------
 
 export interface PromoteWorkspaceCandidateInput {
+  /** Client-minted per candidate; the RPC's idempotency key. */
+  candidateKey: string;
   vendorDomain: string;
   observationText: string;
+  checkpointRef: string | null;
   /** Post-gate evidence chain from the drafting engine. */
   evidence: CandidateEvidence[];
-  /** true when the auditor edited any field before accepting. */
-  edited: boolean;
-  checkpointRef?: string | null;
-  protocolRef?: CandidateProtocolRef | null;
-  provisionalClassification?: ProvisionalClassification;
-  provisionalImpact?: ProvisionalImpact;
-  reason?: string;
+  protocolRef: IsaProtocolRef | null;
+  /** The proposal as the engine returned it. */
+  drafted: DraftedText;
+  engine: DraftingEngine;
+  provisionalClassification: ProvisionalClassification;
 }
 
 export async function promoteWorkspaceCandidate(
   auditId: string,
   input: PromoteWorkspaceCandidateInput,
 ): Promise<CreateWorkspaceEntryResult> {
-  const origin: WorkspaceEntryOrigin = input.edited ? 'PIQC_EDITED' : 'PIQC_DRAFTED';
   const { data, error } = await supabase.rpc('audit_mode_promote_workspace_candidate', {
     p_audit_id: auditId,
+    p_candidate_key: input.candidateKey,
     p_vendor_domain: input.vendorDomain,
     p_observation_text: input.observationText,
-    p_origin: origin,
     p_evidence: input.evidence,
-    p_checkpoint_ref: input.checkpointRef ?? null,
-    p_protocol_ref: input.protocolRef ?? null,
-    p_provisional_impact: input.provisionalImpact ?? 'NONE',
-    p_provisional_classification: input.provisionalClassification ?? 'NOT_YET_CLASSIFIED',
-    p_reason: input.reason ?? null,
+    p_drafted: input.drafted,
+    p_engine: input.engine,
+    p_checkpoint_ref: input.checkpointRef,
+    p_protocol_ref: input.protocolRef,
+    p_provisional_classification: input.provisionalClassification,
   });
 
   if (error) {
