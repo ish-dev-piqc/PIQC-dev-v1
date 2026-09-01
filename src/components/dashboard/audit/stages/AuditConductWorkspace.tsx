@@ -33,6 +33,7 @@ import type { ExtractedItemRecord } from '../../../../types/sotr';
 import { hasPassedStage, hasReachedStage } from '../../../../lib/audit/workflowStages';
 import HistoryDrawer from '../HistoryDrawer';
 import StagePreviewNotice from '../StagePreviewNotice';
+import VendorNotesPad from './vendor/VendorNotesPad';
 import SourceTruthListDrawer from '../../../sotr/SourceTruthListDrawer';
 import SourceTruthDrawer from '../../../sotr/SourceTruthDrawer';
 import { formatExtractedValue } from '../../../sotr/WorksheetItemRow';
@@ -325,6 +326,15 @@ export default function AuditConductWorkspace() {
           </button>
         )}
       </div>
+
+      {/* Fieldwork notes pad (vendor lane, slice 1) — working papers that
+          feed slice 2's candidate drafting; never the observation record. */}
+      <VendorNotesPad
+        key={activeAudit.id}
+        auditId={activeAudit.id}
+        hasReached={hasReached}
+        isLight={isLight}
+      />
 
       {/* Inline form */}
       {inForm && (
