@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: findings-report-diverged-banner-copy
-status: in-review
+status: merged
+merged: 2026-09-01
 started: 2026-09-01
-target_pr:
+target_pr: #587
 ---
 
 # Findings Report — divergence banner names a control that doesn't exist
