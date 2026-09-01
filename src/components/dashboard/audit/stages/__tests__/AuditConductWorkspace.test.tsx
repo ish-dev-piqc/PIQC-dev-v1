@@ -13,13 +13,16 @@ vi.mock('../../../../../context/ThemeContext', () => ({
   useTheme: () => ({ theme: 'light' as const, toggleTheme: () => {} }),
 }));
 
-let mockActiveAudit = {
+const BASE_AUDIT = {
   id: 'audit-1',
   protocol_id: 'proto-1',
   protocol_code: 'PIQC-001',
   workflow_type: 'VENDOR_AUDIT',
   current_stage: 'AUDIT_CONDUCT',
 };
+// Tests mutate this per case; beforeEach restores it so no test inherits a
+// neighbour's stage.
+let mockActiveAudit = { ...BASE_AUDIT };
 const mockAdvanceStage = vi.fn();
 vi.mock('../../../../../context/AuditContext', () => ({
   useAudit: () => ({
@@ -84,13 +87,14 @@ function makeEntry(): MockWorkspaceEntry {
   };
 }
 
-describe('AuditConductWorkspace — one-ahead preview guard (PR-UX2)', () => {
+describe('AuditConductWorkspace — one-ahead preview guard (PR-UX2) + notes pad mount (fieldwork lane)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockActiveAudit = { ...BASE_AUDIT };
     mockEntries = { 'audit-1': [makeEntry()] };
   });
 
-  it('PREVIEW (audit at Stage 5): notice up, New-entry hidden, advance disabled despite entries', async () => {
+  it('PREVIEW (audit at Stage 5): notice up, New-entry hidden, advance disabled despite entries; pad mounts read-only', async () => {
     mockActiveAudit = { ...mockActiveAudit, current_stage: 'PRE_AUDIT_DRAFTING' };
 
     render(<AuditConductWorkspace />);
@@ -106,9 +110,12 @@ describe('AuditConductWorkspace — one-ahead preview guard (PR-UX2)', () => {
     ).toBeDisabled();
     // Per-entry edit affordance hidden too.
     expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument();
+    // The pad still mounts (notes are readable in preview) but is told the
+    // stage is not reached, so its own mutation surfaces stay hidden.
+    expect(screen.getByTestId('vendor-notes-pad').getAttribute('data-reached')).toBe('false');
   });
 
-  it('AT STAGE: New-entry present, advance enabled with entries recorded', async () => {
+  it('AT STAGE: New-entry present, advance enabled with entries recorded; pad mounts live, above the record', async () => {
     mockActiveAudit = { ...mockActiveAudit, current_stage: 'AUDIT_CONDUCT' };
 
     render(<AuditConductWorkspace />);
@@ -116,30 +123,13 @@ describe('AuditConductWorkspace — one-ahead preview guard (PR-UX2)', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /new entry/i })).toBeInTheDocument();
     });
-    expect(
-      screen.getByRole('button', { name: /advance to report drafting/i }),
-    ).toBeEnabled();
+    const advance = screen.getByRole('button', { name: /advance to report drafting/i });
+    expect(advance).toBeEnabled();
     expect(screen.queryByText(/has not reached this stage yet/i)).not.toBeInTheDocument();
-  });
-});
-
-describe('AuditConductWorkspace — fieldwork notes pad (vendor lane, slice 1)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockEntries = { 'audit-1': [makeEntry()] };
-  });
-
-  it('mounts the pad above the observation form and threads the preview flag through', async () => {
-    mockActiveAudit = { ...mockActiveAudit, current_stage: 'AUDIT_CONDUCT' };
-    render(<AuditConductWorkspace />);
-    const pad = await screen.findByTestId('vendor-notes-pad');
+    const pad = screen.getByTestId('vendor-notes-pad');
     expect(pad.getAttribute('data-reached')).toBe('true');
-  });
-
-  it('PREVIEW: the pad still mounts (notes are readable) but is told the stage is not reached', async () => {
-    mockActiveAudit = { ...mockActiveAudit, current_stage: 'PRE_AUDIT_DRAFTING' };
-    render(<AuditConductWorkspace />);
-    const pad = await screen.findByTestId('vendor-notes-pad');
-    expect(pad.getAttribute('data-reached')).toBe('false');
+    // Placement is a decision, not an accident: working papers sit above the
+    // observation record and its stage transition.
+    expect(pad.compareDocumentPosition(advance) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

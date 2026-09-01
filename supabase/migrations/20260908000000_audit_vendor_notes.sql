@@ -20,9 +20,16 @@
 -- same filter as the ISA engine.
 --
 -- Soft delete, delta-trailed under AUDIT_NOTE_OBJECT — the tracked type,
--- can_view branch, and delta contract already exist. Delete refuses a
--- promoted note (either backlink set): a note cited by a record must stay
--- resolvable for the trail (20260724000100 precedent).
+-- can_view branch, and delta contract already exist. All three RPCs carry
+-- the lane guard (the note's audit must be a VENDOR_AUDIT — the vendor trio
+-- must never be a bypass lane around the ISA RPCs' rules, and vice versa).
+-- Update and delete lock the live row (FOR UPDATE) and re-qualify the
+-- write on deleted_at IS NULL, so a double-fired delete or an edit racing a
+-- delete raises P0002 instead of overwriting the tombstone and writing a
+-- second contradictory delta (the ISA delete's guard, kept). A promoted
+-- note (cited by an accepted observation) refuses BOTH edit and delete:
+-- the observation carries its own copy of the text, so the note's job from
+-- then on is to be the unchanged evidence it was accepted from.
 -- =============================================================================
 
 ALTER TABLE audit_note_objects
@@ -60,7 +67,10 @@ BEGIN
     RAISE EXCEPTION 'Not authenticated' USING ERRCODE = '42501';
   END IF;
 
-  IF length(btrim(p_body)) = 0 THEN
+  -- p_body has no DEFAULT but PostgREST passes an explicit null happily;
+  -- without the IS NULL arm the check is NULL (not fired) and the INSERT
+  -- raises a raw 23502 instead of this message.
+  IF p_body IS NULL OR length(btrim(p_body)) = 0 THEN
     RAISE EXCEPTION 'body must not be empty' USING ERRCODE = '23514';
   END IF;
 
@@ -112,18 +122,34 @@ SECURITY INVOKER
 SET search_path = public
 AS $$
 DECLARE
-  v_user   uuid := auth.uid();
-  v_before audit_note_objects;
-  v_after  audit_note_objects;
-  v_delta  jsonb := '{}'::jsonb;
+  v_user     uuid := auth.uid();
+  v_workflow audit_workflow_type;
+  v_before   audit_note_objects;
+  v_after    audit_note_objects;
+  v_delta    jsonb := '{}'::jsonb;
 BEGIN
   IF v_user IS NULL THEN
     RAISE EXCEPTION 'Not authenticated' USING ERRCODE = '42501';
   END IF;
 
-  SELECT * INTO v_before FROM audit_note_objects WHERE id = p_id AND deleted_at IS NULL;
+  -- Lock the LIVE row: a concurrent delete or (slice 2) promotion cannot
+  -- land between this read and the UPDATE below.
+  SELECT * INTO v_before FROM audit_note_objects
+   WHERE id = p_id AND deleted_at IS NULL
+   FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Note % not found', p_id USING ERRCODE = 'P0002';
+  END IF;
+
+  SELECT workflow_type INTO v_workflow FROM audits WHERE id = v_before.audit_id;
+  IF v_workflow IS DISTINCT FROM 'VENDOR_AUDIT' THEN
+    RAISE EXCEPTION 'Vendor notes are only available on vendor audits'
+      USING ERRCODE = '23514';
+  END IF;
+
+  IF v_before.promoted_entry_id IS NOT NULL OR v_before.promoted_finding_id IS NOT NULL THEN
+    RAISE EXCEPTION 'Note is cited by an accepted observation and cannot be edited'
+      USING ERRCODE = '23514';
   END IF;
 
   IF p_body IS NOT NULL AND length(btrim(p_body)) = 0 THEN
@@ -133,8 +159,11 @@ BEGIN
   UPDATE audit_note_objects
      SET body        = COALESCE(btrim(p_body), body),
          is_positive = COALESCE(p_is_positive, is_positive)
-   WHERE id = p_id
+   WHERE id = p_id AND deleted_at IS NULL
   RETURNING * INTO v_after;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Note % not found', p_id USING ERRCODE = 'P0002';
+  END IF;
 
   IF v_before.body IS DISTINCT FROM v_after.body THEN
     v_delta := v_delta || jsonb_build_object(
@@ -173,27 +202,42 @@ SECURITY INVOKER
 SET search_path = public
 AS $$
 DECLARE
-  v_user   uuid := auth.uid();
-  v_before audit_note_objects;
-  v_after  audit_note_objects;
+  v_user     uuid := auth.uid();
+  v_workflow audit_workflow_type;
+  v_before   audit_note_objects;
+  v_after    audit_note_objects;
 BEGIN
   IF v_user IS NULL THEN
     RAISE EXCEPTION 'Not authenticated' USING ERRCODE = '42501';
   END IF;
 
-  SELECT * INTO v_before FROM audit_note_objects WHERE id = p_id AND deleted_at IS NULL;
+  -- Lock the LIVE row (see update). A double-fired delete blocks here, then
+  -- finds no live row and raises — never a second tombstone + second delta.
+  SELECT * INTO v_before FROM audit_note_objects
+   WHERE id = p_id AND deleted_at IS NULL
+   FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Note % not found', p_id USING ERRCODE = 'P0002';
   END IF;
+
+  SELECT workflow_type INTO v_workflow FROM audits WHERE id = v_before.audit_id;
+  IF v_workflow IS DISTINCT FROM 'VENDOR_AUDIT' THEN
+    RAISE EXCEPTION 'Vendor notes are only available on vendor audits'
+      USING ERRCODE = '23514';
+  END IF;
+
   IF v_before.promoted_entry_id IS NOT NULL OR v_before.promoted_finding_id IS NOT NULL THEN
-    RAISE EXCEPTION 'Note is cited by an observation and cannot be deleted'
+    RAISE EXCEPTION 'Note is cited by an accepted observation and cannot be deleted'
       USING ERRCODE = '23514';
   END IF;
 
   UPDATE audit_note_objects
      SET deleted_at = NOW()
-   WHERE id = p_id
+   WHERE id = p_id AND deleted_at IS NULL
   RETURNING * INTO v_after;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Note % not found', p_id USING ERRCODE = 'P0002';
+  END IF;
 
   PERFORM audit_mode_write_delta(
     'AUDIT_NOTE_OBJECT'::tracked_object_type,

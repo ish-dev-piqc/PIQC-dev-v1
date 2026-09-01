@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, ArrowRight, NotebookPen, Pencil, ThumbsUp, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowRight, NotebookPen, Pencil, ThumbsUp, Trash2, X as XIcon } from 'lucide-react';
 import {
   createVendorNote,
   deleteVendorNote,
@@ -11,7 +11,9 @@ import type { AuditNoteObject } from '../../../../../types/audit';
 // =============================================================================
 // VendorNotesPad — the vendor-audit fieldwork notes pad (fieldwork lane,
 // slice 1), rendered as a section of Stage-6 AuditConductWorkspace. Mount
-// with key={auditId}: all state here is audit-scoped and resets by remount.
+// with key={auditId}: all state here is audit-scoped and resets by remount
+// (the key is load-bearing — without it the previous audit's notes, draft
+// text, and errors would stay on screen until the refetch resolved).
 //
 // Copies the ISA pad's PATTERN (IsaConductWorkspace is a no-props 1,217-line
 // file with structural ISA coupling — nothing extractable), not its code:
@@ -20,21 +22,25 @@ import type { AuditNoteObject } from '../../../../../types/audit';
 // candidates.
 //
 // Notes are working papers, never the observation record. Absence ≠ failure
-// on the read (retry banner, never an empty pad over a failed read); a failed
-// save keeps the auditor's text in the editor and says so.
+// on the read (retry banner, never an empty pad over a failed read; the
+// note count is never asserted while the read is unknown); a failed save
+// keeps the auditor's text in the editor and says so; a failed delete is
+// reported on the row it concerns.
 // =============================================================================
 
-// ISA constant mirrored; slice 2's engine truncates at the same cap, so the
-// pad refuses what the engine would silently cut.
-const MAX_NOTE_CHARS = 1_000;
+// The full note is always stored. Slice 2's drafting engine reads only the
+// first 1,000 characters of each note into its prompt (the ISA engine's
+// cap) — so past that point the pad says so instead of silently truncating
+// what the auditor typed.
+const DRAFT_READ_CHARS = 1_000;
 
+// Pinned locale like every other formatter in the repo (dateWindow.ts):
+// working papers must render the same on CI as on the auditor's machine.
 function noteTimestamp(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+  const sameDay = d.toDateString() === new Date().toDateString();
+  return sameDay ? time : `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${time}`;
 }
 
 interface Props {
@@ -58,10 +64,17 @@ export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState('');
   const [editPositive, setEditPositive] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Keyed to the row it concerns, rendered there, cleared by the next action
+  // on any row — never a free-floating banner about a note three actions ago.
+  const [deleteError, setDeleteError] = useState<{ id: string; message: string } | null>(null);
+
+  // auditId in the deps is inert (the key remounts on change); reloadNonce
+  // is the Retry path.
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -100,13 +113,16 @@ export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) 
     setEditPositive(n.is_positive);
     setEditError(null);
     setConfirmDeleteId(null);
+    setDeleteError(null);
   };
 
   const saveEdit = async () => {
-    if (!editingId) return;
+    if (!editingId || savingEdit) return;
     const trimmed = editBody.trim();
     if (!trimmed) return;
+    setSavingEdit(true);
     const res = await updateVendorNote(editingId, { body: trimmed, isPositive: editPositive });
+    setSavingEdit(false);
     if (res.ok) {
       setNotes((prev) => prev.map((n) => (n.id === res.data.id ? res.data : n)));
       setEditingId(null);
@@ -117,13 +133,19 @@ export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) 
   };
 
   const removeNote = async (id: string) => {
-    const res = await deleteVendorNote(id);
+    if (deletingId) return;
+    // Confirm control leaves the DOM before the round trip — a second tap
+    // has nothing to hit, so a successful delete can never be followed by a
+    // "not found" error for the same click.
     setConfirmDeleteId(null);
+    setDeleteError(null);
+    setDeletingId(id);
+    const res = await deleteVendorNote(id);
+    setDeletingId(null);
     if (res.ok) {
       setNotes((prev) => prev.filter((n) => n.id !== id));
-      setDeleteError(null);
     } else {
-      setDeleteError(res.error);
+      setDeleteError({ id, message: res.error });
     }
   };
 
@@ -135,6 +157,8 @@ export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) 
   const inputBase = isLight
     ? 'bg-white border-slate-300 focus:border-brand-600 focus:ring-1 focus:ring-brand-600/30'
     : 'bg-slate-900 border-white/15 focus:border-brand-300 focus:ring-1 focus:ring-brand-300/30';
+  // Dark-ink-on-brand label: the house idiom (AuditConductWorkspace's
+  // buttonPrimary) — no fg-* token exists for inverse text yet.
   const primaryBtn = isLight
     ? 'bg-brand-600 text-white hover:bg-brand-800'
     : 'bg-brand-300 text-[#0F172A] hover:bg-brand-700';
@@ -147,18 +171,25 @@ export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) 
   const redBox = isLight
     ? 'bg-red-50 border-red-200 text-red-700'
     : 'bg-red-500/15 border-red-500/30 text-red-300';
+  const amberText = isLight ? 'text-amber-700' : 'text-amber-300';
   const dangerBtn = isLight
     ? 'bg-red-600 text-white hover:bg-red-700'
     : 'bg-red-500/20 text-red-300 hover:bg-red-500/30';
+
+  const overCap = body.length > DRAFT_READ_CHARS;
 
   return (
     <section data-testid="vendor-notes-pad" className={`${cardBg} border rounded-xl`}>
       <div className={`flex items-center gap-2 px-4 py-3 border-b ${rowBorder}`}>
         <NotebookPen size={15} className={isLight ? 'text-brand-600' : 'text-brand-300'} />
         <h3 className="text-fg-heading text-sm font-semibold">Fieldwork notes</h3>
-        <span className="text-fg-muted text-xs">
-          {notes.length === 1 ? '1 note' : `${notes.length} notes`}
-        </span>
+        {/* The count is a claim about the read — never made while the read
+            is loading or failed. */}
+        {!loading && !loadFailed && (
+          <span className="text-fg-muted text-xs" data-testid="vendor-notes-count">
+            {notes.length === 1 ? '1 note' : `${notes.length} notes`}
+          </span>
+        )}
         <span className="text-fg-muted text-xs ml-auto">
           Working papers — never the observation record
         </span>
@@ -191,7 +222,6 @@ export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) 
               }
             }}
             rows={3}
-            maxLength={MAX_NOTE_CHARS}
             placeholder="e.g. Validation SOP-014 rev 3 unsigned; rev 2 still in use at the bench…"
             aria-label="New fieldwork note"
             data-testid="vendor-notes-input"
@@ -210,8 +240,12 @@ export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) 
               <ThumbsUp size={12} />
               Positive observation
             </button>
-            <span className="text-fg-muted text-[11px]">
-              {body.length}/{MAX_NOTE_CHARS}
+            <span
+              className={`text-[11px] ${overCap ? amberText : 'text-fg-muted'}`}
+              data-testid="vendor-notes-counter"
+            >
+              {body.length.toLocaleString('en-US')} chars
+              {overCap ? ` · drafting reads the first ${DRAFT_READ_CHARS.toLocaleString('en-US')}; the full note is kept` : ''}
             </span>
             <button
               type="button"
@@ -230,16 +264,6 @@ export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) 
               drafting observations.
             </span>
           </p>
-        </div>
-      )}
-
-      {deleteError && (
-        <div
-          role="alert"
-          data-testid="vendor-notes-delete-error"
-          className={`mx-4 mt-3 px-3 py-2 rounded-md border text-xs leading-relaxed ${redBox}`}
-        >
-          {deleteError}
         </div>
       )}
 
@@ -270,9 +294,15 @@ export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) 
           No notes yet. Jot what you observe as you go — the drafting step reads these.
         </p>
       ) : (
-        <ul>
+        // Bounded: the observation record below this pad is the stage's
+        // primary surface and must not be pushed off-screen by a day's notes.
+        <ul className="max-h-96 overflow-y-auto">
           {notes.map((n) => {
-            const promoted = n.promoted_entry_id !== null || n.promoted_finding_id !== null;
+            // A vendor note can only ever carry the entry backlink (the
+            // finding FK targets isa_finding_objects) — cited notes refuse
+            // edit AND delete server-side, so neither affordance renders.
+            const promoted = n.promoted_entry_id !== null;
+            const rowDeleteError = deleteError?.id === n.id ? deleteError.message : null;
             return (
               <li
                 key={n.id}
@@ -283,14 +313,13 @@ export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) 
                   <div className="space-y-2">
                     {editError && (
                       <div role="alert" className={`px-3 py-2 rounded-md border text-xs ${redBox}`}>
-                        Edit not saved — {editError}
+                        Edit not saved — your text is still here. ({editError})
                       </div>
                     )}
                     <textarea
                       value={editBody}
                       onChange={(e) => setEditBody(e.target.value)}
                       rows={3}
-                      maxLength={MAX_NOTE_CHARS}
                       aria-label="Edit fieldwork note"
                       data-testid={`vendor-note-edit-input-${n.id}`}
                       className={`w-full rounded-md border px-3 py-2 text-sm text-fg-body outline-none resize-y ${inputBase}`}
@@ -319,11 +348,11 @@ export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) 
                         <button
                           type="button"
                           onClick={() => void saveEdit()}
-                          disabled={!editBody.trim()}
+                          disabled={!editBody.trim() || savingEdit}
                           data-testid={`vendor-note-save-${n.id}`}
                           className={`rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40 ${primaryBtn}`}
                         >
-                          Save
+                          {savingEdit ? 'Saving…' : 'Save'}
                         </button>
                       </div>
                     </div>
@@ -331,6 +360,24 @@ export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) 
                 ) : (
                   <div className="group">
                     <p className="text-fg-body text-sm whitespace-pre-wrap">{n.body}</p>
+                    {rowDeleteError && (
+                      <div
+                        role="alert"
+                        data-testid={`vendor-note-delete-error-${n.id}`}
+                        className={`mt-2 flex items-start gap-2 px-3 py-2 rounded-md border text-xs leading-relaxed ${redBox}`}
+                      >
+                        <AlertTriangle size={12} className="flex-shrink-0 mt-0.5" />
+                        <p className="flex-1">Not deleted — {rowDeleteError}</p>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteError(null)}
+                          aria-label="Dismiss"
+                          className="inline-flex items-center justify-center w-5 h-5 rounded opacity-70 hover:opacity-100"
+                        >
+                          <XIcon size={11} />
+                        </button>
+                      </div>
+                    )}
                     <div className="mt-1.5 flex flex-wrap items-center gap-2">
                       <span className="text-fg-muted text-xs">{noteTimestamp(n.created_at)}</span>
                       {n.is_positive && (
@@ -345,13 +392,13 @@ export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) 
                         <span
                           data-testid={`vendor-note-promoted-${n.id}`}
                           className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] ${chipBase}`}
-                          title="Cited by an accepted observation — it cannot be deleted"
+                          title="Cited by an accepted observation — it can no longer be edited or deleted"
                         >
                           <ArrowRight size={10} />
                           Observation
                         </span>
                       )}
-                      {hasReached && (
+                      {hasReached && !promoted && (
                         <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                           {confirmDeleteId === n.id ? (
                             <>
@@ -372,6 +419,8 @@ export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) 
                                 No
                               </button>
                             </>
+                          ) : deletingId === n.id ? (
+                            <span className="text-fg-muted text-xs">Deleting…</span>
                           ) : (
                             <>
                               <button
@@ -383,19 +432,18 @@ export default function VendorNotesPad({ auditId, hasReached, isLight }: Props) 
                               >
                                 <Pencil size={12} />
                               </button>
-                              {/* Delete hidden for promoted notes — the server
-                                  refuses it too; hiding avoids a dead click. */}
-                              {!promoted && (
-                                <button
-                                  type="button"
-                                  onClick={() => setConfirmDeleteId(n.id)}
-                                  aria-label="Delete note"
-                                  data-testid={`vendor-note-delete-${n.id}`}
-                                  className="text-fg-muted hover:text-fg-body p-1"
-                                >
-                                  <Trash2 size={12} />
-                                </button>
-                              )}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDeleteError(null);
+                                  setConfirmDeleteId(n.id);
+                                }}
+                                aria-label="Delete note"
+                                data-testid={`vendor-note-delete-${n.id}`}
+                                className="text-fg-muted hover:text-fg-body p-1"
+                              >
+                                <Trash2 size={12} />
+                              </button>
                             </>
                           )}
                         </div>

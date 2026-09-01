@@ -1,12 +1,15 @@
 // VendorNotesPad (fieldwork lane, slice 1) — the vendor-audit notes pad.
 // Pins the honesty contracts the pad owns:
 //   - load failure renders the retry banner, never an empty pad (absence ≠
-//     failure), and Retry refetches
+//     failure), the note COUNT is never asserted while the read is unknown,
+//     and Retry refetches
 //   - capture: Enter adds the trimmed body + positive flag, success clears the
-//     editor, failure banners AND keeps the text
-//   - the 1,000-char cap is enforced at the input (slice 2's engine cap)
+//     editor, failure banners AND keeps the text; nothing is truncated — past
+//     the drafting engine's 1,000-char read the counter says so
 //   - inline edit routes through the update RPC; two-tap delete through the
-//     delete RPC; a promoted note shows its chip and hides Delete
+//     delete RPC exactly once (the confirm control leaves before the round
+//     trip); a refused delete is reported ON ITS ROW and dismissable
+//   - a promoted (cited) note shows its chip and loses BOTH edit and delete
 //   - hasReached=false hides every mutation surface (preview from ahead)
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -62,25 +65,30 @@ beforeEach(() => {
 });
 
 describe('load', () => {
-  it('renders the notes with positive and promoted chips', async () => {
+  it('renders the notes with positive and promoted chips; a promoted note loses edit AND delete', async () => {
     renderPad();
     expect(await screen.findByText('Note body n1')).toBeTruthy();
-    expect(screen.getByText('3 notes')).toBeTruthy();
+    expect(screen.getByTestId('vendor-notes-count').textContent).toBe('3 notes');
     expect(screen.getByTestId('vendor-note-n2').textContent).toContain('Positive');
     expect(screen.getByTestId('vendor-note-promoted-n3')).toBeTruthy();
-    // A promoted note keeps Edit but loses Delete (the server refuses it).
-    expect(screen.getByTestId('vendor-note-edit-n3')).toBeTruthy();
+    // The server refuses both on a cited note; neither affordance renders.
+    expect(screen.queryByTestId('vendor-note-edit-n3')).toBeNull();
     expect(screen.queryByTestId('vendor-note-delete-n3')).toBeNull();
+    expect(screen.getByTestId('vendor-note-edit-n1')).toBeTruthy();
     expect(screen.getByTestId('vendor-note-delete-n1')).toBeTruthy();
   });
 
-  it('a failed read renders the retry banner, never an empty pad, and Retry refetches', async () => {
+  it('a failed read renders the retry banner and NO count, never an empty pad; Retry refetches', async () => {
     m(fetchVendorNotes).mockResolvedValueOnce({ ok: false, error: 'permission denied' });
     renderPad();
     expect(await screen.findByTestId('vendor-notes-load-error')).toBeTruthy();
+    // "0 notes" above "could not be loaded" would assert the very count the
+    // banner disclaims.
+    expect(screen.queryByTestId('vendor-notes-count')).toBeNull();
     expect(screen.queryByText(/No notes yet/)).toBeNull();
     fireEvent.click(screen.getByText('Retry'));
     expect(await screen.findByText('Note body n1')).toBeTruthy();
+    expect(screen.getByTestId('vendor-notes-count').textContent).toBe('3 notes');
     expect(m(fetchVendorNotes)).toHaveBeenCalledTimes(2);
   });
 });
@@ -105,7 +113,7 @@ describe('capture', () => {
     );
     expect(await screen.findByText('Fridge log gap 03–05 Sep')).toBeTruthy();
     expect(input.value).toBe('');
-    expect(screen.getByText('4 notes')).toBeTruthy();
+    expect(screen.getByTestId('vendor-notes-count').textContent).toBe('4 notes');
     // Positive toggle resets after a save.
     expect(screen.getByTestId('vendor-notes-positive').getAttribute('aria-pressed')).toBe('false');
   });
@@ -124,15 +132,30 @@ describe('capture', () => {
     expect(banner.textContent).toContain('your text is still below');
     expect(banner.textContent).toContain('does not exist');
     expect(input.value).toBe('Text that must survive');
-    expect(screen.getByText('3 notes')).toBeTruthy();
+    expect(screen.getByTestId('vendor-notes-count').textContent).toBe('3 notes');
   });
 
-  it('enforces the 1,000-character cap at the input and disables Add on whitespace', async () => {
+  it('never truncates: past the drafting read cap the counter says so and the full text is sent', async () => {
+    m(createVendorNote).mockResolvedValue({ ok: true, data: note('n5', { body: 'x'.repeat(1_200) }) });
     renderPad();
     await screen.findByText('Note body n1');
     const input = screen.getByTestId('vendor-notes-input') as HTMLTextAreaElement;
-    expect(input.maxLength).toBe(1000);
-    fireEvent.change(input, { target: { value: '   ' } });
+    expect(input.maxLength).toBe(-1);
+    fireEvent.change(input, { target: { value: 'x'.repeat(1_200) } });
+    expect(screen.getByTestId('vendor-notes-counter').textContent).toContain('drafting reads the first 1,000');
+    fireEvent.click(screen.getByTestId('vendor-notes-add'));
+    await waitFor(() =>
+      expect(m(createVendorNote)).toHaveBeenCalledWith('audit-1', {
+        body: 'x'.repeat(1_200),
+        isPositive: false,
+      }),
+    );
+  });
+
+  it('disables Add on whitespace-only input', async () => {
+    renderPad();
+    await screen.findByText('Note body n1');
+    fireEvent.change(screen.getByTestId('vendor-notes-input'), { target: { value: '   ' } });
     expect((screen.getByTestId('vendor-notes-add') as HTMLButtonElement).disabled).toBe(true);
   });
 });
@@ -160,33 +183,58 @@ describe('edit + delete', () => {
     expect(await screen.findByText('Edited body')).toBeTruthy();
   });
 
-  it('delete is two-tap and removes the row on success', async () => {
-    m(deleteVendorNote).mockResolvedValue({
-      ok: true,
-      data: note('n1', { deleted_at: '2026-09-08T10:00:00Z' }),
+  it('a failed edit keeps the editor open with the text and the reason', async () => {
+    m(updateVendorNote).mockResolvedValue({
+      ok: false,
+      error: 'Note is cited by an accepted observation and cannot be edited',
     });
+    renderPad();
+    await screen.findByText('Note body n1');
+    fireEvent.click(screen.getByTestId('vendor-note-edit-n1'));
+    fireEvent.change(screen.getByTestId('vendor-note-edit-input-n1'), { target: { value: 'kept' } });
+    fireEvent.click(screen.getByTestId('vendor-note-save-n1'));
+    expect(await screen.findByText(/Edit not saved/)).toBeTruthy();
+    expect((screen.getByTestId('vendor-note-edit-input-n1') as HTMLTextAreaElement).value).toBe('kept');
+  });
+
+  it('delete is two-tap, fires the RPC exactly once even on a double tap, and removes the row', async () => {
+    let resolveDelete: (v: unknown) => void = () => {};
+    m(deleteVendorNote).mockImplementation(
+      () => new Promise((resolve) => { resolveDelete = resolve; }),
+    );
     renderPad();
     await screen.findByText('Note body n1');
     fireEvent.click(screen.getByTestId('vendor-note-delete-n1'));
     expect(m(deleteVendorNote)).not.toHaveBeenCalled();
     fireEvent.click(screen.getByTestId('vendor-note-delete-confirm-n1'));
-    await waitFor(() => expect(m(deleteVendorNote)).toHaveBeenCalledWith('n1'));
+    // The confirm control is gone before the round trip resolves — a second
+    // tap has nothing to hit, so no "not found" error can follow a success.
+    expect(screen.queryByTestId('vendor-note-delete-confirm-n1')).toBeNull();
+    expect(screen.getByText('Deleting…')).toBeTruthy();
+    resolveDelete({ ok: true, data: note('n1', { deleted_at: '2026-09-08T10:00:00Z' }) });
     await waitFor(() => expect(screen.queryByText('Note body n1')).toBeNull());
-    expect(screen.getByText('2 notes')).toBeTruthy();
+    expect(m(deleteVendorNote)).toHaveBeenCalledTimes(1);
+    expect(m(deleteVendorNote)).toHaveBeenCalledWith('n1');
+    expect(screen.getByTestId('vendor-notes-count').textContent).toBe('2 notes');
   });
 
-  it('a refused delete surfaces the server reason and keeps the row', async () => {
+  it('a refused delete is reported on its own row, keeps the row, and is dismissable', async () => {
     m(deleteVendorNote).mockResolvedValue({
       ok: false,
-      error: 'Note is cited by an observation and cannot be deleted',
+      error: 'Note is cited by an accepted observation and cannot be deleted',
     });
     renderPad();
     await screen.findByText('Note body n1');
     fireEvent.click(screen.getByTestId('vendor-note-delete-n1'));
     fireEvent.click(screen.getByTestId('vendor-note-delete-confirm-n1'));
-    const banner = await screen.findByTestId('vendor-notes-delete-error');
-    expect(banner.textContent).toContain('cannot be deleted');
+    const rowError = await screen.findByTestId('vendor-note-delete-error-n1');
+    expect(rowError.textContent).toContain('Not deleted');
+    expect(rowError.textContent).toContain('cannot be deleted');
     expect(screen.getByText('Note body n1')).toBeTruthy();
+    // Not attached to any other row.
+    expect(screen.queryByTestId('vendor-note-delete-error-n2')).toBeNull();
+    fireEvent.click(screen.getByLabelText('Dismiss'));
+    expect(screen.queryByTestId('vendor-note-delete-error-n1')).toBeNull();
   });
 });
 
