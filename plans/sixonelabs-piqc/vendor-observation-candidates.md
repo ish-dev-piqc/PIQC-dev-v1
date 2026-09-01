@@ -1,5 +1,5 @@
 ---
-status: active
+status: in-review
 feature: vendor-observation-candidates
 owner: sixonelabs-piqc
 branch: sixonelabs-piqc/vendor-observation-candidates
