@@ -1,5 +1,5 @@
 ---
-status: active
+status: in-review
 owner: sixonelabs-piqc
 feature: Findings Report (PR-D4) — 6th deliverable kind; third engine shape; Stage-7 surface; generic deliverable RPC pair
 target_pr: TBD
