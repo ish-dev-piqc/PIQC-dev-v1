@@ -39,7 +39,7 @@ jobs:
             for base in src/lib src/components src/components/dashboard src/types; do
               dir="${base}/${domain}"
               [ -d "$dir" ] || continue
-              hits=$(grep -rnE "from ['\"][^'\"]*\b(${others})\b[^'\"]*['\"]" "$dir" 2>/dev/null \
+              hits=$(grep -rnE "from ['\"][^'\"]*\b(${others})\b[^'\"]*['\"]" "$dir" --include="*.ts" --include="*.tsx" 2>/dev/null \
                      | grep -vE "$ALLOWED_CROSS_MODE" || true)
               if [ -n "$hits" ]; then
                 echo "::error::Cross-mode import in ${dir}"
@@ -51,14 +51,29 @@ jobs:
           exit $fail
 
       - name: Raw Tailwind color classes (use text-fg-*)
+        # Two rules with different slate treatment, on purpose:
+        #   1. text-*: bans gray/slate/zinc/neutral — text-fg-* is the remedy.
+        #   2. other color utilities (bg/border/ring/divide/from/to/via): bans
+        #      gray/zinc/neutral only. slate is NOT banned there — it is this
+        #      repo's declared palette (redeclared in tailwind.config.js so the
+        #      values are auditable from one place), and the hex→token sweep
+        #      converts literals like bg-[#0F172A] INTO bg-slate-900.
         run: |
           set -u
+          fail=0
           hits=$(grep -rnE "\btext-(gray|slate|zinc|neutral)-[0-9]" src --include="*.tsx" --include="*.ts" 2>/dev/null || true)
           if [ -n "$hits" ]; then
-            echo "::error::Raw Tailwind color classes found. Use text-fg-heading / text-fg-body / text-fg-sub / text-fg-muted / text-fg-label instead."
+            echo "::error::Raw Tailwind text color classes found. Use text-fg-heading / text-fg-body / text-fg-sub / text-fg-muted / text-fg-label instead."
             echo "$hits"
-            exit 1
+            fail=1
           fi
+          hits=$(grep -rnE "\b(bg|border|ring|divide|from|to|via)-(gray|zinc|neutral)-[0-9]" src --include="*.tsx" --include="*.ts" 2>/dev/null || true)
+          if [ -n "$hits" ]; then
+            echo "::error::Foreign Tailwind palette found (gray/zinc/neutral). Use the repo palette instead: slate for neutral surfaces/borders, brand-N for accents (see tailwind.config.js)."
+            echo "$hits"
+            fail=1
+          fi
+          exit $fail
 
       - name: Components must not import supabase directly
         # Three exemption layers:
@@ -74,7 +89,7 @@ jobs:
         run: |
           set -u
           KNOWN_COMPONENT_SUPABASE_DEBT='(^src/components/Chatbot\.tsx|^src/components/dashboard/(Dashboard|DashboardChat|KnowledgeBase)\.tsx)'
-          hits=$(grep -rnE "from ['\"](@supabase/supabase-js|[^'\"]*lib/supabase)['\"]" src/components 2>/dev/null \
+          hits=$(grep -rnE "from ['\"](@supabase/supabase-js|[^'\"]*lib/supabase)['\"]" src/components --include="*.ts" --include="*.tsx" 2>/dev/null \
                  | grep -vE "import\s+type\b" \
                  | grep -vE "^src/components/auth/" \
                  | grep -vE "$KNOWN_COMPONENT_SUPABASE_DEBT" || true)
@@ -100,7 +115,7 @@ jobs:
       - name: Realtime subscriptions belong in context layer
         run: |
           set -u
-          hits=$(grep -rnE "\.channel\(|\.on\(['\"]postgres_changes" src/components 2>/dev/null || true)
+          hits=$(grep -rnE "\.channel\(|\.on\(['\"]postgres_changes" src/components --include="*.ts" --include="*.tsx" 2>/dev/null || true)
           if [ -n "$hits" ]; then
             echo "::error::Realtime subscriptions must live in src/context/, not src/components/."
             echo "$hits"
@@ -145,8 +160,9 @@ jobs:
           types_changed=$(git diff "${base}...HEAD" --name-only -- 'src/types/' 2>/dev/null || true)
           if [ -n "$sql_changed" ] && [ -z "$types_changed" ]; then
             if ! printf '%s' "$PR_BODY" | grep -qi "no type impact"; then
-              echo "::warning::Migration changed but src/types/ was not updated. If this is intentional, add 'no type impact' to the PR description."
+              echo "::error::Migration changed but src/types/ was not updated. If this is intentional, add 'no type impact' to the PR description."
               echo "$sql_changed"
+              exit 1
             fi
           fi
 
@@ -154,7 +170,7 @@ jobs:
         run: |
           set -u
           base="origin/main"
-          hits=$(git diff "${base}...HEAD" --unified=0 -- 'src/**/*.ts' 'src/**/*.tsx' \
+          hits=$(git diff "${base}...HEAD" --unified=0 -- 'src/*.ts' 'src/*.tsx' 'src/**/*.ts' 'src/**/*.tsx' \
             | grep -E "^\+" \
             | grep -vE "^\+\+\+" \
             | grep -vE "__tests__|\.test\." \
