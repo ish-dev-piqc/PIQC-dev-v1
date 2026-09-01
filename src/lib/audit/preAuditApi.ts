@@ -71,7 +71,9 @@ async function resolveApprovedByNames(
   );
 }
 
-async function resolveApprovedByName(approvedBy: string | null): Promise<string | null> {
+// Exported for findingsReport.ts (PR-D4) — the 6th kind reuses this instead
+// of a 6th private copy (the D3 ledger's client-lifecycle-clone entry).
+export async function resolveApprovedByName(approvedBy: string | null): Promise<string | null> {
   if (!approvedBy) return null;
   const { data } = await supabase
     .from('user_profiles')

@@ -43,6 +43,7 @@ const EMPTY: LineageInput = {
   issues: [],
   capas: [],
   report: null,
+  findingsReport: null,
 };
 
 function fullInput(): LineageInput {
@@ -158,6 +159,19 @@ function fullInput(): LineageInput {
       exported_at: null,
       source_risk_summary_id: 'rs1',
     },
+    findingsReport: {
+      id: 'fr1',
+      audit_id: 'a1',
+      content: { intro_text: '…', closing_text: '…' },
+      approval_status: 'DRAFT',
+      approved_at: null,
+      approved_by_name: null,
+      updated_at: '2026-07-02T00:00:00Z',
+      basis_digest: null,
+      generation_refs: null,
+      grounding_snapshot: null,
+      generated_at: '2026-07-02T00:00:00Z',
+    },
   };
 }
 
@@ -263,6 +277,22 @@ describe('buildLineageGraph', () => {
     expect(n?.stage).toBe(5);
     // Never prefilled → drafted-in-stage origin, no provenance edges.
     expect(n?.origin).toBe('Drafted in Pre-audit drafting.');
+    expect(g.edges.filter((e) => e.fromId === n?.id)).toHaveLength(0);
+  });
+
+  it('the findings report renders as a Stage-7 node with its tracked type and no edge fan (PR-D4)', () => {
+    const g = buildLineageGraph(fullInput());
+    const n = g.nodes.find((x) => x.entityType === 'FINDINGS_REPORT');
+    expect(n).toMatchObject({
+      title: 'Findings report',
+      stage: 7,
+      trackedObjectType: 'FINDINGS_REPORT_OBJECT',
+      objectId: 'fr1',
+    });
+    // Generated → PIQC origin line; blocks always declared live-derived.
+    expect(n?.origin).toContain('PIQC drafted the connective narrative');
+    // No per-entry provenance fan by design — the blocks derive from the
+    // ENTIRE Stage-6 entry set.
     expect(g.edges.filter((e) => e.fromId === n?.id)).toHaveLength(0);
   });
 

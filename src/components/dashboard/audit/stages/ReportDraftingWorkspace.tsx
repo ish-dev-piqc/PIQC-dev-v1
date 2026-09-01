@@ -29,6 +29,7 @@ import {
   LlmExecutiveSummaryError,
 } from '../../../../lib/audit/reportApi';
 import { hasPassedStage, hasReachedStage } from '../../../../lib/audit/workflowStages';
+import FindingsReportSection from './FindingsReportSection';
 import HistoryDrawer from '../HistoryDrawer';
 import PrefillAgentNote from '../PrefillAgentNote';
 import StagePreviewNotice from '../StagePreviewNotice';
@@ -480,6 +481,16 @@ export default function ReportDraftingWorkspace({
             Generate report stub
           </button>
         )}
+        {/* The findings report is its own deliverable — it must not be
+            unreachable just because the working report has no stub yet. */}
+        <div className="mt-8">
+          <FindingsReportSection
+            key={auditId}
+            auditId={auditId}
+            hasReached={hasReached}
+            isLight={isLight}
+          />
+        </div>
       </div>
     );
   }
@@ -1062,6 +1073,18 @@ export default function ReportDraftingWorkspace({
           </div>
         )}
       </div>
+
+      {/* Findings report (PR-D4) — its own deliverable with its own latch,
+          below the working report's approval card. Keyed by audit so all of
+          its audit-scoped state resets by remount. It fetches its own
+          entries (one read moment with the digest) — the workspace's
+          context-cached `entries` are deliberately not passed. */}
+      <FindingsReportSection
+        key={auditId}
+        auditId={auditId}
+        hasReached={hasReached}
+        isLight={isLight}
+      />
 
       {historyOpen && report && (
         <HistoryDrawer

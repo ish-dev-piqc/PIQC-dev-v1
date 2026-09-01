@@ -45,6 +45,7 @@ import type { MockRiskSummary } from './mockRiskSummary';
 import type { MockPreAuditBundle } from './mockPreAudit';
 import type { MockWorkspaceEntry } from './mockWorkspaceEntries';
 import type { MockReportDraft } from './mockReport';
+import type { FindingsReport } from './findingsReport';
 
 // -----------------------------------------------------------------------------
 // Graph shapes
@@ -64,6 +65,7 @@ export type LineageEntityType =
   | 'CHECKLIST'
   | 'INTERNAL_NOTIFICATION'
   | 'EVIDENCE_GAP_SUMMARY'
+  | 'FINDINGS_REPORT'
   | 'WORKSPACE_ENTRY'
   | 'ISSUE'
   | 'CAPA'
@@ -118,6 +120,7 @@ export interface LineageInput {
   issues: IssueObject[];
   capas: CapaObject[];
   report: MockReportDraft | null;
+  findingsReport: FindingsReport | null;
 }
 
 // -----------------------------------------------------------------------------
@@ -512,6 +515,27 @@ export function buildLineageGraph(input: LineageInput): LineageGraph {
         label: 'prefilled from',
       });
     }
+  }
+
+  // --- Stage 7: findings report (PR-D4) -----------------------------------------------
+  // No per-entry edges by design: its observation blocks derive live from the
+  // ENTIRE Stage-6 entry set, so a fan of N provenance edges would restate
+  // the whole Stage-6 column as noise. The origin line carries the claim.
+  if (input.findingsReport) {
+    nodes.push({
+      id: nid('FINDINGS_REPORT', input.findingsReport.id),
+      entityType: 'FINDINGS_REPORT',
+      title: 'Findings report',
+      status: APPROVAL_LABELS[input.findingsReport.approval_status],
+      statusTone: approvalTone(input.findingsReport.approval_status),
+      parentId: auditNodeId,
+      stage: 7,
+      origin: input.findingsReport.generated_at
+        ? 'PIQC drafted the connective narrative; observation blocks derive live from Stage 6 entries.'
+        : 'Narrative drafted in Report drafting; observation blocks derive live from Stage 6 entries.',
+      trackedObjectType: 'FINDINGS_REPORT_OBJECT',
+      objectId: input.findingsReport.id,
+    });
   }
 
   // Drop dangling edges (e.g. a mapping whose risk was deleted upstream). Every

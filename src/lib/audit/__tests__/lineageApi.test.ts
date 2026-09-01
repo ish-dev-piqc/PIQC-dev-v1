@@ -23,6 +23,7 @@ vi.mock('../preAuditApi', () => ({ fetchPreAuditDeliverables: vi.fn() }));
 vi.mock('../workspaceEntriesApi', () => ({ fetchWorkspaceEntries: vi.fn() }));
 vi.mock('../capaApi', () => ({ fetchIssuesWithCapas: vi.fn() }));
 vi.mock('../reportApi', () => ({ fetchReportDraft: vi.fn() }));
+vi.mock('../findingsReport', () => ({ fetchFindingsReport: vi.fn() }));
 
 import { fetchAuditLineage } from '../lineageApi';
 import { fetchProtocolRisksForAudit } from '../intakeApi';
@@ -37,6 +38,7 @@ import { fetchPreAuditDeliverables } from '../preAuditApi';
 import { fetchWorkspaceEntries } from '../workspaceEntriesApi';
 import { fetchIssuesWithCapas } from '../capaApi';
 import { fetchReportDraft } from '../reportApi';
+import { fetchFindingsReport } from '../findingsReport';
 
 const m = (fn: unknown) => fn as ReturnType<typeof vi.fn>;
 
@@ -83,6 +85,9 @@ beforeEach(() => {
   m(fetchWorkspaceEntries).mockResolvedValue([]);
   m(fetchIssuesWithCapas).mockResolvedValue({ issues: [], capasByIssue: {} });
   m(fetchReportDraft).mockResolvedValue(null);
+  // PR-D4 shape: { report, failed } — lineageApi unwraps .report; a failed
+  // read is omitted from the graph like an absent one.
+  m(fetchFindingsReport).mockResolvedValue({ report: null, failed: false });
 });
 
 describe('fetchAuditLineage', () => {
@@ -96,6 +101,32 @@ describe('fetchAuditLineage', () => {
     // Every read was fanned out against this audit id.
     expect(m(fetchProtocolRisksForAudit)).toHaveBeenCalledWith('a1');
     expect(m(fetchReportDraft)).toHaveBeenCalledWith('a1');
+    expect(m(fetchFindingsReport)).toHaveBeenCalledWith('a1');
+  });
+
+  it('threads the findings report through the adapter (PR-D4)', async () => {
+    m(fetchFindingsReport).mockResolvedValueOnce({
+      report: {
+        id: 'fr1',
+        audit_id: 'a1',
+        content: { intro_text: '…', closing_text: '…' },
+        approval_status: 'DRAFT',
+        approved_at: null,
+        approved_by_name: null,
+        updated_at: '2026-09-06T00:00:00Z',
+        basis_digest: null,
+        generation_refs: null,
+        grounding_snapshot: null,
+        generated_at: null,
+      },
+      failed: false,
+    });
+    const result = await fetchAuditLineage(AUDIT);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(
+      result.data.nodes.find((n) => n.entityType === 'FINDINGS_REPORT')?.objectId,
+    ).toBe('fr1');
   });
 
   it('threads fetched objects through the adapter (a risk becomes a node)', async () => {

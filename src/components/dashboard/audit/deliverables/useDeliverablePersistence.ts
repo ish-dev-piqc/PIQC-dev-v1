@@ -139,20 +139,31 @@ export function useDeliverablePersistence<B extends BundleShape<B>>({
   const unsavedDraftFor = <K extends Key>(aid: string, key: K): NonNullable<B[K]> | null =>
     (unsavedDrafts[aid]?.[key] ?? null) as NonNullable<B[K]> | null;
 
-  // Approve rejected by the server's compare-and-swap (STALE_CONTENT): the
-  // deliverable changed since this tab rendered it. Reload server truth so
-  // the reviewer looks at the current text — invitational, not an alarm,
-  // and SAID OUT LOUD via the per-tab notice (an unexplained content swap
-  // read as "Approve did nothing"). Never throws — a failed reload must not
-  // fall into the persist catch and masquerade as a save failure.
-  const reloadAfterStaleApprove = async (key: Key, scope: string, error: string) => {
+  // Approve rejected by the server's compare-and-swap: the deliverable
+  // (STALE_CONTENT), or the derived basis it is built from (STALE_BASIS —
+  // a kind with a basis pin, e.g. the findings report's entry set), changed
+  // since this tab rendered it. Reload server truth so the reviewer looks at
+  // the current state — invitational, not an alarm, and SAID OUT LOUD via
+  // the per-tab notice (an unexplained content swap read as "Approve did
+  // nothing"). Never throws — a failed reload must not fall into the persist
+  // catch and masquerade as a save failure.
+  const reloadAfterStaleApprove = async (
+    key: Key,
+    scope: string,
+    error: string,
+    hint: 'STALE_CONTENT' | 'STALE_BASIS',
+  ) => {
     console.error(`[${logTag}] ${scope} rejected:`, error);
     const refreshed = await refresh();
+    const what =
+      hint === 'STALE_BASIS'
+        ? 'What this deliverable is built from changed since you reviewed it'
+        : 'This deliverable changed since you reviewed it';
     setStaleReloadNotices((prev) => ({
       ...prev,
       [key]: refreshed
-        ? 'This deliverable changed since you reviewed it — the latest version is shown. Re-review and approve.'
-        : 'This deliverable changed since you reviewed it, and reloading it failed — reload the page to see the latest before approving.',
+        ? `${what} — the latest version is shown. Re-review and approve.`
+        : `${what}, and reloading it failed — reload the page to see the latest before approving.`,
     }));
   };
 
@@ -184,13 +195,18 @@ export function useDeliverablePersistence<B extends BundleShape<B>>({
 
       if (prev && isApprovalTransition) {
         const result = await ops.approve(prev);
+        const hint = result.ok ? undefined : result.errorHint;
         if (result.ok) {
           setField(key, result.data);
-        } else if (result.errorHint === 'STALE_CONTENT') {
-          // A real CAS miss: the row moved on. Reload is correct here — and
-          // ONLY here. Routing every failure through it made a missing RPC
-          // look like "Approve did nothing".
-          await reloadAfterStaleApprove(key, `approve${noun}`, result.error);
+        } else if (hint === 'STALE_CONTENT' || hint === 'STALE_BASIS') {
+          // A real CAS miss: the row (or its derived basis) moved on. Revert
+          // the caller's optimistic APPROVED flip FIRST — the reload usually
+          // overwrites it with server truth anyway, but if the reload fails
+          // the cache must not keep showing a green latch the server refused.
+          setField(key, prev);
+          // Reload is correct here — and ONLY here. Routing every failure
+          // through it made a missing RPC look like "Approve did nothing".
+          await reloadAfterStaleApprove(key, `approve${noun}`, result.error, hint);
         } else {
           console.error(`[${logTag}] approve${noun} failed:`, result.error);
           setField(key, prev); // roll back the optimistic APPROVED flip
