@@ -52,6 +52,14 @@ vi.mock('../../../../sotr/WorksheetItemRow', () => ({
   formatExtractedValue: () => '',
 }));
 
+// The notes pad has its own suite (vendor/__tests__/VendorNotesPad.test.tsx);
+// here it mounts as a marker that echoes the preview flag it was handed.
+vi.mock('../vendor/VendorNotesPad', () => ({
+  default: ({ hasReached }: { hasReached: boolean }) => (
+    <div data-testid="vendor-notes-pad" data-reached={String(hasReached)} />
+  ),
+}));
+
 import AuditConductWorkspace from '../AuditConductWorkspace';
 
 function makeEntry(): MockWorkspaceEntry {
@@ -112,5 +120,26 @@ describe('AuditConductWorkspace — one-ahead preview guard (PR-UX2)', () => {
       screen.getByRole('button', { name: /advance to report drafting/i }),
     ).toBeEnabled();
     expect(screen.queryByText(/has not reached this stage yet/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('AuditConductWorkspace — fieldwork notes pad (vendor lane, slice 1)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockEntries = { 'audit-1': [makeEntry()] };
+  });
+
+  it('mounts the pad above the observation form and threads the preview flag through', async () => {
+    mockActiveAudit = { ...mockActiveAudit, current_stage: 'AUDIT_CONDUCT' };
+    render(<AuditConductWorkspace />);
+    const pad = await screen.findByTestId('vendor-notes-pad');
+    expect(pad.getAttribute('data-reached')).toBe('true');
+  });
+
+  it('PREVIEW: the pad still mounts (notes are readable) but is told the stage is not reached', async () => {
+    mockActiveAudit = { ...mockActiveAudit, current_stage: 'PRE_AUDIT_DRAFTING' };
+    render(<AuditConductWorkspace />);
+    const pad = await screen.findByTestId('vendor-notes-pad');
+    expect(pad.getAttribute('data-reached')).toBe('false');
   });
 });
