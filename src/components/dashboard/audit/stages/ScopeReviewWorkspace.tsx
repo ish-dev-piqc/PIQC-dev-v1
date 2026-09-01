@@ -23,7 +23,7 @@ import {
 import { fetchQuestionnaireBundle } from '../../../../lib/audit/questionnaireApi';
 import { fetchRiskSummary } from '../../../../lib/audit/riskSummaryApi';
 import { getStageReadout } from '../../../../lib/audit/auditApi';
-import { hasReachedStage } from '../../../../lib/audit/workflowStages';
+import { hasPassedStage, hasReachedStage } from '../../../../lib/audit/workflowStages';
 import StagePreviewNotice from '../StagePreviewNotice';
 import WorksheetItemsList from '../../../sotr/WorksheetItemsList';
 
@@ -139,8 +139,19 @@ export default function ScopeReviewWorkspace() {
       ? 'The audit has not reached this stage yet — advance from its current stage first.'
       : stageReadout.blockedReason;
 
-  const alreadyAdvanced = activeAudit.current_stage !== 'SCOPE_AND_RISK_REVIEW' &&
-    ['PRE_AUDIT_DRAFTING', 'AUDIT_CONDUCT', 'REPORT_DRAFTING', 'FINAL_REVIEW_EXPORT'].includes(activeAudit.current_stage);
+  const alreadyAdvanced = hasPassedStage(
+    activeAudit.workflow_type,
+    activeAudit.current_stage,
+    'SCOPE_AND_RISK_REVIEW',
+  );
+
+  // Same `const hasReached` idiom as every sibling workspace (PR-4) — this
+  // was the one pane calling hasReachedStage inline in JSX.
+  const hasReached = hasReachedStage(
+    activeAudit.workflow_type,
+    activeAudit.current_stage,
+    'SCOPE_AND_RISK_REVIEW',
+  );
 
   // ---------------------------------------------------------------------------
   // Theme tokens
@@ -160,9 +171,7 @@ export default function ScopeReviewWorkspace() {
       {/* UX2: same preview banner as every other stage. Banner only — the
           advance gate below stays readout-driven (readoutAtThisStage), which
           is stricter and test-pinned. */}
-      {!hasReachedStage(activeAudit.workflow_type, activeAudit.current_stage, 'SCOPE_AND_RISK_REVIEW') && (
-        <StagePreviewNotice currentStage={activeAudit.current_stage} />
-      )}
+      {!hasReached && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
       {/* Header */}
       <div>
         <p className={`${sectionHeader} text-[10px] uppercase tracking-wider font-semibold`}>

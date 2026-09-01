@@ -58,3 +58,19 @@ export function hasReachedStage(
   const stageIdx = stages.indexOf(stage);
   return currentIdx >= 0 && stageIdx >= 0 && currentIdx >= stageIdx;
 }
+
+// Has the audit advanced PAST `stage`? Stage workspaces use this for their
+// "audit has already advanced past this stage" messaging and to disable
+// their own advance action — replacing four hand-maintained downstream-stage
+// string arrays (PR-4) that were never ISA-aware and drifted per file.
+// Same fail-safe as hasReachedStage: unknown stage or workflow → false.
+export function hasPassedStage(
+  workflowType: AuditWorkflowType,
+  currentStage: AuditStage,
+  stage: AuditStage,
+): boolean {
+  const stages = stagesForWorkflow(workflowType);
+  const currentIdx = stages.indexOf(currentStage);
+  const stageIdx = stages.indexOf(stage);
+  return currentIdx >= 0 && stageIdx >= 0 && currentIdx > stageIdx;
+}

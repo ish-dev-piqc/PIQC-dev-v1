@@ -30,7 +30,7 @@ import type {
   ProvisionalImpact,
 } from '../../../../types/audit';
 import type { ExtractedItemRecord } from '../../../../types/sotr';
-import { hasReachedStage } from '../../../../lib/audit/workflowStages';
+import { hasPassedStage, hasReachedStage } from '../../../../lib/audit/workflowStages';
 import HistoryDrawer from '../HistoryDrawer';
 import StagePreviewNotice from '../StagePreviewNotice';
 import SourceTruthListDrawer from '../../../sotr/SourceTruthListDrawer';
@@ -290,8 +290,10 @@ export default function AuditConductWorkspace() {
   const inForm = mode !== 'list';
   const canSave = !!form.vendor_domain.trim() && !!form.observation_text.trim();
 
-  const alreadyAdvanced = ['REPORT_DRAFTING', 'FINAL_REVIEW_EXPORT'].includes(
+  const alreadyAdvanced = hasPassedStage(
+    activeAudit.workflow_type,
     activeAudit.current_stage,
+    'AUDIT_CONDUCT',
   );
 
   return (

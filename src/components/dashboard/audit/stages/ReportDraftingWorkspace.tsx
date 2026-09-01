@@ -30,7 +30,7 @@ import {
 } from '../../../../lib/audit/reportApi';
 import type { MockWorkspaceEntry } from '../../../../lib/audit/mockWorkspaceEntries';
 import type { ProvisionalClassification } from '../../../../types/audit';
-import { hasReachedStage } from '../../../../lib/audit/workflowStages';
+import { hasPassedStage, hasReachedStage } from '../../../../lib/audit/workflowStages';
 import HistoryDrawer from '../HistoryDrawer';
 import PrefillAgentNote from '../PrefillAgentNote';
 import StagePreviewNotice from '../StagePreviewNotice';
@@ -494,7 +494,11 @@ export default function ReportDraftingWorkspace({
   }
 
   const approved = report.approval_status === 'APPROVED';
-  const alreadyAdvanced = activeAudit.current_stage === 'FINAL_REVIEW_EXPORT';
+  const alreadyAdvanced = hasPassedStage(
+    activeAudit.workflow_type,
+    activeAudit.current_stage,
+    'REPORT_DRAFTING',
+  );
   const unclassifiedCount = grouped.NOT_YET_CLASSIFIED.length;
 
   // ---------------------------------------------------------------------------
