@@ -2,6 +2,7 @@ import { Sparkles } from 'lucide-react';
 import {
   computeDeliverableCurrency,
   type DeliverableKind,
+  type LiveEntryTuple,
 } from '../../../../lib/audit/deliverableGenerationApi';
 import type {
   AuditEvidenceListRow,
@@ -55,6 +56,10 @@ interface DeliverableGenerationPanelProps {
    *  checklist-identity axis. Other kinds' snapshots carry no such axis, so
    *  they never pass this. */
   liveChecklistItemIds?: string[];
+  /** Findings report only (PR-D4): the live Stage-6 entries for the
+   *  snapshot's entries axis. Same rule as the checklist ids — pass only for
+   *  the kind whose snapshot carries the axis. */
+  liveEntries?: LiveEntryTuple[];
   onGenerate: () => void;
 }
 
@@ -70,6 +75,7 @@ export default function DeliverableGenerationPanel({
   previewLocked = false,
   privacyNote,
   liveChecklistItemIds,
+  liveEntries,
   onGenerate,
 }: DeliverableGenerationPanelProps) {
   const subColor = 'text-fg-sub';
@@ -83,9 +89,15 @@ export default function DeliverableGenerationPanel({
   // Diffing against [] would falsely flag every grounded source as removed.
   const currency = evidenceRows === null
     ? null
-    : computeDeliverableCurrency(deliverable?.grounding_snapshot, evidenceRows, liveChecklistItemIds);
-  // The gap kind can also drift on checklist identity alone — the header must
-  // not blame the register for a checklist-only change.
+    : computeDeliverableCurrency(
+        deliverable?.grounding_snapshot,
+        evidenceRows,
+        liveChecklistItemIds,
+        liveEntries,
+      );
+  // The gap kind can drift on checklist identity alone, and the findings
+  // report on entry identity alone — the header must not blame the register
+  // for a change on another axis.
   const registerDrifted =
     !!currency &&
     (currency.newSinceGeneration.length > 0 ||
@@ -175,6 +187,8 @@ export default function DeliverableGenerationPanel({
           <span className="font-semibold">
             {registerDrifted
               ? 'The evidence register has changed since this draft.'
+              : currency.entriesChanged === true
+              ? 'The audit observations have changed since this draft.'
               : 'The checklist has changed since this draft.'}
           </span>{' '}
           {currency.newSinceGeneration.length > 0 && (
@@ -191,6 +205,9 @@ export default function DeliverableGenerationPanel({
           )}
           {registerDrifted && currency.checklistChanged === true && (
             <>The checklist's items have also changed. </>
+          )}
+          {registerDrifted && currency.entriesChanged === true && (
+            <>The audit observations have also changed. </>
           )}
           Revise when you're ready — this never blocks approval or export.
         </div>

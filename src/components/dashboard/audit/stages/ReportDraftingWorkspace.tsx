@@ -29,6 +29,7 @@ import {
   LlmExecutiveSummaryError,
 } from '../../../../lib/audit/reportApi';
 import { hasPassedStage, hasReachedStage } from '../../../../lib/audit/workflowStages';
+import FindingsReportSection from './FindingsReportSection';
 import HistoryDrawer from '../HistoryDrawer';
 import PrefillAgentNote from '../PrefillAgentNote';
 import StagePreviewNotice from '../StagePreviewNotice';
@@ -1062,6 +1063,17 @@ export default function ReportDraftingWorkspace({
           </div>
         )}
       </div>
+
+      {/* Findings report (PR-D4) — its own deliverable with its own latch,
+          below the working report's approval card. Keyed by audit so all of
+          its audit-scoped state resets by remount. */}
+      <FindingsReportSection
+        key={auditId}
+        auditId={auditId}
+        hasReached={hasReached}
+        entries={entries}
+        isLight={isLight}
+      />
 
       {historyOpen && report && (
         <HistoryDrawer
