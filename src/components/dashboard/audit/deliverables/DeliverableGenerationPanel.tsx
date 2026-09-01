@@ -47,6 +47,10 @@ interface DeliverableGenerationPanelProps {
   /** One-ahead preview (UX2): the CTA disables honestly instead of the
    *  click dying silently against the generation hook's guard. */
   previewLocked?: boolean;
+  /** Kind-specific sequence lock (the certificate's report-approval gate,
+   *  PR-D6): when set, the CTA disables with this title. The server enforces
+   *  the same rule — this is the honest surface of it, not the gate. */
+  lockedReason?: string;
   /** Kind-specific privacy line rendered under the provenance copy (the
    *  confirmation letter's "recipients are never sent to the model"). The
    *  panel renders it verbatim — the CALLER owns the truth of the claim, so
@@ -73,6 +77,7 @@ export default function DeliverableGenerationPanel({
   error,
   isLight,
   previewLocked = false,
+  lockedReason,
   privacyNote,
   liveChecklistItemIds,
   liveEntries,
@@ -158,11 +163,13 @@ export default function DeliverableGenerationPanel({
           // doesn't block: on an empty deliverable — prefill gated off — the
           // draft CTA is the whole point, and the click is an explicit choice
           // to replace the scratch form.
-          disabled={generating || (editing && !!deliverable) || previewLocked}
+          disabled={generating || (editing && !!deliverable) || previewLocked || !!lockedReason}
           onClick={onGenerate}
           title={
             previewLocked
               ? 'Available when the audit reaches this stage'
+              : lockedReason
+              ? lockedReason
               : editing && deliverable
               ? 'Save or cancel your edits first — revising would overwrite them'
               : undefined

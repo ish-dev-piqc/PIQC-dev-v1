@@ -37,6 +37,7 @@ import type { MockReportDraft } from '../../../../lib/audit/mockReport';
 import type { MockWorkspaceEntry } from '../../../../lib/audit/mockWorkspaceEntries';
 import type { MockRiskSummary } from '../../../../lib/audit/mockRiskSummary';
 import { hasReachedStage } from '../../../../lib/audit/workflowStages';
+import AuditCertificateSection from './AuditCertificateSection';
 import HistoryDrawer from '../HistoryDrawer';
 import StagePreviewNotice from '../StagePreviewNotice';
 
@@ -629,6 +630,17 @@ export default function FinalReviewExportWorkspace() {
           )}
         </div>
       </div>
+
+      {/* Audit certificate (PR-D6) — the terminal deliverable, after export in
+          the flow. Sequence-gated on the approved report; never a gate itself. */}
+      {activeAudit && (
+        <AuditCertificateSection
+          key={activeAudit.id}
+          audit={activeAudit}
+          hasReached={hasReached}
+          isLight={isLight}
+        />
+      )}
 
       {historyOpen && report && (
         <HistoryDrawer
