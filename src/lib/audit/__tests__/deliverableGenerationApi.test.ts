@@ -233,6 +233,33 @@ describe('applyDeliverableGeneration', () => {
     expect(args.p_reason).toBe('Evidence gap summary drafted by PIQC from protocol + evidence');
   });
 
+  it('routes the findings report report-shaped: narrative only, never items/recipients (PR-D4)', async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: null });
+    await applyDeliverableGeneration(
+      'a1',
+      {
+        ...CHECKLIST_PROPOSAL,
+        deliverable: 'findings_report',
+        mode: 'generate',
+        content_patch: {
+          intro_text: 'This report presents the outcomes of the vendor audit…',
+          closing_text: 'The vendor is invited to respond to each observation…',
+          // A malformed proposal carrying items must not leak them into the
+          // report content — the shape arm decides, not the payload.
+          items: CHECKLIST_PROPOSAL.content_patch.items,
+        },
+      },
+      { currentRecipients: ['Quality Assurance Team'] },
+    );
+    const [rpcName, args] = mockRpc.mock.calls[0];
+    expect(rpcName).toBe('audit_mode_apply_findings_report_generation');
+    expect(args.p_content).toEqual({
+      intro_text: 'This report presents the outcomes of the vendor audit…',
+      closing_text: 'The vendor is invited to respond to each observation…',
+    });
+    expect(args.p_reason).toBe('Findings report drafted by PIQC from protocol + evidence');
+  });
+
   it('prefers the RPC hint over the raw message on failure', async () => {
     mockRpc.mockResolvedValueOnce({
       data: null,
@@ -394,6 +421,91 @@ describe('computeDeliverableCurrency — gap-summary snapshot (register present)
     const snapshot = { ...GROUNDING, checklist_item_ids: ['a', 'b'] };
     const currency = computeDeliverableCurrency(snapshot, [evidenceRow({})], ['a', 'a']);
     expect(currency?.checklistChanged).toBe(true);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Entries axis (PR-D4) — a snapshot carrying `entries` (findings report) diffs
+// the live Stage-6 entry set on exactly the digest fields, so the currency
+// flag and the approve basis pin can never disagree. Gated on BOTH sides
+// present, like the checklist axis. Legacy snapshots above stay untouched.
+// -----------------------------------------------------------------------------
+describe('computeDeliverableCurrency — findings-report snapshot (entries present)', () => {
+  const snapEntry = (id: string, overrides: Record<string, unknown> = {}) => ({
+    id,
+    vendor_domain: 'Validation',
+    observation_text: `Observation ${id}`,
+    checkpoint_ref: null,
+    provisional_impact: 'MINOR',
+    provisional_classification: 'FINDING',
+    ...overrides,
+  });
+  const REPORT_SNAPSHOT: DeliverableGroundingSnapshot = {
+    ...GROUNDING,
+    entries: [snapEntry('e1'), snapEntry('e2', { checkpoint_ref: 'SOP-1 §2' })],
+  };
+  const LIVE_MATCHING = [
+    snapEntry('e1'),
+    snapEntry('e2', { checkpoint_ref: 'SOP-1 §2' }),
+  ];
+
+  it('is current when the live entries match the snapshot on every digest field', () => {
+    const currency = computeDeliverableCurrency(
+      REPORT_SNAPSHOT, [evidenceRow({})], undefined, LIVE_MATCHING,
+    );
+    expect(currency).toEqual({
+      newSinceGeneration: [],
+      removedSinceGeneration: [],
+      entriesChanged: false,
+      isCurrent: true,
+    });
+  });
+
+  it('an added entry flags stale', () => {
+    const currency = computeDeliverableCurrency(
+      REPORT_SNAPSHOT, [evidenceRow({})], undefined, [...LIVE_MATCHING, snapEntry('e3')],
+    );
+    expect(currency?.entriesChanged).toBe(true);
+    expect(currency?.isCurrent).toBe(false);
+  });
+
+  it('a removed entry flags stale (length check catches the shrink)', () => {
+    const currency = computeDeliverableCurrency(
+      REPORT_SNAPSHOT, [evidenceRow({})], undefined, [snapEntry('e1')],
+    );
+    expect(currency?.entriesChanged).toBe(true);
+  });
+
+  it('an edit to any digest field flags stale — text, classification, impact, checkpoint', () => {
+    for (const change of [
+      { observation_text: 'Reworded' },
+      { provisional_classification: 'OBSERVATION' },
+      { provisional_impact: 'CRITICAL' },
+      { checkpoint_ref: 'SOP-9' },
+    ]) {
+      const currency = computeDeliverableCurrency(
+        REPORT_SNAPSHOT, [evidenceRow({})], undefined,
+        [snapEntry('e1', change), snapEntry('e2', { checkpoint_ref: 'SOP-1 §2' })],
+      );
+      expect(currency?.entriesChanged).toBe(true);
+    }
+  });
+
+  it('missing live entries → axis unknowable, never stales on its own', () => {
+    const currency = computeDeliverableCurrency(REPORT_SNAPSHOT, [evidenceRow({})]);
+    expect(currency?.entriesChanged).toBeUndefined();
+    expect(currency?.isCurrent).toBe(true);
+  });
+
+  it('a legacy snapshot ignores liveEntries entirely (no report axis leaks in)', () => {
+    const currency = computeDeliverableCurrency(
+      GROUNDING, [evidenceRow({})], undefined, LIVE_MATCHING,
+    );
+    expect(currency).toEqual({
+      newSinceGeneration: [],
+      removedSinceGeneration: [],
+      isCurrent: true,
+    });
   });
 });
 

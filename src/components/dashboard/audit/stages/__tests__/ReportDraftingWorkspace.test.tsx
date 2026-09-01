@@ -131,6 +131,11 @@ vi.mock('../../../../../lib/audit/reportApi', () => ({
   LlmExecutiveSummaryError: MockLlmError,
 }));
 
+// The findings-report section (PR-D4) is its own deliverable with its own
+// suite (FindingsReportSection.test.tsx); mounting the real one here would
+// drag its API modules (and the supabase client) into this harness.
+vi.mock('../FindingsReportSection', () => ({ default: () => null }));
+
 import ReportDraftingWorkspace from '../ReportDraftingWorkspace';
 import {
   fetchReportDraft,
