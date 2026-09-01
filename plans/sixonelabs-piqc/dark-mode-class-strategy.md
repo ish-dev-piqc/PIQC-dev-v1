@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: dark-mode-class-strategy
-status: active
+status: in-review
 started: 2026-09-01
 target_pr:
 ---
