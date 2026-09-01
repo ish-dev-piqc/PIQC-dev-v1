@@ -1,9 +1,10 @@
 ---
-status: in-review
+status: merged
+merged: 2026-09-01
 feature: audit-certificate
 owner: sixonelabs-piqc
 branch: sixonelabs-piqc/audit-certificate
-target_pr: TBD
+target_pr: #585
 ---
 
 # PR-D6 — Audit Certificate: the terminal deliverable, chained to the approved report
