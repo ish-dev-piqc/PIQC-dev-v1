@@ -1,8 +1,9 @@
 ---
-status: in-review
+status: merged
+merged: 2026-09-01
 owner: sixonelabs-piqc
 feature: audit-deliverable-workbench-extraction
-target_pr: TBD
+target_pr: #581
 ---
 
 # Audit deliverable workbench extraction — behavior-frozen moves
