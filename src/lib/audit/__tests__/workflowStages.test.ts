@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hasReachedStage, stagesForWorkflow } from '../workflowStages';
+import { hasPassedStage, hasReachedStage, stagesForWorkflow } from '../workflowStages';
 import { AUDIT_STAGES, AUDIT_WORKFLOW_TYPES } from '../../../types/audit';
 
 // Regression gate for the two-workflow foundation: VENDOR_AUDIT must resolve to
@@ -72,5 +72,48 @@ describe('hasReachedStage', () => {
   it('fails safe when a stage does not belong to the workflow pipeline', () => {
     expect(hasReachedStage('VENDOR_AUDIT', 'AUDIT_CONDUCT', 'ISA_CONDUCT')).toBe(false);
     expect(hasReachedStage('INVESTIGATOR_SITE_AUDIT', 'ISA_CONDUCT', 'AUDIT_CONDUCT')).toBe(false);
+  });
+});
+
+describe('hasPassedStage (PR-4 — the one encoding of "already advanced")', () => {
+  it('the boundary: the CURRENT stage is reached but not passed', () => {
+    expect(hasReachedStage('VENDOR_AUDIT', 'AUDIT_CONDUCT', 'AUDIT_CONDUCT')).toBe(true);
+    expect(hasPassedStage('VENDOR_AUDIT', 'AUDIT_CONDUCT', 'AUDIT_CONDUCT')).toBe(false);
+  });
+
+  it('past stages are passed; current and ahead are not', () => {
+    expect(hasPassedStage('VENDOR_AUDIT', 'AUDIT_CONDUCT', 'PRE_AUDIT_DRAFTING')).toBe(true);
+    expect(hasPassedStage('VENDOR_AUDIT', 'AUDIT_CONDUCT', 'INTAKE')).toBe(true);
+    expect(hasPassedStage('VENDOR_AUDIT', 'AUDIT_CONDUCT', 'REPORT_DRAFTING')).toBe(false);
+  });
+
+  it('reproduces each replaced hardcoded array exactly (vendor pipeline)', () => {
+    // ScopeReview: passed once the audit is beyond SCOPE_AND_RISK_REVIEW.
+    expect(hasPassedStage('VENDOR_AUDIT', 'PRE_AUDIT_DRAFTING', 'SCOPE_AND_RISK_REVIEW')).toBe(true);
+    // PreAuditDrafting: AUDIT_CONDUCT and later.
+    expect(hasPassedStage('VENDOR_AUDIT', 'AUDIT_CONDUCT', 'PRE_AUDIT_DRAFTING')).toBe(true);
+    expect(hasPassedStage('VENDOR_AUDIT', 'PRE_AUDIT_DRAFTING', 'PRE_AUDIT_DRAFTING')).toBe(false);
+    // AuditConduct: REPORT_DRAFTING and later.
+    expect(hasPassedStage('VENDOR_AUDIT', 'REPORT_DRAFTING', 'AUDIT_CONDUCT')).toBe(true);
+    // ReportDrafting: only FINAL_REVIEW_EXPORT.
+    expect(hasPassedStage('VENDOR_AUDIT', 'FINAL_REVIEW_EXPORT', 'REPORT_DRAFTING')).toBe(true);
+    expect(hasPassedStage('VENDOR_AUDIT', 'REPORT_DRAFTING', 'REPORT_DRAFTING')).toBe(false);
+  });
+
+  it('holds at both pipeline ends', () => {
+    expect(hasPassedStage('VENDOR_AUDIT', 'INTAKE', 'INTAKE')).toBe(false);
+    expect(hasPassedStage('VENDOR_AUDIT', 'FINAL_REVIEW_EXPORT', 'INTAKE')).toBe(true);
+    expect(hasPassedStage('VENDOR_AUDIT', 'FINAL_REVIEW_EXPORT', 'FINAL_REVIEW_EXPORT')).toBe(false);
+  });
+
+  it('is ISA-aware — the arrays it replaces never were', () => {
+    expect(hasPassedStage('INVESTIGATOR_SITE_AUDIT', 'ISA_CONDUCT', 'ISA_PREP')).toBe(true);
+    expect(hasPassedStage('INVESTIGATOR_SITE_AUDIT', 'ISA_PREP', 'ISA_CONDUCT')).toBe(false);
+    expect(hasPassedStage('INVESTIGATOR_SITE_AUDIT', 'ISA_CONDUCT', 'ISA_CONDUCT')).toBe(false);
+  });
+
+  it('fails safe when a stage does not belong to the workflow pipeline', () => {
+    expect(hasPassedStage('VENDOR_AUDIT', 'AUDIT_CONDUCT', 'ISA_CONDUCT')).toBe(false);
+    expect(hasPassedStage('INVESTIGATOR_SITE_AUDIT', 'ISA_CONDUCT', 'AUDIT_CONDUCT')).toBe(false);
   });
 });

@@ -53,7 +53,7 @@ import {
 } from '../../../../lib/audit/deliverableGenerationApi';
 import type { AuditEvidenceListRow } from '../../../../types/audit';
 import { useOpenEvidence } from '../evidenceDrawerContext';
-import { hasReachedStage } from '../../../../lib/audit/workflowStages';
+import { hasPassedStage, hasReachedStage } from '../../../../lib/audit/workflowStages';
 import HistoryDrawer from '../HistoryDrawer';
 import PrefillAgentNote from '../PrefillAgentNote';
 import StagePreviewNotice from '../StagePreviewNotice';
@@ -786,8 +786,10 @@ export default function PreAuditDraftingWorkspace() {
   // feed this.
   const allApproved = GATING_TAB_DEFS.every((t) => approvalStatuses[t.key] === 'APPROVED');
 
-  const alreadyAdvanced = ['AUDIT_CONDUCT', 'REPORT_DRAFTING', 'FINAL_REVIEW_EXPORT'].includes(
+  const alreadyAdvanced = hasPassedStage(
+    activeAudit.workflow_type,
     activeAudit.current_stage,
+    'PRE_AUDIT_DRAFTING',
   );
 
   // ---------------------------------------------------------------------------
