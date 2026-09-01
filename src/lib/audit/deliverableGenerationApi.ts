@@ -33,7 +33,8 @@ export type DeliverableKind =
   | 'confirmation_letter'
   | 'internal_notification'
   | 'evidence_gap_summary'
-  | 'findings_report';
+  | 'findings_report'
+  | 'audit_certificate';
 
 export interface DeliverableDraftProposal {
   mode: 'generate' | 'revise';
@@ -66,6 +67,7 @@ const KIND_SHAPE: Record<DeliverableKind, 'items' | 'letter' | 'report'> = {
   internal_notification: 'letter',
   evidence_gap_summary: 'letter',
   findings_report: 'report',
+  audit_certificate: 'letter',
 };
 
 const APPLY_RPC: Record<DeliverableKind, string> = {
@@ -75,6 +77,7 @@ const APPLY_RPC: Record<DeliverableKind, string> = {
   internal_notification: 'audit_mode_apply_internal_notification_generation',
   evidence_gap_summary: 'audit_mode_apply_evidence_gap_summary_generation',
   findings_report: 'audit_mode_apply_findings_report_generation',
+  audit_certificate: 'audit_mode_apply_audit_certificate_generation',
 };
 
 const DRAFT_NOUN: Record<DeliverableKind, string> = {
@@ -84,6 +87,7 @@ const DRAFT_NOUN: Record<DeliverableKind, string> = {
   internal_notification: 'Internal notification',
   evidence_gap_summary: 'Evidence gap summary',
   findings_report: 'Findings report',
+  audit_certificate: 'Audit certificate',
 };
 
 export async function requestDeliverableDraft(
