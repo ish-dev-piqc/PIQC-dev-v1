@@ -1,8 +1,9 @@
 ---
-status: in-review
+status: merged
+merged: 2026-09-01
 owner: sixonelabs-piqc
 feature: audit-dead-code-and-type-ruling
-target_pr: TBD
+target_pr: #575
 ---
 
 # Audit dead code + type-hierarchy ruling
