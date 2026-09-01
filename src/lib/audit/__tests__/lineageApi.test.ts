@@ -24,6 +24,7 @@ vi.mock('../workspaceEntriesApi', () => ({ fetchWorkspaceEntries: vi.fn() }));
 vi.mock('../capaApi', () => ({ fetchIssuesWithCapas: vi.fn() }));
 vi.mock('../reportApi', () => ({ fetchReportDraft: vi.fn() }));
 vi.mock('../findingsReport', () => ({ fetchFindingsReport: vi.fn() }));
+vi.mock('../auditCertificate', () => ({ fetchAuditCertificate: vi.fn() }));
 
 import { fetchAuditLineage } from '../lineageApi';
 import { fetchProtocolRisksForAudit } from '../intakeApi';
@@ -39,6 +40,7 @@ import { fetchWorkspaceEntries } from '../workspaceEntriesApi';
 import { fetchIssuesWithCapas } from '../capaApi';
 import { fetchReportDraft } from '../reportApi';
 import { fetchFindingsReport } from '../findingsReport';
+import { fetchAuditCertificate } from '../auditCertificate';
 
 const m = (fn: unknown) => fn as ReturnType<typeof vi.fn>;
 
@@ -88,6 +90,8 @@ beforeEach(() => {
   // PR-D4 shape: { report, failed } — lineageApi unwraps .report; a failed
   // read is omitted from the graph like an absent one.
   m(fetchFindingsReport).mockResolvedValue({ report: null, failed: false });
+  // PR-D6 shape: { certificate, failed } — same unwrap-and-omit rule.
+  m(fetchAuditCertificate).mockResolvedValue({ certificate: null, failed: false });
 });
 
 describe('fetchAuditLineage', () => {
@@ -127,6 +131,32 @@ describe('fetchAuditLineage', () => {
     expect(
       result.data.nodes.find((n) => n.entityType === 'FINDINGS_REPORT')?.objectId,
     ).toBe('fr1');
+  });
+
+  it('threads the audit certificate through the adapter (PR-D6)', async () => {
+    m(fetchAuditCertificate).mockResolvedValueOnce({
+      certificate: {
+        id: 'cert1',
+        audit_id: 'a1',
+        content: { body_text: '…', scope: [] },
+        approval_status: 'DRAFT',
+        approved_at: null,
+        approved_by_name: null,
+        updated_at: '2026-09-07T00:00:00Z',
+        basis_digest: null,
+        generation_refs: null,
+        grounding_snapshot: null,
+        generated_at: null,
+      },
+      failed: false,
+    });
+    const result = await fetchAuditLineage(AUDIT);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(
+      result.data.nodes.find((n) => n.entityType === 'AUDIT_CERTIFICATE')?.objectId,
+    ).toBe('cert1');
+    expect(m(fetchAuditCertificate)).toHaveBeenCalledWith('a1');
   });
 
   it('threads fetched objects through the adapter (a risk becomes a node)', async () => {

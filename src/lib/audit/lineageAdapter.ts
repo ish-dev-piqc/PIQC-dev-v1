@@ -46,6 +46,7 @@ import type { MockPreAuditBundle } from './mockPreAudit';
 import type { MockWorkspaceEntry } from './mockWorkspaceEntries';
 import type { MockReportDraft } from './mockReport';
 import type { FindingsReport } from './findingsReport';
+import type { AuditCertificate } from './auditCertificate';
 
 // -----------------------------------------------------------------------------
 // Graph shapes
@@ -66,6 +67,7 @@ export type LineageEntityType =
   | 'INTERNAL_NOTIFICATION'
   | 'EVIDENCE_GAP_SUMMARY'
   | 'FINDINGS_REPORT'
+  | 'AUDIT_CERTIFICATE'
   | 'WORKSPACE_ENTRY'
   | 'ISSUE'
   | 'CAPA'
@@ -121,6 +123,7 @@ export interface LineageInput {
   capas: CapaObject[];
   report: MockReportDraft | null;
   findingsReport: FindingsReport | null;
+  auditCertificate: AuditCertificate | null;
 }
 
 // -----------------------------------------------------------------------------
@@ -536,6 +539,38 @@ export function buildLineageGraph(input: LineageInput): LineageGraph {
       trackedObjectType: 'FINDINGS_REPORT_OBJECT',
       objectId: input.findingsReport.id,
     });
+  }
+
+  // --- Stage 8: audit certificate (PR-D6) ---------------------------------------------
+  if (input.auditCertificate) {
+    const certId = nid('AUDIT_CERTIFICATE', input.auditCertificate.id);
+    nodes.push({
+      id: certId,
+      entityType: 'AUDIT_CERTIFICATE',
+      title: 'Audit certificate',
+      status: APPROVAL_LABELS[input.auditCertificate.approval_status],
+      statusTone: approvalTone(input.auditCertificate.approval_status),
+      parentId: auditNodeId,
+      stage: 8,
+      origin: input.auditCertificate.generated_at
+        ? "PIQC drafted the descriptive record; the outcome line stays with the sponsor's QA."
+        : "Drafted in Final review; the outcome line stays with the sponsor's QA.",
+      trackedObjectType: 'AUDIT_CERTIFICATE_OBJECT',
+      objectId: input.auditCertificate.id,
+    });
+    // One upstream, one edge — gated on the RECORDED provenance fact like
+    // every other provenance edge here (source_risk_summary_id, prefilled
+    // flags): basis_digest is the sealed pin naming which report version the
+    // approve covered. A draft certificate pins nothing yet, so it claims
+    // nothing.
+    if (input.report && input.auditCertificate.basis_digest) {
+      edges.push({
+        fromId: certId,
+        toId: nid('REPORT', input.report.id),
+        kind: 'provenance',
+        label: 'certifies',
+      });
+    }
   }
 
   // Drop dangling edges (e.g. a mapping whose risk was deleted upstream). Every

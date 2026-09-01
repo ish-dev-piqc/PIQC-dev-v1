@@ -1,8 +1,9 @@
 ---
-status: in-review
+status: merged
+merged: 2026-09-01
 owner: sixonelabs-piqc
 feature: Findings Report (PR-D4) — 6th deliverable kind; third engine shape; Stage-7 surface; generic deliverable RPC pair
-target_pr: TBD
+target_pr: #583
 ---
 
 # Findings Report (PR-D4)
