@@ -1,8 +1,10 @@
-// VendorNotesPad (fieldwork lane, slice 1) — the vendor-audit notes pad.
-// Pins the honesty contracts the pad owns:
-//   - load failure renders the retry banner, never an empty pad (absence ≠
+// VendorNotesPad (fieldwork lane, slice 1; props-driven since slice 2) —
+// the vendor-audit notes pad. The workspace owns the notes and hands them
+// down; the pad's mutations flow back through onNotesChange, which the Host
+// harness below wires to real state so the pad behaves as in-app. Pins:
+//   - a failed read renders the retry banner, never an empty pad (absence ≠
 //     failure), the note COUNT is never asserted while the read is unknown,
-//     and Retry refetches
+//     and Retry asks the owner to refetch
 //   - capture: Enter adds the trimmed body + positive flag, success clears the
 //     editor, failure banners AND keeps the text; nothing is truncated — past
 //     the drafting engine's 1,000-char read the counter says so
@@ -12,12 +14,12 @@
 //   - a promoted (cited) note shows its chip and loses BOTH edit and delete
 //   - hasReached=false hides every mutation surface (preview from ahead)
 
+import { useState } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { AuditNoteObject } from '../../../../../../types/audit';
 
 vi.mock('../../../../../../lib/audit/vendorNotesApi', () => ({
-  fetchVendorNotes: vi.fn(),
   createVendorNote: vi.fn(),
   updateVendorNote: vi.fn(),
   deleteVendorNote: vi.fn(),
@@ -27,7 +29,6 @@ import VendorNotesPad from '../VendorNotesPad';
 import {
   createVendorNote,
   deleteVendorNote,
-  fetchVendorNotes,
   updateVendorNote,
 } from '../../../../../../lib/audit/vendorNotesApi';
 
@@ -50,24 +51,42 @@ function note(id: string, overrides: Partial<AuditNoteObject> = {}): AuditNoteOb
   };
 }
 
-function renderPad(overrides: Partial<{ hasReached: boolean }> = {}) {
-  return render(
-    <VendorNotesPad auditId="audit-1" hasReached={overrides.hasReached ?? true} isLight />,
+const THREE = () => [note('n1'), note('n2', { is_positive: true }), note('n3', { promoted_entry_id: 'entry-9' })];
+
+interface HostProps {
+  initial?: AuditNoteObject[];
+  hasReached?: boolean;
+  loading?: boolean;
+  loadFailed?: boolean;
+  onRetry?: () => void;
+}
+
+// The workspace's role, reduced to what the pad needs: notes state plus the
+// updater the pad calls.
+function Host({ initial = THREE(), hasReached = true, loading = false, loadFailed = false, onRetry = () => {} }: HostProps) {
+  const [notes, setNotes] = useState(initial);
+  return (
+    <VendorNotesPad
+      auditId="audit-1"
+      hasReached={hasReached}
+      isLight
+      notes={notes}
+      loading={loading}
+      loadFailed={loadFailed}
+      onRetry={onRetry}
+      onNotesChange={setNotes}
+    />
   );
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  m(fetchVendorNotes).mockResolvedValue({
-    ok: true,
-    data: [note('n1'), note('n2', { is_positive: true }), note('n3', { promoted_entry_id: 'entry-9' })],
-  });
 });
 
-describe('load', () => {
-  it('renders the notes with positive and promoted chips; a promoted note loses edit AND delete', async () => {
-    renderPad();
-    expect(await screen.findByText('Note body n1')).toBeTruthy();
+describe('load states', () => {
+  it('renders the notes with positive and promoted chips; a promoted note loses edit AND delete', () => {
+    render(<Host />);
+    expect(screen.getByText('Note body n1')).toBeTruthy();
     expect(screen.getByTestId('vendor-notes-count').textContent).toBe('3 notes');
     expect(screen.getByTestId('vendor-note-n2').textContent).toContain('Positive');
     expect(screen.getByTestId('vendor-note-promoted-n3')).toBeTruthy();
@@ -78,18 +97,23 @@ describe('load', () => {
     expect(screen.getByTestId('vendor-note-delete-n1')).toBeTruthy();
   });
 
-  it('a failed read renders the retry banner and NO count, never an empty pad; Retry refetches', async () => {
-    m(fetchVendorNotes).mockResolvedValueOnce({ ok: false, error: 'permission denied' });
-    renderPad();
-    expect(await screen.findByTestId('vendor-notes-load-error')).toBeTruthy();
+  it('a failed read renders the retry banner and NO count, never an empty pad; Retry asks the owner', () => {
+    const onRetry = vi.fn();
+    render(<Host initial={[]} loadFailed onRetry={onRetry} />);
+    expect(screen.getByTestId('vendor-notes-load-error')).toBeTruthy();
     // "0 notes" above "could not be loaded" would assert the very count the
     // banner disclaims.
     expect(screen.queryByTestId('vendor-notes-count')).toBeNull();
     expect(screen.queryByText(/No notes yet/)).toBeNull();
     fireEvent.click(screen.getByText('Retry'));
-    expect(await screen.findByText('Note body n1')).toBeTruthy();
-    expect(screen.getByTestId('vendor-notes-count').textContent).toBe('3 notes');
-    expect(m(fetchVendorNotes)).toHaveBeenCalledTimes(2);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('while loading, neither the count nor the empty copy is asserted', () => {
+    render(<Host initial={[]} loading />);
+    expect(screen.getByText('Loading notes…')).toBeTruthy();
+    expect(screen.queryByTestId('vendor-notes-count')).toBeNull();
+    expect(screen.queryByText(/No notes yet/)).toBeNull();
   });
 });
 
@@ -99,8 +123,7 @@ describe('capture', () => {
       ok: true,
       data: note('n4', { body: 'Fridge log gap 03–05 Sep', is_positive: true }),
     });
-    renderPad();
-    await screen.findByText('Note body n1');
+    render(<Host />);
     fireEvent.click(screen.getByTestId('vendor-notes-positive'));
     const input = screen.getByTestId('vendor-notes-input') as HTMLTextAreaElement;
     fireEvent.change(input, { target: { value: '  Fridge log gap 03–05 Sep  ' } });
@@ -123,8 +146,7 @@ describe('capture', () => {
       ok: false,
       error: 'function audit_mode_create_vendor_note does not exist',
     });
-    renderPad();
-    await screen.findByText('Note body n1');
+    render(<Host />);
     const input = screen.getByTestId('vendor-notes-input') as HTMLTextAreaElement;
     fireEvent.change(input, { target: { value: 'Text that must survive' } });
     fireEvent.click(screen.getByTestId('vendor-notes-add'));
@@ -137,8 +159,7 @@ describe('capture', () => {
 
   it('never truncates: past the drafting read cap the counter says so and the full text is sent', async () => {
     m(createVendorNote).mockResolvedValue({ ok: true, data: note('n5', { body: 'x'.repeat(1_200) }) });
-    renderPad();
-    await screen.findByText('Note body n1');
+    render(<Host />);
     const input = screen.getByTestId('vendor-notes-input') as HTMLTextAreaElement;
     expect(input.maxLength).toBe(-1);
     fireEvent.change(input, { target: { value: 'x'.repeat(1_200) } });
@@ -152,9 +173,8 @@ describe('capture', () => {
     );
   });
 
-  it('disables Add on whitespace-only input', async () => {
-    renderPad();
-    await screen.findByText('Note body n1');
+  it('disables Add on whitespace-only input', () => {
+    render(<Host />);
     fireEvent.change(screen.getByTestId('vendor-notes-input'), { target: { value: '   ' } });
     expect((screen.getByTestId('vendor-notes-add') as HTMLButtonElement).disabled).toBe(true);
   });
@@ -166,8 +186,7 @@ describe('edit + delete', () => {
       ok: true,
       data: note('n1', { body: 'Edited body', is_positive: true }),
     });
-    renderPad();
-    await screen.findByText('Note body n1');
+    render(<Host />);
     fireEvent.click(screen.getByTestId('vendor-note-edit-n1'));
     fireEvent.change(screen.getByTestId('vendor-note-edit-input-n1'), {
       target: { value: '  Edited body  ' },
@@ -188,8 +207,7 @@ describe('edit + delete', () => {
       ok: false,
       error: 'Note is cited by an accepted observation and cannot be edited',
     });
-    renderPad();
-    await screen.findByText('Note body n1');
+    render(<Host />);
     fireEvent.click(screen.getByTestId('vendor-note-edit-n1'));
     fireEvent.change(screen.getByTestId('vendor-note-edit-input-n1'), { target: { value: 'kept' } });
     fireEvent.click(screen.getByTestId('vendor-note-save-n1'));
@@ -202,8 +220,7 @@ describe('edit + delete', () => {
     m(deleteVendorNote).mockImplementation(
       () => new Promise((resolve) => { resolveDelete = resolve; }),
     );
-    renderPad();
-    await screen.findByText('Note body n1');
+    render(<Host />);
     fireEvent.click(screen.getByTestId('vendor-note-delete-n1'));
     expect(m(deleteVendorNote)).not.toHaveBeenCalled();
     fireEvent.click(screen.getByTestId('vendor-note-delete-confirm-n1'));
@@ -223,8 +240,7 @@ describe('edit + delete', () => {
       ok: false,
       error: 'Note is cited by an accepted observation and cannot be deleted',
     });
-    renderPad();
-    await screen.findByText('Note body n1');
+    render(<Host />);
     fireEvent.click(screen.getByTestId('vendor-note-delete-n1'));
     fireEvent.click(screen.getByTestId('vendor-note-delete-confirm-n1'));
     const rowError = await screen.findByTestId('vendor-note-delete-error-n1');
@@ -239,9 +255,9 @@ describe('edit + delete', () => {
 });
 
 describe('preview from ahead', () => {
-  it('hides capture, edit, and delete when the stage is not reached — notes stay readable', async () => {
-    renderPad({ hasReached: false });
-    expect(await screen.findByText('Note body n1')).toBeTruthy();
+  it('hides capture, edit, and delete when the stage is not reached — notes stay readable', () => {
+    render(<Host hasReached={false} />);
+    expect(screen.getByText('Note body n1')).toBeTruthy();
     expect(screen.queryByTestId('vendor-notes-capture')).toBeNull();
     expect(screen.queryByTestId('vendor-note-edit-n1')).toBeNull();
     expect(screen.queryByTestId('vendor-note-delete-n1')).toBeNull();

@@ -35,6 +35,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   createWorkspaceEntry,
   fetchWorkspaceEntries,
+  promoteWorkspaceCandidate,
   updateWorkspaceEntry,
 } from '../workspaceEntriesApi';
 
@@ -353,5 +354,107 @@ describe('fetchWorkspaceEntries — batched read (PR-5)', () => {
       provisional_impact: 'MAJOR',
       risk_context_outdated: false,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fieldwork lane, slice 2 — promoting a PIQC-drafted candidate. The wrapper's
+// contract: origin is derived from `edited` (verbatim → PIQC_DRAFTED, any
+// edit → PIQC_EDITED), the post-gate evidence is forwarded untouched (the RPC
+// derives source_note_ids from it), and the auditor-owned classification /
+// impact default exactly like createWorkspaceEntry.
+// ---------------------------------------------------------------------------
+
+const NOTE_A = 'aaaaaaaa-0000-0000-0000-000000000001';
+const EVIDENCE = [
+  { text: 'Two excursions were logged five days late.', source_note_ids: [NOTE_A], source_passages: [] },
+];
+
+describe('promoteWorkspaceCandidate — origin + defaults', () => {
+  beforeEach(() => {
+    mockRpc.mockReset();
+    mockIn.mockReset().mockResolvedValue({ data: [], error: null });
+  });
+
+  it('verbatim acceptance → PIQC_DRAFTED with the create-RPC defaults, evidence forwarded as-is', async () => {
+    mockRpc.mockResolvedValueOnce({ data: makeEntryRow({ id: 'we-9' }), error: null });
+
+    const result = await promoteWorkspaceCandidate('audit-1', {
+      vendorDomain: 'Data integrity',
+      observationText: 'Excursions were not documented within the required window.',
+      evidence: EVIDENCE,
+      edited: false,
+    });
+
+    expect(mockRpc).toHaveBeenCalledOnce();
+    expect(mockRpc).toHaveBeenCalledWith('audit_mode_promote_workspace_candidate', {
+      p_audit_id: 'audit-1',
+      p_vendor_domain: 'Data integrity',
+      p_observation_text: 'Excursions were not documented within the required window.',
+      p_origin: 'PIQC_DRAFTED',
+      p_evidence: EVIDENCE,
+      p_checkpoint_ref: null,
+      p_protocol_ref: null,
+      p_provisional_impact: 'NONE',
+      p_provisional_classification: 'NOT_YET_CLASSIFIED',
+      p_reason: null,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data.id).toBe('we-9');
+  });
+
+  it('an edited candidate → PIQC_EDITED, with the auditor classification, checkpoint, and protocol quote forwarded', async () => {
+    mockRpc.mockResolvedValueOnce({ data: makeEntryRow(), error: null });
+    const protocolRef = {
+      chunk_id: 'chunk-p1',
+      document_id: 'doc-p',
+      quote: 'any excursion documented and reported to the sponsor',
+      section_heading: '6.3 Storage',
+      page_start: 47,
+      page_end: 47,
+    };
+
+    await promoteWorkspaceCandidate('audit-1', {
+      vendorDomain: 'Data integrity',
+      observationText: 'Edited text.',
+      evidence: EVIDENCE,
+      edited: true,
+      checkpointRef: 'SOP-014 rev 3 §4.2',
+      protocolRef,
+      provisionalClassification: 'FINDING',
+    });
+
+    expect(mockRpc).toHaveBeenCalledWith(
+      'audit_mode_promote_workspace_candidate',
+      expect.objectContaining({
+        p_origin: 'PIQC_EDITED',
+        p_checkpoint_ref: 'SOP-014 rev 3 §4.2',
+        p_protocol_ref: protocolRef,
+        p_provisional_classification: 'FINDING',
+        p_provisional_impact: 'NONE',
+      }),
+    );
+  });
+
+  it('an RPC refusal (already-promoted note) surfaces as ok:false with the server message', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'candidate cites a note already promoted into an accepted observation — re-run drafting' },
+    });
+
+    const result = await promoteWorkspaceCandidate('audit-1', {
+      vendorDomain: 'x',
+      observationText: 'y',
+      evidence: EVIDENCE,
+      edited: false,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'candidate cites a note already promoted into an accepted observation — re-run drafting',
+    });
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 });

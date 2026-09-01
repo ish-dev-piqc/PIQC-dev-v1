@@ -23,9 +23,11 @@ import {
   createWorkspaceEntry,
   updateWorkspaceEntry,
 } from '../../../../lib/audit/workspaceEntriesApi';
+import { fetchVendorNotes } from '../../../../lib/audit/vendorNotesApi';
 import HeatIndicator from '../../../heatmap/HeatIndicator';
 import { scoreWorkspaceEntry } from '../../../../lib/heatmap';
 import type {
+  AuditNoteObject,
   ProvisionalClassification,
   ProvisionalImpact,
 } from '../../../../types/audit';
@@ -34,6 +36,7 @@ import { hasPassedStage, hasReachedStage } from '../../../../lib/audit/workflowS
 import HistoryDrawer from '../HistoryDrawer';
 import StagePreviewNotice from '../StagePreviewNotice';
 import VendorNotesPad from './vendor/VendorNotesPad';
+import VendorCandidatePanel from './vendor/VendorCandidatePanel';
 import SourceTruthListDrawer from '../../../sotr/SourceTruthListDrawer';
 import SourceTruthDrawer from '../../../sotr/SourceTruthDrawer';
 import { formatExtractedValue } from '../../../sotr/WorksheetItemRow';
@@ -141,6 +144,30 @@ export default function AuditConductWorkspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAudit?.id, setEntriesByAudit]);
 
+  // Fieldwork notes (vendor lane) — ONE read per audit feeds the notes pad
+  // and the candidate panel; both are props-driven. Same hydrate idiom as the
+  // entries read above. 'failed' is a state, not an empty list — the pad
+  // renders it honestly and the panel's stash prune waits.
+  const [notesState, setNotesState] = useState<{
+    status: 'loading' | 'ready' | 'failed';
+    notes: AuditNoteObject[];
+  }>({ status: 'loading', notes: [] });
+  const [notesReloadNonce, setNotesReloadNonce] = useState(0);
+  useEffect(() => {
+    if (!activeAudit) return;
+    const auditIdLocal = activeAudit.id;
+    let cancelled = false;
+    setNotesState({ status: 'loading', notes: [] });
+    void fetchVendorNotes(auditIdLocal).then((res) => {
+      if (cancelled) return;
+      setNotesState(res.ok ? { status: 'ready', notes: res.data } : { status: 'failed', notes: [] });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAudit?.id, notesReloadNonce]);
+
   if (!activeAudit) return null;
 
   const auditId = activeAudit.id;
@@ -195,6 +222,26 @@ export default function AuditConductWorkspace() {
       source_extracted_item_id: null,
       source_extracted_item_label: null,
     }));
+  };
+
+  // Vendor lane — the pad mutates notes through this; an accepted candidate
+  // lands in the shared entry store (the saveEntry merge idiom) and marks
+  // the notes it consumed as promoted, so the pad hides their affordances
+  // and the next Draft excludes them without a refetch.
+  const handleNotesChange = (updater: (prev: AuditNoteObject[]) => AuditNoteObject[]) =>
+    setNotesState((s) => ({ ...s, notes: updater(s.notes) }));
+
+  const handleCandidatePromoted = (entry: MockWorkspaceEntry, consumedNoteIds: string[]) => {
+    setEntriesByAudit((prev) => ({
+      ...prev,
+      [auditId]: [...(prev[auditId] ?? []), entry],
+    }));
+    if (consumedNoteIds.length > 0) {
+      const consumed = new Set(consumedNoteIds);
+      handleNotesChange((prev) =>
+        prev.map((n) => (consumed.has(n.id) ? { ...n, promoted_entry_id: entry.id } : n)),
+      );
+    }
   };
 
   // saveEntry: persists via RPC, then merges the canonical row back into the
@@ -334,6 +381,11 @@ export default function AuditConductWorkspace() {
         auditId={activeAudit.id}
         hasReached={hasReached}
         isLight={isLight}
+        notes={notesState.notes}
+        loading={notesState.status === 'loading'}
+        loadFailed={notesState.status === 'failed'}
+        onRetry={() => setNotesReloadNonce((n) => n + 1)}
+        onNotesChange={handleNotesChange}
       />
 
       {/* Inline form */}
@@ -437,6 +489,19 @@ export default function AuditConductWorkspace() {
           </div>
         </div>
       )}
+
+      {/* PIQC-drafted candidate observations (vendor lane, slice 2) —
+          proposals only; Accept is the single path into the record above.
+          Stays mounted while the entry form is open so an in-flight draft
+          is not lost to a "New entry" click. */}
+      <VendorCandidatePanel
+        key={`candidates-${activeAudit.id}`}
+        auditId={activeAudit.id}
+        hasReached={hasReached}
+        isLight={isLight}
+        notes={notesState.status === 'ready' ? notesState.notes : null}
+        onPromoted={handleCandidatePromoted}
+      />
 
       {historyTarget && (
         <HistoryDrawer
