@@ -29,9 +29,9 @@ import {
 } from '../../../../lib/audit/deliverableGenerationApi';
 import type { DeliverableGroundingSnapshot } from '../../../../types/audit';
 import {
-  PROVISIONAL_IMPACT_LABELS,
-  PROVISIONAL_CLASSIFICATION_LABELS,
-} from '../../../../lib/audit/labels';
+  buildObservationGroups,
+  type ReportClassification,
+} from '../../../../lib/audit/observationGroups';
 import type { AuditWithContext } from '../../../../context/AuditContext';
 import type { MockReportDraft } from '../../../../lib/audit/mockReport';
 import type { MockWorkspaceEntry } from '../../../../lib/audit/mockWorkspaceEntries';
@@ -643,6 +643,15 @@ export default function FinalReviewExportWorkspace() {
   );
 }
 
+// Document-heading casing (Title Case) — deliberately different from the
+// Stage 7 screen's sentence case; see observationGroups.ts. Shared by the
+// markdown and docx builders, whose headings must never drift apart.
+const EXPORT_GROUP_LABELS: Record<ReportClassification, string> = {
+  FINDING: 'Findings',
+  OBSERVATION: 'Observations',
+  OPPORTUNITY_FOR_IMPROVEMENT: 'Opportunities for Improvement',
+};
+
 function buildMarkdown(
   audit: AuditWithContext,
   report: MockReportDraft,
@@ -674,27 +683,19 @@ function buildMarkdown(
       push('', `**Focus areas:** ${riskSummary.focus_areas.join(', ')}`);
   }
 
-  const groups: { key: 'FINDING' | 'OBSERVATION' | 'OPPORTUNITY_FOR_IMPROVEMENT'; label: string }[] = [
-    { key: 'FINDING', label: 'Findings' },
-    { key: 'OBSERVATION', label: 'Observations' },
-    { key: 'OPPORTUNITY_FOR_IMPROVEMENT', label: 'Opportunities for Improvement' },
-  ];
-
-  for (const { key, label } of groups) {
-    const items = entries.filter((e) => e.provisional_classification === key);
+  for (const group of buildObservationGroups(entries)) {
     hr();
-    push(`## ${label} (${items.length})`);
-    if (items.length === 0) {
+    push(`## ${EXPORT_GROUP_LABELS[group.key]} (${group.items.length})`);
+    if (group.items.length === 0) {
       push('', '_None recorded._');
     } else {
-      for (let i = 0; i < items.length; i++) {
-        const e = items[i];
+      for (const b of group.items) {
         push('');
-        push(`**${i + 1}. ${e.vendor_domain}**  `);
-        push(`Impact: ${PROVISIONAL_IMPACT_LABELS[e.provisional_impact]} · Classification: ${PROVISIONAL_CLASSIFICATION_LABELS[e.provisional_classification]}  `);
+        push(`**${b.number}. ${b.vendorDomain}**  `);
+        push(`Impact: ${b.impactLabel} · Classification: ${b.classificationLabel}  `);
         push('');
-        push(e.observation_text);
-        if (e.checkpoint_ref) push('', `*Ref: \`${e.checkpoint_ref}\`*`);
+        push(b.observationText);
+        if (b.checkpointRef) push('', `*Ref: \`${b.checkpointRef}\`*`);
       }
     }
   }
@@ -756,26 +757,18 @@ async function buildDocx(
       children.push(bold('Focus areas: ', riskSummary.focus_areas.join(', ')));
   }
 
-  const groups: { key: 'FINDING' | 'OBSERVATION' | 'OPPORTUNITY_FOR_IMPROVEMENT'; label: string }[] = [
-    { key: 'FINDING', label: 'Findings' },
-    { key: 'OBSERVATION', label: 'Observations' },
-    { key: 'OPPORTUNITY_FOR_IMPROVEMENT', label: 'Opportunities for Improvement' },
-  ];
-
-  for (const { key, label } of groups) {
-    const items = entries.filter((e) => e.provisional_classification === key);
-    children.push(blank(), h2(`${label} (${items.length})`));
-    if (items.length === 0) {
+  for (const group of buildObservationGroups(entries)) {
+    children.push(blank(), h2(`${EXPORT_GROUP_LABELS[group.key]} (${group.items.length})`));
+    if (group.items.length === 0) {
       children.push(italic('None recorded.'));
     } else {
-      for (let i = 0; i < items.length; i++) {
-        const e = items[i];
+      for (const b of group.items) {
         children.push(
-          new Paragraph({ children: [new TextRun({ text: `${i + 1}. ${e.vendor_domain}`, bold: true })] }),
-          italic(`Impact: ${PROVISIONAL_IMPACT_LABELS[e.provisional_impact]} · Classification: ${PROVISIONAL_CLASSIFICATION_LABELS[e.provisional_classification]}`),
-          p(e.observation_text),
+          new Paragraph({ children: [new TextRun({ text: `${b.number}. ${b.vendorDomain}`, bold: true })] }),
+          italic(`Impact: ${b.impactLabel} · Classification: ${b.classificationLabel}`),
+          p(b.observationText),
         );
-        if (e.checkpoint_ref) children.push(italic(`Ref: ${e.checkpoint_ref}`));
+        if (b.checkpointRef) children.push(italic(`Ref: ${b.checkpointRef}`));
         children.push(blank());
       }
     }

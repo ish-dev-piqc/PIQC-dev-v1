@@ -28,20 +28,25 @@ New `src/components/dashboard/audit/deliverables/`:
 - `DeliverableGenerationPanel.tsx` — moved verbatim; `PANEL_NOUNS`
   lookup becomes a `noun` prop, the hardcoded
   `kind === 'confirmation_letter'` recipients line becomes an optional
-  `privacyNote` prop (caller supplies it), and the deliverable prop is
-  typed structurally (the shared generation fields all five Mock types
-  carry). `kind` stays a string prop — the `${kind}-*` data-testids the
-  existing tests assert on are preserved byte-for-byte.
+  `privacyNote` prop (caller supplies it; the caller owns the truth of
+  the claim), and the deliverable prop is typed structurally (the
+  shared generation fields all five Mock types carry). `kind` is typed
+  `DeliverableKind` — the `${kind}-*` data-testids the existing tests
+  assert on are preserved byte-for-byte AND a typo'd kind stays a
+  compile error, as it was pre-extraction.
 - `useDeliverablePersistence.ts` — persistDeliverable +
   reloadAfterStaleApprove + the PR-1 state they drive (savingTabs,
   persistErrors, unsavedDrafts, approveErrors, staleReloadNotices),
-  generic over the bundle map so the per-key draft types stay precise
-  and D4's FindingsReport can instantiate it later. Exposes
-  `dismissSaveError(key)` (collapses the five identical inline
-  closures) and `resetTransient()` (called from the workspace's
-  existing audit-switch effect). Load-path state (failedKindsByAudit,
-  settledAudits, refreshBundle) stays in the workspace — it is
-  bundle-fetch-specific, not per-deliverable.
+  generic over the bundle map: the returned maps are bundle-keyed
+  (typo-proof reads, as pre-extraction), persistDeliverable indexes the
+  row type by its key (`NonNullable<B[K]>` — a letter row under the
+  agenda key is a compile error), and D4's FindingsReport can
+  instantiate it later. Exposes `unsavedDraftFor(aid, key)` (precise
+  per-key draft reads), `dismissSaveError(key)` (collapses the five
+  identical inline closures) and `resetTransient()` (called from the
+  workspace's existing audit-switch effect). Load-path state
+  (failedKindsByAudit, settledAudits, refreshBundle) stays in the
+  workspace — it is bundle-fetch-specific, not per-deliverable.
 - `useDeliverableGeneration.ts` — runDeliverableGeneration +
   generatingTab/generationError. Calls the same
   requestDeliverableDraft/applyDeliverableGeneration; the
