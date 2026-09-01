@@ -35,6 +35,7 @@ import {
   type ProtocolCandidate,
   type ProtocolChunkRow,
 } from "../_shared/protocolCandidates.ts";
+import { normalizeRegister, type RegisterDoc } from "../_shared/evidenceRegister.ts";
 import { AGENDA_PROMPT, CHECKLIST_PROMPT, EVIDENCE_GAP_SUMMARY_PROMPT, INTERNAL_NOTIFICATION_PROMPT, LETTER_PROMPT } from "./prompts.ts";
 
 // -----------------------------------------------------------------------------
@@ -292,35 +293,6 @@ function buildUserMessage(
 // and the register read fails closed in the handler — an unreadable register
 // is not an empty one.
 // -----------------------------------------------------------------------------
-
-// One normalized row per AUDIT_EVIDENCE register entry — the single place the
-// evidence-kind predicate and PostgREST embed unwrap live.
-interface RegisterDoc {
-  document_id: string;
-  source_type: string;
-  title: string;
-  status: string;
-  content_hash: string | null;
-  included: boolean;
-}
-
-function normalizeRegister(registerRows: unknown[] | null): RegisterDoc[] {
-  return (registerRows ?? []).flatMap((r) => {
-    const docRaw = (r as { documents: unknown }).documents;
-    const doc = (Array.isArray(docRaw) ? docRaw[0] : docRaw) as
-      | { title?: string; status?: string; content_hash?: string | null; kind?: string }
-      | null;
-    if (!doc || doc.kind !== "AUDIT_EVIDENCE") return [];
-    return [{
-      document_id: String((r as { document_id: unknown }).document_id),
-      source_type: String((r as { source_type: unknown }).source_type),
-      title: (doc.title ?? "").trim() || "(untitled)",
-      status: doc.status ?? "unknown",
-      content_hash: doc.content_hash ?? null,
-      included: (r as { include_in_generation: boolean }).include_in_generation === true,
-    }];
-  });
-}
 
 // Titles, scope areas, and checklist lines are freetext interpolated into a
 // line-oriented prompt block — collapse whitespace so a newline in a title
