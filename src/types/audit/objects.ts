@@ -188,7 +188,7 @@ export interface AuditEvidenceListRow extends AuditSourceDocument {
 // must never join back to live rows.
 // -----------------------------------------------------------------------------
 export interface DeliverableGenerationRef {
-  item_id: string;                    // item id the ref supports ('letter'/'notification'/'gap_summary' for blob-level refs)
+  item_id: string;                    // item id the ref supports ('letter'/'notification'/'gap_summary'/'findings_report' for blob-level refs)
   chunk_id: string;
   document_id: string;
   source: 'PROTOCOL' | 'EVIDENCE';
@@ -218,6 +218,18 @@ export interface DeliverableGroundingSnapshot {
     included: boolean;
   }>;
   checklist_item_ids?: string[];
+  // Findings-report kind only (PR-D4): the Stage-6 entry tuples the narrative
+  // was drafted against — the same fields audit_mode_entry_set_digest hashes,
+  // so the currency axis and the approve basis pin measure the same identity.
+  // Absent on every other kind; currency logic gates on presence.
+  entries?: Array<{
+    id: string;
+    vendor_domain: string;
+    observation_text: string;
+    checkpoint_ref: string | null;
+    provisional_impact: string;
+    provisional_classification: string;
+  }>;
 }
 
 // -----------------------------------------------------------------------------

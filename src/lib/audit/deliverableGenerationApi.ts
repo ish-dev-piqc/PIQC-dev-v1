@@ -32,16 +32,20 @@ export type DeliverableKind =
   | 'agenda'
   | 'confirmation_letter'
   | 'internal_notification'
-  | 'evidence_gap_summary';
+  | 'evidence_gap_summary'
+  | 'findings_report';
 
 export interface DeliverableDraftProposal {
   mode: 'generate' | 'revise';
   deliverable: DeliverableKind;
-  // items for items-shaped kinds; body_text + scope for letter-shaped ones.
+  // items for items-shaped kinds; body_text + scope for letter-shaped ones;
+  // intro_text + closing_text for the report-shaped findings report.
   content_patch: {
     items?: MockChecklistItem[] | MockAgendaItem[];
     body_text?: string;
     scope?: string[];
+    intro_text?: string;
+    closing_text?: string;
   };
   generation_refs: DeliverableGenerationRef[];
   grounding: DeliverableGroundingSnapshot;
@@ -55,12 +59,13 @@ export interface DeliverableDraftProposal {
 // DELIVERABLES config). Record-typed so a new kind cannot compile without
 // declaring its shape — the alternative (a kind-ternary with an items
 // fall-through) silently wipes a letter-shaped kind's body on apply.
-const KIND_SHAPE: Record<DeliverableKind, 'items' | 'letter'> = {
+const KIND_SHAPE: Record<DeliverableKind, 'items' | 'letter' | 'report'> = {
   checklist: 'items',
   agenda: 'items',
   confirmation_letter: 'letter',
   internal_notification: 'letter',
   evidence_gap_summary: 'letter',
+  findings_report: 'report',
 };
 
 const APPLY_RPC: Record<DeliverableKind, string> = {
@@ -69,6 +74,7 @@ const APPLY_RPC: Record<DeliverableKind, string> = {
   confirmation_letter: 'audit_mode_apply_confirmation_letter_generation',
   internal_notification: 'audit_mode_apply_internal_notification_generation',
   evidence_gap_summary: 'audit_mode_apply_evidence_gap_summary_generation',
+  findings_report: 'audit_mode_apply_findings_report_generation',
 };
 
 const DRAFT_NOUN: Record<DeliverableKind, string> = {
@@ -77,6 +83,7 @@ const DRAFT_NOUN: Record<DeliverableKind, string> = {
   confirmation_letter: 'Confirmation letter',
   internal_notification: 'Internal notification',
   evidence_gap_summary: 'Evidence gap summary',
+  findings_report: 'Findings report',
 };
 
 export async function requestDeliverableDraft(
@@ -128,8 +135,9 @@ export async function applyDeliverableGeneration(
   proposal: DeliverableDraftProposal,
   opts?: { currentRecipients?: string[] },
 ): Promise<Result<null>> {
+  const shape = KIND_SHAPE[proposal.deliverable];
   const content =
-    KIND_SHAPE[proposal.deliverable] === 'letter'
+    shape === 'letter'
       ? {
           body_text: proposal.content_patch.body_text ?? '',
           scope: proposal.content_patch.scope ?? [],
@@ -139,7 +147,14 @@ export async function applyDeliverableGeneration(
             ? { recipients: opts?.currentRecipients ?? [] }
             : {}),
         }
-      : { items: proposal.content_patch.items ?? [] };
+      : shape === 'report'
+        ? {
+            // Connective narrative only — the observation blocks are never
+            // part of stored content (they derive live from Stage-6 entries).
+            intro_text: proposal.content_patch.intro_text ?? '',
+            closing_text: proposal.content_patch.closing_text ?? '',
+          }
+        : { items: proposal.content_patch.items ?? [] };
 
   const noun = DRAFT_NOUN[proposal.deliverable];
   const { error } = await supabase.rpc(APPLY_RPC[proposal.deliverable], {
@@ -176,7 +191,23 @@ export interface DeliverableCurrency {
   // live ids missing).
   withholdFlippedSinceGeneration?: Array<{ document_id: string; title: string }>;
   checklistChanged?: boolean;
+  // Findings-report axis (PR-D4): whether the Stage-6 entry set differs from
+  // the snapshot the narrative was drafted against — same identity the
+  // approve basis pin hashes. undefined when unknowable (snapshot or live
+  // entries missing).
+  entriesChanged?: boolean;
   isCurrent: boolean;
+}
+
+/** Structural floor of a live Stage-6 entry for the currency comparison —
+ *  exactly the digest fields. MockWorkspaceEntry satisfies it. */
+export interface LiveEntryTuple {
+  id: string;
+  vendor_domain: string;
+  observation_text: string;
+  checkpoint_ref: string | null;
+  provisional_impact: string;
+  provisional_classification: string;
 }
 
 /**
@@ -206,11 +237,15 @@ export function checklistLiveIds(checklist: MockChecklist | null): string[] {
  *   Callers surfacing a kind with this axis MUST pass the live ids (use
  *   `checklistLiveIds`) — omitting them silently reports the axis as
  *   unknowable, never as stale.
+ * - `entries` present (findings report): entry identity + digest-field
+ *   content vs `liveEntries`. Same rule — callers surfacing the kind MUST
+ *   pass the live entries or the axis silently reads unknowable.
  */
 export function computeDeliverableCurrency(
   snapshot: DeliverableGroundingSnapshot | null | undefined,
   liveRegister: AuditEvidenceListRow[],
   liveChecklistItemIds?: string[],
+  liveEntries?: LiveEntryTuple[],
 ): DeliverableCurrency | null {
   if (!snapshot) return null;
 
@@ -225,6 +260,29 @@ export function computeDeliverableCurrency(
     const liveSet = new Set(liveChecklistItemIds);
     checklistChanged =
       liveSet.size !== snapSet.size || [...liveSet].some((id) => !snapSet.has(id));
+  }
+
+  // Entries axis — same per-axis gating idiom. Compares the digest fields
+  // exactly (audit_mode_entry_set_digest's identity), so the currency flag
+  // and the approve basis pin can never disagree about what "changed" means.
+  // Length + keyed-field check covers adds, removes, and edits (ids are PKs).
+  const snapEntries = snapshot.entries;
+  let entriesChanged: boolean | undefined;
+  if (liveEntries !== undefined && snapEntries !== undefined) {
+    const snapById = new Map(snapEntries.map((e) => [e.id, e]));
+    entriesChanged =
+      liveEntries.length !== snapEntries.length ||
+      liveEntries.some((e) => {
+        const s = snapById.get(e.id);
+        return (
+          !s ||
+          s.vendor_domain !== e.vendor_domain ||
+          s.observation_text !== e.observation_text ||
+          (s.checkpoint_ref ?? null) !== (e.checkpoint_ref ?? null) ||
+          s.provisional_impact !== e.provisional_impact ||
+          s.provisional_classification !== e.provisional_classification
+        );
+      });
   }
 
   if (snapshot.register) {
@@ -249,11 +307,15 @@ export function computeDeliverableCurrency(
       removedSinceGeneration,
       withholdFlippedSinceGeneration,
       checklistChanged,
+      // Conditional spread keeps the gap kind's return byte-identical (its
+      // snapshots never carry `entries`, so the key never appears).
+      ...(entriesChanged !== undefined ? { entriesChanged } : {}),
       isCurrent:
         newSinceGeneration.length === 0 &&
         removedSinceGeneration.length === 0 &&
         withholdFlippedSinceGeneration.length === 0 &&
-        checklistChanged !== true,
+        checklistChanged !== true &&
+        entriesChanged !== true,
     };
   }
 
@@ -268,16 +330,18 @@ export function computeDeliverableCurrency(
     .filter((e) => !liveIds.has(e.document_id))
     .map((e) => ({ document_id: e.document_id, title: e.title }));
 
-  // The conditional spread keeps every legacy snapshot's return byte-identical
-  // (no new keys); a future no-register snapshot that DID record checklist
-  // identity still gets its axis measured here.
+  // The conditional spreads keep every legacy snapshot's return byte-identical
+  // (no new keys); a no-register snapshot that DID record checklist identity
+  // or the entry tuples still gets those axes measured here.
   return {
     newSinceGeneration,
     removedSinceGeneration,
     ...(checklistChanged !== undefined ? { checklistChanged } : {}),
+    ...(entriesChanged !== undefined ? { entriesChanged } : {}),
     isCurrent:
       newSinceGeneration.length === 0 &&
       removedSinceGeneration.length === 0 &&
-      checklistChanged !== true,
+      checklistChanged !== true &&
+      entriesChanged !== true,
   };
 }

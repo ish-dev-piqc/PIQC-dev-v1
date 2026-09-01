@@ -22,6 +22,7 @@ import { fetchPreAuditDeliverables } from './preAuditApi';
 import { fetchWorkspaceEntries } from './workspaceEntriesApi';
 import { fetchIssuesWithCapas } from './capaApi';
 import { fetchReportDraft } from './reportApi';
+import { fetchFindingsReport } from './findingsReport';
 import { buildLineageGraph, type LineageGraph } from './lineageAdapter';
 
 export type LineageResult =
@@ -41,6 +42,7 @@ export async function fetchAuditLineage(audit: AuditWithContext): Promise<Lineag
       entries,
       issuesWithCapas,
       report,
+      findingsReportFetch,
     ] = await Promise.all([
       fetchProtocolRisksForAudit(audit.id),
       // Result-carrying reads (PR-2): the drawer renders what it can see —
@@ -56,6 +58,8 @@ export async function fetchAuditLineage(audit: AuditWithContext): Promise<Lineag
       fetchWorkspaceEntries(audit.id),
       fetchIssuesWithCapas(audit.id),
       fetchReportDraft(audit.id),
+      // Failed read → omitted like an absent one (same ledgered drawer rule).
+      fetchFindingsReport(audit.id),
     ]);
 
     return {
@@ -73,6 +77,7 @@ export async function fetchAuditLineage(audit: AuditWithContext): Promise<Lineag
         issues: issuesWithCapas.issues,
         capas: Object.values(issuesWithCapas.capasByIssue),
         report,
+        findingsReport: findingsReportFetch.report,
       }),
     };
   } catch (err) {
