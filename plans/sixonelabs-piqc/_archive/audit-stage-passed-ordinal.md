@@ -1,8 +1,9 @@
 ---
-status: in-review
+status: merged
+merged: 2026-09-01
 owner: sixonelabs-piqc
 feature: audit-stage-passed-ordinal
-target_pr: TBD
+target_pr: #577
 ---
 
 # Audit stage-passed ordinal — one encoding for "already advanced"
