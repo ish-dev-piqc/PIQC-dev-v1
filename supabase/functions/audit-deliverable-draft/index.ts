@@ -36,7 +36,7 @@ import {
   type ProtocolChunkRow,
 } from "../_shared/protocolCandidates.ts";
 import { normalizeRegister, type RegisterDoc } from "../_shared/evidenceRegister.ts";
-import { AGENDA_PROMPT, CHECKLIST_PROMPT, EVIDENCE_GAP_SUMMARY_PROMPT, INTERNAL_NOTIFICATION_PROMPT, LETTER_PROMPT } from "./prompts.ts";
+import { AGENDA_PROMPT, CHECKLIST_PROMPT, EVIDENCE_GAP_SUMMARY_PROMPT, FINDINGS_REPORT_PROMPT, INTERNAL_NOTIFICATION_PROMPT, LETTER_PROMPT } from "./prompts.ts";
 
 // -----------------------------------------------------------------------------
 // CORS + constants
@@ -67,12 +67,16 @@ const GAP_MAX_REGISTER_DOCS = 120;
 const GAP_MAX_SCOPE_AREAS   = 50;
 const GAP_MAX_LINE_CHARS    = 200;  // per register-title / scope-area / checklist line
 
-type DeliverableKind = "checklist" | "agenda" | "confirmation_letter" | "internal_notification" | "evidence_gap_summary";
+type DeliverableKind = "checklist" | "agenda" | "confirmation_letter" | "internal_notification" | "evidence_gap_summary" | "findings_report";
 
 // shape drives every structural branch: "items" kinds carry labeled entry
 // lists (C-label revision mode, capped at maxItems); "letter" kinds carry a
 // single body_text + scope blob (current-draft revision mode, empty-body 502
-// guard). The discriminated union makes per-shape data compiler-forced: a new
+// guard); the "report" kind (PR-D4) carries intro_text + closing_text —
+// connective narrative ONLY. Its observation blocks are injected into the
+// document by code and their text is never sent to the model at all (the
+// strongest form of "never round-tripped": nothing to restate). The
+// discriminated union makes per-shape data compiler-forced: a new
 // letter-shaped kind cannot be added without declaring its blob ref id and
 // revision heading, and cannot carry a meaningless maxItems.
 type DeliverableConfig = { table: string; systemPrompt: string } & (
@@ -91,6 +95,11 @@ type DeliverableConfig = { table: string; systemPrompt: string } & (
       // echo cap would silently truncate the auditor's own text on write-back.
       maxBodyChars?: number;
     }
+  | {
+      shape: "report";
+      blobRefId: string;
+      revisionHeading: string;
+    }
 );
 const DELIVERABLES: Record<DeliverableKind, DeliverableConfig> = {
   checklist:             { table: "checklist_objects",             systemPrompt: CHECKLIST_PROMPT,             shape: "items", maxItems: 40 },
@@ -98,6 +107,7 @@ const DELIVERABLES: Record<DeliverableKind, DeliverableConfig> = {
   confirmation_letter:   { table: "confirmation_letter_objects",   systemPrompt: LETTER_PROMPT,                shape: "letter", blobRefId: "letter",       revisionHeading: "CURRENT LETTER" },
   internal_notification: { table: "internal_notification_objects", systemPrompt: INTERNAL_NOTIFICATION_PROMPT, shape: "letter", blobRefId: "notification", revisionHeading: "CURRENT DRAFT"  },
   evidence_gap_summary:  { table: "evidence_gap_summary_objects",  systemPrompt: EVIDENCE_GAP_SUMMARY_PROMPT,  shape: "letter", blobRefId: "gap_summary",  revisionHeading: "CURRENT SUMMARY", maxBodyChars: 12_000 },
+  findings_report:       { table: "findings_report_objects",       systemPrompt: FINDINGS_REPORT_PROMPT,       shape: "report", blobRefId: "findings_report", revisionHeading: "CURRENT NARRATIVE" },
 };
 
 // Static retrieval lenses — the standard vendor-audit domains. Per-domain
@@ -158,7 +168,7 @@ interface ExistingEntry {
 function extractExisting(kind: DeliverableKind, content: unknown): ExistingEntry[] {
   const c = (content ?? {}) as Record<string, unknown>;
   const config = DELIVERABLES[kind];
-  if (config.shape === "letter") return []; // letter-shaped revision passes body/scope, not labeled entries
+  if (config.shape !== "items") return []; // blob-shaped revision passes its sections, not labeled entries
   const maxItems = config.maxItems;
   const rawItems = Array.isArray(c.items) ? c.items : [];
   return rawItems
@@ -197,17 +207,90 @@ interface GapSummaryContext {
   checklistItemIds: string[];
 }
 
-function buildUserMessage(
-  kind: DeliverableKind,
-  protocolTitle: string | null,
-  auditType: string | null,
-  protocolCandidates: ProtocolCandidate[],
-  evidenceCandidates: ProtocolCandidate[],
-  docTitles: Map<string, string>,
-  existing: ExistingEntry[],
-  letterCurrent: { body_text: string; scope: string[] } | null,
-  gapContext: GapSummaryContext | null,
-): string {
+// Findings-report-only context (PR-D4). Deliberately does NOT carry
+// observation text: the blocks are injected into the document by code, and
+// the model writes connective narrative around a body it cannot restate.
+// What it may reference — counts (labeled provisional) and vendor domains —
+// is all it receives. The SNAPSHOT tuples mirror the fields of
+// audit_mode_entry_set_digest so the client's currency axis and the approve
+// pin measure the same identity.
+interface FindingsReportContext {
+  findingCount: number;
+  observationCount: number;
+  ofiCount: number;
+  // Excluded from the report body by the client renderer; the narrative must
+  // not reference them either.
+  unclassifiedCount: number;
+  domains: string[];
+  entriesSnapshot: Array<{
+    id: string;
+    vendor_domain: string;
+    observation_text: string;
+    checkpoint_ref: string | null;
+    provisional_impact: string;
+    provisional_classification: string;
+  }>;
+}
+
+function buildFindingsReportContext(rows: unknown[]): FindingsReportContext {
+  const entries = rows
+    .filter((r): r is Record<string, unknown> => !!r && typeof r === "object")
+    .map((r) => ({
+      id: String(r.id),
+      vendor_domain: String(r.vendor_domain ?? ""),
+      observation_text: String(r.observation_text ?? ""),
+      checkpoint_ref: typeof r.checkpoint_ref === "string" ? r.checkpoint_ref : null,
+      provisional_impact: String(r.provisional_impact ?? ""),
+      provisional_classification: String(r.provisional_classification ?? ""),
+    }));
+  const count = (c: string) =>
+    entries.filter((e) => e.provisional_classification === c).length;
+  return {
+    findingCount: count("FINDING"),
+    observationCount: count("OBSERVATION"),
+    ofiCount: count("OPPORTUNITY_FOR_IMPROVEMENT"),
+    unclassifiedCount: count("NOT_YET_CLASSIFIED"),
+    domains: [...new Set(
+      entries
+        .filter((e) => e.provisional_classification !== "NOT_YET_CLASSIFIED")
+        .map((e) => cleanLine(e.vendor_domain))
+        .filter(Boolean),
+    )],
+    entriesSnapshot: entries,
+  };
+}
+
+// One context object instead of the former nine positional params — the
+// findings report would have been the tenth, and call-site argument order
+// had already become the review hazard.
+interface UserMessageContext {
+  kind: DeliverableKind;
+  protocolTitle: string | null;
+  auditType: string | null;
+  protocolCandidates: ProtocolCandidate[];
+  evidenceCandidates: ProtocolCandidate[];
+  docTitles: Map<string, string>;
+  existing: ExistingEntry[];
+  letterCurrent: { body_text: string; scope: string[] } | null;
+  gapContext: GapSummaryContext | null;
+  reportContext: FindingsReportContext | null;
+  reportCurrent: { intro_text: string; closing_text: string } | null;
+}
+
+function buildUserMessage(ctx: UserMessageContext): string {
+  const {
+    kind,
+    protocolTitle,
+    auditType,
+    protocolCandidates,
+    evidenceCandidates,
+    docTitles,
+    existing,
+    letterCurrent,
+    gapContext,
+    reportContext,
+    reportCurrent,
+  } = ctx;
   const lines: string[] = [];
   lines.push(`Protocol: ${protocolTitle ?? "(unspecified)"}`);
   if (auditType) lines.push(`Audit type: ${auditType}`);
@@ -263,6 +346,31 @@ function buildUserMessage(
       lines.push("");
     }
   }
+  if (reportContext) {
+    const classifiedTotal =
+      reportContext.findingCount + reportContext.observationCount + reportContext.ofiCount;
+    lines.push(
+      "AUDIT OBSERVATIONS (the report's body — the system places the observation blocks between your intro_text and closing_text verbatim; you never see or write their text):",
+    );
+    if (classifiedTotal === 0) {
+      lines.push(
+        "- No classified observations yet. Say so plainly in the narrative; do not invent, imply, or anticipate any.",
+      );
+    } else {
+      lines.push(`- Findings (provisional): ${reportContext.findingCount}`);
+      lines.push(`- Observations (provisional): ${reportContext.observationCount}`);
+      lines.push(`- Opportunities for improvement (provisional): ${reportContext.ofiCount}`);
+      if (reportContext.domains.length > 0) {
+        lines.push(`- Vendor domains touched: ${reportContext.domains.join(", ")}`);
+      }
+    }
+    if (reportContext.unclassifiedCount > 0) {
+      lines.push(
+        `- ${reportContext.unclassifiedCount} entr${reportContext.unclassifiedCount === 1 ? "y is" : "ies are"} not yet classified and excluded from the report body — do not reference them.`,
+      );
+    }
+    lines.push("");
+  }
   if (existing.length > 0) {
     lines.push(`EXISTING ITEMS (${existing.length}; revision mode — reference by label):`);
     for (const e of existing) lines.push(`[${e.label}] ${e.text.slice(0, MAX_PROMPT_CHARS)}`);
@@ -275,8 +383,14 @@ function buildUserMessage(
     lines.push(`scope: ${letterCurrent.scope.join(" | ").slice(0, 2_000)}`);
     lines.push("");
   }
+  if (reportCurrent && cfg.shape === "report") {
+    lines.push(`${cfg.revisionHeading} (revision mode — preserve substance):`);
+    lines.push(`intro_text: ${reportCurrent.intro_text.slice(0, MAX_BODY_TEXT_CHARS)}`);
+    lines.push(`closing_text: ${reportCurrent.closing_text.slice(0, MAX_BODY_TEXT_CHARS)}`);
+    lines.push("");
+  }
   lines.push(
-    existing.length > 0 || letterCurrent
+    existing.length > 0 || letterCurrent || reportCurrent
       ? "Revise against these passages now. Output the JSON object only."
       : "Draft it now. Output the JSON object only.",
   );
@@ -587,7 +701,16 @@ Deno.serve(async (req: Request) => {
       : [];
     if (bodyText.trim().length > 0 || scope.length > 0) letterCurrent = { body_text: bodyText, scope };
   }
-  const mode: "generate" | "revise" = existing.length > 0 || letterCurrent ? "revise" : "generate";
+  let reportCurrent: { intro_text: string; closing_text: string } | null = null;
+  if (config.shape === "report" && existingContent) {
+    const introText = typeof existingContent.intro_text === "string" ? existingContent.intro_text : "";
+    const closingText = typeof existingContent.closing_text === "string" ? existingContent.closing_text : "";
+    if (introText.trim().length > 0 || closingText.trim().length > 0) {
+      reportCurrent = { intro_text: introText, closing_text: closingText };
+    }
+  }
+  const mode: "generate" | "revise" =
+    existing.length > 0 || letterCurrent || reportCurrent ? "revise" : "generate";
 
   // Evidence register — JWT/RLS-gated. Ordered so the gap listing's cap cuts
   // deterministically (matches the client's listAuditEvidence ordering).
@@ -621,6 +744,36 @@ Deno.serve(async (req: Request) => {
     kind === "evidence_gap_summary"
       ? loadGapSummaryContext(supabase, auditId, register, requestId)
       : Promise.resolve(null);
+
+  // Findings-report basis — the Stage-6 entry set (JWT/RLS-gated; same read
+  // the client's fetchWorkspaceEntries performs, same ordering). Fails CLOSED:
+  // an unreadable entry set is not an empty one — drafting "no observations"
+  // narrative over a read error would invert the document.
+  let reportContext: FindingsReportContext | null = null;
+  if (kind === "findings_report") {
+    const { data: entryRows, error: entriesErr } = await supabase
+      .from("audit_workspace_entry_objects")
+      .select("id, vendor_domain, observation_text, checkpoint_ref, provisional_impact, provisional_classification")
+      .eq("audit_id", auditId)
+      .order("created_at", { ascending: true });
+    if (entriesErr) {
+      log("warn", "audit_deliverable_draft.entries_read_error", {
+        request_id: requestId, error: String(entriesErr.message),
+      });
+      return new Response(
+        JSON.stringify({ error: "Audit observations could not be read — try again" }),
+        { status: 503, headers: jsonHeaders });
+    }
+    reportContext = buildFindingsReportContext(entryRows ?? []);
+    log("info", "audit_deliverable_draft.report_context", {
+      request_id: requestId,
+      finding_count: reportContext.findingCount,
+      observation_count: reportContext.observationCount,
+      ofi_count: reportContext.ofiCount,
+      unclassified_count: reportContext.unclassifiedCount,
+      domain_count: reportContext.domains.length,
+    });
+  }
 
   log("info", "audit_deliverable_draft.request", {
     request_id: requestId,
@@ -664,7 +817,9 @@ Deno.serve(async (req: Request) => {
         ? existing.map((e) => e.text).join("\n")
         : letterCurrent
           ? `${letterCurrent.scope.join("\n")}\n${letterCurrent.body_text}`
-          : null;
+          : reportCurrent
+            ? `${reportCurrent.intro_text}\n${reportCurrent.closing_text}`
+            : null;
       candidates = await retrieveCandidates(
         serviceClient, openaiKey, protocolDocIds, evidenceDocIds,
         reviseQuery, controller.signal, requestId,
@@ -707,11 +862,19 @@ Deno.serve(async (req: Request) => {
           { role: "system", content: config.systemPrompt },
           {
             role: "user",
-            content: buildUserMessage(
-              kind, protocolTitle, (audit.audit_type as string | null) ?? null,
-              candidates.protocol, candidates.evidence, docTitles, existing, letterCurrent,
+            content: buildUserMessage({
+              kind,
+              protocolTitle,
+              auditType: (audit.audit_type as string | null) ?? null,
+              protocolCandidates: candidates.protocol,
+              evidenceCandidates: candidates.evidence,
+              docTitles,
+              existing,
+              letterCurrent,
               gapContext,
-            ),
+              reportContext,
+              reportCurrent,
+            }),
           },
         ],
       }),
@@ -807,7 +970,25 @@ Deno.serve(async (req: Request) => {
   let bodyTruncated = false;
   const keptExistingIds = new Set<string>();
 
-  if (config.shape === "letter") {
+  if (config.shape === "report") {
+    const rawIntro = typeof parsed.intro_text === "string" ? parsed.intro_text.trim() : "";
+    const rawClosing = typeof parsed.closing_text === "string" ? parsed.closing_text.trim() : "";
+    const introText = rawIntro.slice(0, MAX_BODY_TEXT_CHARS);
+    const closingText = rawClosing.slice(0, MAX_BODY_TEXT_CHARS);
+    bodyTruncated =
+      rawIntro.length > MAX_BODY_TEXT_CHARS || rawClosing.length > MAX_BODY_TEXT_CHARS;
+    if (introText.length === 0 && closingText.length === 0) {
+      // Never apply an empty narrative: in revise mode it would wipe the
+      // auditor's persisted text (apply is automatic client-side).
+      log("error", "audit_deliverable_draft.empty_body", { request_id: requestId, deliverable: kind });
+      return new Response(JSON.stringify({ error: "AI service returned an empty draft" }),
+        { status: 502, headers: jsonHeaders });
+    }
+    // Blob-level refs: the kind's configured item_id (see DeliverableGenerationRef).
+    gateRefs(parsed.refs, config.blobRefId);
+    contentPatch = { intro_text: introText, closing_text: closingText };
+    outCount = 1;
+  } else if (config.shape === "letter") {
     const bodyCap = config.maxBodyChars ?? MAX_BODY_TEXT_CHARS;
     const rawBody = typeof parsed.body_text === "string" ? parsed.body_text.trim() : "";
     const bodyText = rawBody.slice(0, bodyCap);
@@ -931,6 +1112,12 @@ Deno.serve(async (req: Request) => {
     ...(gapContext ? {
       register: gapContext.registerSnapshot,
       checklist_item_ids: gapContext.checklistItemIds,
+    } : {}),
+    // Findings-report kind only: the entry tuples the narrative was drafted
+    // against — the same fields audit_mode_entry_set_digest hashes, so the
+    // currency axis and the approve pin measure the same identity.
+    ...(reportContext ? {
+      entries: reportContext.entriesSnapshot,
     } : {}),
   };
 

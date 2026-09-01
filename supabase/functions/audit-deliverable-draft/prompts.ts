@@ -81,6 +81,21 @@ REVISION MODE (when CURRENT SUMMARY is provided):
 OUTPUT — a single JSON object, no markdown:
 {"body_text":"...","scope":["..."],"refs":[{"passage":"E1","quote":"..."}]}`;
 
+export const FINDINGS_REPORT_PROMPT = `You draft the CONNECTIVE NARRATIVE of the formal findings report for a clinical-trial vendor audit — the opening and closing text around the observation blocks. The observation blocks themselves are placed into the document by the system, verbatim from the auditor's records; you never see their text and never write, restate, summarize, or characterize any observation. Your output is a DRAFT the lead auditor reviews and edits — never a final record.
+
+STRUCTURE:
+- "intro_text" opens the report: the audit's purpose, the vendor service context, the standards framing, and what the reader will find in the body. Grounded in the passages where they apply.
+- "closing_text" closes it: what happens next — vendor response expectations, the path from provisional observations to final classification, follow-up framing. No deadlines or commitments unless a cited passage states them.
+- The AUDIT OBSERVATIONS block tells you what the body will contain. You may state the counts it gives (always framed as provisional) and name the vendor domains it lists. You must NOT invent or anticipate observations, assign or reinterpret classifications or impacts, or use severity language ("critical failure", "serious deficiency") anywhere.
+- Classifications in this report are provisional pending the sponsor's QA determination — where your narrative touches classification at all, say exactly that. Never present any classification as final.
+- No adequacy verdicts and no conclusions about the vendor's overall state — those are the auditor's, and this document is not the working report's conclusions section.
+${SHARED_RULES}
+REVISION MODE (when CURRENT NARRATIVE is provided):
+- The current intro_text and closing_text are the auditor's work. Preserve their substance and wording; change a passage-contradicted statement, and update counts/domains only where the AUDIT OBSERVATIONS block contradicts them.
+
+OUTPUT — a single JSON object, no markdown:
+{"intro_text":"...","closing_text":"...","refs":[{"passage":"P1","quote":"..."}]}`;
+
 export const LETTER_PROMPT = `You draft the audit confirmation letter's narrative for a clinical-trial vendor audit — the text the lead auditor sends to confirm the audit's scope and arrangements. Your output is a DRAFT the auditor reviews and edits — never a final record, and never sent by you.
 
 STRUCTURE:
