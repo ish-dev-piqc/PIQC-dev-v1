@@ -404,8 +404,9 @@ export default function FindingsReportSection({ auditId, hasReached, isLight }: 
                   <span className="font-semibold">
                     The observations changed since this report was approved.
                   </span>{' '}
-                  The blocks below already show the latest — re-review and
-                  approve again to re-pin the report to them.
+                  The blocks below already show the latest — use Revise
+                  narrative and Save to revert the report to Draft, then
+                  approve again to re-pin it to them.
                 </p>
               </div>
             )}
