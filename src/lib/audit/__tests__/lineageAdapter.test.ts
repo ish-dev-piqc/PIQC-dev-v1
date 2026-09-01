@@ -44,6 +44,7 @@ const EMPTY: LineageInput = {
   capas: [],
   report: null,
   findingsReport: null,
+  auditCertificate: null,
 };
 
 function fullInput(): LineageInput {
@@ -293,6 +294,68 @@ describe('buildLineageGraph', () => {
     expect(n?.origin).toContain('PIQC drafted the connective narrative');
     // No per-entry provenance fan by design — the blocks derive from the
     // ENTIRE Stage-6 entry set.
+    expect(g.edges.filter((e) => e.fromId === n?.id)).toHaveLength(0);
+  });
+
+  it('the audit certificate renders as a Stage-8 node with one certifies edge to the report (PR-D6)', () => {
+    const input = fullInput();
+    input.auditCertificate = {
+      id: 'cert1',
+      audit_id: 'a1',
+      content: { body_text: 'This certificate records that…', scope: ['data_management'] },
+      approval_status: 'DRAFT',
+      approved_at: null,
+      approved_by_name: null,
+      updated_at: '2026-09-07T00:00:00Z',
+      basis_digest: null,
+      generation_refs: null,
+      grounding_snapshot: null,
+      generated_at: '2026-09-07T00:00:00Z',
+    };
+    const g = buildLineageGraph(input);
+    const n = g.nodes.find((x) => x.entityType === 'AUDIT_CERTIFICATE');
+    expect(n).toMatchObject({
+      title: 'Audit certificate',
+      stage: 8,
+      trackedObjectType: 'AUDIT_CERTIFICATE_OBJECT',
+      objectId: 'cert1',
+    });
+    // Generated → PIQC origin line; the outcome always declared QA-owned.
+    expect(n?.origin).toContain('PIQC drafted the descriptive record');
+    // Exactly ONE provenance edge — the certificate's single upstream is the
+    // report whose version its approve pins (unlike the findings report's
+    // deliberate no-fan).
+    const out = g.edges.filter((e) => e.fromId === n?.id);
+    expect(out).toEqual([
+      {
+        fromId: n!.id,
+        toId: 'REPORT:rep1',
+        kind: 'provenance',
+        label: 'certifies',
+      },
+    ]);
+  });
+
+  it('the certifies edge is dropped when the report row is missing (dangling-edge rule)', () => {
+    const input = fullInput();
+    input.report = null;
+    input.auditCertificate = {
+      id: 'cert1',
+      audit_id: 'a1',
+      content: { body_text: '…', scope: [] },
+      approval_status: 'DRAFT',
+      approved_at: null,
+      approved_by_name: null,
+      updated_at: '2026-09-07T00:00:00Z',
+      basis_digest: null,
+      generation_refs: null,
+      grounding_snapshot: null,
+      generated_at: null,
+    };
+    const g = buildLineageGraph(input);
+    const n = g.nodes.find((x) => x.entityType === 'AUDIT_CERTIFICATE');
+    expect(n).toBeDefined();
+    expect(n?.origin).toBe("Drafted in Final review; the outcome line stays with the sponsor's QA.");
     expect(g.edges.filter((e) => e.fromId === n?.id)).toHaveLength(0);
   });
 
