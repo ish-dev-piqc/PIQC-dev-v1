@@ -277,7 +277,13 @@ describe('divergence + preview lock', () => {
       failed: false,
     });
     renderSection();
-    expect(await screen.findByTestId('findings-report-diverged')).toBeTruthy();
+    const banner = await screen.findByTestId('findings-report-diverged');
+    // The banner must name the path that exists while APPROVED (Revise
+    // narrative → Save demotes to Draft → approve again) — when approved,
+    // the latch row shows the Approved badge, not an Approve button.
+    expect(banner.textContent).toContain('Revise narrative');
+    expect(banner.textContent).toContain('revert the report to Draft');
+    expect(banner.textContent).not.toContain('re-review');
   });
 
   it('no divergence claim while the live digest is unknown — unknown is not diverged', async () => {
