@@ -1,6 +1,11 @@
 import { supabase } from '../supabase';
 import type { MockWorkspaceEntry } from './mockWorkspaceEntries';
-import type { CandidateEvidence, DraftedText, DraftingEngine } from './observationDraftApi';
+import type {
+  CandidateEvidence,
+  CandidatePassageRef,
+  DraftedText,
+  DraftingEngine,
+} from './observationDraftApi';
 import type {
   EndpointTier,
   ImpactSurface,
@@ -51,15 +56,59 @@ interface WorkspaceEntryRow {
   // Provenance columns (20260909000000). Optional on the row: absent from
   // `select *` until the migration applies. The mapper defaults them — true
   // pre-apply, since the promote RPC that writes anything else does not
-  // exist there yet.
+  // exist there yet. The jsonb ones are typed unknown and normalized below:
+  // storage is not an internal boundary, and one malformed row must not
+  // take the whole Stage-6 list down on render.
   origin?: WorkspaceEntryOrigin | null;
   source_note_ids?: string[] | null;
-  evidence_refs?: CandidateEvidence[] | null;
-  protocol_ref?: IsaProtocolRef | null;
-  drafting_engine?: DraftingEngine | null;
+  evidence_refs?: unknown;
+  protocol_ref?: unknown;
+  drafting_engine?: unknown;
   created_by: string;
   created_at: string;
   updated_at: string;
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  !!v && typeof v === 'object' && !Array.isArray(v);
+
+function normalizeEvidenceRefs(raw: unknown): CandidateEvidence[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item) => {
+    if (!isRecord(item) || typeof item.text !== 'string') return [];
+    return [
+      {
+        text: item.text,
+        source_note_ids: Array.isArray(item.source_note_ids)
+          ? item.source_note_ids.filter((id): id is string => typeof id === 'string')
+          : [],
+        // The validator documents source_passages as optional.
+        source_passages: Array.isArray(item.source_passages)
+          ? item.source_passages.filter(
+              (p): p is CandidatePassageRef => isRecord(p) && typeof p.chunk_id === 'string',
+            )
+          : [],
+      },
+    ];
+  });
+}
+
+function normalizeProtocolRef(raw: unknown): IsaProtocolRef | null {
+  if (!isRecord(raw) || typeof raw.quote !== 'string') return null;
+  return {
+    chunk_id: typeof raw.chunk_id === 'string' ? raw.chunk_id : null,
+    document_id: typeof raw.document_id === 'string' ? raw.document_id : null,
+    quote: raw.quote,
+    section_heading: typeof raw.section_heading === 'string' ? raw.section_heading : null,
+    page_start: typeof raw.page_start === 'number' ? raw.page_start : null,
+    page_end: typeof raw.page_end === 'number' ? raw.page_end : null,
+  };
+}
+
+function normalizeEngine(raw: unknown): DraftingEngine | null {
+  return isRecord(raw) && typeof raw.function === 'string' && typeof raw.model === 'string'
+    ? { function: raw.function, model: raw.model }
+    : null;
 }
 
 // One user_profiles query for any number of creators (PR-5): the old
@@ -109,9 +158,9 @@ function flattenEntry(
     source_extracted_item_id: row.source_extracted_item_id,
     origin: row.origin ?? 'AUDITOR',
     source_note_ids: row.source_note_ids ?? [],
-    evidence_refs: row.evidence_refs ?? [],
-    protocol_ref: row.protocol_ref ?? null,
-    drafting_engine: row.drafting_engine ?? null,
+    evidence_refs: normalizeEvidenceRefs(row.evidence_refs),
+    protocol_ref: normalizeProtocolRef(row.protocol_ref),
+    drafting_engine: normalizeEngine(row.drafting_engine),
     created_by_name: creatorNames.get(row.created_by) ?? '(unknown)',
     created_at: row.created_at,
   };

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Plus,
   Pencil,
@@ -87,6 +87,10 @@ const EMPTY_FORM: EntryFormState = {
 
 type FormMode = 'list' | 'add' | 'edit';
 
+// Stable empty read for the audit-switch window — a fresh [] per render
+// would defeat the notesById memo below.
+const NO_NOTES: AuditNoteObject[] = [];
+
 export default function AuditConductWorkspace() {
   const { theme } = useTheme();
   const { activeAudit, advanceStage, advanceStageError } = useAudit();
@@ -173,15 +177,23 @@ export default function AuditConductWorkspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAudit?.id, notesReloadNonce]);
 
-  if (!activeAudit) return null;
-
-  const auditId = activeAudit.id;
   // Between a switch and the effect above, the slot still holds the previous
   // audit's read — that reads as loading here, never as the wrong notes.
   const notesForAudit: { status: 'loading' | 'ready' | 'failed'; notes: AuditNoteObject[] } =
-    notesState.auditId === auditId ? notesState : { status: 'loading', notes: [] };
-  // The same read feeds each row's provenance chain (slice 3).
-  const notesById = new Map(notesForAudit.notes.map((n) => [n.id, n]));
+    activeAudit && notesState.auditId === activeAudit.id
+      ? notesState
+      : { status: 'loading', notes: NO_NOTES };
+  // The same read feeds each row's provenance chain (slice 3). Memoized: the
+  // entry form re-renders this component per keystroke, and every row
+  // receives this map.
+  const notesById = useMemo(
+    () => new Map(notesForAudit.notes.map((n) => [n.id, n])),
+    [notesForAudit.notes],
+  );
+
+  if (!activeAudit) return null;
+
+  const auditId = activeAudit.id;
   const entries = entriesByAudit[auditId] ?? [];
   const auditProtocolRisks = protocolRisks[auditId] ?? [];
 
@@ -492,6 +504,7 @@ export default function AuditConductWorkspace() {
                 previewLocked={!hasReached}
                 onHistoryClick={() => setHistoryTarget({ objectId: e.id })}
                 notesById={notesById}
+                notesStatus={notesForAudit.status}
                 isLight={isLight}
                 cardBg={cardBg}
                 headingColor={headingColor}
@@ -855,6 +868,7 @@ interface EntryRowProps {
   onHistoryClick: () => void;
   /** The workspace's notes read, for the provenance chain of an accepted candidate. */
   notesById: Map<string, AuditNoteObject>;
+  notesStatus: 'loading' | 'ready' | 'failed';
   isLight: boolean;
   cardBg: string;
   headingColor: string;
@@ -869,6 +883,7 @@ function EntryRow({
   previewLocked,
   onHistoryClick,
   notesById,
+  notesStatus,
   isLight,
   cardBg,
   headingColor,
@@ -926,7 +941,12 @@ function EntryRow({
 
       {/* Provenance (fieldwork lane, slice 3) — renders nothing for a
           hand-typed entry. */}
-      <EntryProvenance entry={entry} notesById={notesById} isLight={isLight} />
+      <EntryProvenance
+        entry={entry}
+        notesById={notesById}
+        notesStatus={notesStatus}
+        isLight={isLight}
+      />
 
       {/* Footer: checkpoint, history, attribution */}
       <div className={`flex items-center gap-3 mt-3 flex-wrap text-[11px] ${mutedColor}`}>

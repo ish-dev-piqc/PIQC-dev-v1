@@ -413,11 +413,12 @@ describe('buildLineageGraph — Stage-6 provenance (fieldwork lane)', () => {
     const originOf = (id: string) =>
       g.nodes.find((n) => n.entityType === 'WORKSPACE_ENTRY' && n.objectId === id)?.origin;
     expect(originOf('e1')).toBe('Recorded during Audit conduct (Validation).');
+    // Same vocabulary as the row's pill (WORKSPACE_ENTRY_ORIGIN_LABELS).
     expect(originOf('e2')).toBe(
-      'PIQC-drafted from 2 fieldwork notes during Audit conduct (Validation); edited and accepted by the auditor.',
+      'PIQC-drafted, edited — from 2 fieldwork notes during Audit conduct (Validation); accepted by the auditor.',
     );
     expect(originOf('e3')).toBe(
-      'PIQC-drafted from filed evidence during Audit conduct (Validation); accepted by the auditor.',
+      'PIQC-drafted — from filed evidence during Audit conduct (Validation); accepted by the auditor.',
     );
   });
 });

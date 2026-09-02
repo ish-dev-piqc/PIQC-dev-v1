@@ -403,6 +403,36 @@ describe('fetchWorkspaceEntries — batched read (PR-5)', () => {
       drafting_engine: null,
     });
   });
+
+  it('normalizes malformed jsonb instead of throwing in render: optional source_passages, junk items, incomplete refs', async () => {
+    mockOrder.mockResolvedValueOnce({
+      data: [
+        makeEntryRow({
+          origin: 'PIQC_DRAFTED',
+          evidence_refs: [
+            { text: 'No passages key at all.', source_note_ids: ['note-a'] },
+            { text: 'Junk passage entries.', source_note_ids: [7, 'note-b'], source_passages: [null, 'x', { chunk_id: 'c1', document_id: 'd1', content_hash: null, section_heading: null, page_start: null, page_end: null }] },
+            'not an object',
+            { source_note_ids: [] },
+          ],
+          protocol_ref: { section_heading: '6.3' },
+          drafting_engine: { model: 'gpt-4o-mini' },
+        }),
+      ],
+      error: null,
+    });
+    const entries = await fetchWorkspaceEntries('audit-1');
+    expect(entries[0].evidence_refs).toEqual([
+      { text: 'No passages key at all.', source_note_ids: ['note-a'], source_passages: [] },
+      {
+        text: 'Junk passage entries.',
+        source_note_ids: ['note-b'],
+        source_passages: [{ chunk_id: 'c1', document_id: 'd1', content_hash: null, section_heading: null, page_start: null, page_end: null }],
+      },
+    ]);
+    expect(entries[0].protocol_ref).toBeNull();
+    expect(entries[0].drafting_engine).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
