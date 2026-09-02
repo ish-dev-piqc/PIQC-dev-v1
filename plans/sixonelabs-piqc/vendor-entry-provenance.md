@@ -1,5 +1,5 @@
 ---
-status: active
+status: in-review
 feature: vendor-entry-provenance
 owner: sixonelabs-piqc
 branch: sixonelabs-piqc/vendor-entry-provenance
