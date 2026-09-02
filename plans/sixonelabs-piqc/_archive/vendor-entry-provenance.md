@@ -1,9 +1,10 @@
 ---
-status: in-review
+status: merged
+merged: 2026-09-02
 feature: vendor-entry-provenance
 owner: sixonelabs-piqc
 branch: sixonelabs-piqc/vendor-entry-provenance
-target_pr: TBD
+target_pr: #599
 ---
 
 # Vendor-entry provenance (fieldwork lane, slice 3 of 3)
