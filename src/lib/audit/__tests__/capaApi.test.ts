@@ -123,6 +123,11 @@ describe('buildCapaPrefillFromFinding (pure)', () => {
     inherited_time_sensitivity: true,
     risk_context_outdated: false,
     source_extracted_item_id: null,
+    origin: 'AUDITOR',
+    source_note_ids: [],
+    evidence_refs: [],
+    protocol_ref: null,
+    drafting_engine: null,
     created_by_name: 'Auditor',
     created_at: '2026-07-02T00:00:00Z',
   };

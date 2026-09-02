@@ -23,6 +23,7 @@ import type {
   QuestionAnswerType,
   QuestionnaireInstanceStatus,
   TrustPosture,
+  WorkspaceEntryOrigin,
 } from '../../types/audit';
 
 export const STAGE_LABELS: Record<AuditStage, string> = {
@@ -287,3 +288,13 @@ export const PROVISIONAL_CLASSIFICATION_ORDER: readonly ProvisionalClassificatio
   'OPPORTUNITY_FOR_IMPROVEMENT',
   'NOT_YET_CLASSIFIED',
 ];
+
+// Provenance of a Stage-6 observation (fieldwork lane). Hand-typed entries
+// are never badged in the record — the AUDITOR label exists for lineage and
+// any future disclosure. PIQC_EDITED means the auditor changed the proposal
+// before accepting it (the server's comparison, not a client claim).
+export const WORKSPACE_ENTRY_ORIGIN_LABELS: Record<WorkspaceEntryOrigin, string> = {
+  AUDITOR: 'Auditor',
+  PIQC_DRAFTED: 'PIQC-drafted',
+  PIQC_EDITED: 'PIQC-drafted, edited',
+};
