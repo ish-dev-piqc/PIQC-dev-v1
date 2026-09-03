@@ -67,7 +67,7 @@ No RLS policy that references any of the nine is `TO anon` / `TO public` / witho
 
 ## Verification
 
-Pre-apply: see the recorded anon-probe line at the bottom of this section.
+Pre-apply (recorded 2026-09-03): `POST /rest/v1/rpc/user_can_access_protocol` `{"uid":null,"pid":null}` and `POST /rest/v1/rpc/org_has_entitlement` `{"p_org_id":null,"p_capability":null}` with the public key both returned `HTTP 200` / `false` — the helpers execute for the anon role.
 
 - [ ] CI green (mechanical checks only — CI does not execute migrations; the backend team's `supabase db push` is the first execution of this SQL)
 - [ ] Backend applies the migration; `db push` reports no `function … does not exist` (every signature is pinned to the applied definition)
