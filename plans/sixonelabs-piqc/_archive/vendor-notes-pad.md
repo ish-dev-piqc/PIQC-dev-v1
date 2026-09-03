@@ -1,9 +1,10 @@
 ---
-status: in-review
+status: merged
+merged: 2026-09-01
 feature: vendor-notes-pad
 owner: sixonelabs-piqc
 branch: sixonelabs-piqc/vendor-notes-pad
-target_pr: TBD
+target_pr: #595
 ---
 
 # Vendor-audit notes pad (fieldwork lane, slice 1 of 3)

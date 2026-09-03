@@ -1,9 +1,10 @@
 ---
-status: in-review
+status: merged
+merged: 2026-09-01
 feature: vendor-observation-candidates
 owner: sixonelabs-piqc
 branch: sixonelabs-piqc/vendor-observation-candidates
-target_pr: TBD
+target_pr: #597
 ---
 
 # Vendor-audit candidate observations (fieldwork lane, slice 2 of 3)
