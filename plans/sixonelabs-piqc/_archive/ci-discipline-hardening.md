@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: ci-discipline-hardening
-status: in-review
+status: merged
+merged: 2026-09-01
 started: 2026-09-01
-target_pr:
+target_pr: #593
 ---
 
 # CI discipline hardening — safe half
