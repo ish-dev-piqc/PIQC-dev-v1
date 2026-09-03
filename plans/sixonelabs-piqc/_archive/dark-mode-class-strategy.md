@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: dark-mode-class-strategy
-status: in-review
+status: merged
+merged: 2026-09-01
 started: 2026-09-01
-target_pr:
+target_pr: #591
 ---
 
 # darkMode: 'class' — make `dark:` utilities obey the in-app theme toggle
