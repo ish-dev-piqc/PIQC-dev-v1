@@ -268,22 +268,27 @@ export interface CapaObject {
   updated_at: string;
 }
 
-// Freeform fieldwork note on an Investigator Site Audit (ISA_CONDUCT pad).
-// Working papers, not findings: freely editable and soft-deletable, unlike
-// the append-only workspace-entry rows. Soft delete keeps the note's
-// state-history deltas resolvable and (S2) protects findings' evidence
-// trails. 1:1 with audit_note_objects
+// Freeform fieldwork note — the ISA_CONDUCT pad and, since the vendor
+// fieldwork lane (20260908000000), the vendor AUDIT_CONDUCT pad share this
+// row. Working papers, not findings: freely editable and soft-deletable,
+// unlike the append-only workspace-entry rows. Soft delete keeps the note's
+// state-history deltas resolvable and protects the evidence trails of
+// whatever record cited it. 1:1 with audit_note_objects
 // (20260723000000_audit_mode_isa_notes_schema.sql).
 export interface AuditNoteObject {
   id: string;
   audit_id: string;
   body: string;
-  isa_domain: IsaDomain | null;      // optional tag; S2 infers when absent
+  isa_domain: IsaDomain | null;      // ISA optional tag; always null for vendor notes
   is_positive: boolean;              // feeds the report's positive-observations section
   deleted_at: string | null;
-  /** Set when a finding's evidence cites this note (S2). Promoted notes are
-   *  excluded from later drafting rounds. */
+  /** Set when an ISA finding's evidence cites this note (S2). Promoted notes
+   *  are excluded from later drafting rounds. */
   promoted_finding_id: string | null;
+  /** Vendor lane: set when an accepted candidate observation consumed this
+   *  note (audit_workspace_entry_objects backlink). At most one of the two
+   *  promotion backlinks is ever set (DB CHECK). */
+  promoted_entry_id: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;

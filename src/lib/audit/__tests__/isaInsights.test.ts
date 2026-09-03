@@ -23,6 +23,7 @@ function note(overrides: Partial<AuditNoteObject> = {}): AuditNoteObject {
     is_positive: false,
     deleted_at: null,
     promoted_finding_id: null,
+    promoted_entry_id: null,
     created_by: 'user-1',
     created_at: '2026-07-19T10:00:00Z',
     updated_at: '2026-07-19T10:00:00Z',
