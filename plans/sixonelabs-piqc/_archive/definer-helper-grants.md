@@ -1,9 +1,10 @@
 ---
 owner: rv61
 feature: definer-helper-grants
-status: in-review
+status: merged
+merged: 2026-09-03
 started: 2026-09-03
-target_pr:
+target_pr: #603
 ---
 
 # Revoke anon EXECUTE on the un-gated SECURITY DEFINER helpers
