@@ -86,6 +86,22 @@ vi.mock('../vendor/VendorNotesPad', () => ({
     </div>
   ),
 }));
+// The provenance surface has its own suite; here it echoes the entry it was
+// mounted for and how many notes the workspace handed it.
+vi.mock('../vendor/EntryProvenance', () => ({
+  default: ({ entry, notesById, notesStatus }: {
+    entry: { id: string };
+    notesById: Map<string, unknown>;
+    notesStatus: string;
+  }) => (
+    <div
+      data-testid="entry-provenance"
+      data-entry={entry.id}
+      data-notes={String(notesById.size)}
+      data-notes-status={notesStatus}
+    />
+  ),
+}));
 vi.mock('../vendor/VendorCandidatePanel', () => ({
   default: ({ hasReached, notes, notesStatus, onPromoted }: {
     hasReached: boolean;
@@ -141,6 +157,11 @@ function makeEntry(): MockWorkspaceEntry {
     inherited_time_sensitivity: null,
     risk_context_outdated: false,
     source_extracted_item_id: null,
+    origin: 'AUDITOR',
+    source_note_ids: [],
+    evidence_refs: [],
+    protocol_ref: null,
+    drafting_engine: null,
     created_by_name: 'Auditor',
     created_at: '2026-08-01T00:00:00Z',
   };
@@ -196,6 +217,12 @@ describe('AuditConductWorkspace — one-ahead preview guard (PR-UX2) + fieldwork
     expect(panel.getAttribute('data-reached')).toBe('true');
     expect(pad.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(panel.compareDocumentPosition(advance) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Each row mounts the provenance surface with the same notes read and
+    // its status.
+    const provenance = screen.getByTestId('entry-provenance');
+    expect(provenance.getAttribute('data-entry')).toBe('entry-1');
+    await waitFor(() => expect(provenance.getAttribute('data-notes')).toBe('1'));
+    expect(provenance.getAttribute('data-notes-status')).toBe('ready');
   });
 
   it('reads the notes ONCE per audit and hands the same status + notes to the pad and the panel', async () => {

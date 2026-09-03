@@ -19,6 +19,7 @@ import {
   PROVISIONAL_CLASSIFICATION_ORDER,
 } from '../../../../../lib/audit/labels';
 import { formatProtocolRefWhere } from '../../../../../lib/audit/isaReportModel';
+import { formatPassageWhere } from '../../../../../lib/audit/passageLocator';
 import PiqcMark from '../../PiqcMark';
 import type { AuditNoteObject, ProvisionalClassification } from '../../../../../types/audit';
 
@@ -72,18 +73,6 @@ function mintKey(i: number): string {
 
 function citedNoteIds(c: ObservationCandidate): string[] {
   return [...new Set(c.evidence.flatMap((e) => e.source_note_ids))];
-}
-
-// The shared locator formatter reads only section/pages; a passage carries
-// no quote. Its no-locator fallback names the protocol, which a filed
-// document is not — so that case renders as nothing here.
-function passageWhere(p: {
-  section_heading: string | null;
-  page_start: number | null;
-  page_end: number | null;
-}): string {
-  const where = formatProtocolRefWhere({ chunk_id: null, document_id: null, quote: '', ...p });
-  return where === 'Protocol' ? '' : where;
 }
 
 export default function VendorCandidatePanel({
@@ -417,7 +406,7 @@ export default function VendorCandidatePanel({
                         );
                       })}
                       {ev.source_passages.map((p) => {
-                        const where = passageWhere(p);
+                        const where = formatPassageWhere(p);
                         return (
                           <p
                             key={p.chunk_id}
