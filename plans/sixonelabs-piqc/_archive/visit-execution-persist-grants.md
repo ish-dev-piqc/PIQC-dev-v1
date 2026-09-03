@@ -1,9 +1,10 @@
 ---
 owner: rv61
 feature: visit-execution-persist-grants
-status: in-review
+status: merged
+merged: 2026-09-03
 started: 2026-09-03
-target_pr:
+target_pr: #601
 ---
 
 # Lock `visit_execution_persist_parsed_workspace` to service_role
