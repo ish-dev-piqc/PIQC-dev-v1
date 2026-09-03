@@ -1,7 +1,7 @@
 ---
 owner: rv61
 feature: visit-execution-persist-grants
-status: active
+status: in-review
 started: 2026-09-03
 target_pr:
 ---
