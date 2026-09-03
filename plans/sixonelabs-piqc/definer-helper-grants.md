@@ -1,7 +1,7 @@
 ---
 owner: rv61
 feature: definer-helper-grants
-status: active
+status: in-review
 started: 2026-09-03
 target_pr:
 ---
@@ -67,7 +67,7 @@ No RLS policy that references any of the nine is `TO anon` / `TO public` / witho
 
 ## Verification
 
-Pre-apply (recorded 2026-09-03): `POST /rest/v1/rpc/user_can_access_protocol` `{"uid":null,"pid":null}` and `POST /rest/v1/rpc/org_has_entitlement` `{"p_org_id":null,"p_capability":null}` with the public key both returned `HTTP 200` / `false` — the helpers execute for the anon role.
+Pre-apply (recorded 2026-09-03): every one of the nine executed for the anon role via `POST /rest/v1/rpc/<fn>` with the public key and null arguments — seven returned `HTTP 200` (`false` / `null` / `true` / `[]`), and the orphan pair ran to its org-admin body gate and raised `P0001`. The exposure is observed, not inferred.
 
 - [ ] CI green (mechanical checks only — CI does not execute migrations; the backend team's `supabase db push` is the first execution of this SQL)
 - [ ] Backend applies the migration; `db push` reports no `function … does not exist` (every signature is pinned to the applied definition)

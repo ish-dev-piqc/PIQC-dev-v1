@@ -8,9 +8,9 @@
 -- and Supabase's default privileges add an explicit grant to anon as well.
 -- Their defining migrations granted `TO authenticated` (or nothing) but never
 -- revoked PUBLIC/anon, so every one of them is callable through PostgREST with
--- the project's public key. Observed on the hosted project 2026-09-03:
--- `user_can_access_protocol` and `org_has_entitlement` both returned
--- HTTP 200 / false for the anon role with null arguments.
+-- the project's public key. Observed on the hosted project 2026-09-03: all
+-- nine executed for the anon role with null arguments (HTTP 200; the orphan
+-- pair ran up to its org-admin gate and raised P0001).
 --
 -- The callers that must keep EXECUTE run as one of two roles:
 --   authenticated — RLS policies (all `TO authenticated`), SECURITY INVOKER
