@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Plus,
   Pencil,
@@ -15,6 +15,7 @@ import { useAuditData } from '../../../../context/AuditDataContext';
 import {
   PROVISIONAL_IMPACT_LABELS,
   PROVISIONAL_CLASSIFICATION_LABELS,
+  PROVISIONAL_CLASSIFICATION_ORDER,
 } from '../../../../lib/audit/labels';
 import { type TaggedSection } from '../../../../lib/audit/mockProtocolRisks';
 import { type MockWorkspaceEntry } from '../../../../lib/audit/mockWorkspaceEntries';
@@ -23,9 +24,11 @@ import {
   createWorkspaceEntry,
   updateWorkspaceEntry,
 } from '../../../../lib/audit/workspaceEntriesApi';
+import { fetchVendorNotes } from '../../../../lib/audit/vendorNotesApi';
 import HeatIndicator from '../../../heatmap/HeatIndicator';
 import { scoreWorkspaceEntry } from '../../../../lib/heatmap';
 import type {
+  AuditNoteObject,
   ProvisionalClassification,
   ProvisionalImpact,
 } from '../../../../types/audit';
@@ -34,6 +37,8 @@ import { hasPassedStage, hasReachedStage } from '../../../../lib/audit/workflowS
 import HistoryDrawer from '../HistoryDrawer';
 import StagePreviewNotice from '../StagePreviewNotice';
 import VendorNotesPad from './vendor/VendorNotesPad';
+import VendorCandidatePanel from './vendor/VendorCandidatePanel';
+import EntryProvenance from './vendor/EntryProvenance';
 import SourceTruthListDrawer from '../../../sotr/SourceTruthListDrawer';
 import SourceTruthDrawer from '../../../sotr/SourceTruthDrawer';
 import { formatExtractedValue } from '../../../sotr/WorksheetItemRow';
@@ -52,12 +57,8 @@ import { formatExtractedValue } from '../../../sotr/WorksheetItemRow';
 // =============================================================================
 
 const IMPACT_OPTIONS: ProvisionalImpact[] = ['CRITICAL', 'MAJOR', 'MINOR', 'OBSERVATION', 'NONE'];
-const CLASSIFICATION_OPTIONS: ProvisionalClassification[] = [
-  'FINDING',
-  'OBSERVATION',
-  'OPPORTUNITY_FOR_IMPROVEMENT',
-  'NOT_YET_CLASSIFIED',
-];
+// One order for the entry form and the candidate panel (labels.ts).
+const CLASSIFICATION_OPTIONS: ProvisionalClassification[] = [...PROVISIONAL_CLASSIFICATION_ORDER];
 
 interface EntryFormState {
   vendor_domain: string;
@@ -85,6 +86,10 @@ const EMPTY_FORM: EntryFormState = {
 };
 
 type FormMode = 'list' | 'add' | 'edit';
+
+// Stable empty read for the audit-switch window — a fresh [] per render
+// would defeat the notesById memo below.
+const NO_NOTES: AuditNoteObject[] = [];
 
 export default function AuditConductWorkspace() {
   const { theme } = useTheme();
@@ -141,6 +146,51 @@ export default function AuditConductWorkspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAudit?.id, setEntriesByAudit]);
 
+  // Fieldwork notes (vendor lane) — ONE read per audit feeds the notes pad
+  // and the candidate panel; both are props-driven. Same hydrate idiom as the
+  // entries read above, and keyed by audit like the entries store: the slot
+  // names the audit it was read for, so on a switch the stale read is never
+  // handed to the next audit's pad or panel. 'failed' is a state, not an
+  // empty list — the pad renders it honestly and the panel stays unarmed.
+  const [notesState, setNotesState] = useState<{
+    auditId: string | null;
+    status: 'loading' | 'ready' | 'failed';
+    notes: AuditNoteObject[];
+  }>({ auditId: null, status: 'loading', notes: [] });
+  const [notesReloadNonce, setNotesReloadNonce] = useState(0);
+  useEffect(() => {
+    if (!activeAudit) return;
+    const auditIdLocal = activeAudit.id;
+    let cancelled = false;
+    setNotesState({ auditId: auditIdLocal, status: 'loading', notes: [] });
+    void fetchVendorNotes(auditIdLocal).then((res) => {
+      if (cancelled) return;
+      setNotesState(
+        res.ok
+          ? { auditId: auditIdLocal, status: 'ready', notes: res.data }
+          : { auditId: auditIdLocal, status: 'failed', notes: [] },
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAudit?.id, notesReloadNonce]);
+
+  // Between a switch and the effect above, the slot still holds the previous
+  // audit's read — that reads as loading here, never as the wrong notes.
+  const notesForAudit: { status: 'loading' | 'ready' | 'failed'; notes: AuditNoteObject[] } =
+    activeAudit && notesState.auditId === activeAudit.id
+      ? notesState
+      : { status: 'loading', notes: NO_NOTES };
+  // The same read feeds each row's provenance chain (slice 3). Memoized: the
+  // entry form re-renders this component per keystroke, and every row
+  // receives this map.
+  const notesById = useMemo(
+    () => new Map(notesForAudit.notes.map((n) => [n.id, n])),
+    [notesForAudit.notes],
+  );
+
   if (!activeAudit) return null;
 
   const auditId = activeAudit.id;
@@ -195,6 +245,28 @@ export default function AuditConductWorkspace() {
       source_extracted_item_id: null,
       source_extracted_item_label: null,
     }));
+  };
+
+  // Vendor lane — the pad mutates notes through this; an accepted candidate
+  // lands in the shared entry store (the saveEntry merge idiom) and marks
+  // the notes it consumed as promoted, so the pad hides their affordances
+  // and the next Draft excludes them without a refetch. Bound to THIS
+  // audit: a mutation that resolves after a switch (the old pad's closure)
+  // is dropped rather than written into the next audit's notes.
+  const handleNotesChange = (updater: (prev: AuditNoteObject[]) => AuditNoteObject[]) =>
+    setNotesState((s) => (s.auditId === auditId ? { ...s, notes: updater(s.notes) } : s));
+
+  const handleCandidatePromoted = (entry: MockWorkspaceEntry, consumedNoteIds: string[]) => {
+    setEntriesByAudit((prev) => ({
+      ...prev,
+      [auditId]: [...(prev[auditId] ?? []), entry],
+    }));
+    if (consumedNoteIds.length > 0) {
+      const consumed = new Set(consumedNoteIds);
+      handleNotesChange((prev) =>
+        prev.map((n) => (consumed.has(n.id) ? { ...n, promoted_entry_id: entry.id } : n)),
+      );
+    }
   };
 
   // saveEntry: persists via RPC, then merges the canonical row back into the
@@ -334,6 +406,10 @@ export default function AuditConductWorkspace() {
         auditId={activeAudit.id}
         hasReached={hasReached}
         isLight={isLight}
+        notes={notesForAudit.notes}
+        status={notesForAudit.status}
+        onRetry={() => setNotesReloadNonce((n) => n + 1)}
+        onNotesChange={handleNotesChange}
       />
 
       {/* Inline form */}
@@ -427,6 +503,8 @@ export default function AuditConductWorkspace() {
                 onEdit={() => openEdit(e)}
                 previewLocked={!hasReached}
                 onHistoryClick={() => setHistoryTarget({ objectId: e.id })}
+                notesById={notesById}
+                notesStatus={notesForAudit.status}
                 isLight={isLight}
                 cardBg={cardBg}
                 headingColor={headingColor}
@@ -437,6 +515,20 @@ export default function AuditConductWorkspace() {
           </div>
         </div>
       )}
+
+      {/* PIQC-drafted candidate observations (vendor lane, slice 2) —
+          proposals only; Accept is the single path into the record above.
+          Stays mounted while the entry form is open so an in-flight draft
+          is not lost to a "New entry" click. */}
+      <VendorCandidatePanel
+        key={`candidates-${activeAudit.id}`}
+        auditId={activeAudit.id}
+        hasReached={hasReached}
+        isLight={isLight}
+        notes={notesForAudit.notes}
+        notesStatus={notesForAudit.status}
+        onPromoted={handleCandidatePromoted}
+      />
 
       {historyTarget && (
         <HistoryDrawer
@@ -774,6 +866,9 @@ interface EntryRowProps {
   /** One-ahead preview (UX2): hide the edit affordance, keep the record readable. */
   previewLocked: boolean;
   onHistoryClick: () => void;
+  /** The workspace's notes read, for the provenance chain of an accepted candidate. */
+  notesById: Map<string, AuditNoteObject>;
+  notesStatus: 'loading' | 'ready' | 'failed';
   isLight: boolean;
   cardBg: string;
   headingColor: string;
@@ -787,6 +882,8 @@ function EntryRow({
   onEdit,
   previewLocked,
   onHistoryClick,
+  notesById,
+  notesStatus,
   isLight,
   cardBg,
   headingColor,
@@ -841,6 +938,15 @@ function EntryRow({
 
       {/* Observation text */}
       <p className={`${headingColor} text-sm leading-relaxed mt-2`}>{entry.observation_text}</p>
+
+      {/* Provenance (fieldwork lane, slice 3) — renders nothing for a
+          hand-typed entry. */}
+      <EntryProvenance
+        entry={entry}
+        notesById={notesById}
+        notesStatus={notesStatus}
+        isLight={isLight}
+      />
 
       {/* Footer: checkpoint, history, attribution */}
       <div className={`flex items-center gap-3 mt-3 flex-wrap text-[11px] ${mutedColor}`}>

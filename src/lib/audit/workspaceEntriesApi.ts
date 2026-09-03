@@ -1,10 +1,18 @@
 import { supabase } from '../supabase';
 import type { MockWorkspaceEntry } from './mockWorkspaceEntries';
 import type {
+  CandidateEvidence,
+  CandidatePassageRef,
+  DraftedText,
+  DraftingEngine,
+} from './observationDraftApi';
+import type {
   EndpointTier,
   ImpactSurface,
+  IsaProtocolRef,
   ProvisionalClassification,
   ProvisionalImpact,
+  WorkspaceEntryOrigin,
 } from '../../types/audit';
 
 // =============================================================================
@@ -45,9 +53,62 @@ interface WorkspaceEntryRow {
   risk_context_confirmed_by: string | null;
   /** B2: optional SOTR protocol_extracted_item this finding traces back to. */
   source_extracted_item_id: string | null;
+  // Provenance columns (20260909000000). Optional on the row: absent from
+  // `select *` until the migration applies. The mapper defaults them — true
+  // pre-apply, since the promote RPC that writes anything else does not
+  // exist there yet. The jsonb ones are typed unknown and normalized below:
+  // storage is not an internal boundary, and one malformed row must not
+  // take the whole Stage-6 list down on render.
+  origin?: WorkspaceEntryOrigin | null;
+  source_note_ids?: string[] | null;
+  evidence_refs?: unknown;
+  protocol_ref?: unknown;
+  drafting_engine?: unknown;
   created_by: string;
   created_at: string;
   updated_at: string;
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  !!v && typeof v === 'object' && !Array.isArray(v);
+
+function normalizeEvidenceRefs(raw: unknown): CandidateEvidence[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item) => {
+    if (!isRecord(item) || typeof item.text !== 'string') return [];
+    return [
+      {
+        text: item.text,
+        source_note_ids: Array.isArray(item.source_note_ids)
+          ? item.source_note_ids.filter((id): id is string => typeof id === 'string')
+          : [],
+        // The validator documents source_passages as optional.
+        source_passages: Array.isArray(item.source_passages)
+          ? item.source_passages.filter(
+              (p): p is CandidatePassageRef => isRecord(p) && typeof p.chunk_id === 'string',
+            )
+          : [],
+      },
+    ];
+  });
+}
+
+function normalizeProtocolRef(raw: unknown): IsaProtocolRef | null {
+  if (!isRecord(raw) || typeof raw.quote !== 'string') return null;
+  return {
+    chunk_id: typeof raw.chunk_id === 'string' ? raw.chunk_id : null,
+    document_id: typeof raw.document_id === 'string' ? raw.document_id : null,
+    quote: raw.quote,
+    section_heading: typeof raw.section_heading === 'string' ? raw.section_heading : null,
+    page_start: typeof raw.page_start === 'number' ? raw.page_start : null,
+    page_end: typeof raw.page_end === 'number' ? raw.page_end : null,
+  };
+}
+
+function normalizeEngine(raw: unknown): DraftingEngine | null {
+  return isRecord(raw) && typeof raw.function === 'string' && typeof raw.model === 'string'
+    ? { function: raw.function, model: raw.model }
+    : null;
 }
 
 // One user_profiles query for any number of creators (PR-5): the old
@@ -95,6 +156,11 @@ function flattenEntry(
     inherited_time_sensitivity: row.inherited_time_sensitivity,
     risk_context_outdated: row.risk_context_outdated,
     source_extracted_item_id: row.source_extracted_item_id,
+    origin: row.origin ?? 'AUDITOR',
+    source_note_ids: row.source_note_ids ?? [],
+    evidence_refs: normalizeEvidenceRefs(row.evidence_refs),
+    protocol_ref: normalizeProtocolRef(row.protocol_ref),
+    drafting_engine: normalizeEngine(row.drafting_engine),
     created_by_name: creatorNames.get(row.created_by) ?? '(unknown)',
     created_at: row.created_at,
   };
@@ -210,6 +276,60 @@ export async function updateWorkspaceEntry(
 
   const row = data as WorkspaceEntryRow;
   return flattenEntry(row, await resolveCreatorNames([row.created_by]));
+}
+
+// ----------------------------------------------------------------------------
+// Promote a PIQC-drafted candidate (fieldwork lane, slice 2) — the ONLY path
+// from candidate to record. audit_mode_promote_workspace_candidate
+// (20260909000000) inserts the entry with provenance, consumes the cited
+// notes, and writes one delta — one transaction. The server decides origin
+// (PIQC_DRAFTED vs PIQC_EDITED) by comparing the accepted text with the
+// engine's proposal (`drafted`), derives source_note_ids from the evidence
+// chain, and refuses a repeat of the same candidateKey on the audit — none
+// of that is a client claim. Classification is the auditor's (default
+// NOT_YET_CLASSIFIED blocks Stage-8 sign-off and is excluded from report
+// bodies); impact stays at its default until the entry is edited.
+// ----------------------------------------------------------------------------
+
+export interface PromoteWorkspaceCandidateInput {
+  /** Client-minted per candidate; the RPC's idempotency key. */
+  candidateKey: string;
+  vendorDomain: string;
+  observationText: string;
+  checkpointRef: string | null;
+  /** Post-gate evidence chain from the drafting engine. */
+  evidence: CandidateEvidence[];
+  protocolRef: IsaProtocolRef | null;
+  /** The proposal as the engine returned it. */
+  drafted: DraftedText;
+  engine: DraftingEngine;
+  provisionalClassification: ProvisionalClassification;
+}
+
+export async function promoteWorkspaceCandidate(
+  auditId: string,
+  input: PromoteWorkspaceCandidateInput,
+): Promise<CreateWorkspaceEntryResult> {
+  const { data, error } = await supabase.rpc('audit_mode_promote_workspace_candidate', {
+    p_audit_id: auditId,
+    p_candidate_key: input.candidateKey,
+    p_vendor_domain: input.vendorDomain,
+    p_observation_text: input.observationText,
+    p_evidence: input.evidence,
+    p_drafted: input.drafted,
+    p_engine: input.engine,
+    p_checkpoint_ref: input.checkpointRef,
+    p_protocol_ref: input.protocolRef,
+    p_provisional_classification: input.provisionalClassification,
+  });
+
+  if (error) {
+    console.error('[workspaceEntriesApi] promoteWorkspaceCandidate error:', error);
+    return { ok: false, error: error.message };
+  }
+
+  const row = data as WorkspaceEntryRow;
+  return { ok: true, data: flattenEntry(row, await resolveCreatorNames([row.created_by])) };
 }
 
 // Delete is intentionally NOT supported. Audit observations are corrected

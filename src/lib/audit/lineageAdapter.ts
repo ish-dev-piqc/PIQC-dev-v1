@@ -32,6 +32,7 @@ import {
   PROVISIONAL_IMPACT_LABELS,
   QUESTIONNAIRE_INSTANCE_STATUS_LABELS,
   SERVICE_TYPE_OPTIONS,
+  WORKSPACE_ENTRY_ORIGIN_LABELS,
   TRUST_POSTURE_LABELS,
 } from './labels';
 import type { TaggedSection } from './mockProtocolRisks';
@@ -378,6 +379,15 @@ export function buildLineageGraph(input: LineageInput): LineageGraph {
   }
 
   // --- Stage 6: workspace entries (findings/observations) ----------------------------
+  // The origin line names the provenance an accepted candidate carries
+  // (fieldwork lane) with the same label the row's pill wears; a hand-typed
+  // entry keeps the plain line.
+  const entryOriginLine = (entry: MockWorkspaceEntry): string => {
+    if (entry.origin === 'AUDITOR') return `Recorded during Audit conduct (${entry.vendor_domain}).`;
+    const n = entry.source_note_ids.length;
+    const from = n > 0 ? `${n} fieldwork ${n === 1 ? 'note' : 'notes'}` : 'filed evidence';
+    return `${WORKSPACE_ENTRY_ORIGIN_LABELS[entry.origin]} — from ${from} during Audit conduct (${entry.vendor_domain}); accepted by the auditor.`;
+  };
   for (const entry of input.entries) {
     const entryId = nid('WORKSPACE_ENTRY', entry.id);
     const isFinding = entry.provisional_classification === 'FINDING';
@@ -391,7 +401,7 @@ export function buildLineageGraph(input: LineageInput): LineageGraph {
       statusTone: isFinding ? 'attention' : 'neutral',
       parentId: auditNodeId,
       stage: 6,
-      origin: `Recorded during Audit conduct (${entry.vendor_domain}).`,
+      origin: entryOriginLine(entry),
       trackedObjectType: 'AUDIT_WORKSPACE_ENTRY_OBJECT',
       objectId: entry.id,
     });

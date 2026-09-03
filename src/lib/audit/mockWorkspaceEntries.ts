@@ -16,11 +16,14 @@
 // Sponsor-name-free by rule.
 // =============================================================================
 
+import type { CandidateEvidence, DraftingEngine } from './observationDraftApi';
 import type {
   EndpointTier,
   ImpactSurface,
+  IsaProtocolRef,
   ProvisionalClassification,
   ProvisionalImpact,
+  WorkspaceEntryOrigin,
 } from '../../types/audit';
 
 export interface MockWorkspaceEntry {
@@ -43,6 +46,17 @@ export interface MockWorkspaceEntry {
   // B2: optional SOTR protocol_extracted_item this finding traces back to.
   // Same trust-act as Stage 1's source link — auditor-attested provenance.
   source_extracted_item_id: string | null;
+  // Provenance (fieldwork lane; columns since 20260909000000). AUDITOR =
+  // hand-typed, the chain below is empty. PIQC_* = an accepted candidate —
+  // the notes it consumed, the gated evidence chain, the verified protocol
+  // quote, and the engine that proposed it. The mapper defaults these when
+  // the columns are absent (pre-apply), which is true then: nothing but the
+  // promote RPC writes anything else.
+  origin: WorkspaceEntryOrigin;
+  source_note_ids: string[];
+  evidence_refs: CandidateEvidence[];
+  protocol_ref: IsaProtocolRef | null;
+  drafting_engine: DraftingEngine | null;
   created_by_name: string;
   created_at: string;
 }
