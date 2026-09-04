@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: sotr-audit-lead-read
-status: in-review
+status: merged
+merged: 2026-09-04
 started: 2026-09-04
-target_pr:
+target_pr: #607
 ---
 
 # SOTR: lead auditors can read the parsed protocol they audit (F-011)
