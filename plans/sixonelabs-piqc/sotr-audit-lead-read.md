@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: sotr-audit-lead-read
-status: active
+status: in-review
 started: 2026-09-04
 target_pr:
 ---
@@ -80,6 +80,25 @@ none
   inside the policies run as the caller, so their own policies apply — the
   explicit predicate makes the result independent of that (same pattern as the
   owner policies).
+
+## Blast radius of the `documents` policy (every client that lists documents without a `user_id` filter — checked 2026-09-04)
+
+- `src/components/dashboard/KnowledgeBase.tsx:366-371` lists RLS-visible documents
+  and renders a delete button on every row (:472). For an auditor, A's document
+  now appears; clicking delete issues a DELETE that RLS silently filters to 0
+  rows — no error, the row vanishes from the list and is back on reload. A
+  silent false success. **Follow-up (separate task, not this PR):** select
+  `user_id` and hide the delete control when it isn't the session user. No
+  data is at risk — the owner `FOR DELETE` policy holds.
+- `src/components/dashboard/DashboardChat.tsx:423,613` source pickers (Ask) list
+  `status='ready'` documents; A's document becomes selectable but `chunks` stay
+  owner-scoped, so Ask over it returns nothing. Ledgered with the chunks
+  decision.
+- `orgsApi.listReductoDocumentsForProtocol` and `realSiteRepo.fetchProtocolDocuments`
+  filter by `protocol_id` — an auditor who also has Site Mode access to the
+  protocol now sees the document in its document lists, consistent with reading
+  the protocol.
+- `auditCreationApi.listAuditorProtocolLibrary` filters by `user_id` — unchanged.
 
 ## Verification
 
