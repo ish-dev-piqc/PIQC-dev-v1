@@ -9,6 +9,7 @@ import {
   OPERATIONAL_DOMAIN_OPTIONS,
 } from '../../../../lib/audit/labels';
 import { type TaggedSection } from '../../../../lib/audit/mockProtocolRisks';
+import ProtocolReadinessCard from './ProtocolReadinessCard';
 import type { EndpointTier, ImpactSurface } from '../../../../types/audit';
 import RiskTaggingForm, { type RiskTagFormValues } from './intake/RiskTaggingForm';
 import {
@@ -227,6 +228,11 @@ export default function IntakeWorkspace() {
           </button>
         )}
       </div>
+
+      {/* Parse status of the audit's protocol + the guarded upload path. The
+          source-item picker in the form below lists nothing until this reads
+          "Parsed". Hidden while the form is open so the form keeps the pane. */}
+      {!inForm && <ProtocolReadinessCard />}
 
       {/* Inline form */}
       {inForm && (

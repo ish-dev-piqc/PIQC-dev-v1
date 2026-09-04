@@ -28,7 +28,7 @@ import StagePreviewNotice from '../StagePreviewNotice';
 import WorksheetItemsList from '../../../sotr/WorksheetItemsList';
 
 const AUDIT_EMPTY_STATE_MESSAGE =
-  'No worksheet items are visible for this protocol. Extracted items are visible only to the account that uploaded the protocol PDF — if the protocol was processed under a different account, or no PDF has been processed yet, nothing will appear here.';
+  'No worksheet items are visible for this protocol. Check the parse status on Stage 1 (Intake) — if no PDF has been parsed yet you can upload it there.';
 
 // =============================================================================
 // ScopeReviewWorkspace — SCOPE_AND_RISK_REVIEW stage center pane.

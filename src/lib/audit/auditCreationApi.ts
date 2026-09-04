@@ -251,11 +251,21 @@ export async function listAuditorProtocolLibrary(): Promise<Result<AuditorProtoc
 
 export interface ProtocolUploadResult {
   document_id: string;
-  protocol_id?: string | null;        // populated when autotag matched an existing protocol
+  protocol_id?: string | null;        // the document's pin: autotag match, the caller's pin, or a deduped row's original
   chunks_created?: number;
+  /** 'pending' = Reducto parse kicked off (HTTP 202); 'ready' = text path, or
+   *  a per-user content_hash dedupe of an already-parsed PDF. */
+  status?: 'pending' | 'ready';
+  /** true when /ingest returned an EXISTING document (same bytes, same user)
+   *  — with that document's original protocol_id, not the one passed in. */
+  deduped?: boolean;
 }
 
-export async function uploadProtocolPdf(file: File, title?: string): Promise<ProtocolUploadResult> {
+export async function uploadProtocolPdf(
+  file: File,
+  title?: string,
+  protocolId?: string | null,
+): Promise<ProtocolUploadResult> {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
@@ -264,6 +274,11 @@ export async function uploadProtocolPdf(file: File, title?: string): Promise<Pro
     title: (title ?? file.name.replace(/\.pdf$/i, '')).trim() || 'Untitled protocol',
     source: 'Audit Mode protocol upload',
     pdf_base64: base64,
+    // Stage-1 upload pins the document to the audit's protocol so the
+    // completion pipeline writes its items there. The new-audit drawer omits
+    // it and links the document afterwards via
+    // audit_mode_create_protocol_from_document.
+    ...(protocolId ? { protocol_id: protocolId } : {}),
   };
 
   const { data: { session } } = await supabase.auth.getSession();

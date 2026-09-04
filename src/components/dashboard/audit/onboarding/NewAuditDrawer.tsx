@@ -201,7 +201,7 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
         // picks a new file (see the file input onChange above).
         let documentId = uploadedDocumentId;
         if (!documentId) {
-          setProgressStep('Uploading and parsing protocol PDF…');
+          setProgressStep('Uploading protocol PDF…');
           const upload = await uploadProtocolPdf(pdfFile, pdfTitle || pdfFile.name);
           documentId = upload.document_id;
           setUploadedDocumentId(documentId);
@@ -733,8 +733,8 @@ export default function NewAuditDrawer({ onClose, onCreated }: Props) {
                   </div>
                 </div>
                 <p className={`text-[11px] ${mutedColor}`}>
-                  The PDF is parsed by the PIQC engine so it becomes a structured protocol
-                  you can audit against.
+                  PIQC parses the PDF in the background after upload — Stage 1 of the new
+                  audit shows the parse status and the extracted worksheet items.
                 </p>
                 {/* Surfaces when a previous submit got past upload but failed
                     on a later step. The cached document id will be reused on

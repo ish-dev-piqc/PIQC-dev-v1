@@ -2,6 +2,7 @@ import { Stethoscope, User, MapPin, Hash, FileText, FlaskConical, ArrowRight } f
 import { useTheme } from '../../../../../context/ThemeContext';
 import { useAudit } from '../../../../../context/AuditContext';
 import { AUDIT_TYPE_LABELS, CLINICAL_TRIAL_PHASE_LABELS, STAGE_LABELS } from '../../../../../lib/audit/labels';
+import ProtocolReadinessCard from '../ProtocolReadinessCard';
 
 // =============================================================================
 // SiteIntakeWorkspace — ISA_SITE_INTAKE stage center pane
@@ -93,6 +94,10 @@ export default function SiteIntakeWorkspace() {
           ))}
         </dl>
       </section>
+
+      {/* Parse status of that protocol + the guarded upload path. The rows
+          above stay read-only; the card owns everything about the document. */}
+      <ProtocolReadinessCard />
 
       {/* Next-stage hint */}
       <div

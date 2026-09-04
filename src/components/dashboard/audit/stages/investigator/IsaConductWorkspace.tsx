@@ -928,8 +928,9 @@ export default function IsaConductWorkspace() {
 
           {bridgeReady === false && (
             <p className="text-fg-muted text-xs">
-              Parse this study's protocol in the library to unlock protocol
-              citations — findings can then quote the protocol's own text.
+              No parsed protocol document yet — check Stage 1 (Site intake) and
+              upload the protocol PDF there to unlock protocol citations; findings
+              can then quote the protocol's own text.
             </p>
           )}
 

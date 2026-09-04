@@ -228,3 +228,8 @@ export type TrackedObjectType =
 // PROTOCOL is the default for every pre-existing row; AUDIT_EVIDENCE rows are
 // paste-ingested for the audit evidence register and never carry a protocol_id.
 export type DocumentKind = 'PROTOCOL' | 'AUDIT_EVIDENCE';
+
+// 1:1 with the documents.status CHECK (20260423220000). pending = Reducto
+// parse in flight; ready = completion pipeline finished; failed = Reducto or
+// completion error (documents.error_message carries the reason).
+export type DocumentStatus = 'pending' | 'ready' | 'failed';

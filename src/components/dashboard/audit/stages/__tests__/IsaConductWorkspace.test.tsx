@@ -67,4 +67,15 @@ describe('IsaConductWorkspace — one-ahead preview guard (PR-UX2)', () => {
     await waitFor(() => expect(screen.getByText('New note')).toBeInTheDocument());
     expect(screen.queryByText(/has not reached this stage yet/i)).not.toBeInTheDocument();
   });
+
+  it('AT STAGE with no parsed protocol: the nudge points at Stage 1, not a "library"', async () => {
+    mockActiveAudit = { ...mockActiveAudit, current_stage: 'ISA_CONDUCT' };
+
+    render(<IsaConductWorkspace />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/check Stage 1 \(Site intake\)/)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/in the library/)).not.toBeInTheDocument();
+  });
 });
