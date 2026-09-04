@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: audit-protocol-readiness
-status: in-review
+status: merged
+merged: 2026-09-04
 started: 2026-09-04
-target_pr:
+target_pr: #611
 ---
 
 # Audit Mode: honest parse status and a guarded upload at Stage 1
