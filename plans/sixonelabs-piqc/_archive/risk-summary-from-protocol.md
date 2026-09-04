@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: risk-summary-from-protocol
-status: in-review
+status: merged
+merged: 2026-09-04
 started: 2026-09-04
-target_pr:
+target_pr: #613
 ---
 
 # Risk summary: study context from the parsed protocol, tagged risks linked
