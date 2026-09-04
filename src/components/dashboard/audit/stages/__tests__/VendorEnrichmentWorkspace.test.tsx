@@ -20,8 +20,13 @@ let mockActiveAudit = {
   workflow_type: 'VENDOR_AUDIT',
   current_stage: 'VENDOR_ENRICHMENT',
 };
+const mockAdvanceStage = vi.fn();
 vi.mock('../../../../../context/AuditContext', () => ({
-  useAudit: () => ({ activeAudit: mockActiveAudit }),
+  useAudit: () => ({
+    activeAudit: mockActiveAudit,
+    advanceStage: mockAdvanceStage,
+    advanceStageError: null,
+  }),
 }));
 
 // Real useState behind the three vendor stores so the component's own cache
@@ -216,5 +221,40 @@ describe('VendorEnrichmentWorkspace — load-path honesty (hardening PR-2)', () 
     // rendering the phantom row as a saved service.
     expect(screen.getByRole('button', { name: /save vendor service/i })).toBeInTheDocument();
     expect(screen.queryByText('Phantom service')).not.toBeInTheDocument();
+  });
+});
+
+// vendor-early-stage-advance: the ungated Stage 2 → 3 transition. The card's
+// own states are pinned in StageTransitionCard.test.tsx; here we lock that it
+// is MOUNTED on this workspace with the right target — enabled at the stage,
+// disabled in the one-ahead preview.
+describe('VendorEnrichmentWorkspace — stage transition (vendor-early-stage-advance)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetTrioMocks();
+    initialVendorServices = {};
+    initialServiceMappings = {};
+    initialTrustAssessments = {};
+  });
+
+  it('AT STAGE: offers "Advance to Questionnaire review" and advances to that stage', async () => {
+    mockActiveAudit = { ...mockActiveAudit, current_stage: 'VENDOR_ENRICHMENT' };
+
+    render(<VendorEnrichmentWorkspace />);
+
+    const button = await screen.findByRole('button', { name: /advance to questionnaire review/i });
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    expect(mockAdvanceStage).toHaveBeenCalledWith('QUESTIONNAIRE_REVIEW');
+  });
+
+  it('PREVIEW (audit at Intake): the transition button is present but disabled', async () => {
+    mockActiveAudit = { ...mockActiveAudit, current_stage: 'INTAKE' };
+
+    render(<VendorEnrichmentWorkspace />);
+
+    const button = await screen.findByRole('button', { name: /advance to questionnaire review/i });
+    expect(button).toBeDisabled();
+    expect(mockAdvanceStage).not.toHaveBeenCalled();
   });
 });

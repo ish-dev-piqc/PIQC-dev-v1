@@ -6,7 +6,7 @@
 // ReportDraftingWorkspace.test.tsx (PR #66/#69 precedent).
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 vi.mock('../../../../../context/ThemeContext', () => ({
   useTheme: () => ({ theme: 'light' as const, toggleTheme: () => {} }),
@@ -17,8 +17,13 @@ let mockActiveAudit = {
   workflow_type: 'VENDOR_AUDIT',
   current_stage: 'QUESTIONNAIRE_REVIEW',
 };
+const mockAdvanceStage = vi.fn();
 vi.mock('../../../../../context/AuditContext', () => ({
-  useAudit: () => ({ activeAudit: mockActiveAudit }),
+  useAudit: () => ({
+    activeAudit: mockActiveAudit,
+    advanceStage: mockAdvanceStage,
+    advanceStageError: null,
+  }),
 }));
 
 vi.mock('../../../../../context/AuditDataContext', () => ({
@@ -83,5 +88,46 @@ describe('QuestionnaireReviewWorkspace — one-ahead preview guard (PR-UX2)', ()
       screen.getByRole('button', { name: /create questionnaire instance/i }),
     ).toBeInTheDocument();
     expect(screen.queryByText(/has not reached this stage yet/i)).not.toBeInTheDocument();
+  });
+});
+
+// vendor-early-stage-advance: the ungated Stage 3 → 4 transition. The server
+// allows it with no questionnaire instance (the questionnaire gate is Stage
+// 4's), so the card is mounted on the no-instance branch too. Card states are
+// pinned in StageTransitionCard.test.tsx.
+describe('QuestionnaireReviewWorkspace — stage transition (vendor-early-stage-advance)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFetchBundle.mockResolvedValue(null);
+  });
+
+  it('AT STAGE with no instance yet: offers "Advance to Scope & risk review" and advances', async () => {
+    mockActiveAudit = {
+      id: 'audit-1',
+      workflow_type: 'VENDOR_AUDIT',
+      current_stage: 'QUESTIONNAIRE_REVIEW',
+    };
+
+    render(<QuestionnaireReviewWorkspace />);
+
+    await waitFor(() => expect(mockFetchBundle).toHaveBeenCalledWith('audit-1'));
+    const button = screen.getByRole('button', { name: /advance to scope & risk review/i });
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    expect(mockAdvanceStage).toHaveBeenCalledWith('SCOPE_AND_RISK_REVIEW');
+  });
+
+  it('PREVIEW (audit at Stage 2): the transition button is present but disabled', async () => {
+    mockActiveAudit = {
+      id: 'audit-1',
+      workflow_type: 'VENDOR_AUDIT',
+      current_stage: 'VENDOR_ENRICHMENT',
+    };
+
+    render(<QuestionnaireReviewWorkspace />);
+
+    await waitFor(() => expect(mockFetchBundle).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: /advance to scope & risk review/i })).toBeDisabled();
+    expect(mockAdvanceStage).not.toHaveBeenCalled();
   });
 });

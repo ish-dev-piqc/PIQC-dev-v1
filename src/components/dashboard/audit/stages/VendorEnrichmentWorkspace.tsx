@@ -30,6 +30,7 @@ import ServiceMappingTable from './vendor-enrichment/ServiceMappingTable';
 import TrustAssessmentForm, { type TrustAssessmentFormValues } from './vendor-enrichment/TrustAssessmentForm';
 import HistoryDrawer from '../HistoryDrawer';
 import StagePreviewNotice from '../StagePreviewNotice';
+import StageTransitionCard from './StageTransitionCard';
 import { fetchProtocolRisksForAudit } from '../../../../lib/audit/intakeApi';
 import { hasReachedStage } from '../../../../lib/audit/workflowStages';
 import type { TrackedObjectType } from '../../../../types/audit';
@@ -569,6 +570,11 @@ export default function VendorEnrichmentWorkspace() {
         )}
       </SectionCard>
       )}
+
+      {/* Ungated: Vendor enrichment → Questionnaire review has no server gate
+          (the questionnaire gate sits at Stage 4), so the card offers the
+          transition regardless of which sections are done. */}
+      <StageTransitionCard stage="VENDOR_ENRICHMENT" nextStage="QUESTIONNAIRE_REVIEW" />
 
       {historyTarget && (
         <HistoryDrawer

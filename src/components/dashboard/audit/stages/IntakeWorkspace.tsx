@@ -1,4 +1,5 @@
 import ProtocolRiskTagging from './intake/ProtocolRiskTagging';
+import StageTransitionCard from './StageTransitionCard';
 
 // =============================================================================
 // IntakeWorkspace — INTAKE stage center pane (vendor workflow)
@@ -9,7 +10,8 @@ import ProtocolRiskTagging from './intake/ProtocolRiskTagging';
 // parsed protocol, manual tagging, PIQC-assisted accept with provenance,
 // edit, delete, history — lives in ProtocolRiskTagging, shared with the
 // investigator site workflow's Risk assessment stage; this workspace owns the
-// stage header and mounts the parse-status card.
+// stage header, mounts the parse-status card, and ends with the stage
+// transition (ungated: Intake → Vendor enrichment is +1 with no server gate).
 // =============================================================================
 
 export default function IntakeWorkspace() {
@@ -30,6 +32,10 @@ export default function IntakeWorkspace() {
       </div>
 
       <ProtocolRiskTagging workflow="VENDOR_AUDIT" showReadinessCard />
+
+      {/* Stays visible while the tagging form above is open — the form hides
+          its own panels, not the page — same as Scope review's card. */}
+      <StageTransitionCard stage="INTAKE" nextStage="VENDOR_ENRICHMENT" />
     </div>
   );
 }

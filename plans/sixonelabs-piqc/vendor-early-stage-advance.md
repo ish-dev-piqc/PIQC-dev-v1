@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: vendor-early-stage-advance
-status: active
+status: in-review
 started: 2026-09-04
 target_pr:
 ---
@@ -95,6 +95,17 @@ none
   the tagging form is open (the form hides its own panels, not the page) —
   same as Scope review's card next to its form. Accepted; revisit if it reads
   as noise.
+- **`advanceStageError` is audit-wide, not per stage** (AuditContext keeps
+  one string, cleared at the next attempt). A Stage-4 gate rejection viewed
+  later on this card would read as this card's — the same parity the four
+  inline cards already share. Per-stage scoping needs a context change
+  (2-reviewer gate); ledgered, trigger: first confused report.
+- **Test coverage, honestly.** The card's states, the Intake mount, the
+  Enrichment mount (at stage / preview) and the Questionnaire NO-INSTANCE
+  mount are test-pinned. The Questionnaire WITH-INSTANCE mount is a one-line
+  JSX addition covered by tsc and the owner walk — the existing test has no
+  bundle fixture and inventing one for a mount assertion is not worth the
+  brittleness.
 
 ## Verification
 
@@ -103,11 +114,11 @@ execution. Owner walk on the deployed app (frontend only — live on merge):
 
 - [ ] Vendor audit at Stage 1 (either live audit): Intake ends with "Stage
       transition · Ready to advance" and an enabled "Advance to Vendor
-      enrichment". Click → the audit's current stage flips to Stage 2 (nav,
-      header chips), the Audit history drawer shows the transition, Intake
-      viewed again reads "Audit has already advanced past this stage ·
-      Current stage: Vendor enrichment" with the button disabled, and
-      tagging on Stage 1 still works.
+      enrichment". Click → the view snaps to Stage 2 (the shell follows
+      current_stage) and the nav marks it current; the Audit history drawer
+      shows the transition. Step back to Intake → "Audit has already advanced
+      past this stage · Current stage: Vendor enrichment", button disabled,
+      and tagging on Stage 1 still works.
 - [ ] Stage 2 → "Advance to Questionnaire review"; Stage 3 (no instance yet
       and with one) → "Advance to Scope & risk review"; each lands on the
       next stage and Stage 4's own card then reads its gates as before.
