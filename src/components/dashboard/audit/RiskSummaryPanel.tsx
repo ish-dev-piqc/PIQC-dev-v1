@@ -482,9 +482,11 @@ export default function RiskSummaryPanel({
                     <li key={r.id} className="text-xs leading-relaxed">
                       <span className={`font-semibold ${headingColor}`}>{r.section_identifier}</span>
                       <span className={subColor}> — {r.section_title}</span>
-                      <span className={`${mutedColor} block text-[10px] mt-0.5`}>
-                        {r.operational_domain_tag.replace(/_/g, ' ')}
-                      </span>
+                      {r.operational_domain_tag && (
+                        <span className={`${mutedColor} block text-[10px] mt-0.5`}>
+                          {r.operational_domain_tag.replace(/_/g, ' ')}
+                        </span>
+                      )}
                     </li>
                   ))}
                 </ul>

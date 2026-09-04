@@ -5,18 +5,21 @@ import { ENDPOINT_TIER_LABELS, IMPACT_SURFACE_LABELS } from '../../../../../lib/
 import type { TaggedSection } from '../../../../../lib/audit/mockProtocolRisks';
 import {
   deriveRiskCandidates,
+  ISA_CANDIDATE_RULES,
   VENDOR_CANDIDATE_RULES,
   type CandidateSourceItem,
   type RiskCandidate,
 } from '../../../../../lib/audit/riskCandidates';
 import { fetchCandidateSourceItems } from '../../../../../lib/audit/riskCandidatesApi';
-import type { RiskCandidateRule } from '../../../../../types/audit';
+import type { AuditWorkflowType, RiskCandidateRule } from '../../../../../types/audit';
 
 // =============================================================================
-// RiskCandidatesPanel — "Suggested from the parsed protocol" (Stage 1, Intake)
+// RiskCandidatesPanel — "Suggested from the parsed protocol" (vendor Intake,
+// ISA Risk assessment)
 //
 // Reads the protocol's worksheet items once per mount (and per protocol
-// change), derives candidates with the pure rule module, and lists them
+// change), derives candidates with the pure rule module for the workflow's
+// rule set (vendor: no eligibility criteria; site: all), and lists them
 // grouped by rule. Accept hands the candidate to the workspace, which opens
 // the tagging form prefilled — nothing is written from here. A candidate
 // leaves the list when a tagged risk names its item as source (`tagged` is
@@ -30,6 +33,9 @@ import type { RiskCandidateRule } from '../../../../../types/audit';
 
 interface RiskCandidatesPanelProps {
   protocolId: string;
+  /** Picks the rule set and where the no-items copy points for the parse
+   *  status (vendor Intake has the card above; ISA has it on Stage 1). */
+  workflow: AuditWorkflowType;
   /** Risks already tagged on the protocol version — dedupe source. */
   tagged: TaggedSection[];
   /** Mirrors the workspace's "Tag a section" button: a save in flight. */
@@ -60,6 +66,7 @@ const RULE_CHIP_LABELS: Record<RiskCandidateRule, string> = {
 
 export default function RiskCandidatesPanel({
   protocolId,
+  workflow,
   tagged,
   disabled,
   onAccept,
@@ -87,19 +94,21 @@ export default function RiskCandidatesPanel({
     };
   }, [protocolId, reloadKey]);
 
+  const rules = workflow === 'VENDOR_AUDIT' ? VENDOR_CANDIDATE_RULES : ISA_CANDIDATE_RULES;
+
   const view = useMemo(() => {
     if (state.kind !== 'ready') return null;
-    const set = deriveRiskCandidates(state.items, tagged, VENDOR_CANDIDATE_RULES, state.derivedAt);
+    const set = deriveRiskCandidates(state.items, tagged, rules, state.derivedAt);
     const taggedSourceIds = new Set(
       tagged.map((t) => t.source_extracted_item_id).filter((id): id is string => Boolean(id)),
     );
     const linked = state.items.filter((item) => taggedSourceIds.has(item.id)).length;
-    const groups = VENDOR_CANDIDATE_RULES.map((rule) => ({
+    const groups = rules.map((rule) => ({
       rule,
       candidates: set.candidates.filter((c) => c.rule === rule),
     })).filter((g) => g.candidates.length > 0);
     return { ...set, groups, linked, itemCount: state.items.length };
-  }, [state, tagged]);
+  }, [state, tagged, rules]);
 
   const reload = () => setReloadKey((k) => k + 1);
 
@@ -181,7 +190,9 @@ export default function RiskCandidatesPanel({
       {view && view.itemCount === 0 && (
         <div className="px-4 py-4 flex items-center justify-between gap-3 flex-wrap">
           <p className="text-fg-sub text-sm">
-            No parsed protocol items yet — see the parse status above.
+            {workflow === 'VENDOR_AUDIT'
+              ? 'No parsed protocol items yet — see the parse status above.'
+              : 'No parsed protocol items yet — see the parse status on Stage 1 (Site intake).'}
           </p>
           <button
             type="button"

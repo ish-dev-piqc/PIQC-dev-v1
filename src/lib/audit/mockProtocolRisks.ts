@@ -26,7 +26,9 @@ export interface TaggedSection {
   impact_surface: ImpactSurface;
   time_sensitivity: boolean;
   vendor_dependency_flags: string[]; // controlled vocab values
-  operational_domain_tag: string;    // controlled vocab value
+  /** Vendor-axis controlled vocab value. null on risks tagged from an
+   *  investigator site audit — they carry no vendor domain (20260915000000). */
+  operational_domain_tag: string | null;
   tagging_mode: TaggingMode;
   version_change_type: VersionChangeType;
   /** Optional FK to the SOTR protocol_extracted_item this risk traces back to.

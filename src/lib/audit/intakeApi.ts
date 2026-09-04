@@ -36,7 +36,8 @@ interface ProtocolRiskRow {
   impact_surface: ImpactSurface;
   time_sensitivity: boolean;
   vendor_dependency_flags: string[];
-  operational_domain_tag: string;
+  /** Nullable since 20260915000000: site-tagged risks carry no vendor domain. */
+  operational_domain_tag: string | null;
   tagging_mode: TaggingMode;
   version_change_type: VersionChangeType;
   source_extracted_item_id: string | null;
@@ -108,7 +109,8 @@ export interface CreateProtocolRiskInput {
   impactSurface: ImpactSurface;
   timeSensitivity: boolean;
   vendorDependencyFlags: string[];
-  operationalDomainTag: string;
+  /** Vendor audits: required controlled-vocab value. Site audits: null. */
+  operationalDomainTag: string | null;
   versionChangeType?: VersionChangeType;
   reason?: string;
   /** Optional SOTR protocol_extracted_item this risk traces back to. */

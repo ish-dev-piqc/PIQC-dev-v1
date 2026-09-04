@@ -16,7 +16,8 @@ export interface MockProtocolRiskRef {
   id: string;
   section_identifier: string;
   section_title: string;
-  operational_domain_tag: string;
+  /** null on site-tagged risks (no vendor domain). */
+  operational_domain_tag: string | null;
 }
 
 export interface MockRiskSummary {

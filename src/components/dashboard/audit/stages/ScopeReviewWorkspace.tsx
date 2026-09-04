@@ -244,13 +244,18 @@ export default function ScopeReviewWorkspace() {
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <TierChip tier={r.endpoint_tier} isLight={isLight} />
                   <SurfaceChip surface={r.impact_surface} isLight={isLight} />
-                  <DomainChip
-                    label={
-                      OPERATIONAL_DOMAIN_OPTIONS.find((o) => o.value === r.operational_domain_tag)?.label ??
-                      r.operational_domain_tag
-                    }
-                    isLight={isLight}
-                  />
+                  {/* Site-tagged risks on a shared protocol version carry no
+                      vendor domain (20260915000000) — no chip rather than an
+                      empty one. */}
+                  {r.operational_domain_tag && (
+                    <DomainChip
+                      label={
+                        OPERATIONAL_DOMAIN_OPTIONS.find((o) => o.value === r.operational_domain_tag)?.label ??
+                        r.operational_domain_tag
+                      }
+                      isLight={isLight}
+                    />
+                  )}
                   {r.time_sensitivity && <TimeSensitiveChip isLight={isLight} />}
                 </div>
               </div>

@@ -9,6 +9,7 @@ import {
   VENDOR_DEPENDENCY_FLAG_OPTIONS,
 } from '../../../../../lib/audit/labels';
 import type {
+  AuditWorkflowType,
   EndpointTier,
   ImpactSurface,
 } from '../../../../../types/audit';
@@ -29,9 +30,14 @@ import { formatExtractedValue } from '../../../../sotr/WorksheetItemRow';
 //   - vendor dependency flags (multi)
 //   - operational domain tag
 //
-// Plus the section identifier and section title (free-text in Phase 1; will be
-// pre-populated from PIQC payload in Phase 2). identifier and title are
-// immutable once a section has been tagged — preserves traceability.
+// Plus the section identifier and section title (free-text, or prefilled from
+// a PIQC candidate). identifier and title are immutable once a section has
+// been tagged — preserves traceability.
+//
+// Workflow: the operational domain and vendor dependency flags are the vendor
+// axis of a protocol risk. Investigator site audits hide both and save a null
+// domain (protocol_risk_objects.operational_domain_tag is nullable since
+// 20260915000000); the site axis lives on the site scope mapping.
 // =============================================================================
 
 export interface RiskTagFormValues {
@@ -41,13 +47,17 @@ export interface RiskTagFormValues {
   impact_surface: ImpactSurface;
   time_sensitivity: boolean;
   vendor_dependency_flags: string[];
-  operational_domain_tag: string;
+  /** Vendor audits: required. Investigator site audits: always null. */
+  operational_domain_tag: string | null;
   /** SOTR protocol_extracted_item this risk traces back to (optional). */
   source_extracted_item_id: string | null;
 }
 
 interface RiskTaggingFormProps {
   mode: 'add' | 'edit';
+  /** Vendor audits show the operational domain (required) and the vendor
+   *  dependency flags; investigator site audits hide both. */
+  workflow: AuditWorkflowType;
   initialValues?: Partial<RiskTagFormValues>;
   onSubmit: (values: RiskTagFormValues) => void;
   onCancel: () => void;
@@ -65,6 +75,7 @@ const SURFACES: ImpactSurface[] = ['DATA_INTEGRITY', 'PATIENT_SAFETY', 'BOTH'];
 
 export default function RiskTaggingForm({
   mode,
+  workflow,
   initialValues,
   onSubmit,
   onCancel,
@@ -74,6 +85,7 @@ export default function RiskTaggingForm({
 }: RiskTaggingFormProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
+  const isSiteAudit = workflow === 'INVESTIGATOR_SITE_AUDIT';
 
   // ---------------------------------------------------------------------------
   // Form state
@@ -132,7 +144,7 @@ export default function RiskTaggingForm({
       setError('Section title is required.');
       return;
     }
-    if (!domain) {
+    if (!isSiteAudit && !domain) {
       setError('Operational domain is required.');
       return;
     }
@@ -143,8 +155,8 @@ export default function RiskTaggingForm({
       endpoint_tier: tier,
       impact_surface: surface,
       time_sensitivity: timeSensitive,
-      vendor_dependency_flags: flags,
-      operational_domain_tag: domain,
+      vendor_dependency_flags: isSiteAudit ? [] : flags,
+      operational_domain_tag: isSiteAudit ? null : domain,
       source_extracted_item_id: sourceItemId,
     });
   };
@@ -307,61 +319,67 @@ export default function RiskTaggingForm({
         </div>
       </div>
 
-      {/* Operational domain (single-select) */}
-      <div>
-        <label className={`block text-sm font-medium mb-2 ${labelColor}`}>
-          Operational domain
-          <span className={`${mutedColor} font-normal ml-1`}>(primary domain this section addresses)</span>
-        </label>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {OPERATIONAL_DOMAIN_OPTIONS.map((opt) => {
-            const active = domain === opt.value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setDomain(opt.value)}
-                className={`text-left rounded-md border px-3 py-2 text-xs font-semibold transition-colors ${active ? radioActive : radioInactive}`}
-                aria-pressed={active}
-              >
-                {opt.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      {/* Operational domain + vendor dependency flags — the vendor axis of a
+          risk. A site audit carries neither (see the header note). */}
+      {!isSiteAudit && (
+        <>
+          {/* Operational domain (single-select) */}
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${labelColor}`}>
+              Operational domain
+              <span className={`${mutedColor} font-normal ml-1`}>(primary domain this section addresses)</span>
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {OPERATIONAL_DOMAIN_OPTIONS.map((opt) => {
+                const active = domain === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setDomain(opt.value)}
+                    className={`text-left rounded-md border px-3 py-2 text-xs font-semibold transition-colors ${active ? radioActive : radioInactive}`}
+                    aria-pressed={active}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-      {/* Vendor dependency flags (multi) */}
-      <div>
-        <label className={`block text-sm font-medium mb-1 ${labelColor}`}>
-          Vendor dependency flags
-        </label>
-        <p className={`text-[11px] mb-2 ${subColor}`}>
-          Tick every vendor category this section depends on. A section can flag multiple
-          (e.g. central lab + ECG).
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {VENDOR_DEPENDENCY_FLAG_OPTIONS.map((opt) => {
-            const active = flags.includes(opt.value);
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => toggleFlag(opt.value)}
-                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${active ? radioActive : radioInactive}`}
-                aria-pressed={active}
-              >
-                {opt.label}
-              </button>
-            );
-          })}
-        </div>
-        {flags.length > 0 && (
-          <p className={`text-[11px] mt-2 ${sectionHeader}`}>
-            {flags.length} flag{flags.length === 1 ? '' : 's'} selected
-          </p>
-        )}
-      </div>
+          {/* Vendor dependency flags (multi) */}
+          <div>
+            <label className={`block text-sm font-medium mb-1 ${labelColor}`}>
+              Vendor dependency flags
+            </label>
+            <p className={`text-[11px] mb-2 ${subColor}`}>
+              Tick every vendor category this section depends on. A section can flag multiple
+              (e.g. central lab + ECG).
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {VENDOR_DEPENDENCY_FLAG_OPTIONS.map((opt) => {
+                const active = flags.includes(opt.value);
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => toggleFlag(opt.value)}
+                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${active ? radioActive : radioInactive}`}
+                    aria-pressed={active}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            {flags.length > 0 && (
+              <p className={`text-[11px] mt-2 ${sectionHeader}`}>
+                {flags.length} flag{flags.length === 1 ? '' : 's'} selected
+              </p>
+            )}
+          </div>
+        </>
+      )}
 
       {/* Protocol source link (optional). Hidden when no protocol is on the
           active audit — the picker would have nothing to read from. */}

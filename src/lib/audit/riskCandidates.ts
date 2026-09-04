@@ -48,6 +48,13 @@ export const VENDOR_CANDIDATE_RULES: readonly RiskCandidateRule[] = [
   'visit',
 ];
 
+/** Investigator site audits: every rule — eligibility criteria are the site's
+ *  own responsibility. */
+export const ISA_CANDIDATE_RULES: readonly RiskCandidateRule[] = [
+  ...VENDOR_CANDIDATE_RULES,
+  'criterion',
+];
+
 /** A worksheet item as the candidate reader returns it — the SOTR row plus
  *  its primary evidence coordinates. Never carries quoted protocol text. */
 export interface CandidateSourceItem {
