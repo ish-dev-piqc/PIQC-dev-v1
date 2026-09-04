@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader, Trash2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 
 interface Document {
   id: string;
@@ -11,6 +12,7 @@ interface Document {
   chunk_count?: number;
   status?: string;
   error_message?: string | null;
+  user_id: string | null;
 }
 
 interface UploadState {
@@ -358,6 +360,7 @@ export function UploadForm({
 }
 
 function DocumentList({ refreshKey, isLight }: { refreshKey: number; isLight: boolean }) {
+  const { user } = useAuth();
   const [docs, setDocs] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -366,7 +369,7 @@ function DocumentList({ refreshKey, isLight }: { refreshKey: number; isLight: bo
     setLoading(true);
     const { data: docData } = await supabase
       .from('documents')
-      .select('id, title, filename, created_at, status, error_message')
+      .select('id, title, filename, created_at, status, error_message, user_id')
       .order('created_at', { ascending: false })
       .limit(50);
 
@@ -468,18 +471,26 @@ function DocumentList({ refreshKey, isLight }: { refreshKey: number; isLight: bo
                 <span className={`text-xs hidden sm:block ${isLight ? 'text-[#334155]/30' : 'text-[#CBD5E1]/20'}`}>
                   {new Date(doc.created_at).toLocaleDateString()}
                 </span>
-                <button
-                  onClick={() => handleDelete(doc.id)}
-                  disabled={deleting === doc.id}
-                  className={`opacity-0 group-hover:opacity-100 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-500/10 hover:text-red-400 transition-all ${
-                    isLight ? 'text-[#334155]/40' : 'text-[#CBD5E1]/30'
-                  }`}
-                >
-                  {deleting === doc.id
-                    ? <Loader size={13} className="animate-spin" />
-                    : <Trash2 size={13} />
-                  }
-                </button>
+                {/* RLS lets non-owners READ a document (lead auditors of an
+                    audit pinned to its protocol) but only the uploader may
+                    DELETE. A delete on a non-owned row returns no error and
+                    removes 0 rows, so the control is gated on the same
+                    predicate the policy uses: user_id = auth.uid(). */}
+                {doc.user_id === user?.id && (
+                  <button
+                    onClick={() => handleDelete(doc.id)}
+                    disabled={deleting === doc.id}
+                    aria-label={`Delete ${doc.title || 'Untitled'}`}
+                    className={`opacity-0 group-hover:opacity-100 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-500/10 hover:text-red-400 transition-all ${
+                      isLight ? 'text-[#334155]/40' : 'text-[#CBD5E1]/30'
+                    }`}
+                  >
+                    {deleting === doc.id
+                      ? <Loader size={13} className="animate-spin" />
+                      : <Trash2 size={13} />
+                    }
+                  </button>
+                )}
               </div>
             </div>
           ))}
