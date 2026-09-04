@@ -75,6 +75,10 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
   // if a rollback is ever needed.
 
   const isHomeScope = activeProtocol === null;
+  // Audit Mode's equivalent: no active audit = the hub (attention queue +
+  // worklist). Cleared by the picker's "All audits" item and the workspace
+  // shell's back link.
+  const isAuditHomeScope = activeAudit === null;
 
   const renderProtocolPicker = () => (
     <div className="relative" ref={protocolMenuRef}>
@@ -310,7 +314,7 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
         className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md border transition-colors ${isLight ? 'border-[#E2E8F0] bg-white text-[#334155] hover:bg-[#F8FAFC]' : 'border-white/[0.08] bg-[#0F172A] text-[#CBD5E1] hover:bg-white/[0.08]'}`}
         aria-haspopup="listbox"
         aria-expanded={auditMenuOpen}
-        title={activeAudit ? activeAudit.audit_name : 'No audit selected'}
+        title={activeAudit ? activeAudit.audit_name : 'All audits — attention queue and worklist'}
       >
         {activeAudit ? (
           (() => {
@@ -324,10 +328,10 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
             );
           })()
         ) : (
-          <ClipboardList size={12} className={`flex-shrink-0 ${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'}`} />
+          <Home size={12} className={`flex-shrink-0 ${isLight ? 'text-brand-600' : 'text-brand-300'}`} />
         )}
         <span className="truncate max-w-[160px]">
-          {activeAudit ? activeAudit.audit_name : 'Select audit'}
+          {activeAudit ? activeAudit.audit_name : 'All audits'}
         </span>
         <ChevronDown size={12} className={`transition-transform duration-150 flex-shrink-0 ${auditMenuOpen ? 'rotate-180' : ''}`} />
       </button>
@@ -338,7 +342,42 @@ export default function Navbar({ view, onViewChange, onDashboardHome, onOpenSett
         >
           <div className={`px-3 py-2 border-b ${isLight ? 'border-[#E2E8F0]' : 'border-white/[0.06]'}`}>
             <p className={`text-[10px] uppercase tracking-wider font-semibold ${isLight ? 'text-[#334155]/40' : 'text-[#CBD5E1]/35'}`}>
-              Active audits
+              Scope
+            </p>
+          </div>
+          {/* Home scope — mirrors the protocol picker's "All protocols": clears
+              the active audit so the workspace shell renders the hub. */}
+          <button
+            type="button"
+            onClick={() => {
+              setActiveAudit(null);
+              setAuditMenuOpen(false);
+            }}
+            className={`w-full text-left px-3 py-2.5 transition-colors flex items-start gap-2.5 ${
+              isAuditHomeScope
+                ? isLight
+                  ? 'bg-brand-600/10'
+                  : 'bg-brand-600/15'
+                : isLight
+                ? 'hover:bg-[#0F172A]/[0.04]'
+                : 'hover:bg-white/[0.04]'
+            }`}
+            role="option"
+            aria-selected={isAuditHomeScope}
+          >
+            <Home size={14} className={`mt-0.5 flex-shrink-0 ${isAuditHomeScope ? (isLight ? 'text-brand-600' : 'text-brand-300') : isLight ? 'text-[#334155]/50' : 'text-[#CBD5E1]/45'}`} />
+            <div className="min-w-0">
+              <div className={`text-xs font-semibold ${isAuditHomeScope ? (isLight ? 'text-brand-600' : 'text-brand-300') : isLight ? 'text-[#0F172A]' : 'text-white'}`}>
+                All audits
+              </div>
+              <div className={`text-[11px] mt-0.5 ${isLight ? 'text-[#334155]/55' : 'text-[#CBD5E1]/45'}`}>
+                Attention queue and full worklist
+              </div>
+            </div>
+          </button>
+          <div className={`px-3 py-2 border-y ${isLight ? 'border-[#E2E8F0] bg-[#F8FAFC]' : 'border-white/[0.06] bg-white/[0.02]'}`}>
+            <p className={`text-[10px] uppercase tracking-wider font-semibold ${isLight ? 'text-[#334155]/40' : 'text-[#CBD5E1]/35'}`}>
+              Your audits
             </p>
           </div>
           {audits.length === 0 ? (

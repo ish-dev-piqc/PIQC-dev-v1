@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: audit-home-navigation
-status: active
+status: in-review
 started: 2026-09-04
 target_pr:
 ---
@@ -71,4 +71,24 @@ none
 
 ## Verification
 
-Filled in before review.
+Static review only on this machine (no Node): CI's `npm run test` is the first
+execution of the new test file. Owner walk on the deployed app after merge:
+
+- [ ] Open an audit (vendor and investigator site) → "‹ All audits" sits on its own
+      line above the stage chips → click → hub with attention queue, worklist,
+      Start a new audit.
+- [ ] Reload on the hub → still the hub (`piq-audit-v1` removed from localStorage).
+- [ ] Top-bar picker reads "All audits" with the home icon; open → "Scope" header,
+      "All audits" highlighted first, then "Your audits"; pick an audit → workspace;
+      picker → All audits → hub.
+- [ ] Hub → Start a new audit → lands on Stage 1 → "‹ All audits" → stays on the hub
+      (no bounce-back from the parked new-audit id).
+- [ ] Switch Site Mode → Audit Mode from the hub → still the hub; from inside an
+      audit → still that audit.
+- [ ] Vendor audit at <xl: open the Risk summary drawer → "‹ All audits" → open
+      another vendor audit → the drawer is closed.
+- [ ] Keyboard: Tab to "‹ All audits", Enter → hub. Screen reader name: "Back to
+      all audits".
+- [ ] `src/components/__tests__/Navbar.test.tsx` green in CI (3 cases: home trigger
+      + selected home option; choose home from inside an audit clears + closes;
+      empty library keeps the home option and "No audits yet.").
