@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: isa-risk-tagging
-status: in-review
+status: merged
+merged: 2026-09-04
 started: 2026-09-04
-target_pr:
+target_pr: #617
 ---
 
 # ISA Stage 2: protocol risk tagging on the investigator site workflow
