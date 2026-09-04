@@ -3,6 +3,7 @@ import type { TaggedSection } from './mockProtocolRisks';
 import type {
   EndpointTier,
   ImpactSurface,
+  SuggestionProvenance,
   TaggingMode,
   VersionChangeType,
 } from '../../types/audit';
@@ -21,7 +22,9 @@ import type {
 //
 // Note on tagged_at / tagging_mode: server stamps these. Clients send the
 // values they want recorded for endpoint_tier / impact_surface / etc. — the
-// server fills in tagged_by = auth.uid() and tagging_mode = 'MANUAL'.
+// server fills in tagged_by = auth.uid() and tagging_mode: 'MANUAL' via
+// createProtocolRisk, 'PIQC_ASSISTED' (with suggestion_provenance) via
+// createProtocolRiskFromCandidate (20260914000000).
 // =============================================================================
 
 interface ProtocolRiskRow {
@@ -136,6 +139,59 @@ export async function createProtocolRisk(
 
   if (error) {
     console.error('[intakeApi] createProtocolRisk error:', error);
+    return { ok: false, error: error.message };
+  }
+
+  return { ok: true, data: flattenRisk(data as ProtocolRiskRow) };
+}
+
+export type CreateProtocolRiskFromCandidateInput = Omit<
+  CreateProtocolRiskInput,
+  'versionChangeType' | 'sourceExtractedItemId'
+> & {
+  /** Required: a candidate is defined by the SOTR item it came from. */
+  sourceExtractedItemId: string;
+};
+
+export type CreateProtocolRiskFromCandidateResult =
+  | { ok: true; data: TaggedSection }
+  | { ok: false; error: string; notApplied?: boolean };
+
+/**
+ * Create a protocol risk from a PIQC-derived candidate the auditor confirmed
+ * in the tagging form. Same row as createProtocolRisk except the server
+ * stamps tagging_mode = 'PIQC_ASSISTED' and stores the provenance
+ * (20260914000000_audit_mode_create_protocol_risk_from_candidate.sql).
+ *
+ * `notApplied: true` means the RPC is not in this environment yet
+ * (PGRST202) — the caller falls back to createProtocolRisk with the source
+ * link so nothing is lost but the provenance.
+ */
+export async function createProtocolRiskFromCandidate(
+  protocolVersionId: string,
+  input: CreateProtocolRiskFromCandidateInput,
+  provenance: SuggestionProvenance,
+): Promise<CreateProtocolRiskFromCandidateResult> {
+  const { data, error } = await supabase.rpc('audit_mode_create_protocol_risk_from_candidate', {
+    p_protocol_version_id: protocolVersionId,
+    p_section_identifier: input.sectionIdentifier,
+    p_section_title: input.sectionTitle,
+    p_endpoint_tier: input.endpointTier,
+    p_impact_surface: input.impactSurface,
+    p_time_sensitivity: input.timeSensitivity,
+    p_vendor_dependency_flags: input.vendorDependencyFlags,
+    p_operational_domain_tag: input.operationalDomainTag,
+    p_source_extracted_item_id: input.sourceExtractedItemId,
+    p_suggestion_provenance: provenance,
+    p_reason: input.reason ?? null,
+  });
+
+  if (error) {
+    if (error.code === 'PGRST202') {
+      // Expected until the migration is pushed — not an error worth logging.
+      return { ok: false, error: error.message, notApplied: true };
+    }
+    console.error('[intakeApi] createProtocolRiskFromCandidate error:', error);
     return { ok: false, error: error.message };
   }
 

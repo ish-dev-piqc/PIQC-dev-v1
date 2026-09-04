@@ -21,6 +21,10 @@
 //      forward as null. A `||` substituted for `??` would silently break
 //      this and we'd lose the ability to send "explicit not-clear."
 //
+//   5. Candidate create (PIQC-assisted) forwards the source id and the
+//      provenance to its own RPC, and reports PGRST202 as `notApplied` so
+//      the workspace can fall back to the manual create before `db push`.
+//
 // Pattern mirrors src/lib/sotr/__tests__/sourceEvidenceApi.test.ts:
 //   - vi.mock('../../supabase') with an inline rpc factory
 //   - mockResolvedValueOnce for the data path
@@ -29,7 +33,12 @@
 //     assertions (avoids untyped mock.calls indexing)
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createProtocolRisk, updateProtocolRisk } from '../intakeApi';
+import {
+  createProtocolRisk,
+  createProtocolRiskFromCandidate,
+  updateProtocolRisk,
+} from '../intakeApi';
+import type { SuggestionProvenance } from '../../../types/audit';
 
 vi.mock('../../supabase', () => {
   const rpc = vi.fn();
@@ -229,6 +238,99 @@ describe('updateProtocolRisk — three-way source-link semantics', () => {
     });
 
     expect(result).toBeNull();
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+});
+
+describe('createProtocolRiskFromCandidate — PIQC-assisted create', () => {
+  beforeEach(() => {
+    mockRpc.mockReset();
+  });
+
+  const PROVENANCE: SuggestionProvenance = {
+    source: 'sotr_item',
+    rule: 'endpoint_primary',
+    field_path: 'primary_endpoints[0]',
+    field_type: 'endpoint',
+    confidence_state: 'high',
+    document_id: 'doc-1',
+    proposed: {
+      section_identifier: '§5.1',
+      section_title: 'Overall survival',
+      endpoint_tier: 'PRIMARY',
+      impact_surface: 'DATA_INTEGRITY',
+      time_sensitivity: false,
+    },
+    derived_at: '2026-09-04T12:00:00.000Z',
+  };
+
+  it('forwards the source id and provenance to the candidate RPC and flattens the row', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: makeRiskRow({ tagging_mode: 'PIQC_ASSISTED', source_extracted_item_id: 'extracted-abc' }),
+      error: null,
+    });
+
+    const result = await createProtocolRiskFromCandidate(
+      'pv-1',
+      { ...BASE_CREATE_INPUT, sourceExtractedItemId: 'extracted-abc' },
+      PROVENANCE,
+    );
+
+    expect(mockRpc).toHaveBeenCalledOnce();
+    expect(mockRpc).toHaveBeenCalledWith(
+      'audit_mode_create_protocol_risk_from_candidate',
+      expect.objectContaining({
+        p_protocol_version_id: 'pv-1',
+        p_section_identifier: '4.1',
+        p_source_extracted_item_id: 'extracted-abc',
+        p_suggestion_provenance: PROVENANCE,
+        p_reason: null,
+      }),
+    );
+    expect(result).toEqual({
+      ok: true,
+      data: expect.objectContaining({
+        id: 'risk-1',
+        tagging_mode: 'PIQC_ASSISTED',
+        source_extracted_item_id: 'extracted-abc',
+      }),
+    });
+  });
+
+  it('reports PGRST202 (RPC not applied) as notApplied without logging', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'Could not find the function', code: 'PGRST202' },
+    });
+
+    const result = await createProtocolRiskFromCandidate(
+      'pv-1',
+      { ...BASE_CREATE_INPUT, sourceExtractedItemId: 'extracted-abc' },
+      PROVENANCE,
+    );
+
+    expect(result).toEqual({ ok: false, error: 'Could not find the function', notApplied: true });
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it('returns a plain ok:false (no notApplied) on any other error', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'permission denied', code: '42501' },
+    });
+
+    const result = await createProtocolRiskFromCandidate(
+      'pv-1',
+      { ...BASE_CREATE_INPUT, sourceExtractedItemId: 'extracted-abc' },
+      PROVENANCE,
+    );
+
+    expect(result).toEqual({ ok: false, error: 'permission denied' });
+    expect(result).not.toHaveProperty('notApplied');
     expect(errorSpy).toHaveBeenCalled();
     errorSpy.mockRestore();
   });

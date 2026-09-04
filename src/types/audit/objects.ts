@@ -19,6 +19,8 @@ import type {
   CapaStatus,
   ClinicalTrialPhase,
   DocumentKind,
+  EndpointTier,
+  ImpactSurface,
   IsaDomain,
   IsaFindingOrigin,
   IsaResponseOwner,
@@ -148,6 +150,41 @@ export interface RiskSummaryStudyContext {
   source?: 'parsed_document' | 'manual';
   /** The ready document the snapshot was captured from; null when manual. */
   source_document_id?: string | null;
+}
+
+// -----------------------------------------------------------------------------
+// Protocol-version-scoped: how a PIQC-assisted risk was proposed.
+// Mirrors protocol_risk_objects.suggestion_provenance (JSONB) as written by
+// audit_mode_create_protocol_risk_from_candidate (20260914000000). Identifiers
+// and the proposal only — never quoted protocol text — so the History drawer
+// can show what PIQC proposed against what the auditor saved. Rows tagged
+// MANUAL carry null.
+// -----------------------------------------------------------------------------
+/** The deterministic rule that produced a candidate (src/lib/audit/riskCandidates.ts). */
+export type RiskCandidateRule =
+  | 'endpoint_primary'
+  | 'endpoint_secondary'
+  | 'dosing'
+  | 'visit'
+  | 'criterion';
+
+export interface SuggestionProvenance {
+  source: 'sotr_item';
+  rule: RiskCandidateRule;
+  /** SOTR item coordinates at derivation time (snapshot, not a live join). */
+  field_path: string;
+  field_type: string;
+  confidence_state: string;
+  document_id: string;
+  /** What PIQC proposed; the saved row holds what the auditor confirmed. */
+  proposed: {
+    section_identifier: string;
+    section_title: string;
+    endpoint_tier: EndpointTier;
+    impact_surface: ImpactSurface;
+    time_sensitivity: boolean;
+  };
+  derived_at: string; // ISO 8601
 }
 
 // -----------------------------------------------------------------------------

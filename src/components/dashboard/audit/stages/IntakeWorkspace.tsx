@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Plus, Pencil, Clock, Trash2, History as HistoryIcon, Link2 } from 'lucide-react';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useAudit } from '../../../../context/AuditContext';
@@ -12,11 +12,15 @@ import { type TaggedSection } from '../../../../lib/audit/mockProtocolRisks';
 import ProtocolReadinessCard from './ProtocolReadinessCard';
 import type { EndpointTier, ImpactSurface } from '../../../../types/audit';
 import RiskTaggingForm, { type RiskTagFormValues } from './intake/RiskTaggingForm';
+import RiskCandidatesPanel from './intake/RiskCandidatesPanel';
+import { candidateProvenance, type RiskCandidate } from '../../../../lib/audit/riskCandidates';
 import {
   fetchProtocolRisksForAudit,
   createProtocolRisk,
+  createProtocolRiskFromCandidate,
   updateProtocolRisk,
   deleteProtocolRisk,
+  type CreateProtocolRiskFromCandidateResult,
 } from '../../../../lib/audit/intakeApi';
 import HistoryDrawer from '../HistoryDrawer';
 
@@ -27,9 +31,10 @@ import HistoryDrawer from '../HistoryDrawer';
 // vendor is responsible for. Each tagged section anchors downstream
 // criticality scoring, questionnaire addenda, and the risk summary.
 //
-// Phase 1 = manual (this build). Phase 2 = PIQC-assisted (sections arrive
-// pre-populated). Phase 3 = LLM-assisted. The form is suggestion-aware in
-// shape from day one — those phases swap data sources, not UI.
+// Manual tagging plus PIQC-assisted candidates: the suggestions panel derives
+// proposals from the parsed protocol (riskCandidates.ts, deterministic), and
+// Accept opens the same form prefilled — the auditor confirms, the row records
+// PIQC_ASSISTED with provenance. LLM-assisted tagging is not built.
 //
 // Wired to Supabase: reads via fetchProtocolRisksForAudit, writes via the
 // per-mutation RPCs (createProtocolRisk etc.) — the shared context store
@@ -55,6 +60,13 @@ export default function IntakeWorkspace() {
   const [historyTarget, setHistoryTarget] = useState<{ objectId: string; title: string } | null>(null);
   // AUD-301: surface a save failure instead of silently swallowing the null.
   const [saveError, setSaveError] = useState<string | null>(null);
+  // A candidate accepted from the suggestions panel: the form is prefilled
+  // from it and the save goes through the candidate RPC so the row records
+  // PIQC_ASSISTED + provenance.
+  const [pendingCandidate, setPendingCandidate] = useState<RiskCandidate | null>(null);
+  // Row saved through the manual path because the candidate RPC is not applied
+  // in this environment yet — that row carries the note.
+  const [fallbackNoteRiskId, setFallbackNoteRiskId] = useState<string | null>(null);
 
   // Load protocol risks from Supabase when the active audit changes
   useEffect(() => {
@@ -79,12 +91,34 @@ export default function IntakeWorkspace() {
     loadRisks();
     setMode('list');
     setEditTarget(null);
+    setPendingCandidate(null);
     return () => {
       cancelled = true;
     };
     // Depend on activeAudit?.id only — see RiskSummaryPanel for rationale.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAudit?.id, setSectionsByAudit]);
+
+  // RiskTaggingForm resets its fields whenever the `initialValues` reference
+  // changes, so the proposal must be a stable object per candidate — an
+  // inline literal would wipe the auditor's edits on the re-render a save
+  // failure causes.
+  const candidateInitialValues = useMemo<Partial<RiskTagFormValues> | undefined>(
+    () =>
+      pendingCandidate
+        ? {
+            section_identifier: pendingCandidate.section_identifier,
+            section_title: pendingCandidate.section_title,
+            endpoint_tier: pendingCandidate.endpoint_tier,
+            impact_surface: pendingCandidate.impact_surface,
+            time_sensitivity: pendingCandidate.time_sensitivity,
+            vendor_dependency_flags: [],
+            operational_domain_tag: '',
+            source_extracted_item_id: pendingCandidate.source_extracted_item_id,
+          }
+        : undefined,
+    [pendingCandidate],
+  );
 
   if (!activeAudit) {
     // Shell should have rendered the gate, but guard for defensive rendering.
@@ -98,7 +132,7 @@ export default function IntakeWorkspace() {
   // ---------------------------------------------------------------------------
   const handleAdd = async (values: RiskTagFormValues) => {
     setLoading(true);
-    const result = await createProtocolRisk(activeAudit.protocol_version_id, {
+    const common = {
       sectionIdentifier: values.section_identifier,
       sectionTitle: values.section_title,
       endpointTier: values.endpoint_tier,
@@ -106,15 +140,51 @@ export default function IntakeWorkspace() {
       timeSensitivity: values.time_sensitivity,
       vendorDependencyFlags: values.vendor_dependency_flags,
       operationalDomainTag: values.operational_domain_tag,
-      versionChangeType: 'ADDED',
-      sourceExtractedItemId: values.source_extracted_item_id,
-    });
+    };
+    // The candidate path applies only while the row still traces to the
+    // candidate's item. Unlinking or re-linking in the form makes it a manual
+    // tag — provenance for one item must never be stored against another.
+    const candidate =
+      pendingCandidate &&
+      values.source_extracted_item_id === pendingCandidate.source_extracted_item_id
+        ? pendingCandidate
+        : null;
+
+    let recordedManually = false;
+    let result: CreateProtocolRiskFromCandidateResult;
+    if (candidate) {
+      result = await createProtocolRiskFromCandidate(
+        activeAudit.protocol_version_id,
+        { ...common, sourceExtractedItemId: candidate.source_extracted_item_id },
+        candidateProvenance(candidate),
+      );
+      if (!result.ok && result.notApplied) {
+        // RPC not pushed to this environment yet: keep the row and its source
+        // link, lose only the provenance, and say so on the row.
+        recordedManually = true;
+        result = await createProtocolRisk(activeAudit.protocol_version_id, {
+          ...common,
+          versionChangeType: 'ADDED',
+          sourceExtractedItemId: candidate.source_extracted_item_id,
+        });
+      }
+    } else {
+      result = await createProtocolRisk(activeAudit.protocol_version_id, {
+        ...common,
+        versionChangeType: 'ADDED',
+        sourceExtractedItemId: values.source_extracted_item_id,
+      });
+    }
+
     if (result.ok) {
+      const saved = result.data;
       setSaveError(null);
+      setFallbackNoteRiskId(recordedManually ? saved.id : null);
       setSectionsByAudit((prev) => ({
         ...prev,
-        [activeAudit.id]: [...(prev[activeAudit.id] ?? []), result.data],
+        [activeAudit.id]: [...(prev[activeAudit.id] ?? []), saved],
       }));
+      setPendingCandidate(null);
       setMode('list');
     } else {
       // Keep the form open so the auditor can retry without re-entering the tag.
@@ -166,17 +236,26 @@ export default function IntakeWorkspace() {
 
   const openAdd = () => {
     setEditTarget(null);
+    setPendingCandidate(null);
+    setMode('add');
+  };
+
+  const openAddFromCandidate = (candidate: RiskCandidate) => {
+    setEditTarget(null);
+    setPendingCandidate(candidate);
     setMode('add');
   };
 
   const openEdit = (section: TaggedSection) => {
     setEditTarget(section);
+    setPendingCandidate(null);
     setMode('edit');
   };
 
   const cancel = () => {
     setMode('list');
     setEditTarget(null);
+    setPendingCandidate(null);
   };
 
   // ---------------------------------------------------------------------------
@@ -234,6 +313,18 @@ export default function IntakeWorkspace() {
           "Parsed". Hidden while the form is open so the form keeps the pane. */}
       {!inForm && <ProtocolReadinessCard />}
 
+      {/* Candidates derived from the parsed items the card above reports on.
+          `tagged` is the same store the list below renders from, so an
+          accepted candidate leaves the suggestions as soon as it is saved. */}
+      {!inForm && (
+        <RiskCandidatesPanel
+          protocolId={activeAudit.protocol_id}
+          tagged={sections}
+          disabled={loading}
+          onAccept={openAddFromCandidate}
+        />
+      )}
+
       {/* Inline form */}
       {inForm && (
         <div className={`${formCardBg} border rounded-xl p-5`}>
@@ -254,7 +345,7 @@ export default function IntakeWorkspace() {
                     operational_domain_tag: editTarget.operational_domain_tag,
                     source_extracted_item_id: editTarget.source_extracted_item_id,
                   }
-                : undefined
+                : candidateInitialValues
             }
             onSubmit={mode === 'add' ? handleAdd : handleEdit}
             onCancel={cancel}
@@ -324,6 +415,11 @@ export default function IntakeWorkspace() {
                 onHistoryClick={() =>
                   setHistoryTarget({ objectId: s.id, title: s.section_title })
                 }
+                note={
+                  s.id === fallbackNoteRiskId
+                    ? 'Recorded as manually tagged — PIQC-assisted provenance isn’t available in this environment yet.'
+                    : null
+                }
                 isLight={isLight}
                 cardBg={cardBg}
                 headingColor={headingColor}
@@ -356,6 +452,8 @@ interface SectionRowProps {
   onEdit: () => void;
   onDelete: () => Promise<void>;
   onHistoryClick: () => void;
+  /** One-line caveat under the row, e.g. the pre-apply fallback note. */
+  note: string | null;
   isLight: boolean;
   cardBg: string;
   headingColor: string;
@@ -368,6 +466,7 @@ function SectionRow({
   onEdit,
   onDelete,
   onHistoryClick,
+  note,
   isLight,
   cardBg,
   headingColor,
@@ -406,6 +505,7 @@ function SectionRow({
             <DomainChip label={domainLabel} isLight={isLight} />
             {section.time_sensitivity && <TimeSensitiveChip isLight={isLight} />}
             {section.source_extracted_item_id && <SourceLinkedChip isLight={isLight} />}
+            {section.tagging_mode !== 'MANUAL' && <PiqcAssistedChip isLight={isLight} />}
             {section.vendor_dependency_flags.length > 0 && (
               <span className={`text-[11px] ${mutedColor}`}>
                 · {section.vendor_dependency_flags.length} dependency
@@ -427,6 +527,7 @@ function SectionRow({
               <span className={`text-[11px] ${mutedColor}`}>· Re-tagged</span>
             )}
           </div>
+          {note && <p className={`text-[11px] mt-2 ${mutedColor}`}>{note}</p>}
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           <button
@@ -535,6 +636,23 @@ function TimeSensitiveChip({ isLight }: ChipProps) {
     >
       <Clock size={10} />
       Time-sensitive
+    </span>
+  );
+}
+
+// The row was accepted from a PIQC proposal (tagging_mode PIQC_ASSISTED).
+// History shows what PIQC proposed against what the auditor saved.
+function PiqcAssistedChip({ isLight }: ChipProps) {
+  return (
+    <span
+      title="Proposed by PIQC from the parsed protocol, confirmed by the auditor"
+      className={`inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded border ${
+        isLight
+          ? 'bg-brand-600/10 border-brand-600/25 text-brand-600'
+          : 'bg-brand-300/15 border-brand-300/30 text-brand-300'
+      }`}
+    >
+      PIQC-assisted
     </span>
   );
 }
