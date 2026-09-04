@@ -41,6 +41,7 @@ import type {
 import { hasReachedStage } from '../../../../lib/audit/workflowStages';
 import HistoryDrawer from '../HistoryDrawer';
 import StagePreviewNotice from '../StagePreviewNotice';
+import StageTransitionCard from './StageTransitionCard';
 import { useOpenEvidence } from '../evidenceDrawerContext';
 
 // =============================================================================
@@ -233,6 +234,12 @@ export default function QuestionnaireReviewWorkspace() {
             Create questionnaire instance
           </button>
         )}
+        {/* The server allows advancing without an instance (the questionnaire
+            gate is Stage 4's); the card says so here rather than hiding the
+            rule behind "create an instance first". */}
+        <div className="mt-6">
+          <StageTransitionCard stage="QUESTIONNAIRE_REVIEW" nextStage="SCOPE_AND_RISK_REVIEW" />
+        </div>
       </div>
     );
   }
@@ -609,6 +616,11 @@ export default function QuestionnaireReviewWorkspace() {
           )}
         </div>
       </div>
+
+      {/* Audit-stage transition — distinct from the questionnaire's own
+          lifecycle "Advance to {status}" button above: that moves the
+          instance, this moves the audit. Ungated on the server. */}
+      <StageTransitionCard stage="QUESTIONNAIRE_REVIEW" nextStage="SCOPE_AND_RISK_REVIEW" />
 
       {historyOpen && bundle && (
         <HistoryDrawer
