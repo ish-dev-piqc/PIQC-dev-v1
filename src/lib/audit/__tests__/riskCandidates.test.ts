@@ -10,14 +10,14 @@ import { describe, it, expect } from 'vitest';
 import {
   candidateProvenance,
   deriveRiskCandidates,
+  ISA_CANDIDATE_RULES,
   VENDOR_CANDIDATE_RULES,
   type CandidateSourceItem,
 } from '../riskCandidates';
 import type { TaggedSection } from '../mockProtocolRisks';
-import type { RiskCandidateRule } from '../../../types/audit';
 
 const AT = '2026-09-04T12:00:00.000Z';
-const ALL_RULES: readonly RiskCandidateRule[] = [...VENDOR_CANDIDATE_RULES, 'criterion'];
+const ALL_RULES = ISA_CANDIDATE_RULES;
 
 function item(
   overrides: Partial<CandidateSourceItem> &
@@ -58,6 +58,13 @@ const visitValue = (patch: Record<string, unknown> = {}) => ({
   window_plus_days: 3,
   procedures: ['ECG', 'Labs'],
   ...patch,
+});
+
+describe('rule sets', () => {
+  it('vendor Intake excludes eligibility criteria; the site workflow is the vendor set plus criterion', () => {
+    expect(VENDOR_CANDIDATE_RULES).toEqual(['endpoint_primary', 'endpoint_secondary', 'dosing', 'visit']);
+    expect(ISA_CANDIDATE_RULES).toEqual([...VENDOR_CANDIDATE_RULES, 'criterion']);
+  });
 });
 
 describe('deriveRiskCandidates — rule table', () => {

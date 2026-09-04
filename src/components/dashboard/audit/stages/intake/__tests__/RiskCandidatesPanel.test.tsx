@@ -95,6 +95,7 @@ function renderPanel(props: Partial<ComponentProps<typeof RiskCandidatesPanel>> 
   const utils = render(
     <RiskCandidatesPanel
       protocolId="protocol-1"
+      workflow="VENDOR_AUDIT"
       tagged={[]}
       disabled={false}
       onAccept={onAccept}
@@ -221,6 +222,26 @@ describe('RiskCandidatesPanel — list', () => {
     renderPanel();
 
     expect(await screen.findByText(/1 parsed item not proposed/)).toBeInTheDocument();
+  });
+
+  it('includes eligibility criteria on the investigator site workflow', async () => {
+    mockFetch.mockResolvedValue({ ok: true, data: [VISIT, ENDPOINT, CRITERION] });
+    renderPanel({ workflow: 'INVESTIGATOR_SITE_AUDIT' });
+
+    expect(await screen.findByText('3 suggestions')).toBeInTheDocument();
+    expect(screen.getByText('Eligibility criteria')).toBeInTheDocument();
+    const row = screen.getByText('Age ≥ 18').closest('li') as HTMLElement;
+    expect(within(row).getByText('Criterion')).toBeInTheDocument();
+    expect(within(row).getByText(/Safety · Both/)).toBeInTheDocument();
+  });
+
+  it('points the site workflow at Stage 1 for the parse status when there are no items', async () => {
+    mockFetch.mockResolvedValue({ ok: true, data: [] });
+    renderPanel({ workflow: 'INVESTIGATOR_SITE_AUDIT' });
+
+    expect(
+      await screen.findByText('No parsed protocol items yet — see the parse status on Stage 1 (Site intake).'),
+    ).toBeInTheDocument();
   });
 
   it('collapses and expands a group', async () => {

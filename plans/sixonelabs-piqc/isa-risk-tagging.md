@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: isa-risk-tagging
-status: active
+status: in-review
 started: 2026-09-04
 target_pr:
 ---
@@ -100,10 +100,19 @@ none
   chip, Risk summary rail) hide the chip instead of printing an empty one.
   Risks are shared across every audit on the protocol version, so a site-tagged
   risk can appear in a vendor audit's lists — those must not crash on null.
-- **No ISA stage gate.** `audit_mode_advance_audit_stage` is fail-closed for
-  ISA stages by design (20260719000000); Conduct and Report already work by
-  viewing stages. Stage 2 follows the same pattern — no advance call, no gate
-  change. ISA gate semantics stay a ledger item.
+- **No stage-preview gate, and no ISA stage gate — corrected finding.**
+  `audit_mode_advance_audit_stage` is fail-closed for ISA stages by design
+  (20260719000000: no ISA ordering), and the nav only opens the one-ahead
+  stage, so every ISA audit sits at ISA_SITE_INTAKE and Stage 2 is only ever
+  reached as the one-ahead view (Conduct and Report, which gate on
+  `hasReachedStage`, are FUTURE-locked today — not "working by viewing", as
+  the intake heads-up said). Gating Stage 2 on `hasReachedStage` would make it
+  inert, so it stays live: what it writes is version-scoped protocol data the
+  vendor flow already writes ungated at its own first stage, not audit stage
+  state. Recorded in the workspace's header comment. The ISA advance path
+  (`isa-stage-advance`: a workflow-aware advance for ISA, Site intake gains
+  "Continue to Risk assessment") is the next build, before `isa-site-modules`,
+  which is per-audit stage-owned data and needs it.
 - **Nothing else moves.** Candidates, provenance, PIQC-assisted accept, the
   fallback before `db push`, History and Lineage all apply unchanged to a site
   audit; `audit_mode_derive_criticality` will score these risks for site
