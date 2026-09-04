@@ -169,6 +169,18 @@ export default function AuditWorkspaceShell() {
     reviewCountToken,
   );
 
+  // Audit-level exit — back to the hub (AuditRequiredGate) that lists every
+  // audit. Sits above the stage-level prev/next stepping shipped in #559: that
+  // moves within an audit, this leaves it. Clearing pendingNewAuditId first
+  // matters: the activation effect below runs above the !activeAudit early
+  // return, so a parked id (post-create refresh that errored) would re-open
+  // the audit on the next AuditContext refetch minutes after the auditor
+  // went home.
+  const handleBackToAudits = () => {
+    setPendingNewAuditId(null);
+    setActiveAudit(null);
+  };
+
   useEffect(() => {
     if (!pendingNewAuditId) return;
     const next = audits.find((a) => a.id === pendingNewAuditId);
@@ -192,6 +204,9 @@ export default function AuditWorkspaceShell() {
     setAuditHistoryOpen(false);
     setRecordsOpen(false);
     setChatOpen(false);
+    // The <xl Risk summary drawer is per-audit UI too; without this it stayed
+    // open across a switch and reappeared on the next vendor audit.
+    setSummaryDrawerOpen(false);
     setChatThreads((prev) => {
       if (!activeAudit) return {};
       const keep = prev[activeAudit.id];
@@ -275,6 +290,19 @@ export default function AuditWorkspaceShell() {
         <div className={`flex-shrink-0 border-b ${headerBg} px-4 sm:px-6 py-3`}>
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-0 flex-1">
+              {/* Audit-level exit on its own line above the stage chips — not in
+                  the chip row (it would read as a stage step and orphan-wrap at
+                  <md next to "Stage N of M"), not in the actions row (IA
+                  ceiling). The top-bar audit picker carries the same exit. */}
+              <button
+                type="button"
+                onClick={handleBackToAudits}
+                aria-label="Back to all audits"
+                className="inline-flex items-center gap-1 -ml-1 px-1 py-0.5 mb-1 rounded-md text-[11px] font-medium text-fg-muted hover:text-fg-heading transition-colors"
+              >
+                <ChevronLeft size={12} />
+                All audits
+              </button>
               <div className="flex items-center gap-2 flex-wrap mb-1">
                 {/* Prev/next stepping — the literal "back and forth". Adjacent
                     stage names ride the buttons (visible ≥lg, always in the
