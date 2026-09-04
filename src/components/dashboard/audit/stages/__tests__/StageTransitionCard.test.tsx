@@ -67,15 +67,16 @@ describe('StageTransitionCard', () => {
     expect(mockAdvanceStage).not.toHaveBeenCalled();
   });
 
-  it('ahead of the audit (one-ahead preview): not-reached copy, button disabled', () => {
+  it('ahead of the audit (one-ahead preview): terse ahead copy naming the current stage, button disabled', () => {
     mockActiveAudit = vendorAuditAt('INTAKE');
 
     render(<StageTransitionCard stage="VENDOR_ENRICHMENT" nextStage="QUESTIONNAIRE_REVIEW" />);
 
-    expect(screen.getByText('Preview — the audit has not reached this stage yet')).toBeInTheDocument();
-    expect(
-      screen.getByText('The audit has not reached this stage yet — advance from its current stage first.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Ahead of the audit’s current stage')).toBeInTheDocument();
+    expect(screen.getByText('Advance from Intake first.')).toBeInTheDocument();
+    // The page-level StagePreviewNotice owns the "has not reached this stage
+    // yet" sentence; the card must not echo it (sibling tests match on it).
+    expect(screen.queryByText(/has not reached this stage yet/i)).not.toBeInTheDocument();
     expect(advanceButton()).toBeDisabled();
   });
 

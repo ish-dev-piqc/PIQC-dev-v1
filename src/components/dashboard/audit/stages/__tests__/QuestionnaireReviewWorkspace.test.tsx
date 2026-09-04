@@ -68,7 +68,7 @@ describe('QuestionnaireReviewWorkspace — one-ahead preview guard (PR-UX2)', ()
     render(<QuestionnaireReviewWorkspace />);
 
     await waitFor(() => expect(mockFetchBundle).toHaveBeenCalledWith('audit-1'));
-    expect(screen.getByText(/has not reached this stage yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/this is a preview/i)).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /create questionnaire instance/i }),
     ).not.toBeInTheDocument();
@@ -87,7 +87,7 @@ describe('QuestionnaireReviewWorkspace — one-ahead preview guard (PR-UX2)', ()
     expect(
       screen.getByRole('button', { name: /create questionnaire instance/i }),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/has not reached this stage yet/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/this is a preview/i)).not.toBeInTheDocument();
   });
 });
 

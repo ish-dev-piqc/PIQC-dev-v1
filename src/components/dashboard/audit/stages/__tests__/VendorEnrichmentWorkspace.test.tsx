@@ -111,7 +111,7 @@ describe('VendorEnrichmentWorkspace — one-ahead preview guard (PR-UX2)', () =>
     // Service + trust sections both fall back to the placeholder (findAll
     // also waits out the load gate).
     expect(await screen.findAllByText('Nothing recorded yet.')).toHaveLength(2);
-    expect(screen.getByText(/has not reached this stage yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/this is a preview/i)).toBeInTheDocument();
     // No live form: the service form's save affordance must be absent.
     expect(screen.queryByRole('button', { name: /save/i })).not.toBeInTheDocument();
   });
@@ -123,7 +123,7 @@ describe('VendorEnrichmentWorkspace — one-ahead preview guard (PR-UX2)', () =>
 
     // Wait for the ok state (section card title only renders post-load).
     expect(await screen.findByText('Vendor service')).toBeInTheDocument();
-    expect(screen.queryByText(/has not reached this stage yet/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/this is a preview/i)).not.toBeInTheDocument();
     expect(screen.queryByText('Nothing recorded yet.')).not.toBeInTheDocument();
   });
 });

@@ -20,8 +20,11 @@ import type { AuditStage } from '../../../../types/audit';
 // Three states, from the audit's real position (activeAudit.current_stage):
 //   at the stage      → ready, button enabled
 //   past the stage    → "already advanced", button disabled
-//   ahead (the nav's one-ahead preview) → "not reached yet", disabled — the
-//                       server refuses a +2 jump; the card just doesn't offer it
+//   ahead (the nav's one-ahead preview) → "ahead of the audit", disabled —
+//                       the server refuses a +2 jump; the card just doesn't
+//                       offer it. Kept terse: StagePreviewNotice at the top of
+//                       the page already explains the preview, so this state
+//                       must not repeat that sentence.
 // The server's rejection, if any, surfaces from AuditContext.advanceStage as
 // advanceStageError and renders inline (AUD-301 class: never a dead click).
 // =============================================================================
@@ -47,12 +50,12 @@ export default function StageTransitionCard({ stage, nextStage }: StageTransitio
     ? 'Audit has already advanced past this stage'
     : atThisStage
     ? 'Ready to advance'
-    : 'Preview — the audit has not reached this stage yet';
+    : 'Ahead of the audit’s current stage';
   const detail = alreadyAdvanced
     ? `Current stage: ${STAGE_LABELS[activeAudit.current_stage]}`
     : atThisStage
     ? 'No gate on this transition. Advancing records it in the audit history; this stage stays editable afterwards.'
-    : 'The audit has not reached this stage yet — advance from its current stage first.';
+    : `Advance from ${STAGE_LABELS[activeAudit.current_stage]} first.`;
 
   const cardBg = isLight ? 'bg-white border-[#E2E8F0]' : 'bg-[#0F172A] border-white/5';
   const buttonApprove = isLight

@@ -3,7 +3,7 @@ owner: sixonelabs-piqc
 feature: vendor-early-stage-advance
 status: in-review
 started: 2026-09-04
-target_pr:
+target_pr: 619
 ---
 
 # Vendor audit: stage transition on Stages 1–3
@@ -78,10 +78,12 @@ none
   caller.
 - **Enabled only at the stage.** `current_stage === stage` enables the
   button; past → "Audit has already advanced past this stage · Current
-  stage: {label}"; ahead (the one-ahead preview) → the sibling copy "The
-  audit has not reached this stage yet — advance from its current stage
-  first." — a +2 jump is refused by the server anyway, the card just doesn't
-  offer it.
+  stage: {label}"; ahead (the one-ahead preview) → "Ahead of the audit's
+  current stage · Advance from {current label} first." — terse on purpose:
+  StagePreviewNotice at the top of the page already says "has not reached
+  this stage yet", and the sibling workspace tests match on that sentence, so
+  the card must not echo it (first CI run of #619 caught exactly that). A +2
+  jump is refused by the server anyway; the card just doesn't offer it.
 - **No client-side gate.** Intake with zero tagged sections, Enrichment
   without a service, Questionnaire without an instance all advance — that is
   the server rule, and the Stage-4 gate (questionnaire + risk summary
@@ -123,8 +125,8 @@ execution. Owner walk on the deployed app (frontend only — live on merge):
       and with one) → "Advance to Scope & risk review"; each lands on the
       next stage and Stage 4's own card then reads its gates as before.
 - [ ] Preview one ahead (e.g. view Stage 3 while at Stage 2): the preview
-      banner plus the card's "has not reached this stage yet" state, button
-      disabled.
+      banner plus the card's "Ahead of the audit's current stage · Advance
+      from Vendor enrichment first." state, button disabled.
 - [ ] Server refusal path: none reachable from the UI for these transitions
       (ungated, +1 only); the alert markup is pinned by the card test.
 - [ ] Tests green in CI: StageTransitionCard (four states + click + alert),
