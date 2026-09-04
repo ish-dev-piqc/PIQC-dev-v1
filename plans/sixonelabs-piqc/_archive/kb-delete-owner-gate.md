@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: kb-delete-owner-gate
-status: in-review
+status: merged
+merged: 2026-09-04
 started: 2026-09-04
-target_pr:
+target_pr: #609
 ---
 
 # Knowledge Base: delete control only on documents you own
