@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useAuditData } from '../../../context/AuditDataContext';
+import { useAudit } from '../../../context/AuditContext';
 import type { ClinicalTrialPhase } from '../../../types/audit';
 import { CLINICAL_TRIAL_PHASE_LABELS } from '../../../lib/audit/labels';
 import { scoreFocusArea } from '../../../lib/heatmap';
@@ -17,20 +18,28 @@ import {
   fetchRiskSummary,
   upsertRiskSummary,
   approveRiskSummary,
+  fetchParsedStudyContext,
+  focusAreasFromRisks,
+  linkProtocolRisksToSummary,
+  manualStudyContext,
 } from '../../../lib/audit/riskSummaryApi';
+import { fetchProtocolRisksForAudit } from '../../../lib/audit/intakeApi';
 import { getStageReadout } from '../../../lib/audit/auditApi';
 
 // =============================================================================
 // RiskSummaryPanel — right rail of the audit workspace.
 //
-// Renders the VendorRiskSummaryObject for the active audit. Phase A is
-// mock-backed: edits/approvals update local state only. Phase B replaces the
-// mock store with Supabase reads + RPC calls.
+// Renders the VendorRiskSummaryObject for the active audit over Supabase reads
+// + RPC calls (AuditDataContext is the shared cache; Scope Review's gate reads
+// the same store).
 //
 // Three states:
-//   - No summary yet → "Generate stub" empty state
+//   - No summary yet → "Generate from protocol": study context captured from
+//                      the audit protocol's parsed document (with provenance),
+//                      the sections tagged at Intake linked, focus areas seeded
+//                      from their domains. The narrative is the auditor's.
 //   - DRAFT          → edit + approve buttons
-//   - APPROVED       → approved badge; editing demotes to DRAFT
+//   - APPROVED       → approved badge; editing or linking demotes to DRAFT
 //
 // Sponsor-name-free by rule — narrative copy stays generic.
 // =============================================================================
@@ -53,9 +62,22 @@ export default function RiskSummaryPanel({
   const isLight = theme === 'light';
 
   // Shared store — Scope Review's approval gate reads the same data.
-  const { riskSummaries: summaries, setRiskSummaries: setSummaries, setStageReadouts } =
-    useAuditData();
+  const {
+    riskSummaries: summaries,
+    setRiskSummaries: setSummaries,
+    setStageReadouts,
+    protocolRisks,
+    setProtocolRisks,
+  } = useAuditData();
   const summary = summaries[auditId] ?? null;
+  // Protocol + phase for generation come from the active audit; the rail only
+  // ever renders for it, but guard on the id so a stale prop can't read the
+  // wrong protocol.
+  const { activeAudit } = useAudit();
+  const protocolId = activeAudit?.id === auditId ? activeAudit.protocol_id : null;
+  const phase: ClinicalTrialPhase =
+    activeAudit?.id === auditId ? activeAudit.clinical_trial_phase : 'NOT_APPLICABLE';
+  const taggedRisks = protocolRisks[auditId] ?? [];
 
   const [editing, setEditing] = useState(false);
   const [draftNarrative, setDraftNarrative] = useState(summary?.vendor_relevance_narrative ?? '');
@@ -64,11 +86,17 @@ export default function RiskSummaryPanel({
   );
   const [confirmingApprove, setConfirmingApprove] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [linking, setLinking] = useState(false);
+  // One visible line for anything generate / link could not finish — never a
+  // console-only failure.
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Reset editing state when the active audit changes.
   useEffect(() => {
     setEditing(false);
     setConfirmingApprove(false);
+    setActionError(null);
     setDraftNarrative(summary?.vendor_relevance_narrative ?? '');
     setDraftFocusAreas((summary?.focus_areas ?? []).join(', '));
     // intentionally only reset on auditId change
@@ -86,10 +114,19 @@ export default function RiskSummaryPanel({
         setSummaries((prev) => ({ ...prev, [auditId]: fetched }));
       }
     })();
+    // The tagged sections feed generation and the "not linked" line. Intake and
+    // Scope Review hydrate this store too; the rail is on every stage, so fill
+    // it when empty rather than showing a false "all linked".
+    if (!protocolRisks[auditId]?.length) {
+      void fetchProtocolRisksForAudit(auditId).then((risks) => {
+        if (cancelled || risks.length === 0) return;
+        setProtocolRisks((prev) => ({ ...prev, [auditId]: risks }));
+      });
+    }
     return () => {
       cancelled = true;
     };
-    // setSummaries is a stable React.Dispatch ref from context.
+    // setSummaries / setProtocolRisks are stable React.Dispatch refs from context.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auditId]);
 
@@ -118,29 +155,83 @@ export default function RiskSummaryPanel({
   // Actions — backed by audit_mode_* RPCs in
   // supabase/migrations/20260430160000_audit_mode_risk_summary_rpcs.sql
   // ---------------------------------------------------------------------------
-  const generateStub = async () => {
-    const stubNarrative =
-      'Stub generated from study context, mapped protocol risks, and vendor service category. Edit this paragraph down to your judgment of why this vendor matters in the context of this study.';
-    const stubContext = {
-      therapeutic_space: 'TBD — capture from protocol',
-      primary_endpoints: [],
-      secondary_endpoints: [],
-      clinical_trial_phase: 'NOT_APPLICABLE' as ClinicalTrialPhase,
-      captured_at: new Date().toISOString(),
-    };
-    const created = await upsertRiskSummary(
-      auditId,
-      {
-        study_context: stubContext,
-        vendor_relevance_narrative: stubNarrative,
-        focus_areas: [],
-      },
-      'Risk summary stub generated',
+  // Generate = capture facts from the parsed protocol + link the tagged
+  // sections. The narrative is deliberately left empty: PIQC never authors why
+  // a vendor matters, and Approve stays disabled until the auditor writes it.
+  const generateFromProtocol = async () => {
+    setGenerating(true);
+    setActionError(null);
+    try {
+      const now = new Date().toISOString();
+      const [contextRes, risks] = await Promise.all([
+        protocolId
+          ? fetchParsedStudyContext(protocolId, phase)
+          : Promise.resolve<Awaited<ReturnType<typeof fetchParsedStudyContext>>>({ ok: true, data: null }),
+        taggedRisks.length > 0 ? Promise.resolve(taggedRisks) : fetchProtocolRisksForAudit(auditId),
+      ]);
+      // A read failure is not "no document": abort rather than snapshot a
+      // context we could not read.
+      if (!contextRes.ok) {
+        setActionError(`Couldn't read the parsed protocol: ${contextRes.error}`);
+        return;
+      }
+      const studyContext = contextRes.data ? contextRes.data.context : manualStudyContext(phase, now);
+      const created = await upsertRiskSummary(
+        auditId,
+        {
+          study_context: studyContext,
+          vendor_relevance_narrative: '',
+          focus_areas: focusAreasFromRisks(risks),
+        },
+        'Risk summary generated from protocol',
+      );
+      if (!created) {
+        setActionError('Could not create the risk summary. Try again.');
+        return;
+      }
+      const linkRes = await linkProtocolRisksToSummary(
+        created.id,
+        risks.map((r) => r.id),
+        'Linked at generation',
+      );
+      // Re-read so protocol_risk_refs reflects the junction the RPC just wrote.
+      const fresh = (await fetchRiskSummary(auditId)) ?? created;
+      setSummaries((prev) => ({ ...prev, [auditId]: fresh }));
+      setDraftNarrative(fresh.vendor_relevance_narrative);
+      setDraftFocusAreas(fresh.focus_areas.join(', '));
+      if (!linkRes.ok) {
+        setActionError(`Summary created, but linking the tagged sections stopped: ${linkRes.error}`);
+      }
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // Sections tagged after generation (or before the store hydrated) that the
+  // summary does not yet link. Linking an APPROVED summary demotes it to Draft
+  // (20260827000100) — the approval attests to the linked set.
+  const unlinkedRisks = summary
+    ? taggedRisks.filter((r) => !summary.protocol_risk_refs.some((ref) => ref.id === r.id))
+    : [];
+
+  const linkUnlinked = async () => {
+    if (!summary || unlinkedRisks.length === 0) return;
+    setLinking(true);
+    setActionError(null);
+    const res = await linkProtocolRisksToSummary(
+      summary.id,
+      unlinkedRisks.map((r) => r.id),
+      'Tagged sections linked',
     );
-    if (!created) return;
-    setSummaries((prev) => ({ ...prev, [auditId]: created }));
-    setDraftNarrative(created.vendor_relevance_narrative);
-    setDraftFocusAreas(created.focus_areas.join(', '));
+    const fresh = await fetchRiskSummary(auditId);
+    if (fresh) setSummaries((prev) => ({ ...prev, [auditId]: fresh }));
+    // Link can flip APPROVED → DRAFT server-side; keep the shared gate readout
+    // current, as saveEdits / approve do.
+    getStageReadout(auditId).then((readout) => {
+      setStageReadouts((prev) => ({ ...prev, [auditId]: readout }));
+    });
+    if (!res.ok) setActionError(`Linking stopped: ${res.error}`);
+    setLinking(false);
   };
 
   const saveEdits = async () => {
@@ -264,13 +355,19 @@ export default function RiskSummaryPanel({
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto px-5 py-4">
+        {actionError && (
+          <p role="alert" className="text-xs text-red-500 mb-3 leading-relaxed">
+            {actionError}
+          </p>
+        )}
         {!summary ? (
           <EmptyState
             isLight={isLight}
             cardBg={cardBg}
             subColor={subColor}
             buttonPrimary={buttonPrimary}
-            onGenerate={generateStub}
+            generating={generating}
+            onGenerate={() => void generateFromProtocol()}
           />
         ) : (
           <>
@@ -311,7 +408,11 @@ export default function RiskSummaryPanel({
                 />
               </dl>
               <p className={`${mutedColor} text-[10px] mt-2 leading-relaxed`}>
-                Snapshot {formatDate(summary.study_context.captured_at)} — frozen across protocol amendments.
+                {summary.study_context.source === 'parsed_document'
+                  ? `Captured from the parsed protocol ${formatDate(summary.study_context.captured_at)} — frozen across protocol amendments.`
+                  : summary.study_context.source === 'manual'
+                    ? `Study context not captured — no parsed protocol yet (see Stage 1). Snapshot ${formatDate(summary.study_context.captured_at)}.`
+                    : `Snapshot ${formatDate(summary.study_context.captured_at)} — frozen across protocol amendments.`}
               </p>
             </Section>
 
@@ -325,6 +426,10 @@ export default function RiskSummaryPanel({
                   className={`w-full rounded-md border px-2.5 py-2 text-xs ${inputBg} ${inputBorder} ${headingColor} focus:outline-none transition-colors`}
                   placeholder="Why does this vendor matter for this study?"
                 />
+              ) : summary.vendor_relevance_narrative.trim().length === 0 ? (
+                <p className={`text-xs italic ${mutedColor}`}>
+                  Not written yet — Edit to add why this vendor matters for this study.
+                </p>
               ) : (
                 <p className={`text-xs leading-relaxed whitespace-pre-wrap ${headingColor}`}>
                   {summary.vendor_relevance_narrative}
@@ -383,6 +488,24 @@ export default function RiskSummaryPanel({
                     </li>
                   ))}
                 </ul>
+              )}
+              {unlinkedRisks.length > 0 && (
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <span className={`text-[11px] ${mutedColor}`}>
+                    {unlinkedRisks.length} tagged section{unlinkedRisks.length === 1 ? '' : 's'} not linked
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void linkUnlinked()}
+                    disabled={linking}
+                    className={`text-[11px] font-semibold px-2 py-0.5 rounded-md transition-colors disabled:opacity-50 ${buttonSecondary}`}
+                  >
+                    {linking ? 'Linking…' : 'Link'}
+                  </button>
+                  {approved && (
+                    <span className={`text-[10px] ${mutedColor}`}>Linking demotes to Draft.</span>
+                  )}
+                </div>
               )}
             </Section>
           </>
@@ -519,10 +642,11 @@ interface EmptyStateProps {
   cardBg: string;
   subColor: string;
   buttonPrimary: string;
+  generating: boolean;
   onGenerate: () => void;
 }
 
-function EmptyState({ isLight, cardBg, subColor, buttonPrimary, onGenerate }: EmptyStateProps) {
+function EmptyState({ isLight, cardBg, subColor, buttonPrimary, generating, onGenerate }: EmptyStateProps) {
   const iconBg = isLight
     ? 'bg-brand-600/10 border-brand-600/20 text-brand-600'
     : 'bg-brand-600/15 border-brand-600/30 text-brand-300';
@@ -532,15 +656,17 @@ function EmptyState({ isLight, cardBg, subColor, buttonPrimary, onGenerate }: Em
         <Sparkles size={14} />
       </div>
       <p className={`${subColor} text-xs leading-relaxed mb-3`}>
-        No risk summary yet. Generate a stub from the audit's study context, mapped
-        protocol risks, and vendor service category — then edit it down.
+        No risk summary yet. Generate one from the parsed protocol and the sections
+        tagged at Intake — the study context is captured from the document; the
+        narrative is yours to write.
       </p>
       <button
         type="button"
         onClick={onGenerate}
-        className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-colors ${buttonPrimary}`}
+        disabled={generating}
+        className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 ${buttonPrimary}`}
       >
-        Generate stub
+        {generating ? 'Generating…' : 'Generate from protocol'}
       </button>
     </div>
   );

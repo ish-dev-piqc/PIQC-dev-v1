@@ -143,6 +143,11 @@ export interface RiskSummaryStudyContext {
   secondary_endpoints: string[];
   clinical_trial_phase: ClinicalTrialPhase;
   captured_at: string; // ISO 8601
+  /** Where the snapshot came from. Absent on rows created before the
+   *  generate-from-protocol flow (hand-typed stub). */
+  source?: 'parsed_document' | 'manual';
+  /** The ready document the snapshot was captured from; null when manual. */
+  source_document_id?: string | null;
 }
 
 // -----------------------------------------------------------------------------
