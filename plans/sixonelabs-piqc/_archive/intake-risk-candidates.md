@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: intake-risk-candidates
-status: in-review
+status: merged
+merged: 2026-09-04
 started: 2026-09-04
-target_pr:
+target_pr: #615
 ---
 
 # Intake: risk candidates derived from the parsed protocol
