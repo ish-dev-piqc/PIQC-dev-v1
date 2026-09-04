@@ -113,6 +113,26 @@ export interface Audit {
 }
 
 // -----------------------------------------------------------------------------
+// Audit-scoped read model: parse status of the audit protocol's documents.
+// Mirrors audit_mode_protocol_document_status(uuid) RETURNS jsonb
+// (20260913000000). Counts span every PROTOCOL document pinned to the
+// protocol, whoever uploaded it; the own_* fields are the caller's.
+// -----------------------------------------------------------------------------
+export interface ProtocolDocumentStatus {
+  protocol_id: string;
+  any_ready: number;
+  own_ready: number;
+  any_pending: number;
+  /** The caller's most recent in-flight upload, or null. The Stage-1 card
+   *  polls it, so a parse started elsewhere (new-audit drawer) resumes. */
+  own_pending_document_id: string | null;
+  /** The caller's most recent failed upload's error_message, or null. */
+  own_failed_error: string | null;
+  /** Worksheet items across the protocol's ready documents. */
+  visible_item_count: number;
+}
+
+// -----------------------------------------------------------------------------
 // Audit-scoped: vendor risk summary (D-010)
 // -----------------------------------------------------------------------------
 // Snapshot of protocol context captured at risk-summary creation. Stable across

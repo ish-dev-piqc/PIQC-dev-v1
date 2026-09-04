@@ -15,6 +15,7 @@ import EvidenceDrawer from './EvidenceDrawer';
 import HistoryDrawer from './HistoryDrawer';
 import RescheduleAuditPopover from './RescheduleAuditPopover';
 import { EvidenceOpenContext } from './evidenceDrawerContext';
+import { ProtocolSourceOpenContext } from './protocolSourceDrawerContext';
 import AuditChatPanel from './AuditChatPanel';
 import PiqcDock from './PiqcDock';
 import type { AuditChatMessage } from '../../../lib/audit/chatApi';
@@ -111,6 +112,9 @@ export default function AuditWorkspaceShell() {
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   // Stable identity: handed to stage workspaces via EvidenceOpenContext.
   const openEvidence = useCallback(() => setEvidenceOpen(true), []);
+  // Same hoist for Records ▸ Protocol source: the Stage-1 readiness card opens
+  // it once the protocol is parsed (ProtocolSourceOpenContext).
+  const openProtocolSource = useCallback(() => setProtocolSourceOpen(true), []);
   // Audit history slide-over — the audit-level delta trail ('AUDIT' deltas:
   // stage advances, reschedules, evidence attach/remove). Before PR-UX1 these
   // deltas were written but had no UI surface.
@@ -604,6 +608,7 @@ export default function AuditWorkspaceShell() {
             force the auditor to scroll past the dock to read content. */}
         <div className="flex-1 overflow-y-auto pb-20" style={{ minHeight: 0 }}>
           <EvidenceOpenContext.Provider value={openEvidence}>
+          <ProtocolSourceOpenContext.Provider value={openProtocolSource}>
           {(() => {
             // REPORT_DRAFTING is specialized so the shell can hand it the
             // transient PIQC write-back landing notice. Every other stage
@@ -628,6 +633,7 @@ export default function AuditWorkspaceShell() {
             }
             return <Workspace />;
           })()}
+          </ProtocolSourceOpenContext.Provider>
           </EvidenceOpenContext.Provider>
         </div>
       </main>

@@ -243,7 +243,7 @@ describe('ScopeReviewWorkspace gate feed', () => {
     expect(embed.getAttribute('data-study-id')).toBe('protocol-1');
     expect(embed.getAttribute('data-study-code')).toBe('PROTO-001');
     expect(embed.getAttribute('data-empty-message')).toMatch(
-      /visible only to the account that uploaded/,
+      /parse status on Stage 1 \(Intake\)/,
     );
   });
 

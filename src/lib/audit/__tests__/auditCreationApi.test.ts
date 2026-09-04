@@ -10,11 +10,12 @@
 // shared mock fns are declared via vi.hoisted so the tests can drive them
 // without reaching through the chain.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const { mockOrder, mockRpc } = vi.hoisted(() => ({
+const { mockOrder, mockRpc, mockGetSession } = vi.hoisted(() => ({
   mockOrder: vi.fn(),
   mockRpc: vi.fn(),
+  mockGetSession: vi.fn(),
 }));
 
 vi.mock('../../supabase', () => ({
@@ -23,10 +24,11 @@ vi.mock('../../supabase', () => ({
       select: vi.fn(() => ({ order: mockOrder })),
     })),
     rpc: mockRpc,
+    auth: { getSession: mockGetSession },
   },
 }));
 
-import { listVendors, createAudit } from '../auditCreationApi';
+import { listVendors, createAudit, uploadProtocolPdf } from '../auditCreationApi';
 
 const VENDORS = [
   { id: 'v1', name: 'Acme CRO', legal_name: null, country: 'USA', website: null },
@@ -76,5 +78,75 @@ describe('auditCreationApi — Result contract', () => {
       auditType: 'REMOTE',
     });
     expect(res).toEqual({ ok: true, data: row });
+  });
+});
+
+// -----------------------------------------------------------------------------
+// uploadProtocolPdf — the Stage-1 re-upload pins the document to the audit's
+// protocol (protocol_id in the /ingest body); the new-audit drawer must keep
+// sending no pin. The result passes /ingest's status + deduped through.
+//
+// FileReader is stubbed: the base64 step is happy-dom-independent this way and
+// the body assertion stays about the pin, not the encoding.
+// -----------------------------------------------------------------------------
+describe('uploadProtocolPdf — protocol pin', () => {
+  const fetchMock = vi.fn();
+
+  class FileReaderStub {
+    result: string | null = null;
+    onload: null | (() => void) = null;
+    onerror: null | ((e: unknown) => void) = null;
+    readAsDataURL() {
+      this.result = 'data:application/pdf;base64,QUJD';
+      queueMicrotask(() => this.onload?.());
+    }
+  }
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    mockGetSession.mockReset();
+    mockGetSession.mockResolvedValue({ data: { session: { access_token: 'jwt-1' } } });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('FileReader', FileReaderStub);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function ingestResponse(payload: Record<string, unknown>, status = 202) {
+    return { ok: true, status, json: async () => payload };
+  }
+
+  it('sends protocol_id when a pin is given and passes status/deduped through', async () => {
+    fetchMock.mockResolvedValueOnce(
+      ingestResponse({ success: true, document_id: 'doc-1', status: 'pending' }),
+    );
+    const file = new File(['%PDF'], 'protocol.pdf', { type: 'application/pdf' });
+
+    const res = await uploadProtocolPdf(file, undefined, 'protocol-1');
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.protocol_id).toBe('protocol-1');
+    expect(body.pdf_base64).toBe('QUJD');
+    expect(body.title).toBe('protocol');
+    expect(res).toEqual({ success: true, document_id: 'doc-1', status: 'pending' });
+  });
+
+  it('sends no protocol_id without a pin (new-audit drawer path)', async () => {
+    fetchMock.mockResolvedValueOnce(
+      ingestResponse({ success: true, document_id: 'doc-2', status: 'ready', deduped: true }, 200),
+    );
+    const file = new File(['%PDF'], 'protocol.pdf', { type: 'application/pdf' });
+
+    const res = await uploadProtocolPdf(file, 'My title');
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect('protocol_id' in body).toBe(false);
+    expect(body.title).toBe('My title');
+    expect(res.deduped).toBe(true);
+    expect(res.status).toBe('ready');
   });
 });
