@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: audit-home-navigation
-status: in-review
+status: merged
+merged: 2026-09-04
 started: 2026-09-04
-target_pr:
+target_pr: #605
 ---
 
 # Audit Mode: a way back to all audits
