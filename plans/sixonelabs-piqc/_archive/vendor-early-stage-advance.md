@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: vendor-early-stage-advance
-status: in-review
+status: merged
+merged: 2026-09-04
 started: 2026-09-04
-target_pr: 619
+target_pr: #619
 ---
 
 # Vendor audit: stage transition on Stages 1–3
