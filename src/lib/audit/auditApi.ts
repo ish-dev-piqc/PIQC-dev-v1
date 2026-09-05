@@ -1,11 +1,15 @@
 import { supabase } from '../supabase';
 import type { AuditStage } from '../../types/audit';
+import { stagesForWorkflow } from './workflowStages';
 
 // =============================================================================
 // Audit-level operations: stage advancement + readout.
 //
 // Wraps audit_mode_advance_audit_stage and audit_mode_get_stage_readout in
-// supabase/migrations/20260430200000_audit_mode_stage_advancement_rpc.sql.
+// supabase/migrations/20260430200000_audit_mode_stage_advancement_rpc.sql,
+// and audit_mode_advance_isa_stage (20260916000000) for the investigator
+// site pipeline. The two pipelines share no stage value, so advanceAuditStage
+// picks the RPC from the target stage and AuditContext keeps one call.
 // =============================================================================
 
 interface AuditRow {
@@ -22,7 +26,9 @@ export interface AdvanceAuditStageResult {
   /**
    * Postgres HINT, when raised by the RPC, is one of:
    *   GATE_QUESTIONNAIRE_NOT_APPROVED, GATE_RISK_SUMMARY_NOT_APPROVED,
-   *   GATE_DELIVERABLES_NOT_APPROVED. Otherwise undefined.
+   *   GATE_DELIVERABLES_NOT_APPROVED (vendor gates),
+   *   STAGE_NOT_IN_ADVANCEMENT_MAP, WORKFLOW_NOT_ISA (pipeline mismatch —
+   *   both RPCs fail closed). Otherwise undefined.
    */
   errorHint?: string;
 }
@@ -32,7 +38,14 @@ export async function advanceAuditStage(
   toStage: AuditStage,
   reason?: string,
 ): Promise<AdvanceAuditStageResult> {
-  const { data, error } = await supabase.rpc('audit_mode_advance_audit_stage', {
+  // The ISA_* stages route to the ISA RPC; everything else to the vendor RPC.
+  // A mismatched pair (vendor audit asked for an ISA stage, or the reverse)
+  // is rejected on the server either way — this only chooses the function.
+  const rpc = stagesForWorkflow('INVESTIGATOR_SITE_AUDIT').includes(toStage)
+    ? 'audit_mode_advance_isa_stage'
+    : 'audit_mode_advance_audit_stage';
+
+  const { data, error } = await supabase.rpc(rpc, {
     p_audit_id: auditId,
     p_to_stage: toStage,
     p_reason: reason ?? null,

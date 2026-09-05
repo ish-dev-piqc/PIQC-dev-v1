@@ -1,8 +1,9 @@
-import { Stethoscope, User, MapPin, Hash, FileText, FlaskConical, ArrowRight } from 'lucide-react';
+import { Stethoscope, User, MapPin, Hash, FileText, FlaskConical } from 'lucide-react';
 import { useTheme } from '../../../../../context/ThemeContext';
 import { useAudit } from '../../../../../context/AuditContext';
-import { AUDIT_TYPE_LABELS, CLINICAL_TRIAL_PHASE_LABELS, STAGE_LABELS } from '../../../../../lib/audit/labels';
+import { AUDIT_TYPE_LABELS, CLINICAL_TRIAL_PHASE_LABELS } from '../../../../../lib/audit/labels';
 import ProtocolReadinessCard from '../ProtocolReadinessCard';
+import StageTransitionCard from '../StageTransitionCard';
 
 // =============================================================================
 // SiteIntakeWorkspace — ISA_SITE_INTAKE stage center pane
@@ -12,6 +13,11 @@ import ProtocolReadinessCard from '../ProtocolReadinessCard';
 // Phase 1 is a read-only profile summary sourced from AuditContext (site joined
 // on the audit); auditor-editable site context + the auditor-independence
 // attestation (which gates the report export) land in later phases.
+//
+// The stage ends with the shared StageTransitionCard (isa-stage-advance): the
+// ISA pipeline advances through audit_mode_advance_isa_stage, ungated at this
+// transition exactly like the vendor early stages. Until that migration is
+// applied the card's inline alert reports the missing function honestly.
 // =============================================================================
 
 export default function SiteIntakeWorkspace() {
@@ -99,18 +105,9 @@ export default function SiteIntakeWorkspace() {
           above stay read-only; the card owns everything about the document. */}
       <ProtocolReadinessCard />
 
-      {/* Next-stage hint */}
-      <div
-        className={`flex items-center gap-2 rounded-md border px-4 py-3 text-sm ${
-          isLight ? 'bg-brand-600/[0.06] border-brand-600/20 text-fg-body' : 'bg-brand-300/[0.06] border-brand-300/20 text-fg-body'
-        }`}
-      >
-        <ArrowRight size={14} className={`flex-shrink-0 ${isLight ? 'text-brand-600' : 'text-brand-300'}`} />
-        <span>
-          Next: <span className="font-medium text-fg-heading">{STAGE_LABELS.ISA_RISK_ASSESSMENT}</span> —
-          derive protocol and site risk to drive the audit scope.
-        </span>
-      </div>
+      {/* Stage transition — replaces the former next-stage hint with the real
+          control. Risk assessment reads the protocol the card above parses. */}
+      <StageTransitionCard stage="ISA_SITE_INTAKE" nextStage="ISA_RISK_ASSESSMENT" />
     </div>
   );
 }

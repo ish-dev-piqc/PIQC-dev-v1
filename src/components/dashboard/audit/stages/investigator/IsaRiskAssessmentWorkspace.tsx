@@ -2,6 +2,8 @@ import { ArrowRight } from 'lucide-react';
 import { useTheme } from '../../../../../context/ThemeContext';
 import { useAudit } from '../../../../../context/AuditContext';
 import { STAGE_LABELS } from '../../../../../lib/audit/labels';
+import { hasReachedStage } from '../../../../../lib/audit/workflowStages';
+import StagePreviewNotice from '../../StagePreviewNotice';
 import ProtocolRiskTagging from '../intake/ProtocolRiskTagging';
 
 // =============================================================================
@@ -16,14 +18,13 @@ import ProtocolRiskTagging from '../intake/ProtocolRiskTagging';
 // their derived criticality land on the mapping that follows
 // (isa-site-modules); the parse-status card stays on Stage 1.
 //
-// No stage-preview gate here, deliberately. ISA stage advancement is
-// fail-closed by design (20260719000000: audit_mode_advance_audit_stage has
-// no ISA ordering yet), so every ISA audit sits at ISA_SITE_INTAKE and this
-// stage is only ever reached as the nav's one-ahead view. Gating on
-// hasReachedStage would make the stage inert. What the flow writes is
-// version-scoped protocol data the vendor workflow already writes ungated at
-// its own first stage — not audit stage state. Revisit when the ISA advance
-// path lands (see plans/sixonelabs-piqc/isa-risk-tagging.md).
+// House preview gate (isa-stage-advance). Site intake now advances through
+// audit_mode_advance_isa_stage, so this stage is reached for real; viewed one
+// ahead (the nav's preview) it shows StagePreviewNotice and the tagging flow
+// runs read-only — no Tag button, Accept disabled, no Edit/Delete. Tagged
+// rows and History stay visible: they are version-scoped protocol data, not
+// audit stage state. (isa-risk-tagging shipped this stage ungated because
+// nothing could reach it yet; that reason is gone.)
 // =============================================================================
 
 export default function IsaRiskAssessmentWorkspace() {
@@ -33,10 +34,18 @@ export default function IsaRiskAssessmentWorkspace() {
 
   if (!activeAudit) return null;
 
+  const hasReached = hasReachedStage(
+    activeAudit.workflow_type,
+    activeAudit.current_stage,
+    'ISA_RISK_ASSESSMENT',
+  );
+
   return (
     // Container + type scale match the vendor stage workspaces (p-6 max-w-4xl,
     // text-xl heading) so the two pipelines read as siblings in the same shell.
     <div className="p-6 max-w-4xl mx-auto space-y-6">
+      {!hasReached && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
+
       {/* Header */}
       <div>
         <p className="text-fg-label text-[10px] uppercase tracking-wider font-semibold">
@@ -53,7 +62,11 @@ export default function IsaRiskAssessmentWorkspace() {
         </p>
       </div>
 
-      <ProtocolRiskTagging workflow="INVESTIGATOR_SITE_AUDIT" showReadinessCard={false} />
+      <ProtocolRiskTagging
+        workflow="INVESTIGATOR_SITE_AUDIT"
+        showReadinessCard={false}
+        readOnly={!hasReached}
+      />
 
       {/* Next-stage hint */}
       <div

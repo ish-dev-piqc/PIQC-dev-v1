@@ -40,6 +40,12 @@ import HistoryDrawer from '../../HistoryDrawer';
 // Reads via fetchProtocolRisksForAudit into the shared AuditDataContext
 // store; writes via the per-mutation RPCs, so the other stages that consume
 // the store (mapping picker, scope review, risk summary) see edits at once.
+//
+// `readOnly` is the stage's one-ahead preview (StagePreviewNotice up in the
+// workspace): no entry into the form, Accept disabled, no Edit/Delete. The
+// list and History stay — tagged risks are version-scoped protocol data the
+// preview may read. Optional because vendor Intake (pipeline index 0) can
+// never be a preview.
 // =============================================================================
 
 type FormMode = 'list' | 'add' | 'edit';
@@ -49,9 +55,15 @@ interface ProtocolRiskTaggingProps {
   /** Vendor Intake mounts the parse-status card here; the ISA workflow shows
    *  it on Stage 1 (Site intake) and must not poll from two stages. */
   showReadinessCard: boolean;
+  /** The workspace is a one-ahead preview: every write affordance is off. */
+  readOnly?: boolean;
 }
 
-export default function ProtocolRiskTagging({ workflow, showReadinessCard }: ProtocolRiskTaggingProps) {
+export default function ProtocolRiskTagging({
+  workflow,
+  showReadinessCard,
+  readOnly = false,
+}: ProtocolRiskTaggingProps) {
   const { theme } = useTheme();
   const { activeAudit } = useAudit();
   const isLight = theme === 'light';
@@ -291,7 +303,7 @@ export default function ProtocolRiskTagging({ workflow, showReadinessCard }: Pro
   return (
     <div className="space-y-6">
       {/* Manual entry — sits under the stage header the workspace renders. */}
-      {!inForm && (
+      {!inForm && !readOnly && (
         <div className="flex justify-end">
           <button
             type="button"
@@ -318,7 +330,7 @@ export default function ProtocolRiskTagging({ workflow, showReadinessCard }: Pro
           protocolId={activeAudit.protocol_id}
           workflow={workflow}
           tagged={sections}
-          disabled={loading}
+          disabled={loading || readOnly}
           onAccept={openAddFromCandidate}
         />
       )}
@@ -382,7 +394,13 @@ export default function ProtocolRiskTagging({ workflow, showReadinessCard }: Pro
           className={`border border-dashed rounded-xl px-6 py-10 text-center ${emptyBg}`}
         >
           <p className={`${subColor} text-sm`}>
-            No sections tagged yet. Accept a suggestion above or use <span className={`${headingColor} font-medium`}>Tag a section</span> to record the first protocol risk.
+            {readOnly ? (
+              'No sections tagged yet.'
+            ) : (
+              <>
+                No sections tagged yet. Accept a suggestion above or use <span className={`${headingColor} font-medium`}>Tag a section</span> to record the first protocol risk.
+              </>
+            )}
           </p>
         </div>
       )}
@@ -397,6 +415,7 @@ export default function ProtocolRiskTagging({ workflow, showReadinessCard }: Pro
               <SectionRow
                 key={s.id}
                 section={s}
+                readOnly={readOnly}
                 onEdit={() => openEdit(s)}
                 onDelete={async () => {
                   setLoading(true);
@@ -448,6 +467,8 @@ export default function ProtocolRiskTagging({ workflow, showReadinessCard }: Pro
 
 interface SectionRowProps {
   section: TaggedSection;
+  /** Preview: no Edit/Delete; History stays. */
+  readOnly: boolean;
   onEdit: () => void;
   onDelete: () => Promise<void>;
   onHistoryClick: () => void;
@@ -462,6 +483,7 @@ interface SectionRowProps {
 
 function SectionRow({
   section,
+  readOnly,
   onEdit,
   onDelete,
   onHistoryClick,
@@ -530,29 +552,31 @@ function SectionRow({
           </div>
           {note && <p className={`text-[11px] mt-2 ${mutedColor}`}>{note}</p>}
         </div>
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          <button
-            type="button"
-            onClick={onEdit}
-            className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
-          >
-            <Pencil size={12} />
-            Edit
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (window.confirm(`Delete tagged section "${section.section_title}"? This cannot be undone.`)) {
-                void onDelete();
-              }
-            }}
-            className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
-            title="Delete tagged section"
-            aria-label="Delete tagged section"
-          >
-            <Trash2 size={12} />
-          </button>
-        </div>
+        {!readOnly && (
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <button
+              type="button"
+              onClick={onEdit}
+              className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+            >
+              <Pencil size={12} />
+              Edit
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(`Delete tagged section "${section.section_title}"? This cannot be undone.`)) {
+                  void onDelete();
+                }
+              }}
+              className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1.5 rounded-md transition-colors ${buttonSecondary}`}
+              title="Delete tagged section"
+              aria-label="Delete tagged section"
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
