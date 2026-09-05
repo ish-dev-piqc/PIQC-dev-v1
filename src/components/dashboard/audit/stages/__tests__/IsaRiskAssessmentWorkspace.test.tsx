@@ -68,6 +68,15 @@ vi.mock('../../../../../lib/audit/riskCandidatesApi', () => ({
   fetchCandidateSourceItems: vi.fn(),
 }));
 
+// The module-mapping panel's Api (isa-site-modules); its behaviour is pinned
+// in SiteModuleMappingPanel.test.tsx — here only that it is mounted, and how
+// it reads in the preview.
+vi.mock('../../../../../lib/audit/siteModulesApi', () => ({
+  fetchSiteModuleMappings: vi.fn(),
+  createSiteModuleMapping: vi.fn(),
+  deleteSiteModuleMapping: vi.fn(),
+}));
+
 // A string child, not JSX: the factory is hoisted above the jsx runtime import.
 vi.mock('../ProtocolReadinessCard', () => ({
   default: () => 'readiness-card-marker',
@@ -83,11 +92,13 @@ import {
   fetchProtocolRisksForAudit,
 } from '../../../../../lib/audit/intakeApi';
 import { fetchCandidateSourceItems } from '../../../../../lib/audit/riskCandidatesApi';
+import { fetchSiteModuleMappings } from '../../../../../lib/audit/siteModulesApi';
 
 const mockFetchRisks = fetchProtocolRisksForAudit as unknown as ReturnType<typeof vi.fn>;
 const mockCreate = createProtocolRisk as unknown as ReturnType<typeof vi.fn>;
 const mockCreateFromCandidate = createProtocolRiskFromCandidate as unknown as ReturnType<typeof vi.fn>;
 const mockFetchItems = fetchCandidateSourceItems as unknown as ReturnType<typeof vi.fn>;
+const mockFetchMappings = vi.mocked(fetchSiteModuleMappings);
 
 function item(
   overrides: Partial<CandidateSourceItem> &
@@ -145,6 +156,8 @@ beforeEach(() => {
   mockFetchItems.mockReset();
   mockFetchRisks.mockResolvedValue([]);
   mockFetchItems.mockResolvedValue({ ok: true, data: [ENDPOINT, CRITERION] });
+  mockFetchMappings.mockReset();
+  mockFetchMappings.mockResolvedValue({ ok: true, data: { available: true, mappings: [] } });
 });
 
 describe('IsaRiskAssessmentWorkspace — stage', () => {
@@ -162,6 +175,10 @@ describe('IsaRiskAssessmentWorkspace — stage', () => {
     expect(screen.queryByText('readiness-card-marker')).not.toBeInTheDocument();
     expect(screen.queryByText(/this is a preview/i)).not.toBeInTheDocument();
     expect(mockFetchRisks).toHaveBeenCalledWith('audit-isa-1');
+
+    // The module-mapping panel sits under the flow and loads for this audit.
+    expect(screen.getByText('Map tagged risks to site audit modules')).toBeInTheDocument();
+    expect(mockFetchMappings).toHaveBeenCalledWith('audit-isa-1');
   });
 });
 
@@ -279,5 +296,35 @@ describe('IsaRiskAssessmentWorkspace — one-ahead preview (isa-stage-advance)',
 
     expect(await screen.findByText('No sections tagged yet.')).toBeInTheDocument();
     expect(screen.queryByText(/use Tag a section/)).not.toBeInTheDocument();
+  });
+
+  it('at Site intake: the module panel is mounted read-only (no picker even with a mapping to show)', async () => {
+    mockCurrentStage = 'ISA_SITE_INTAKE';
+    mockFetchMappings.mockResolvedValue({
+      ok: true,
+      data: {
+        available: true,
+        mappings: [{
+          id: 'smm-1',
+          audit_id: 'audit-isa-1',
+          protocol_risk_id: 'risk-1',
+          isa_domain: 'INFORMED_CONSENT',
+          derived_criticality: 'HIGH',
+          criticality_rationale: 'Derived from: safety endpoint, both impact.',
+          created_at: '2026-09-05T00:00:00Z',
+          updated_at: '2026-09-05T00:00:00Z',
+        }],
+      },
+    });
+
+    render(<IsaRiskAssessmentWorkspace />);
+
+    expect(screen.getByText('Map tagged risks to site audit modules')).toBeInTheDocument();
+    await waitFor(() => expect(mockFetchMappings).toHaveBeenCalledWith('audit-isa-1'));
+    // The panel reads tagged risks from its own store slice in this mock
+    // (per-hook useState), so with none tagged it shows the pointer copy and
+    // no picker — the readOnly rendering with rows is pinned in the panel test.
+    expect(await screen.findByText('Tag a protocol section above to map it to a site module.')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   });
 });

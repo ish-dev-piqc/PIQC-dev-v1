@@ -22,6 +22,7 @@ import type {
   EndpointTier,
   ImpactSurface,
   IsaDomain,
+  DerivedCriticality,
   IsaFindingOrigin,
   IsaResponseOwner,
   IsaSeverity,
@@ -376,6 +377,22 @@ export interface IsaProtocolRef {
   section_heading: string | null;
   page_start: number | null;
   page_end: number | null;
+}
+
+// Site audit module mapping — which site audit modules (the isa_domain
+// vocabulary) a tagged protocol risk lands in on an Investigator Site Audit.
+// 1:1 with site_module_mapping_objects (20260917000000). The ISA counterpart
+// of MockServiceMapping: keyed on the audit (no service object), criticality
+// and rationale derived server-side by the same rule the vendor lane uses.
+export interface SiteModuleMapping {
+  id: string;
+  audit_id: string;
+  protocol_risk_id: string;          // references ProtocolRiskObject (TaggedSection) ids
+  isa_domain: IsaDomain;
+  derived_criticality: DerivedCriticality;
+  criticality_rationale: string;     // always derived; NOT NULL
+  created_at: string;
+  updated_at: string;
 }
 
 // Formal ISA finding. Append-only (update-with-delta, no delete), like the

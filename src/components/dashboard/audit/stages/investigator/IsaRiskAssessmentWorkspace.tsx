@@ -5,6 +5,7 @@ import { STAGE_LABELS } from '../../../../../lib/audit/labels';
 import { hasReachedStage } from '../../../../../lib/audit/workflowStages';
 import StagePreviewNotice from '../../StagePreviewNotice';
 import ProtocolRiskTagging from '../intake/ProtocolRiskTagging';
+import SiteModuleMappingPanel from './SiteModuleMappingPanel';
 
 // =============================================================================
 // IsaRiskAssessmentWorkspace — ISA_RISK_ASSESSMENT stage center pane
@@ -14,9 +15,11 @@ import ProtocolRiskTagging from '../intake/ProtocolRiskTagging';
 // flow as the vendor Intake stage (ProtocolRiskTagging), because protocol
 // risks belong to the protocol version, not the auditee. On the site
 // workflow the vendor axis (operational domain, vendor dependency flags) is
-// hidden and eligibility criteria join the PIQC candidates. Site modules and
-// their derived criticality land on the mapping that follows
-// (isa-site-modules); the parse-status card stays on Stage 1.
+// hidden and eligibility criteria join the PIQC candidates. Under the flow,
+// SiteModuleMappingPanel maps each tagged risk to the site audit modules it
+// lands in, with the criticality derived server-side (isa-site-modules);
+// the Scope builder rolls those up next. The parse-status card stays on
+// Stage 1.
 //
 // House preview gate (isa-stage-advance). Site intake now advances through
 // audit_mode_advance_isa_stage, so this stage is reached for real; viewed one
@@ -67,6 +70,8 @@ export default function IsaRiskAssessmentWorkspace() {
         showReadinessCard={false}
         readOnly={!hasReached}
       />
+
+      <SiteModuleMappingPanel readOnly={!hasReached} />
 
       {/* Next-stage hint */}
       <div
