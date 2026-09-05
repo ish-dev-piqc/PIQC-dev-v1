@@ -43,6 +43,8 @@ import {
 import { hasReachedStage } from '../../../../../lib/audit/workflowStages';
 import PiqcMark from '../../PiqcMark';
 import StagePreviewNotice from '../../StagePreviewNotice';
+import StageTransitionCard from '../StageTransitionCard';
+import { copyRich, downloadBlob } from './isaReportDelivery';
 import type {
   AuditNoteObject,
   IsaFindingObject,
@@ -62,6 +64,12 @@ import type {
 //
 // Clipboard copies carry text/html + text/plain flavors so Word and Google
 // Docs paste formatted; the DRAFT/provenance banner is inside the payload.
+//
+// The exports here are DRAFTS (file names say so) for editing prose in
+// Word. The recorded export — sign-off latch, verified against the sealed
+// version — is Stage 7 (IsaExportWorkspace), reached through the
+// StageTransitionCard at the bottom (isa-review-export). The clipboard and
+// download helpers are shared with it (isaReportDelivery).
 // =============================================================================
 
 const VERDICT_OPTIONS: { value: IsaSiteVerdict; label: string }[] = [
@@ -69,46 +77,6 @@ const VERDICT_OPTIONS: { value: IsaSiteVerdict; label: string }[] = [
   { value: 'CONTINUE_INCREASED_MONITORING', label: 'Continue with increased monitoring' },
   { value: 'DO_NOT_CONTINUE', label: 'Do not continue pending resolution' },
 ];
-
-async function copyRich(html: string, plain: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard && 'write' in navigator.clipboard && typeof ClipboardItem !== 'undefined') {
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          'text/html': new Blob([html], { type: 'text/html' }),
-          'text/plain': new Blob([plain], { type: 'text/plain' }),
-        }),
-      ]);
-      return true;
-    }
-  } catch {
-    // fall through to the selection-based path
-  }
-  try {
-    const container = document.createElement('div');
-    container.innerHTML = html;
-    container.style.position = 'fixed';
-    container.style.left = '-9999px';
-    document.body.appendChild(container);
-    const range = document.createRange();
-    range.selectNodeContents(container);
-    const sel = window.getSelection();
-    sel?.removeAllRanges();
-    sel?.addRange(range);
-    const ok = document.execCommand('copy');
-    sel?.removeAllRanges();
-    container.remove();
-    if (ok) return true;
-  } catch {
-    // fall through to plain text
-  }
-  try {
-    await navigator.clipboard.writeText(plain);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 export default function IsaReportWorkspace() {
   const { theme } = useTheme();
@@ -344,15 +312,6 @@ export default function IsaReportWorkspace() {
     } else {
       setError('Copy failed — your browser blocked clipboard access.');
     }
-  };
-
-  const downloadBlob = (blob: Blob, name: string) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = name;
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   const downloadDocx = async () => {
@@ -754,6 +713,8 @@ export default function IsaReportWorkspace() {
           </section>
         </>
       )}
+
+      <StageTransitionCard stage="ISA_REPORT" nextStage="ISA_EXPORT" />
     </div>
   );
 }

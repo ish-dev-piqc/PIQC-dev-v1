@@ -157,3 +157,93 @@ export async function requestIsaReportSection(
 
   return (await res.json()) as IsaReportSectionDraft;
 }
+
+// ============================================================================
+// Sign-off + verified export (isa-review-export, 20260919000100)
+//
+// The latch: sign-off asserts the version the auditor saw (updated_at CAS)
+// and seals a server-computed fingerprint over everything the export renders;
+// verify re-checks it; mark records the export only while it still holds.
+// ============================================================================
+
+/** Server gate codes — in verify's `reasons` and in a rejection's errorHint. */
+export type IsaExportGate =
+  | 'GATE_ISA_VERDICT_NOT_SET'
+  | 'GATE_ISA_REPORT_NOT_SIGNED_OFF'
+  | 'GATE_ISA_REPORT_DIVERGED';
+
+export type IsaExportReadiness =
+  | { available: false }
+  | { available: true; ready: boolean; reasons: IsaExportGate[] };
+
+/** Readiness probe. PGRST202 (the RPC is not applied in this environment)
+ *  is `available: false`, never an error — the workspace must not render a
+ *  gate verdict it cannot know. */
+export async function verifyIsaExportReadiness(
+  auditId: string,
+): Promise<Result<IsaExportReadiness>> {
+  const { data, error } = await supabase.rpc('audit_mode_verify_isa_export_readiness', {
+    p_audit_id: auditId,
+  });
+
+  if (error) {
+    if (error.code === 'PGRST202') return { ok: true, data: { available: false } };
+    console.error('[isaReportApi] verifyIsaExportReadiness error:', error);
+    return { ok: false, error: error.message };
+  }
+
+  const row = (data ?? {}) as { ready?: unknown; reasons?: unknown };
+  const reasons = Array.isArray(row.reasons)
+    ? row.reasons.filter((r): r is IsaExportGate => typeof r === 'string')
+    : [];
+  return { ok: true, data: { available: true, ready: row.ready === true, reasons } };
+}
+
+export type IsaReportMutationResult =
+  | { ok: true; data: IsaReportDraftObject }
+  | { ok: false; error: string; errorHint?: string };
+
+/** Sign off the report as reviewed. `expectedUpdatedAt` is the row version
+ *  the auditor saw: 22023 MISSING_EXPECTED_VERSION when absent, 40001
+ *  STALE_CONTENT when the row moved. Re-seals when the content changed since
+ *  a previous sign-off; idempotent when it did not. */
+export async function signOffIsaReport(
+  id: string,
+  expectedUpdatedAt: string,
+  reason?: string,
+): Promise<IsaReportMutationResult> {
+  const { data, error } = await supabase.rpc('audit_mode_final_sign_off_isa_report', {
+    p_id: id,
+    p_expected_updated_at: expectedUpdatedAt,
+    p_reason: reason ?? null,
+  });
+
+  if (error) {
+    console.error('[isaReportApi] signOffIsaReport error:', error);
+    return { ok: false, error: error.message, errorHint: (error as { hint?: string }).hint };
+  }
+
+  return { ok: true, data: data as IsaReportDraftObject };
+}
+
+export type IsaExportArtifact = 'report_docx' | 'observation_form_docx' | 'clipboard';
+
+/** Record that the signed-off version left PIQC. Server-gated on readiness
+ *  (a GATE_* code in errorHint when refused) so a race between verify and
+ *  mark still fails closed. */
+export async function markIsaReportExported(
+  id: string,
+  artifact: IsaExportArtifact,
+): Promise<IsaReportMutationResult> {
+  const { data, error } = await supabase.rpc('audit_mode_mark_isa_report_exported', {
+    p_id: id,
+    p_artifact: artifact,
+  });
+
+  if (error) {
+    console.error('[isaReportApi] markIsaReportExported error:', error);
+    return { ok: false, error: error.message, errorHint: (error as { hint?: string }).hint };
+  }
+
+  return { ok: true, data: data as IsaReportDraftObject };
+}
