@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: isa-stage-advance
-status: in-review
+status: merged
+merged: 2026-09-05
 started: 2026-09-04
-target_pr:
+target_pr: #621
 ---
 
 # ISA: stage advancement (Site intake → Risk assessment) and the Stage 2 preview gate
