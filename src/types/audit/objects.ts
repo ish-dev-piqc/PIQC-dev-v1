@@ -395,6 +395,38 @@ export interface SiteModuleMapping {
   updated_at: string;
 }
 
+// Site audit scope — the risk-based scope of an Investigator Site Audit,
+// derived deterministically from SiteModuleMapping rows (lib/audit/siteScope.ts)
+// and stored as the content of site_scope_objects (20260918000000). Every
+// item is one mapping: `id` IS the mapping id, so a scope line traces to the
+// mapping, the protocol risk and the module it came from. criticality and
+// rationale are the mapping's server-derived values copied at build time,
+// so an approved scope reads the same later even if the mappings move on.
+export interface SiteScopeItem {
+  id: string;                        // site_module_mapping_objects.id
+  protocol_risk_id: string;
+  isa_domain: IsaDomain;
+  section_identifier: string;
+  section_title: string;
+  criticality: DerivedCriticality;
+  rationale: string;
+}
+
+export interface SiteScopeModule {
+  isa_domain: IsaDomain;
+  criticality: DerivedCriticality;   // the highest over its items
+  items: SiteScopeItem[];
+}
+
+export interface SiteScopeContent {
+  /** The live mapping set is diffed against this to show drift. */
+  built_from: {
+    mapping_ids: string[];           // sorted
+    built_at: string;
+  };
+  modules: SiteScopeModule[];
+}
+
 // Formal ISA finding. Append-only (update-with-delta, no delete), like the
 // vendor lane's workspace entries but site-shaped. 1:1 with
 // isa_finding_objects (20260724000000_audit_mode_isa_findings_schema.sql).

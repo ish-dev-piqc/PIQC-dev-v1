@@ -1,9 +1,7 @@
-import { ArrowRight } from 'lucide-react';
-import { useTheme } from '../../../../../context/ThemeContext';
 import { useAudit } from '../../../../../context/AuditContext';
-import { STAGE_LABELS } from '../../../../../lib/audit/labels';
 import { hasReachedStage } from '../../../../../lib/audit/workflowStages';
 import StagePreviewNotice from '../../StagePreviewNotice';
+import StageTransitionCard from '../StageTransitionCard';
 import ProtocolRiskTagging from '../intake/ProtocolRiskTagging';
 import SiteModuleMappingPanel from './SiteModuleMappingPanel';
 
@@ -18,8 +16,9 @@ import SiteModuleMappingPanel from './SiteModuleMappingPanel';
 // hidden and eligibility criteria join the PIQC candidates. Under the flow,
 // SiteModuleMappingPanel maps each tagged risk to the site audit modules it
 // lands in, with the criticality derived server-side (isa-site-modules);
-// the Scope builder rolls those up next. The parse-status card stays on
-// Stage 1.
+// the Scope builder rolls those up next, and the stage ends with the shared
+// StageTransitionCard that advances into it (isa-scope-builder). The
+// parse-status card stays on Stage 1.
 //
 // House preview gate (isa-stage-advance). Site intake now advances through
 // audit_mode_advance_isa_stage, so this stage is reached for real; viewed one
@@ -31,9 +30,7 @@ import SiteModuleMappingPanel from './SiteModuleMappingPanel';
 // =============================================================================
 
 export default function IsaRiskAssessmentWorkspace() {
-  const { theme } = useTheme();
   const { activeAudit } = useAudit();
-  const isLight = theme === 'light';
 
   if (!activeAudit) return null;
 
@@ -73,18 +70,7 @@ export default function IsaRiskAssessmentWorkspace() {
 
       <SiteModuleMappingPanel readOnly={!hasReached} />
 
-      {/* Next-stage hint */}
-      <div
-        className={`flex items-center gap-2 rounded-md border px-4 py-3 text-sm ${
-          isLight ? 'bg-brand-600/[0.06] border-brand-600/20 text-fg-body' : 'bg-brand-300/[0.06] border-brand-300/20 text-fg-body'
-        }`}
-      >
-        <ArrowRight size={14} className={`flex-shrink-0 ${isLight ? 'text-brand-600' : 'text-brand-300'}`} />
-        <span>
-          Next: <span className="font-medium text-fg-heading">{STAGE_LABELS.ISA_SCOPE_BUILDER}</span> —
-          map these sections to site audit modules and generate the checklist.
-        </span>
-      </div>
+      <StageTransitionCard stage="ISA_RISK_ASSESSMENT" nextStage="ISA_SCOPE_BUILDER" />
     </div>
   );
 }

@@ -3,13 +3,14 @@ import { Layers, X } from 'lucide-react';
 import { useTheme } from '../../../../../context/ThemeContext';
 import { useAudit } from '../../../../../context/AuditContext';
 import { useAuditData } from '../../../../../context/AuditDataContext';
-import { DERIVED_CRITICALITY_LABELS, ISA_DOMAIN_LABELS } from '../../../../../lib/audit/labels';
+import { ISA_DOMAIN_LABELS } from '../../../../../lib/audit/labels';
 import {
   createSiteModuleMapping,
   deleteSiteModuleMapping,
   fetchSiteModuleMappings,
 } from '../../../../../lib/audit/siteModulesApi';
-import type { DerivedCriticality, IsaDomain, SiteModuleMapping } from '../../../../../types/audit';
+import type { IsaDomain, SiteModuleMapping } from '../../../../../types/audit';
+import CriticalityChip from './CriticalityChip';
 
 // =============================================================================
 // SiteModuleMappingPanel — ISA Stage 2, under the tagging flow.
@@ -265,37 +266,5 @@ export default function SiteModuleMappingPanel({ readOnly }: SiteModuleMappingPa
         )}
       </div>
     </section>
-  );
-}
-
-// Same tones as the vendor lane's mapping table so a criticality reads the
-// same on both workflows.
-function CriticalityChip({
-  criticality,
-  isLight,
-}: {
-  criticality: DerivedCriticality;
-  isLight: boolean;
-}) {
-  const tones: Record<DerivedCriticality, string> = {
-    CRITICAL: isLight
-      ? 'bg-red-50 border-red-200 text-red-700'
-      : 'bg-red-500/15 border-red-500/30 text-red-300',
-    HIGH: isLight
-      ? 'bg-orange-50 border-orange-200 text-orange-700'
-      : 'bg-orange-500/15 border-orange-500/30 text-orange-300',
-    MODERATE: isLight
-      ? 'bg-amber-50 border-amber-200 text-amber-700'
-      : 'bg-amber-500/15 border-amber-500/30 text-amber-300',
-    LOW: isLight
-      ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-      : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300',
-  };
-  return (
-    <span
-      className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded border ${tones[criticality]}`}
-    >
-      {DERIVED_CRITICALITY_LABELS[criticality]}
-    </span>
   );
 }
