@@ -478,6 +478,15 @@ export interface IsaReportDraftObject {
   site_verdict_text: string | null;
   response_due_days: number;
   response_due_basis: 'CALENDAR' | 'BUSINESS';
+  /** Sealed at sign-off (isa-review-export, 20260919000000): md5 over
+   *  everything the export renders from stored state. Server-computed; the
+   *  client never compares it — verify_isa_export_readiness reports
+   *  divergence as a gate code. */
+  readiness_fingerprint: string | null;
+  final_signed_off_by: string | null;
+  final_signed_off_at: string | null;
+  /** When the signed-off version last left PIQC; cleared by a re-sign. */
+  exported_at: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;

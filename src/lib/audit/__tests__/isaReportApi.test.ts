@@ -13,8 +13,11 @@ import { supabase } from '../../supabase';
 import {
   fetchIsaReportDraft,
   IsaReportSectionError,
+  markIsaReportExported,
   requestIsaReportSection,
+  signOffIsaReport,
   upsertIsaReportDraft,
+  verifyIsaExportReadiness,
 } from '../isaReportApi';
 
 const rpcMock = vi.mocked(supabase.rpc);
@@ -36,6 +39,10 @@ function makeDraft(overrides: Partial<IsaReportDraftObject> = {}): IsaReportDraf
     site_verdict_text: null,
     response_due_days: 30,
     response_due_basis: 'CALENDAR',
+    readiness_fingerprint: null,
+    final_signed_off_by: null,
+    final_signed_off_at: null,
+    exported_at: null,
     created_by: 'user-1',
     created_at: '2026-07-19T10:00:00Z',
     updated_at: '2026-07-19T10:00:00Z',
@@ -219,5 +226,135 @@ describe('requestIsaReportSection', () => {
       .rejects.toThrowError(IsaReportSectionError);
     await expect(requestIsaReportSection('audit-1', 'exec_summary'))
       .rejects.toMatchObject({ status: 409 });
+  });
+});
+
+// ============================================================================
+// Sign-off + verified export (isa-review-export)
+// ============================================================================
+
+describe('verifyIsaExportReadiness', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  it('returns the server verdict and its reasons', async () => {
+    rpcMock.mockResolvedValue({
+      data: { ready: false, reasons: ['GATE_ISA_REPORT_NOT_SIGNED_OFF'] },
+      error: null,
+    } as never);
+
+    const res = await verifyIsaExportReadiness('audit-1');
+
+    expect(rpcMock).toHaveBeenCalledWith('audit_mode_verify_isa_export_readiness', {
+      p_audit_id: 'audit-1',
+    });
+    expect(res).toEqual({
+      ok: true,
+      data: { available: true, ready: false, reasons: ['GATE_ISA_REPORT_NOT_SIGNED_OFF'] },
+    });
+  });
+
+  it('ready with no reasons', async () => {
+    rpcMock.mockResolvedValue({ data: { ready: true, reasons: [] }, error: null } as never);
+
+    const res = await verifyIsaExportReadiness('audit-1');
+
+    expect(res).toEqual({ ok: true, data: { available: true, ready: true, reasons: [] } });
+  });
+
+  it('PGRST202 (not applied) is available:false, never an error', async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { code: 'PGRST202', message: 'Could not find the function' },
+    } as never);
+
+    const res = await verifyIsaExportReadiness('audit-1');
+
+    expect(res).toEqual({ ok: true, data: { available: false } });
+  });
+
+  it('any other error is ok:false', async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { code: '42501', message: 'Not authenticated' },
+    } as never);
+
+    const res = await verifyIsaExportReadiness('audit-1');
+
+    expect(res).toEqual({ ok: false, error: 'Not authenticated' });
+  });
+});
+
+describe('signOffIsaReport', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  it('sends the id, the version pin and a null reason; returns the sealed row', async () => {
+    const sealed = makeDraft({
+      final_signed_off_at: '2026-09-05T10:00:00Z',
+      final_signed_off_by: 'user-1',
+      readiness_fingerprint: 'fp-1',
+    });
+    rpcMock.mockResolvedValue({ data: sealed, error: null } as never);
+
+    const res = await signOffIsaReport('draft-1', '2026-07-19T10:00:00Z');
+
+    expect(rpcMock).toHaveBeenCalledWith('audit_mode_final_sign_off_isa_report', {
+      p_id: 'draft-1',
+      p_expected_updated_at: '2026-07-19T10:00:00Z',
+      p_reason: null,
+    });
+    expect(res).toEqual({ ok: true, data: sealed });
+  });
+
+  it('surfaces the server hint (STALE_CONTENT) through errorHint', async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { code: '40001', message: 'The report changed since you reviewed it', hint: 'STALE_CONTENT' },
+    } as never);
+
+    const res = await signOffIsaReport('draft-1', '2026-07-19T10:00:00Z');
+
+    expect(res).toEqual({
+      ok: false,
+      error: 'The report changed since you reviewed it',
+      errorHint: 'STALE_CONTENT',
+    });
+  });
+});
+
+describe('markIsaReportExported', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  it('sends the id and the artefact; returns the marked row', async () => {
+    const marked = makeDraft({ exported_at: '2026-09-05T11:00:00Z' });
+    rpcMock.mockResolvedValue({ data: marked, error: null } as never);
+
+    const res = await markIsaReportExported('draft-1', 'report_docx');
+
+    expect(rpcMock).toHaveBeenCalledWith('audit_mode_mark_isa_report_exported', {
+      p_id: 'draft-1',
+      p_artifact: 'report_docx',
+    });
+    expect(res).toEqual({ ok: true, data: marked });
+  });
+
+  it('surfaces the gate code through errorHint', async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { code: '42501', message: 'Cannot record export: report is not ready', hint: 'GATE_ISA_REPORT_DIVERGED' },
+    } as never);
+
+    const res = await markIsaReportExported('draft-1', 'clipboard');
+
+    expect(res).toEqual({
+      ok: false,
+      error: 'Cannot record export: report is not ready',
+      errorHint: 'GATE_ISA_REPORT_DIVERGED',
+    });
   });
 });

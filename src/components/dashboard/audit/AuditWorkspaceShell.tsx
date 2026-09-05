@@ -33,6 +33,7 @@ import FinalReviewExportWorkspace from './stages/FinalReviewExportWorkspace';
 import SiteIntakeWorkspace from './stages/investigator/SiteIntakeWorkspace';
 import IsaConductWorkspace from './stages/investigator/IsaConductWorkspace';
 import IsaReportWorkspace from './stages/investigator/IsaReportWorkspace';
+import IsaExportWorkspace from './stages/investigator/IsaExportWorkspace';
 import IsaRiskAssessmentWorkspace from './stages/investigator/IsaRiskAssessmentWorkspace';
 import IsaScopeBuilderWorkspace from './stages/investigator/IsaScopeBuilderWorkspace';
 import IsaStagePlaceholder from './stages/investigator/IsaStagePlaceholder';
@@ -68,7 +69,8 @@ const STAGE_COMPONENTS: Record<
     ISA_SCOPE_BUILDER: IsaScopeBuilderWorkspace,
     ISA_CONDUCT: IsaConductWorkspace,
     ISA_REPORT: IsaReportWorkspace,
-    // ISA_PREP / ISA_EXPORT ship in later phases → placeholder.
+    ISA_EXPORT: IsaExportWorkspace,
+    // ISA_PREP ships later → placeholder.
   },
 };
 
