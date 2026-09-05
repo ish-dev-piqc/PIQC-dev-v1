@@ -31,8 +31,11 @@ vi.mock('../../../../../context/ThemeContext', () => ({
 }));
 
 let mockCurrentStage = 'ISA_RISK_ASSESSMENT';
+const { mockAdvanceStage } = vi.hoisted(() => ({ mockAdvanceStage: vi.fn() }));
 vi.mock('../../../../../context/AuditContext', () => ({
   useAudit: () => ({
+    advanceStage: mockAdvanceStage,
+    advanceStageError: null,
     activeAudit: {
       id: 'audit-isa-1',
       workflow_type: 'INVESTIGATOR_SITE_AUDIT',
@@ -167,7 +170,8 @@ describe('IsaRiskAssessmentWorkspace — stage', () => {
     expect(screen.getByText('Stage 2 · Risk assessment')).toBeInTheDocument();
     expect(screen.getByText('Assess protocol risk for this site')).toBeInTheDocument();
     expect(screen.getByText(/carry risk at Site 042/)).toBeInTheDocument();
-    expect(screen.getByText(/Scope builder/)).toBeInTheDocument();
+    // The stage ends with the shared transition card (isa-scope-builder).
+    expect(screen.getByRole('button', { name: 'Advance to Scope builder' })).toBeEnabled();
 
     expect(await screen.findByText('2 suggestions')).toBeInTheDocument();
     expect(screen.getByText('Eligibility criteria')).toBeInTheDocument();
@@ -179,6 +183,15 @@ describe('IsaRiskAssessmentWorkspace — stage', () => {
     // The module-mapping panel sits under the flow and loads for this audit.
     expect(screen.getByText('Map tagged risks to site audit modules')).toBeInTheDocument();
     expect(mockFetchMappings).toHaveBeenCalledWith('audit-isa-1');
+  });
+
+  it('the transition card advances the audit to Scope builder', async () => {
+    const user = userEvent.setup();
+    render(<IsaRiskAssessmentWorkspace />);
+
+    await user.click(screen.getByRole('button', { name: 'Advance to Scope builder' }));
+
+    expect(mockAdvanceStage).toHaveBeenCalledWith('ISA_SCOPE_BUILDER');
   });
 });
 
@@ -287,6 +300,8 @@ describe('IsaRiskAssessmentWorkspace — one-ahead preview (isa-stage-advance)',
     expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Delete tagged section' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'History' })).toBeInTheDocument();
+    // The card mirrors the server rule: a +2 jump is never offered.
+    expect(screen.getByRole('button', { name: 'Advance to Scope builder' })).toBeDisabled();
   });
 
   it('at Site intake with nothing tagged: the empty state does not point at a button that is not there', async () => {
