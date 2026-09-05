@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: isa-placeholder-advance
-status: in-review
+status: merged
+merged: 2026-09-05
 started: 2026-09-05
-target_pr:
+target_pr: #627
 ---
 
 # ISA: stage advancement through Report drafting
