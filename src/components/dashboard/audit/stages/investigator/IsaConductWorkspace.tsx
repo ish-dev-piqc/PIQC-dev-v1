@@ -25,6 +25,7 @@ import IsaClosingMeetingView from './IsaClosingMeetingView';
 import { hasReachedStage } from '../../../../../lib/audit/workflowStages';
 import PiqcMark from '../../PiqcMark';
 import StagePreviewNotice from '../../StagePreviewNotice';
+import StageTransitionCard from '../StageTransitionCard';
 import type {
   AuditNoteObject,
   IsaDomain,
@@ -47,6 +48,10 @@ import type {
 // Draft cards are stashed in localStorage (`piq-isa-drafts-v1:<audit>`) so a
 // reload doesn't lose an evening of review to a nondeterministic re-run.
 // PHI rule: the pad instructs subject numbers only — bodies go to an LLM.
+//
+// Stage 5 → Report drafting: the shared StageTransitionCard at the bottom
+// (isa-placeholder-advance). Ungated server-side today; a "findings filed or
+// a documented clean visit" gate is ledgered in that plan.
 // =============================================================================
 
 const DOMAIN_OPTIONS = Object.entries(ISA_DOMAIN_LABELS) as [IsaDomain, string][];
@@ -1205,6 +1210,8 @@ export default function IsaConductWorkspace() {
           </ul>
         )}
       </section>
+
+      <StageTransitionCard stage="ISA_CONDUCT" nextStage="ISA_REPORT" />
 
       {showClosing && (
         <IsaClosingMeetingView

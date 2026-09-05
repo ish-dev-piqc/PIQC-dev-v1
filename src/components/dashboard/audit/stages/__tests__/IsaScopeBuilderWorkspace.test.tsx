@@ -26,6 +26,7 @@ vi.mock('../../../../../context/ThemeContext', () => ({
   useTheme: () => ({ theme: 'light' as const, toggleTheme: () => {} }),
 }));
 
+const mockAdvanceStage = vi.fn();
 let mockCurrentStage = 'ISA_SCOPE_BUILDER';
 vi.mock('../../../../../context/AuditContext', () => ({
   useAudit: () => ({
@@ -39,6 +40,8 @@ vi.mock('../../../../../context/AuditContext', () => ({
       protocol_title: 'Protocol one',
       auditee_name: 'Site 042',
     },
+    advanceStage: mockAdvanceStage,
+    advanceStageError: null,
   }),
 }));
 
@@ -340,8 +343,14 @@ describe('IsaScopeBuilderWorkspace — one-ahead preview', () => {
     mockFetchMappings.mockResolvedValue({ ok: true, data: { available: true, mappings: MAPPINGS.slice(0, 2) } });
     render(<IsaScopeBuilderWorkspace />);
 
-    expect(screen.getByText(/this is a preview/i)).toBeInTheDocument();
-    expect(screen.getByText(/advance from Risk assessment/i)).toBeInTheDocument();
+    // Two elements name the audit's real stage here: the preview notice and
+    // the Stage 3 → Audit prep card's ahead line. A bare /advance from Risk
+    // assessment/ matches both, so each is matched on its own copy.
+    expect(
+      screen.getByText(/this is a preview\. Actions here are disabled until you advance from Risk assessment\./i),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Advance from Risk assessment first.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Advance to Audit prep' })).toBeDisabled();
 
     expect(await screen.findByText('Informed consent')).toBeInTheDocument();
     expect(screen.getByText(/0 mappings added and 1 removed/)).toBeInTheDocument();
@@ -355,5 +364,34 @@ describe('IsaScopeBuilderWorkspace — one-ahead preview', () => {
 
     expect(await screen.findByText(/3 mappings across 2 modules are ready to scope/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Build scope' })).not.toBeInTheDocument();
+  });
+});
+
+// isa-placeholder-advance: Stage 3 carries the shared StageTransitionCard
+// toward Audit prep. The card's own states are pinned in
+// StageTransitionCard.test.tsx; here: the mount, the target stage, and that
+// the transition does not depend on the scope (no content gate server-side).
+describe('IsaScopeBuilderWorkspace — Stage 3 → Audit prep card (isa-placeholder-advance)', () => {
+  it('at the stage: "Advance to Audit prep" is enabled and advances to ISA_PREP', async () => {
+    const user = userEvent.setup();
+    render(<IsaScopeBuilderWorkspace />);
+
+    expect(await screen.findByRole('button', { name: 'Build scope' })).toBeInTheDocument();
+    const button = screen.getByRole('button', { name: 'Advance to Audit prep' });
+    expect(button).toBeEnabled();
+    await user.click(button);
+    expect(mockAdvanceStage).toHaveBeenCalledTimes(1);
+    expect(mockAdvanceStage).toHaveBeenCalledWith('ISA_PREP');
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it('is offered even when the builder is not available — the transition has no content gate', async () => {
+    mockFetchMappings.mockResolvedValue({ ok: true, data: { available: false } });
+    render(<IsaScopeBuilderWorkspace />);
+
+    expect(
+      await screen.findByText('Scope builder isn’t available in this environment yet.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Advance to Audit prep' })).toBeEnabled();
   });
 });

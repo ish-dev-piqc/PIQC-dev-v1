@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: isa-placeholder-advance
-status: active
+status: in-review
 started: 2026-09-05
 target_pr:
 ---
