@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: isa-review-export
-status: in-review
+status: merged
+merged: 2026-09-05
 started: 2026-09-05
-target_pr:
+target_pr: #629
 ---
 
 # ISA: Review & export (sign-off latch + verified export)
