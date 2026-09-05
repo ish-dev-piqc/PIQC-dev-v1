@@ -1,7 +1,7 @@
 ---
 owner: sixonelabs-piqc
 feature: isa-stage-advance
-status: active
+status: in-review
 started: 2026-09-04
 target_pr:
 ---

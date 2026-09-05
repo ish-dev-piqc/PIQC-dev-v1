@@ -9,6 +9,10 @@
 //   - accepting a criterion candidate prefills the form and saves through the
 //     candidate RPC with the same null domain.
 //
+// Since isa-stage-advance the stage is gated: the audit's current_stage is
+// mutable per test (`mockCurrentStage`) — the tagging flows run at the
+// reached stage, and the last describe pins the one-ahead preview.
+//
 // Mock idiom: IsaConductWorkspace.test.tsx (context hooks + Api modules
 // mocked). AuditDataContext is a real useState behind the hook so the list
 // re-renders when the flow writes to the shared store. Every module that
@@ -26,12 +30,13 @@ vi.mock('../../../../../context/ThemeContext', () => ({
   useTheme: () => ({ theme: 'light' as const, toggleTheme: () => {} }),
 }));
 
+let mockCurrentStage = 'ISA_RISK_ASSESSMENT';
 vi.mock('../../../../../context/AuditContext', () => ({
   useAudit: () => ({
     activeAudit: {
       id: 'audit-isa-1',
       workflow_type: 'INVESTIGATOR_SITE_AUDIT',
-      current_stage: 'ISA_SITE_INTAKE',
+      current_stage: mockCurrentStage,
       protocol_id: 'protocol-1',
       protocol_version_id: 'pv-1',
       protocol_code: 'PROTO-001',
@@ -133,6 +138,7 @@ function savedRow(patch: Partial<TaggedSection>): TaggedSection {
 }
 
 beforeEach(() => {
+  mockCurrentStage = 'ISA_RISK_ASSESSMENT';
   mockFetchRisks.mockReset();
   mockCreate.mockReset();
   mockCreateFromCandidate.mockReset();
@@ -154,6 +160,7 @@ describe('IsaRiskAssessmentWorkspace — stage', () => {
     expect(screen.getByText('Eligibility criteria')).toBeInTheDocument();
     expect(screen.getByText('Age ≥ 18')).toBeInTheDocument();
     expect(screen.queryByText('readiness-card-marker')).not.toBeInTheDocument();
+    expect(screen.queryByText(/this is a preview/i)).not.toBeInTheDocument();
     expect(mockFetchRisks).toHaveBeenCalledWith('audit-isa-1');
   });
 });
@@ -238,5 +245,39 @@ describe('IsaRiskAssessmentWorkspace — tagging without the vendor axis', () =>
     expect(await screen.findByText('PIQC-assisted')).toBeInTheDocument();
     expect(screen.getByText('1 suggestion · 1 tagged')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Accept key_inclusion_criteria[0]' })).not.toBeInTheDocument();
+  });
+});
+
+// isa-stage-advance: Site intake can advance now, so Stage 2 carries the
+// house preview gate. Viewed one ahead (audit still at Site intake) the flow
+// is read-only — no Tag button, Accept disabled, no Edit/Delete — while the
+// tagged rows and History stay visible (version-scoped protocol data).
+describe('IsaRiskAssessmentWorkspace — one-ahead preview (isa-stage-advance)', () => {
+  it('at Site intake: banner up, tagging entry points off, tagged rows read-only', async () => {
+    mockCurrentStage = 'ISA_SITE_INTAKE';
+    mockFetchRisks.mockResolvedValue([savedRow({})]);
+
+    render(<IsaRiskAssessmentWorkspace />);
+
+    expect(screen.getByText(/this is a preview/i)).toBeInTheDocument();
+    expect(screen.getByText(/advance from Site intake/i)).toBeInTheDocument();
+
+    expect(await screen.findByText(/2 suggestions/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Tag a section' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Accept key_inclusion_criteria[0]' })).toBeDisabled();
+
+    expect(await screen.findByText('Eligibility: age')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete tagged section' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'History' })).toBeInTheDocument();
+  });
+
+  it('at Site intake with nothing tagged: the empty state does not point at a button that is not there', async () => {
+    mockCurrentStage = 'ISA_SITE_INTAKE';
+
+    render(<IsaRiskAssessmentWorkspace />);
+
+    expect(await screen.findByText('No sections tagged yet.')).toBeInTheDocument();
+    expect(screen.queryByText(/use Tag a section/)).not.toBeInTheDocument();
   });
 });
