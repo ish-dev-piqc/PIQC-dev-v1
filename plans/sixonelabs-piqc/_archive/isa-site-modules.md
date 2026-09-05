@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: isa-site-modules
-status: in-review
+status: merged
+merged: 2026-09-05
 started: 2026-09-05
-target_pr:
+target_pr: #623
 ---
 
 # ISA: site module mapping on Risk assessment (risk → module → derived criticality)
