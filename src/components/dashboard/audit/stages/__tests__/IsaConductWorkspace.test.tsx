@@ -4,19 +4,24 @@
 // preview must be read-only. Mock idiom follows the vendor stage tests.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 vi.mock('../../../../../context/ThemeContext', () => ({
   useTheme: () => ({ theme: 'light' as const, toggleTheme: () => {} }),
 }));
 
+const mockAdvanceStage = vi.fn();
 let mockActiveAudit = {
   id: 'audit-1',
   workflow_type: 'INVESTIGATOR_SITE_AUDIT',
   current_stage: 'ISA_CONDUCT',
 };
 vi.mock('../../../../../context/AuditContext', () => ({
-  useAudit: () => ({ activeAudit: mockActiveAudit }),
+  useAudit: () => ({
+    activeAudit: mockActiveAudit,
+    advanceStage: mockAdvanceStage,
+    advanceStageError: null,
+  }),
 }));
 
 vi.mock('../../../../../lib/audit/isaNotesApi', () => ({
@@ -77,5 +82,42 @@ describe('IsaConductWorkspace — one-ahead preview guard (PR-UX2)', () => {
       expect(screen.getByText(/check Stage 1 \(Site intake\)/)).toBeInTheDocument(),
     );
     expect(screen.queryByText(/in the library/)).not.toBeInTheDocument();
+  });
+});
+
+// isa-placeholder-advance: Stage 5 carries the shared StageTransitionCard
+// toward Report drafting. The card's own states are pinned in
+// StageTransitionCard.test.tsx; here: the mount, the target stage, and the
+// one-ahead preview leaving it disabled.
+describe('IsaConductWorkspace — Stage 5 → Report drafting card (isa-placeholder-advance)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFetchNotes.mockResolvedValue({ ok: true, data: [] });
+  });
+
+  it('AT STAGE: "Advance to Report drafting" is enabled and advances to ISA_REPORT', async () => {
+    mockActiveAudit = { ...mockActiveAudit, current_stage: 'ISA_CONDUCT' };
+
+    render(<IsaConductWorkspace />);
+
+    await waitFor(() => expect(screen.getByText('New note')).toBeInTheDocument());
+    const button = screen.getByRole('button', { name: 'Advance to Report drafting' });
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    expect(mockAdvanceStage).toHaveBeenCalledTimes(1);
+    expect(mockAdvanceStage).toHaveBeenCalledWith('ISA_REPORT');
+  });
+
+  it('PREVIEW (audit at ISA_PREP): the card is ahead of the audit, button disabled', async () => {
+    mockActiveAudit = { ...mockActiveAudit, current_stage: 'ISA_PREP' };
+
+    render(<IsaConductWorkspace />);
+
+    await waitFor(() => expect(mockFetchNotes).toHaveBeenCalledWith('audit-1'));
+    expect(screen.getByText('Advance from Audit prep first.')).toBeInTheDocument();
+    const button = screen.getByRole('button', { name: 'Advance to Report drafting' });
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(mockAdvanceStage).not.toHaveBeenCalled();
   });
 });

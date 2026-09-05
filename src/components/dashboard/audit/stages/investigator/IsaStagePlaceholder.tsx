@@ -1,23 +1,48 @@
 import { Hammer } from 'lucide-react';
 import { useTheme } from '../../../../../context/ThemeContext';
+import { useAudit } from '../../../../../context/AuditContext';
 import type { AuditStage } from '../../../../../types/audit';
 import { STAGE_LABELS, STAGE_DESCRIPTIONS } from '../../../../../lib/audit/labels';
+import { hasReachedStage, stagesForWorkflow } from '../../../../../lib/audit/workflowStages';
+import StagePreviewNotice from '../../StagePreviewNotice';
+import StageTransitionCard from '../StageTransitionCard';
 
 // =============================================================================
 // IsaStagePlaceholder — center pane for Investigator Site Audit stages whose
-// workspace ships in a later phase (risk assessment, scope builder, prep,
-// conduct, report, export). The stage nav is fully walkable in Phase 1; each
-// unbuilt stage explains what it will do rather than rendering blank.
+// workspace ships later (today: Audit prep, Review & export). The stage nav
+// is fully walkable; each unbuilt stage explains what it will do rather than
+// rendering blank.
+//
+// A placeholder is also a stage the audit has to pass THROUGH: the ISA
+// advance RPC permits every +1 step with no content gate, so the placeholder
+// mounts the shared StageTransitionCard toward the next stage in the ISA
+// pipeline (Audit prep → Audit conduct) — without it the built stages behind
+// it are unreachable. The terminal stage has no successor and no card.
+// Viewed one ahead, the house preview notice sits above the card's ahead
+// state, as on every built stage (the card's terse "Advance from X first."
+// presumes the notice has explained the preview).
 // =============================================================================
 
 export default function IsaStagePlaceholder({ stage }: { stage: AuditStage }) {
   const { theme } = useTheme();
+  const { activeAudit } = useAudit();
   const isLight = theme === 'light';
+
+  // Successor from the pipeline resolver, never a hand-kept map. A stage
+  // outside the active workflow (or the last one) has none → no card.
+  const stages: readonly AuditStage[] = activeAudit
+    ? stagesForWorkflow(activeAudit.workflow_type)
+    : [];
+  const idx = stages.indexOf(stage);
+  const nextStage = idx >= 0 && idx + 1 < stages.length ? stages[idx + 1] : null;
+  const hasReached =
+    !!activeAudit && hasReachedStage(activeAudit.workflow_type, activeAudit.current_stage, stage);
 
   return (
     // Same container scale as the vendor stage workspaces (p-6 max-w-4xl) so
     // the pane doesn't narrow when navigating between built and unbuilt stages.
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6 max-w-4xl mx-auto space-y-6">
+      {activeAudit && !hasReached && <StagePreviewNotice currentStage={activeAudit.current_stage} />}
       <div
         className={`rounded-lg border border-dashed px-6 py-8 text-center ${
           isLight ? 'bg-white border-[#CBD5E1]' : 'bg-white/[0.02] border-white/15'
@@ -36,6 +61,7 @@ export default function IsaStagePlaceholder({ stage }: { stage: AuditStage }) {
             for clinical-trial phases in user-facing copy. */}
         <p className="text-fg-muted text-xs mt-3">This workspace isn't available yet.</p>
       </div>
+      {nextStage && <StageTransitionCard stage={stage} nextStage={nextStage} />}
     </div>
   );
 }

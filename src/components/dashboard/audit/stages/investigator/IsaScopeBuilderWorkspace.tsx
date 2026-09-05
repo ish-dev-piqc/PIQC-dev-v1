@@ -24,6 +24,7 @@ import { buildSiteScopeContent, scopeDrift } from '../../../../../lib/audit/site
 import type { TaggedSection } from '../../../../../lib/audit/mockProtocolRisks';
 import type { SiteModuleMapping } from '../../../../../types/audit';
 import StagePreviewNotice from '../../StagePreviewNotice';
+import StageTransitionCard from '../StageTransitionCard';
 import StatusBadge from '../../deliverables/StatusBadge';
 import { useDeliverablePersistence } from '../../deliverables/useDeliverablePersistence';
 import HistoryDrawer from '../../HistoryDrawer';
@@ -60,8 +61,10 @@ import CriticalityChip from './CriticalityChip';
 //
 // House preview gate: viewed one ahead (audit still at Risk assessment)
 // the page shows StagePreviewNotice, an existing scope read-only, and no
-// Build / Rebuild / Approve. No Stage 3 → Prep card yet: Audit prep is
-// still a placeholder (isa-placeholder-advance follows).
+// Build / Rebuild / Approve. The Stage 3 → Audit prep card sits below the
+// scope (isa-placeholder-advance): the transition is ungated server-side —
+// "scope approved" as a gate is ledgered — so the card is offered whenever
+// the audit is at this stage, whatever the scope's state.
 // =============================================================================
 
 type LoadState =
@@ -485,6 +488,8 @@ export default function IsaScopeBuilderWorkspace() {
           )}
         </div>
       </section>
+
+      <StageTransitionCard stage="ISA_SCOPE_BUILDER" nextStage="ISA_PREP" />
 
       {historyOpen && scope && (
         <HistoryDrawer
