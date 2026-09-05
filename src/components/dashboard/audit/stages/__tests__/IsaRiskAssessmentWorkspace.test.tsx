@@ -289,8 +289,13 @@ describe('IsaRiskAssessmentWorkspace — one-ahead preview (isa-stage-advance)',
 
     render(<IsaRiskAssessmentWorkspace />);
 
-    expect(screen.getByText(/this is a preview/i)).toBeInTheDocument();
-    expect(screen.getByText(/advance from Site intake/i)).toBeInTheDocument();
+    // Two elements name the audit's real stage here: the preview notice and
+    // the transition card's ahead line. A bare /advance from Site intake/
+    // matches both, so each is matched on its own copy.
+    expect(
+      screen.getByText(/this is a preview\. Actions here are disabled until you advance from Site intake\./i),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Advance from Site intake first.')).toBeInTheDocument();
 
     expect(await screen.findByText(/2 suggestions/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Tag a section' })).not.toBeInTheDocument();
