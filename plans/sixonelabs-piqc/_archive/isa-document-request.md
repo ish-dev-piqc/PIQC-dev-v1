@@ -1,9 +1,10 @@
 ---
 owner: sixonelabs-piqc
 feature: isa-document-request
-status: in-review
+status: merged
+merged: 2026-09-06
 started: 2026-09-06
-target_pr:
+target_pr: #631
 ---
 
 # ISA: Audit prep — document request and sampling approach → request letter
