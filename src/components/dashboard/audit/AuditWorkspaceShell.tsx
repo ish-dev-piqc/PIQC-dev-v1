@@ -36,6 +36,7 @@ import IsaReportWorkspace from './stages/investigator/IsaReportWorkspace';
 import IsaExportWorkspace from './stages/investigator/IsaExportWorkspace';
 import IsaRiskAssessmentWorkspace from './stages/investigator/IsaRiskAssessmentWorkspace';
 import IsaScopeBuilderWorkspace from './stages/investigator/IsaScopeBuilderWorkspace';
+import IsaPrepWorkspace from './stages/investigator/IsaPrepWorkspace';
 import IsaStagePlaceholder from './stages/investigator/IsaStagePlaceholder';
 
 // Dispatch table — (workflow_type, viewedStage) → component. Keying by workflow
@@ -67,10 +68,10 @@ const STAGE_COMPONENTS: Record<
     ISA_SITE_INTAKE: SiteIntakeWorkspace,
     ISA_RISK_ASSESSMENT: IsaRiskAssessmentWorkspace,
     ISA_SCOPE_BUILDER: IsaScopeBuilderWorkspace,
+    ISA_PREP: IsaPrepWorkspace,
     ISA_CONDUCT: IsaConductWorkspace,
     ISA_REPORT: IsaReportWorkspace,
     ISA_EXPORT: IsaExportWorkspace,
-    // ISA_PREP ships later → placeholder.
   },
 };
 

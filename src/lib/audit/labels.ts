@@ -80,7 +80,7 @@ export const STAGE_DESCRIPTIONS: Record<AuditStage, string> = {
   ISA_SITE_INTAKE: 'Confirm the site, PI, and protocol under audit.',
   ISA_RISK_ASSESSMENT: 'Assess protocol and site risk to drive scope.',
   ISA_SCOPE_BUILDER: 'Generate the risk-based audit scope and checklist.',
-  ISA_PREP: 'Request documents and plan the subject sample.',
+  ISA_PREP: 'Request documents and set the sampling approach.',
   ISA_CONDUCT: 'Execute the checklist and capture evidence.',
   ISA_REPORT: 'Compose the investigator site audit report.',
   ISA_EXPORT: 'Review and export the report.',
