@@ -427,6 +427,40 @@ export interface SiteScopeContent {
   modules: SiteScopeModule[];
 }
 
+// Document request — the pre-visit document request of an Investigator Site
+// Audit, derived deterministically from the site scope and a closed-world
+// vocabulary (lib/audit/documentRequest.ts, lib/audit/documentRequestVocabulary
+// .ts) and stored as the content of document_request_objects (20260920000000).
+// The auditor shapes it (include / exclude / note / add) before approving;
+// `key` is a line's stable identity across rebuilds, so those choices
+// survive. Subjects are selected during Audit conduct, never before: no line
+// and no field ever carries a subject identifier.
+export type DocumentRequestItemBasis =
+  | { kind: 'baseline' }
+  | { kind: 'module'; isa_domain: IsaDomain; criticality: DerivedCriticality }  // pinned at build; shown inside PIQC only
+  | { kind: 'auditor'; isa_domain: IsaDomain | null };
+
+export interface DocumentRequestItem {
+  key: string;                       // 'baseline:<slug>' | '<DOMAIN>:<slug>' | 'auditor:<ms>'
+  title: string;
+  detail?: string;                   // the vocabulary's one-line instruction; auditor lines have none
+  basis: DocumentRequestItemBasis;
+  included: boolean;                 // excluded lines stay in content (History) but leave the letter
+  note: string;                      // the auditor's note → the letter's Notes column
+}
+
+export interface DocumentRequestContent {
+  built_from: {
+    scope_id: string;                // site_scope_objects.id — provenance only
+    /** The live scope's modules are diffed against this to show drift. */
+    scope_modules: { isa_domain: IsaDomain; criticality: DerivedCriticality }[];
+    built_at: string;
+  };
+  items: DocumentRequestItem[];      // baseline, then per module in scope order, then auditor lines
+  sampling_approach: string;         // prefilled at build; '' → the statement is left out of the letter
+  instructions: string;              // delivery instructions; '' → the section is left out
+}
+
 // Formal ISA finding. Append-only (update-with-delta, no delete), like the
 // vendor lane's workspace entries but site-shaped. 1:1 with
 // isa_finding_objects (20260724000000_audit_mode_isa_findings_schema.sql).

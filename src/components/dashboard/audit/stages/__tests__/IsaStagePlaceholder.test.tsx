@@ -40,7 +40,7 @@ describe('IsaStagePlaceholder', () => {
     render(<IsaStagePlaceholder stage="ISA_PREP" />);
 
     expect(screen.getByRole('heading', { name: 'Audit prep' })).toBeInTheDocument();
-    expect(screen.getByText('Request documents and plan the subject sample.')).toBeInTheDocument();
+    expect(screen.getByText('Request documents and set the sampling approach.')).toBeInTheDocument();
     expect(screen.getByText("This workspace isn't available yet.")).toBeInTheDocument();
     expect(screen.queryByText(/this is a preview/i)).not.toBeInTheDocument();
 
