@@ -1,9 +1,10 @@
 ---
 owner: ki-dev-piqc
 feature: org-wide-parsed-protocol-read
-status: active
+status: merged
+merged: 2026-09-09
 started: 2026-09-09
-target_pr: TBD
+target_pr: #633
 ---
 
 # Org-wide read access to already-parsed protocol documents
